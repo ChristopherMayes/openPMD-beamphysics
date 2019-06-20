@@ -37,6 +37,16 @@ nice_phase_space_factor = {
     'pz':1e-9, # eV/c  -> GeV/c   
     'pz_abs': 1e-6 # eV/c  -> MeV/c
 }
+nice_phase_space_unit = {
+    'x':'um',
+    'y':'um',
+    'z':'fs',
+    'z_abs':'mm',
+    'px':'MeV/c',
+    'py':'MeV/c',
+    'pz':'GeV/c',
+    'pz_abs':'MeV/c'
+}
 nice_phase_space_label = {
     'x':'x (um)',
     'y':'y (um)',
@@ -47,6 +57,7 @@ nice_phase_space_label = {
     'pz':'pz (GeV/c)',
     'pz_abs': ('pz (MeV/c)')
 }
+
 
 
 def particle_array(h5, component, liveOnly=False):

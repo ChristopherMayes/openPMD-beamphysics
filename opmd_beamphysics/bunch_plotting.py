@@ -1,4 +1,4 @@
-from .bunch_tools import bin_particles2d_h5, nice_phase_space_factor, nice_phase_space_label, particle_array
+from .bunch_tools import bin_particles2d_h5, nice_phase_space_factor, nice_phase_space_label, particle_array, nice_phase_space_unit
 
 
 from bokeh.plotting import figure#, show, output_notebook
@@ -52,6 +52,31 @@ def plot_bunch_h5(h5_bunch, component1, component2, bins=20, nice=True, liveOnly
     
     return plot
 
+
+def plot_histogram_h5(h5_bunch, component1, bins=30, nice=True):
+    #c_light = 299792458. 
+    #total_charge = h5_bunch.attrs['totalCharge']
+    
+    hist, edges = np.histogram(particle_array(h5_bunch, component1), density=True, bins=bins)
+    
+    if nice:
+        f1 = nice_phase_space_factor[component1]
+        edges *= f1
+        xlabel=nice_phase_space_label[component1]
+        ylabel =  '??particles/'+nice_phase_space_unit[component1]
+    else:
+        xlabel = component1
+        ylabel = '??particles/bin'
+    
+    
+    # Change units
+    #hist *= total_charge * c_light / 1000 # q/m * c  = q/s = A. Then change from A = 1/1000 kA
+    #edges *=  1e15/c_light
+    
+    plot = figure(plot_width=500, plot_height=250, x_axis_label = xlabel, y_axis_label=ylabel)
+    plot.quad(top=hist, bottom=0, left=edges[:-1], right=edges[1:],
+       fill_color='grey', line_color="white", alpha=0.5)
+    return plot
 
 
 def plot_bunch_current_profile(h5_bunch, bins=30):

@@ -61,8 +61,6 @@ def plot_histogram_h5(h5_bunch, component1, bins=30, nice=True, liveOnly=True):
     
     dat = particle_array(h5_bunch, component1, liveOnly=liveOnly)
     weights = particle_array(h5_bunch, 'weight', liveOnly=True)
-    print(weights)
-    print(len(weights))
     if len(weights)==1:
         weights = None
     

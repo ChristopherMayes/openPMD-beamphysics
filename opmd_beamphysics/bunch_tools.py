@@ -5,6 +5,15 @@ phase_space_key = {
     'x':'position/x',
     'y':'position/y',
     'z':'position/z',
+    'px':'momentum/x',
+    'py':'momentum/y',
+    'pz':'momentum/z',
+    'weight':'weight',
+    'status':'particleStatus'
+}
+
+# Legacy version
+legacy_phase_space_key = {
     'px':'momentum/px',
     'py':'momentum/py',
     'pz':'momentum/pz',
@@ -15,13 +24,18 @@ def unit_factor(h5, key):
     
     type = key.split('/')[0]
     # Basic conversion to SI
-    factor = h5[type].attrs['unitSI'] 
+    if 'unitSI' in h5[key].attrs:
+        # Check component
+        factor = h5[key].attrs['unitSI']
+    else:
+        # Check group
+        factor = h5[type].attrs['unitSI'] 
     if  type == 'position':
         pass
     elif type == 'momentum':
         factor /= (1.60217662e-19/299792458.) # convert J/(m/s) to eV/c
     elif type == 'weight':
-        pass
+        factor = 1
     else:
         print('unknown type:', type)
     return factor
@@ -58,28 +72,69 @@ nice_phase_space_label = {
     'pz_abs': ('pz (MeV/c)')
 }
 
+def is_constant_component(h5):
+    """
+    Constant record component should have 'value' and 'shape'
+    """
+    return 'value' and 'shape' in h5.attrs
 
+def component_data(h5, use_unitSI=True):
+    """
+    Determines wheter a component has constant data, or array data, and returns that. 
+    """
+    if is_constant_component(h5):
+        dat = np.array(h5.attrs['value'])
+    else:
+        dat = h5[:]
+    
+    # look for unitSI factor. 
+    if use_unitSI and ('unitSI' in h5.attrs):
+        return dat * h5.attrs['unitSI']
+    else:
+        return dat
 
 def particle_array(h5, component, liveOnly=False):
     
     # Special cases, add offsets
     if component == 'z_abs':
-        offset = h5['positionOffset/z'].attrs['value'] * h5['positionOffset/z'].attrs['unitSI']
+        offset = component_data(h5['positionOffset/z']) 
         component = 'z'
     elif component == 'pz_abs':
-        offset = h5['momentumOffset/pz'].attrs['value'] * h5['momentumOffset/pz'].attrs['unitSI']
+        offset = component_data(h5['momentumOffset/pz']) 
         offset /= (1.60217662e-19/299792458.) # convert J/(m/s) to eV/c
         component = 'pz'
     else: 
         offset = 0
         
     key = phase_space_key[component]
-    dat = h5[key]*unit_factor(h5, key)  + offset
+    # Legacy syntax
+    if component in ['px', 'py', 'pz']:
+        if key not in h5:
+            # Try legacy version
+            key = legacy_phase_space_key[component]
     
     
-    
+    if is_constant_component(h5[key]):
+       
+        dat = h5[key].attrs['value']*unit_factor(h5, key)
+        dat = np.array([dat]) # Cast to array
+        return dat
+    else:
+        dat = h5[key]*unit_factor(h5, key)  + offset
+
     if liveOnly:
-        live = np.where(np.array(h5['particleStatus']) > 0 ) #== goodStatus )
+        if 'particleStatus' not in h5:
+            print('Warning: bunch does not have particleStatus. Assuming all particles are live.')
+            return dat
+        status = component_data(h5['particleStatus'])
+        if len(status) == 1:
+            # Constant component
+            if status[0] > 0:
+                return dat
+            else:
+                return np.array([])
+            
+        live = np.where(status == 1  ) #== goodStatus )
         return dat[live]
     return dat
 
@@ -94,6 +149,31 @@ def bin_particles2d_h5(h5, component1, component2, bins=20, liveOnly=False):
     
     H, xedges, yedges = np.histogram2d(x,y, range = [[xmin, xmax], [ymin,ymax]], bins=bins)
     return H, xedges, yedges
+
+
+
+def load_bunch_h5(h5_bunch, liveOnly=True):
+    """
+    Load particles into structured numpy array
+    """
+    n = len(h5_bunch['position/x'])
+    
+    names = ['x', 'px', 'y', 'py', 'z', 'pz', 'weight']
+    formats =  7*[np.float]
+    
+    data = np.empty(n, dtype=np.dtype({'names': names, 'formats':formats})) 
+   
+    for component in names:
+        data[component] = particle_array(h5_bunch, component, liveOnly=False)
+    
+    status = component_data(h5_bunch['particleStatus'], use_unitSI=False)
+                        
+    if liveOnly:
+        return data[:][np.where(status == 1)]
+    else:
+    
+        return data
+
 
 
 

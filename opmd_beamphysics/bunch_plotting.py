@@ -17,8 +17,8 @@ pal[0] = white # replace 0 with white
 
 
 
-def plot_bunch_h5(h5_bunch, component1, component2, bins=20, nice=True, liveOnly=True):
-    H, xedges, yedges = bin_particles2d_h5(h5_bunch, component1, component2, bins, liveOnly=liveOnly)
+def plot_bunch_h5(h5_bunch, component1, component2, bins=20, nice=True, liveOnly=True, liveStatus=1):
+    H, xedges, yedges = bin_particles2d_h5(h5_bunch, component1, component2, bins, liveOnly=liveOnly, liveStatus=liveStatus)
     xmin = min(xedges)
     xmax = max(xedges)
     ymin = min(yedges)
@@ -53,18 +53,18 @@ def plot_bunch_h5(h5_bunch, component1, component2, bins=20, nice=True, liveOnly
     return plot
 
 
-def plot_histogram_h5(h5_bunch, component1, bins=30, nice=True, liveOnly=True):
+def plot_histogram_h5(h5_bunch, component1, bins=30, nice=True, liveOnly=True, liveStatus=1):
     #c_light = 299792458. 
     #total_charge = h5_bunch.attrs['totalCharge']
     
     
     
     dat = particle_array(h5_bunch, component1, liveOnly=liveOnly)
-    weights = particle_array(h5_bunch, 'weight', liveOnly=True)
+    weights = particle_array(h5_bunch, 'weight', liveOnly=True, liveStatus=liveStatus)
     if len(weights)==1:
         weights = None
     
-    hist, edges = np.histogram(particle_array(h5_bunch, component1, liveOnly=liveOnly), 
+    hist, edges = np.histogram(particle_array(h5_bunch, component1, liveOnly=liveOnly, liveStatus=liveStatus), 
                                weights = weights,
                                density=True, bins=bins)
     
@@ -74,10 +74,10 @@ def plot_histogram_h5(h5_bunch, component1, bins=30, nice=True, liveOnly=True):
         f1 = nice_phase_space_factor[component1]
         edges *= f1
         xlabel=nice_phase_space_label[component1]
-        ylabel =  '??particles/'+nice_phase_space_unit[component1]
+        ylabel =  '?? particles/'+nice_phase_space_unit[component1]
     else:
         xlabel = component1
-        ylabel = '??particles/bin'
+        ylabel = '?? particles/bin'
     
     
     # Change units
@@ -90,15 +90,15 @@ def plot_histogram_h5(h5_bunch, component1, bins=30, nice=True, liveOnly=True):
     return plot
 
 
-def plot_bunch_current_profile(h5_bunch, bins=30, liveOnly=True):
+def plot_bunch_current_profile(h5_bunch, bins=30, liveOnly=True, liveStatus=1):
     c_light = 299792458. 
     total_charge = h5_bunch.attrs['chargeLive']
     
-    weights = particle_array(h5_bunch, 'weight', liveOnly=liveOnly)
+    weights = particle_array(h5_bunch, 'weight', liveOnly=liveOnly, liveStatus=liveStatus)
     if len(weights)==1:
         weights = None
     
-    hist, edges = np.histogram(particle_array(h5_bunch, 'z', liveOnly=liveOnly),
+    hist, edges = np.histogram(particle_array(h5_bunch, 'z', liveOnly=liveOnly, liveStatus=liveStatus),
                                density=True, weights = weights, bins=bins)
     
     # Change units
@@ -112,8 +112,8 @@ def plot_bunch_current_profile(h5_bunch, bins=30, liveOnly=True):
 
 
 
-def bin_bunch_datasource_h5(h5_bunch, component1, component2, bins=20, nice=True, liveOnly=True):
-    H, xedges, yedges = bin_particles2d_h5(h5_bunch, component1, component2, bins, liveOnly=liveOnly)
+def bin_bunch_datasource_h5(h5_bunch, component1, component2, bins=20, nice=True, liveOnly=True, liveStatus=1):
+    H, xedges, yedges = bin_particles2d_h5(h5_bunch, component1, component2, bins, liveOnly=liveOnly, liveStatus=liveStatus)
     xmin = min(xedges)
     xmax = max(xedges)
     ymin = min(yedges)

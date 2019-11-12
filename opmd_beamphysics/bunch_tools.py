@@ -108,7 +108,7 @@ def particle_array(h5, component, liveOnly=False, liveStatus=1):
         offset = component_data(h5['positionOffset/z']) 
         component = 'z'
     elif component == 'pz_abs':
-        offset = component_data(h5['momentumOffset/pz']) 
+        offset = component_data(h5['momentumOffset/z']) 
         offset /= (1.60217662e-19/299792458.) # convert J/(m/s) to eV/c
         component = 'pz'
     else: 

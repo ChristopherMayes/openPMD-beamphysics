@@ -97,7 +97,10 @@ def component_data(h5, use_unitSI=True):
     
     # look for unitSI factor. 
     if use_unitSI and ('unitSI' in h5.attrs):
-        return dat * h5.attrs['unitSI']
+        if h5.attrs['unitSI'] != 1.0:
+            return dat * h5.attrs['unitSI']
+        else: 
+            return dat
     else:
         return dat
 

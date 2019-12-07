@@ -15,6 +15,25 @@ charge_state = {'electron': -1}
 #-----------------------------------------
 # Classes
 
+
+# Set units
+UNITS = {}
+for k in ['t']:
+    UNITS[k] = 's'
+for k in ['energy', 'kinetic_energy', 'mass']:
+    UNITS[k] = 'eV'
+for k in ['px', 'py', 'pz', 'p']:
+    UNITS[k] = 'eV/c'
+for k in ['x', 'y', 'z']:
+    UNITS[k] = 'm' 
+for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma']:    
+    UNITS[k] = '1'
+for k in ['total_charge', 'weight']:
+    UNITS[k] = 'C'
+for k in ['norm_emit_x', 'norm_emit_y']:
+    UNITS[k] = 'm*rad'
+
+
 class ParticleGroup:
     """
     Particle Group class
@@ -33,10 +52,29 @@ class ParticleGroup:
         
     Derived data can be computed as properties:
         gamma, beta, beta_x, beta_y, beta_z: relativistic factors
-        energy: energy in eV
+        energy, kinetic_energy: energy, energy - mc2 in eV. 
         p: total momentum in eV
         mass: rest mass in eV
         
+    Statistics of any of these are calculated with:
+        .avg(X)
+        .std(X)
+        .cov(X, Y, ...)
+        with a string X as the name any of the properties above.
+        
+    Useful beam phyics quantities are given as properties:
+        .norm_emit_x
+        .norm_emit_y
+    
+    All properties can be accessed with brackets:
+        [key]
+    Additional keys are allowed for convenience:
+        ['mean_prop'] will return  .avg('prop')
+        ['sigma_prop'] will return .std('prop')
+        
+    Units for all properties can be accessed by:
+        .units(key)
+    
     Particles are often stored at the same time (i.e. from a t-based code), 
     or with the same z position (i.e. from an s-based code.)
     Routines: drift_to_z and drift_to_t help to convert these.
@@ -48,25 +86,24 @@ class ParticleGroup:
         if h5:
             data = load_bunch_data(h5)
         
-        for key in ['species', 'n_particle', 'x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight']:
+        self._settable_array_keys = ['x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight']
+        self._settable_scalar_keys = ['species', 'n_particle']
+        self._settable_keys =  self._settable_array_keys + self._settable_scalar_keys                       
+        for key in self._settable_keys:
             self.__dict__[key] = data[key]
         
-        # Set units
-        units = {}
-        for k in ['energy', 'mass']:
-            units[k] = 'eV'
-        for k in ['px', 'py', 'pz', 'p']:
-            units[k] = 'eV/c'
-        for k in ['x', 'y', 'z']:
-            units[k] = 'm' 
-        for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma']:    
-            units[k] = '1'
-        for k in ['total_charge', 'weight']:
-            units[k] = 'C'
-        self._units = units
+
     
     def units(self, key):
-        return self._units[key]
+        if key.startswith('sigma_'):
+            prop = key[6:]
+            return UNITS[prop]
+        
+        if key.startswith('mean_'):
+            prop = key[5:]
+            return UNITS[prop]
+        
+        return UNITS[key]
         
     @property
     def mass(self):
@@ -74,12 +111,12 @@ class ParticleGroup:
         return mass_of[self.species]
 
     @property
-    def charge(self):
+    def species_charge(self):
         """Species charge in C"""
         return charge_of[self.species]
     
     @property
-    def total_charge(self):
+    def charge(self):
         return np.sum(self.weight)
     
     # Relativistic properties
@@ -91,6 +128,11 @@ class ParticleGroup:
     def energy(self):
         """Total energy in eV"""
         return np.sqrt(self.px**2 + self.py**2 + self.pz**2 + self.mass**2) 
+    @property
+    def kinetic_energy(self):
+        """Kinetic energy in eV"""
+        return self.energy - self.mass
+    
     @property
     def gamma(self):
         """Relativistic gamma"""
@@ -112,7 +154,7 @@ class ParticleGroup:
         """Relativistic beta, z component"""
         return self.pz/self.energy
     
-    # Statistical properties
+    # Statistical property functions
     def avg(self, key):
         """Statistical average"""
         dat = getattr(self, key) # equivalent to self.key for accessing properties above
@@ -134,6 +176,41 @@ class ParticleGroup:
         dats = np.array([ getattr(self, key) for key in keys ])
         return np.cov(dats, aweights=self.weight)
     
+    # Beam statistics
+    @property
+    def norm_emit_x(self):
+        """Normalized emittance in the x plane"""
+        mat = self.cov('x', 'px')
+        return  np.sqrt(mat[0,0]*mat[1,1]-mat[0,1]**2)/self.mass
+    @property
+    def norm_emit_y(self):       
+        mat = self.cov('y', 'py')
+        """Normalized emittance in the y plane"""
+        return  np.sqrt(mat[0,0]*mat[1,1]-mat[0,1]**2)/self.mass
+    
+    
+    def __getitem__(self, key):
+        """
+        Returns a property or statistical quantity that can be computed. 
+        """
+        if key.startswith('sigma_'):
+            prop = key[6:]
+            return self.std(prop)
+        elif key.startswith('mean_'):
+            prop = key[5:]
+            return self.std(prop)
+        else:
+            return getattr(self, key) 
+    
+    # TODO: should the user be allowed to do this?
+    #def __setitem__(self, key, value):    
+    #    assert key in self._settable_keyes, 'Error: you cannot set:'+str(key)
+    #    
+    #    if key in self._settable_array_keys:
+    #        assert len(value) == self.n_particle
+    #        self.__dict__[key] = value
+    #    elif key == 
+    #        print()
      
     # Simple 'tracking'     
     def drift(self, delta_t):
@@ -163,6 +240,9 @@ class ParticleGroup:
     # Writers
     def write_astra(self, filePath, verbose=False):
         write_astra(self, filePath, verbose=verbose)
+    
+    
+    
     
     
     

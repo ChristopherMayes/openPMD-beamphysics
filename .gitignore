@@ -105,3 +105,4 @@ venv.bak/
 
 # Anything in devel/
 devel/*
+opmd_beamphysics/.DS_Store

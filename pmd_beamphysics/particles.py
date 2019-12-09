@@ -1,5 +1,5 @@
 
-from .units import dimension, dimension_name, SI_symbol
+from .units import dimension, dimension_name, SI_symbol, pg_units
 from .interfaces.astra import write_astra
 import numpy as np
 import scipy.constants
@@ -14,25 +14,7 @@ charge_state = {'electron': -1}
 
 #-----------------------------------------
 # Classes
-
-
 # Set units
-UNITS = {}
-for k in ['t']:
-    UNITS[k] = 's'
-for k in ['energy', 'kinetic_energy', 'mass']:
-    UNITS[k] = 'eV'
-for k in ['px', 'py', 'pz', 'p']:
-    UNITS[k] = 'eV/c'
-for k in ['x', 'y', 'z']:
-    UNITS[k] = 'm' 
-for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma']:    
-    UNITS[k] = '1'
-for k in ['total_charge', 'weight']:
-    UNITS[k] = 'C'
-for k in ['norm_emit_x', 'norm_emit_y']:
-    UNITS[k] = 'm*rad'
-
 
 class ParticleGroup:
     """
@@ -48,36 +30,45 @@ class ParticleGroup:
         x, y, z are positions in units of [m]
         px, py, pz are momenta in units of [eV/c]
         t is time in [s]
-        weight is the macro-charge weight in C, used for statistical calulations.
+        weight is the macro-charge weight in [C], used for all statistical calulations.
         
-    Derived data can be computed as properties:
-        gamma, beta, beta_x, beta_y, beta_z: relativistic factors
-        energy, kinetic_energy: energy, energy - mc2 in eV. 
-        p: total momentum in eV
-        mass: rest mass in eV
+    Derived data can be computed as attributes:
+        .gamma, .beta, .beta_x, .beta_y, .beta_z: relativistic factors
+        .energy, .kinetic_energy: energy, energy - mc2 in [eV]. 
+        .p: total momentum in [eV/c]
+        .mass: rest mass in [eV]
         
     Statistics of any of these are calculated with:
+        .min(X)
+        .max(X)
         .avg(X)
         .std(X)
         .cov(X, Y, ...)
         with a string X as the name any of the properties above.
         
-    Useful beam phyics quantities are given as properties:
+    Useful beam physics quantities are given as attributes:
         .norm_emit_x
         .norm_emit_y
-    
-    All properties can be accessed with brackets:
+        .higher_order_energy_spread
+        .average_current
+            
+    All attributes can be accessed with brackets:
         [key]
     Additional keys are allowed for convenience:
-        ['mean_prop'] will return  .avg('prop')
-        ['sigma_prop'] will return .std('prop')
+        ['min_prop']   will return  .min('prop')
+        ['max_prop']   will return  .max('prop')
+        ['mean_prop']  will return  .avg('prop')
+        ['sigma_prop'] will return  .std('prop')
         
-    Units for all properties can be accessed by:
+    Units for all attributes can be accessed by:
         .units(key)
     
     Particles are often stored at the same time (i.e. from a t-based code), 
     or with the same z position (i.e. from an s-based code.)
-    Routines: drift_to_z and drift_to_t help to convert these.
+    Routines: 
+        drift_to_z(z0)
+        drift_to_t(t0)
+    help to convert these. If no argument is given, particles will be drifted to the mean.
         
     
     """
@@ -93,17 +84,8 @@ class ParticleGroup:
             self.__dict__[key] = data[key]
         
 
-    
     def units(self, key):
-        if key.startswith('sigma_'):
-            prop = key[6:]
-            return UNITS[prop]
-        
-        if key.startswith('mean_'):
-            prop = key[5:]
-            return UNITS[prop]
-        
-        return UNITS[key]
+        return pg_units(key)
         
     @property
     def mass(self):
@@ -154,7 +136,20 @@ class ParticleGroup:
         """Relativistic beta, z component"""
         return self.pz/self.energy
     
+    def delta(self, key):
+        """Attribute (array) relative to its mean"""
+        return getattr(self, key) - self.avg(key)
+    
+    
     # Statistical property functions
+    
+    def min(self, key):
+        """Minimum of any key"""
+        return np.min(getattr(self, key))
+    def max(self, key):
+        """Maximum of any key"""
+        return np.max(getattr(self, key)) 
+        
     def avg(self, key):
         """Statistical average"""
         dat = getattr(self, key) # equivalent to self.key for accessing properties above
@@ -187,18 +182,39 @@ class ParticleGroup:
         mat = self.cov('y', 'py')
         """Normalized emittance in the y plane"""
         return  np.sqrt(mat[0,0]*mat[1,1]-mat[0,1]**2)/self.mass
-    
+    @property
+    def higher_order_energy_spread(self, order=2):
+        """
+        Fits a quadratic (order=2) to the Energy vs. time, subtracts it, finds the rms of the residual in eV.
+        """
+        best_fit_coeffs = np.polynomial.polynomial.polyfit(self.t, self.energy, order)
+        best_fit = np.polynomial.polynomial.polyval(self.t, best_fit_coeffs)
+        return np.std(self.energy - best_fit)        
+    @property
+    def average_current(self):
+        """
+        Simple average current in A: charge / dt, with dt =  (max_t - min_t)
+        If particles are in t coordinates, will try dt = (max_z - min_z)*c_light*beta_z
+        """
+        dt = self.t.ptp()  # ptp 'peak to peak' is max - min
+        if dt == 0:
+            # must be in t coordinates. Calc with 
+            dt = self.z.ptp() / (self.avg('beta_z')*c_light)
+        return self.charge / dt
     
     def __getitem__(self, key):
         """
         Returns a property or statistical quantity that can be computed. 
         """
         if key.startswith('sigma_'):
-            prop = key[6:]
-            return self.std(prop)
+            return self.std(key[6:])
         elif key.startswith('mean_'):
-            prop = key[5:]
-            return self.std(prop)
+            return self.avg(key[5:])
+        elif key.startswith('min_'):
+            return self.min(key[4:])
+        elif key.startswith('max_'):
+            return self.max(key[4:])        
+        
         else:
             return getattr(self, key) 
     
@@ -222,16 +238,24 @@ class ParticleGroup:
         self.z = self.z + self.beta_z * c_light * delta_t
         self.t = self.t + delta_t
     
-    def drift_to_z(self, z):
-        """Drifts all particles to the same z"""
+    def drift_to_z(self, z=None):
+
+        if not z:
+            z = self.avg('z')
         dt = (z - self.z) / (self.beta_z * c_light)
         self.drift(dt)
         # Fix z to be exactly this value
         self.z = np.full(self.n_particle, z)
         
         
-    def drift_to_t(self, t):
-        """Drifts all particles to the same t"""
+    def drift_to_t(self, t=None):
+        """
+        Drifts all particles to the same t
+        
+        If no z is given, particles will be drifted to the average t
+        """
+        if not t:
+            t = self.avg('t')
         dt = t - self.t
         self.drift(dt)
         # Fix t to be exactly this value
@@ -240,17 +264,42 @@ class ParticleGroup:
     # Writers
     def write_astra(self, filePath, verbose=False):
         write_astra(self, filePath, verbose=verbose)
-    
-    
-    
-    
-    
-    
-    
         
+    # New constructors
+    def split(self, n_chunks = 100, key='z'):
+        return split_particles(self, n_chunks=n_chunks, key=key)
+    
+    # Resample
+    def resample(self, n):
+        """
+        Resamples n particles.
+        """
+        return resample(self, n)
+    
+    # Internal sorting
+    def _sort(self, key):
+        """Sorts internal arrays by key"""
+        ixlist = np.argsort(self[key])
+        for k in self._settable_array_keys:
+            self.__dict__[k] = self[k][ixlist]    
         
+    def __add__(self, other):
+        """
+        Overloads the + operator to join particle groups.
+        Simply calls join_particle_groups
+        """
+        return join_particle_groups(self, other)
+    
+    def __str__(self):
+        s = f'ParticleGroup with {self.n_particle} particles with total charge {self.charge} C'
+        return s
+
+
+
 #-----------------------------------------
 # helper funcion for ParticleGroup class
+    
+    
 def load_bunch_data(h5):
     """
     Load particles into structured numpy array.
@@ -260,7 +309,7 @@ def load_bunch_data(h5):
     attrs = dict(h5.attrs)
     data = {}
     data['species'] = attrs['speciesType'].decode('utf-8') # String
-    data['n_particle'] = attrs['numParticles']
+    data['n_particle'] = int(attrs['numParticles'])
     data['total_charge'] = attrs['totalCharge']*attrs['chargeUnitSI']
     
     for key in ['x', 'px', 'y', 'py', 'z', 'pz', 't']:
@@ -269,7 +318,7 @@ def load_bunch_data(h5):
     if 'particleStatus' in h5:
         data['status'] = particle_array(h5, 'particleStatus')
     else:
-        data['status'] = 1
+        data['status'] = np.full(data['n_particle'], 1)
     
     # Make sure weight is populated
     if 'weight' in h5:
@@ -281,6 +330,106 @@ def load_bunch_data(h5):
     data['weight'] = weight
         
     return data
+
+    
+    
+def split_particles(particle_group, n_chunks = 100, key='z'):
+    """
+    Splits a particle group into even chunks. Returns a list of particle groups. 
+    
+    Useful for creating slice statistics. 
+    
+    """
+    
+    # Sorting
+    zlist = getattr(particle_group, key) 
+    iz = np.argsort(zlist)
+
+    # Split particles into chunks
+    plist = []
+    for chunk in np.array_split(iz, n_chunks):
+        # Prepare data
+        data = {}
+        keys = ['x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight'] 
+        for k in keys:
+            data[k] = getattr(particle_group, k)[chunk]
+        # These should be scalars
+        data['n_particle'] = len(chunk)
+        data['species'] = particle_group.species
+        
+        # New object
+        p = ParticleGroup(data=data)
+        plist.append(p)
+        
+    return plist    
+   
+def resample(particle_group, n):
+    """
+    Resamples a ParticleGroup randomly.
+    
+    Returns a new ParticleGroup instance.
+    
+    Note that this only works if the weights are the same
+    
+    """
+    n_old = particle_group.n_particle
+    assert n <= n_old, 'Cannot supersample'
+    assert len(set(particle_group.weight)) == 1, 'non-unique weights for resampling.'
+    ixlist = np.random.choice(n_old, n, replace=False)
+    data = {}
+    for key in particle_group._settable_array_keys:
+        data[key] = particle_group[key][ixlist]
+    data['species'] = particle_group['species']
+    data['weight'] *= n_old/n # Need to re-weight
+    data['n_particle'] = n
+    
+    return ParticleGroup(data=data)
+
+    
+def join_particle_groups(*particle_groups):
+    """
+    Join particle groups. 
+    
+    This simply concatenates the internal particle arrays.
+    
+    Species must be the same
+    """
+    species = [pg['species'] for pg in particle_groups]
+    #return species 
+
+    species0 = species[0]
+    assert all([spe == species0 for spe in species]) , 'species must be the same to join'
+    
+    data = {}
+    for key in particle_groups[0]._settable_array_keys:
+        data[key] = np.hstack([pg[key] for pg in particle_groups ])
+    
+    data['species'] = species0
+    data['n_particle'] = np.sum( [pg['n_particle'] for pg in particle_groups]) 
+    
+    return ParticleGroup(data=data)    
+    
+    
+    
+def slice_statistics(particle_group,  keys=['mean_z', 'average_current'], n_slice=40, slice_key='z'):
+    """
+    Slices a particle group into n slices and returns statistics from each sliced defined in keys. 
+    
+    These statistics should be scalar floats for now.
+    
+    Any key can be used to slice on. 
+    
+    """
+    sdat = {}
+    for k in keys:
+        sdat[k] = np.empty(n_slice)
+    for i, pg in enumerate(particle_group.split(n_slice, key=slice_key)):
+        for k in keys:
+            sdat[k][i] = pg[k]
+            
+    return sdat
+    
+
 
         
 
@@ -321,29 +470,29 @@ particle_record_components = {
 Expected unit dimensions for paricle records
 """
 particle_record_unit_dimension = {
-    'branchIndex':dimension['1'],
-    'chargeState':dimension['1'],
-    'electricField':dimension['electric_field'],
-    'elementIndex':dimension['1'],
-    'magneticField':dimension['tesla'],
-    'locationInElement': dimension['1'],
-    'momentum':dimension['momentum'],
-    'momentumOffset':dimension['momentum'],
-    'photonPolarizationAmplitude':dimension['electric_field'],
-    'photonPolarizationPhase':dimension['1'],
-    'sPosition':dimension['length'],
-    'totalMomentum':dimension['momentum'],
-    'totalMomentumOffset':dimension['momentum'],
+    'branchIndex':dimension('1'),
+    'chargeState':dimension('1'),
+    'electricField':dimension('electric_field'),
+    'elementIndex':dimension('1'),
+    'magneticField':dimension('tesla'),
+    'locationInElement': dimension('1'),
+    'momentum':dimension('momentum'),
+    'momentumOffset':dimension('momentum'),
+    'photonPolarizationAmplitude':dimension('electric_field'),
+    'photonPolarizationPhase':dimension('1'),
+    'sPosition':dimension('length'),
+    'totalMomentum':dimension('momentum'),
+    'totalMomentumOffset':dimension('momentum'),
     #'particleCoordinatesToGlobalTransformation': ??
-    'particleStatus':dimension['1'],
-    'pathLength':dimension['length'],
-    'position':dimension['length'],
-    'positionOffset':dimension['length'],
-    'spin':dimension['1'],
-    'time':dimension['time'],
-    'timeOffset':dimension['time'],
-    'velocity':dimension['velocity'],
-    'weight':dimension['1']
+    'particleStatus':dimension('1'),
+    'pathLength':dimension('length'),
+    'position':dimension('length'),
+    'positionOffset':dimension('length'),
+    'spin':dimension('1'),
+    'time':dimension('time'),
+    'timeOffset':dimension('time'),
+    'velocity':dimension('velocity'),
+    'weight':dimension('1')
 }
 
 
@@ -528,7 +677,7 @@ def component_str(particle_group, name):
     record_name = name.split('/')[0]
     expected_dimension = particle_record_unit_dimension[record_name]
     this_dimension =  component_unit_dimension(g)
-    dname = dimension_name[this_dimension]
+    dname = dimension_name(this_dimension)
     symbol = SI_symbol[dname]
     
     s = name+' '
@@ -544,6 +693,6 @@ def component_str(particle_group, name):
         s += f' is a {dname} with units: {symbol}'
         
     if expected_dimension != this_dimension:
-        s +=', but expected units: '+ SI_symbol[dimension_name[this_dimension]]
+        s +=', but expected units: '+ SI_symbol[dimension_name(this_dimension)]
     
     return s

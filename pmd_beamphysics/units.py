@@ -13,7 +13,7 @@ m_p = scipy.constants.value('proton mass energy equivalent in MeV')*1e6
 c_light = 299792458
 e_charge = scipy.constants.e
 
-
+import numpy as np
 
 
 class pmd_unit:
@@ -32,7 +32,7 @@ class pmd_unit:
         self.unitSymbol = unitSymbol       
         self.unitSI = unitSI
         if isinstance(unitDimension, str):
-             self.unitDimension = dimension[unitDimension]
+             self.unitDimension = DIMENSION[unitDimension]
         else:
             self.unitDimension = unitDimension
 
@@ -43,7 +43,7 @@ class pmd_unit:
         return  f"pmd_unit('{self.unitSymbol}', {self.unitSI}, {self.unitDimension})"
         
         
-dimension = {
+DIMENSION = {
    
     '1'              : (0,0,0,0,0,0,0),
      # Base units
@@ -64,7 +64,16 @@ dimension = {
     'tesla'          : (0,1,-2,-1,0,0,0)
 }
 # Inverse
-dimension_name = {v: k for k, v in dimension.items()}
+DIMENSION_NAME = {v: k for k, v in DIMENSION.items()}
+
+def dimension(name):
+    if name in DIMENSION:
+        return DIMENSION[name]
+    else:
+        return None
+
+def dimension_name(dim_array):
+    return DIMENSION_NAME[tuple(dim_array)]
 
 SI_symbol = {
     '1'              : '1',
@@ -110,4 +119,134 @@ unit = {
 
 
 
+# Dicts for prefixes
+PREFIX_FACTOR = {
+    'yocto-' :1e-24,
+    'zepto-' :1e-21,
+    'atto-'  :1e-18,
+    'femto-' :1e-15,
+    'pico-'  :1e-12,
+    'nano-'  :1e-9 ,
+    'micro-' :1e-6,
+    'milli-' :1e-3 ,
+    'centi-' :1e-2 ,
+    'deci-'  :1e-1,
+    'deca-'  :1e+1,
+    'hecto-' :1e2  ,
+    'kilo-'  :1e3  ,
+    'mega-'  :1e6  ,
+    'giga-'  :1e9  ,
+    'tera-'  :1e12 ,
+    'peta-'  :1e15 ,
+    'exa-'   :1e18 ,
+    'zetta-' :1e21 ,
+    'yotta-' :1e24
+}
+# Inverse
+PREFIX = dict( (v,k) for k,v in PREFIX_FACTOR.items())
 
+SHORT_PREFIX_FACTOR = {
+    'y'  :1e-24,
+    'z'  :1e-21,
+    'a'  :1e-18,
+    'f'  :1e-15,
+    'p'  :1e-12,
+    'n'  :1e-9 ,
+    'u'  :1e-6,
+    'm'  :1e-3 ,
+    'c'  :1e-2 ,
+    'd'  :1e-1,
+    ''   : 1,
+    'da' :1e+1,
+    'h'  :1e2  ,
+    'k'  :1e3  ,
+    'M'  :1e6  ,
+    'G'  :1e9  ,
+    'T'  :1e12 ,
+    'P'  :1e15 ,
+    'E'  :1e18 ,
+    'Z'  :1e21 ,
+    'Y'  :1e24
+}
+# Inverse
+SHORT_PREFIX = dict( (v,k) for k,v in SHORT_PREFIX_FACTOR.items())
+
+
+
+
+# Nice scaling
+
+def nice_scale_prefix(scale):
+    """
+    Returns a nice factor and a SI prefix string 
+    
+    Example:
+        scale = 2e-10
+        
+        f, u = nice_scale_prefix(scale)
+        
+        
+    """
+    p10 = np.log10(abs(scale))
+    if p10 <-2 or p10 > 2:
+        f = 10**(p10 //3 *3)
+    else:
+        f = 1
+    
+    return f, SHORT_PREFIX[f]
+
+def nice_array(a):
+    """
+    Returns a scaled array, the scaling, and a unit prefix
+    
+    Example: 
+        nice_array( np.array([2e-10, 3e-10]) )
+    Returns:
+        (array([200., 300.]), 1e-12, 'p')
+    
+    """
+
+    a = np.array(a)
+    fac, prefix = nice_scale_prefix( np.abs(a).max())
+    
+    return a/fac, fac,  prefix
+
+
+
+
+# -------------------------
+# Units for ParitcleGroup
+
+PARTICLEGROUP_UNITS = {}
+for k in ['t']:
+    PARTICLEGROUP_UNITS[k] = 's'
+for k in ['energy', 'kinetic_energy', 'mass', 'higher_order_energy_spread']:
+    PARTICLEGROUP_UNITS[k] = 'eV'
+for k in ['px', 'py', 'pz', 'p']:
+    PARTICLEGROUP_UNITS[k] = 'eV/c'
+for k in ['x', 'y', 'z']:
+    PARTICLEGROUP_UNITS[k] = 'm' 
+for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma']:    
+    PARTICLEGROUP_UNITS[k] = '1'
+for k in ['charge', 'species_charge', 'weight']:
+    PARTICLEGROUP_UNITS[k] = 'C'
+for k in ['average_current']:
+    PARTICLEGROUP_UNITS[k] = 'A'
+for k in ['norm_emit_x', 'norm_emit_y']:
+    PARTICLEGROUP_UNITS[k] = 'm*rad'
+
+def pg_units(key):
+    """
+    Returns a str representing the units of any attribute
+    """
+    if key.startswith('sigma_'):
+        return PARTICLEGROUP_UNITS[key[6:]]     
+    elif key.startswith('mean_'):
+        return PARTICLEGROUP_UNITS[key[5:]]
+    elif key.startswith('min_'):
+        return PARTICLEGROUP_UNITS[key[4:]]
+    elif key.startswith('max_'):
+        return PARTICLEGROUP_UNITS[key[4:]]
+    else:
+        return PARTICLEGROUP_UNITS[key]    
+    

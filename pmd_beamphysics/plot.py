@@ -72,6 +72,7 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=100):
     # Scale to nice units and get the factor, unit prefix
     x, f1, p1 = nice_array(particle_group[key1])
     y, f2, p2 = nice_array(particle_group[key2])
+
     w = particle_group['weight']
     
     u1 = particle_group.units(key1)

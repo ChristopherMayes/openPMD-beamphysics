@@ -14,7 +14,6 @@ charge_state = {'electron': -1}
 
 #-----------------------------------------
 # Classes
-# Set units
 
 class ParticleGroup:
     """
@@ -33,7 +32,7 @@ class ParticleGroup:
         weight is the macro-charge weight in [C], used for all statistical calulations.
         
     Derived data can be computed as attributes:
-        .gamma, .beta, .beta_x, .beta_y, .beta_z: relativistic factors
+        .gamma, .beta, .beta_x, .beta_y, .beta_z: relativistic factors [1].
         .energy, .kinetic_energy: energy, energy - mc2 in [eV]. 
         .p: total momentum in [eV/c]
         .mass: rest mass in [eV]
@@ -41,6 +40,7 @@ class ParticleGroup:
     Statistics of any of these are calculated with:
         .min(X)
         .max(X)
+        .ptp(X)
         .avg(X)
         .std(X)
         .cov(X, Y, ...)
@@ -57,6 +57,7 @@ class ParticleGroup:
     Additional keys are allowed for convenience:
         ['min_prop']   will return  .min('prop')
         ['max_prop']   will return  .max('prop')
+        ['ptp_prop']   will return  .ptp('prop')
         ['mean_prop']  will return  .avg('prop')
         ['sigma_prop'] will return  .std('prop')
         
@@ -149,6 +150,9 @@ class ParticleGroup:
     def max(self, key):
         """Maximum of any key"""
         return np.max(getattr(self, key)) 
+    def ptp(self, key):
+        """Peak-to-Peak = max - min of any key"""
+        return np.ptp(getattr(self, key))     
         
     def avg(self, key):
         """Statistical average"""
@@ -213,7 +217,9 @@ class ParticleGroup:
         elif key.startswith('min_'):
             return self.min(key[4:])
         elif key.startswith('max_'):
-            return self.max(key[4:])        
+            return self.max(key[4:])     
+        elif key.startswith('ptp_'):
+            return self.ptp(key[4:])         
         
         else:
             return getattr(self, key) 
@@ -283,6 +289,7 @@ class ParticleGroup:
         for k in self._settable_array_keys:
             self.__dict__[k] = self[k][ixlist]    
         
+    # Operator overloading    
     def __add__(self, other):
         """
         Overloads the + operator to join particle groups.
@@ -293,7 +300,6 @@ class ParticleGroup:
     def __str__(self):
         s = f'ParticleGroup with {self.n_particle} particles with total charge {self.charge} C'
         return s
-
 
 
 #-----------------------------------------
@@ -411,7 +417,7 @@ def join_particle_groups(*particle_groups):
     
     
     
-def slice_statistics(particle_group,  keys=['mean_z', 'average_current'], n_slice=40, slice_key='z'):
+def slice_statistics(particle_group,  keys=['mean_z'], n_slice=40, slice_key='z'):
     """
     Slices a particle group into n slices and returns statistics from each sliced defined in keys. 
     

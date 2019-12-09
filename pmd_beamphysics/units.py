@@ -208,7 +208,7 @@ def nice_array(a):
     """
 
     a = np.array(a)
-    fac, prefix = nice_scale_prefix( np.abs(a).max())
+    fac, prefix = nice_scale_prefix( a.ptp())
     
     return a/fac, fac,  prefix
 

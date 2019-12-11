@@ -1,1 +1,1 @@
-from .particles import ParticleGroup
+from .particles import ParticleGroup, particle_paths

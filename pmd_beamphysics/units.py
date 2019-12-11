@@ -206,9 +206,16 @@ def nice_array(a):
         (array([200., 300.]), 1e-12, 'p')
     
     """
-
-    a = np.array(a)
-    fac, prefix = nice_scale_prefix( a.ptp())
+    
+    if np.isscalar(a):
+        x = a
+    elif len(a) == 1:
+        x = a[0]
+    else:
+        a = np.array(a)
+        x = a.ptp()
+        
+    fac, prefix = nice_scale_prefix( x )
     
     return a/fac, fac,  prefix
 

@@ -187,6 +187,10 @@ def nice_scale_prefix(scale):
         
         
     """
+    
+    if scale == 0:
+        return 1, ''
+    
     p10 = np.log10(abs(scale))
 
     if p10 <-2 or p10 > 2:

@@ -1,7 +1,7 @@
 # exclude .gitignore and similar from the generated tarball
 .git*           export-ignore
 examples        export-ignore
-
+opmd_beamphysics export-ignore  # This is the old package
 
 # exclude CI configurations (useless outside the repo)
 .travis-ci.yml  export-ignore

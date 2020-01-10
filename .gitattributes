@@ -1,6 +1,8 @@
 # exclude .gitignore and similar from the generated tarball
 .git*           export-ignore
+docs            export-ignore
 examples        export-ignore
+mkdocs.yml      export-ignore
 opmd_beamphysics export-ignore
 
 # exclude CI configurations (useless outside the repo)

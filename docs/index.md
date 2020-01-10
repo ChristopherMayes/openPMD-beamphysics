@@ -1,13 +1,13 @@
-# Welcome to MkDocs
+# openPMD-beamphysics
 
-For full documentation visit [mkdocs.org](https://mkdocs.org).
+Tools for analyzing and viewing particle data in the openPMD standard, extension beamphysics.
 
-## Commands
+[beamphysics extension](https://github.com/DavidSagan/openPMD-standard/blob/EXT_BeamPhysics/EXT_BeamPhysics.md)
 
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve` - Start the live-reloading docs server.
-* `mkdocs build` - Build the documentation site.
-* `mkdocs help` - Print this help message.
+## Python classes
+
+* `ParticleGroup` - Basic class
+
 
 ## Project layout
 

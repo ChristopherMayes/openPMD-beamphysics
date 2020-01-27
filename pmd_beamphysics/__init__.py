@@ -1,1 +1,2 @@
-from .particles import ParticleGroup, particle_paths
+from .particles import ParticleGroup
+from .readers import particle_paths

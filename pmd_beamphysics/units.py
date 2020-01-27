@@ -1,3 +1,4 @@
+
 """
 Simple units functionality for the openPMD beamphysics records.
 
@@ -101,19 +102,19 @@ unit = {
     '1'          : pmd_unit('', 1, '1'),
     'm'          : pmd_unit('m', 1, 'length'),
     'kg'         : pmd_unit('kg', 1, 'mass'),
-    'sec'        : pmd_unit('sec', 1, 'time'),
+    's'          : pmd_unit('s', 1, 'time'),
     'amp'        : pmd_unit('Amp', 1, 'current'),
     'K'          : pmd_unit('K', 1, 'temperture'),
     'mol'        : pmd_unit('mol', 1, 'mol'),
     'cd'         : pmd_unit('cd', 1, 'luminous'),
-    'Coulomb'    : pmd_unit('Coulomb', 1, 'charge'),
+    'C'          : pmd_unit('C', 1, 'charge'),
     'charge_num' : pmd_unit('charge #', 1, 'charge'),
-    'V_per_m'    : pmd_unit('V/m', 1, 'electric_field'),
+    'V/m'    : pmd_unit('V/m', 1, 'electric_field'),
     'V'          : pmd_unit('V', 1, 'electric_potential'),
     'c_light'    : pmd_unit('vel/c', c_light, 'velocity'),
-    'm_per_s'    : pmd_unit('m/s', 1, 'velocity'),
+    'm/s'    : pmd_unit('m/s', 1, 'velocity'),
     'eV'         : pmd_unit('eV', e_charge, 'energy'),
-    'eV_per_c'   : pmd_unit('eV/c', e_charge/c_light, 'momentum'),
+    'eV/c'   : pmd_unit('eV/c', e_charge/c_light, 'momentum'),
     'Tesla'      : pmd_unit('Tesla', 1, 'tesla')
     }    
 
@@ -230,6 +231,8 @@ def nice_array(a):
 # Units for ParitcleGroup
 
 PARTICLEGROUP_UNITS = {}
+for k in ['status']:
+    PARTICLEGROUP_UNITS[k] = '1'
 for k in ['t']:
     PARTICLEGROUP_UNITS[k] = 's'
 for k in ['energy', 'kinetic_energy', 'mass', 'higher_order_energy_spread']:

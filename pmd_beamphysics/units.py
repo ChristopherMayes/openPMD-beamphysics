@@ -282,6 +282,8 @@ for k in ['average_current']:
     PARTICLEGROUP_UNITS[k] = unit['A']
 for k in ['norm_emit_x', 'norm_emit_y']:
     PARTICLEGROUP_UNITS[k] = unit['m']
+for k in ['xp', 'yp']:
+    PARTICLEGROUP_UNITS[k] = unit['1']
 
 def pg_units(key):
     """

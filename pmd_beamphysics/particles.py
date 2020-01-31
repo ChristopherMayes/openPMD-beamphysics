@@ -40,6 +40,7 @@ class ParticleGroup:
         .kinetic_energy: total energy - mc^2 in [eV]. 
         .p: total momentum in [eV/c]
         .mass: rest mass in [eV]
+        .xp, .yp: Slopes x' = dx/dz = dpx/dpz and y' = dy/dz = fpy/dpz [1].
         
     Statistics of any of these are calculated with:
         .min(X)
@@ -120,6 +121,14 @@ class ParticleGroup:
     def kinetic_energy(self):
         """Kinetic energy in eV"""
         return self.energy - self.mass
+    
+    # Slopes. Note that these are relatie to pz
+    @property
+    def xp(self):
+        return self.px/self.pz  
+    @property
+    def yp(self):
+        return self.py/self.pz    
     
     @property
     def gamma(self):
@@ -314,7 +323,6 @@ class ParticleGroup:
     def __str__(self):
         s = f'ParticleGroup with {self.n_particle} particles with total charge {self.charge} C'
         return s
-
 
 
 

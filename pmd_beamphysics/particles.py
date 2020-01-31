@@ -17,6 +17,7 @@ charge_state = {'electron': -1}
 #-----------------------------------------
 # Classes
 
+
 class ParticleGroup:
     """
     Particle Group class
@@ -35,7 +36,8 @@ class ParticleGroup:
         
     Derived data can be computed as attributes:
         .gamma, .beta, .beta_x, .beta_y, .beta_z: relativistic factors [1].
-        .energy, .kinetic_energy: energy, energy - mc2 in [eV]. 
+        .energy : total energy [eV]
+        .kinetic_energy: total energy - mc^2 in [eV]. 
         .p: total momentum in [eV/c]
         .mass: rest mass in [eV]
         
@@ -62,6 +64,7 @@ class ParticleGroup:
         ['ptp_prop']   will return  .ptp('prop')
         ['mean_prop']  will return  .avg('prop')
         ['sigma_prop'] will return  .std('prop')
+        ['cov_prop1__prop2'] will return .cov('prop1', 'prop2')[0,1]
         
     Units for all attributes can be accessed by:
         .units(key)
@@ -212,7 +215,12 @@ class ParticleGroup:
         """
         Returns a property or statistical quantity that can be computed. 
         """
-        if key.startswith('sigma_'):
+        if key.startswith('cov_'):
+            subkeys = key[4:].split('__')
+            assert len(subkeys) == 2, f'Too many properties in covariance request: {key}'
+            return self.cov(*subkeys)[0,1]
+            
+        elif key.startswith('sigma_'):
             return self.std(key[6:])
         elif key.startswith('mean_'):
             return self.avg(key[5:])
@@ -306,6 +314,9 @@ class ParticleGroup:
     def __str__(self):
         s = f'ParticleGroup with {self.n_particle} particles with total charge {self.charge} C'
         return s
+
+
+
 
 
 #-----------------------------------------

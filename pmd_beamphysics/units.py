@@ -23,10 +23,25 @@ class pmd_unit:
     Params
     ------
     
-    unitSymbol: Native units name. EG 'eV'
-    unitSI:     Conversion to SI
+    unitSymbol: Native units name
+    unitSI:     Conversion factor to the the correspontign SI unit
     unitDimension: SI Base Exponents
 
+    Base unit dimensions are defined as:    
+       Base dimension  | exponents.       | SI unit
+       ---------------- -----------------   -------
+       length          : (1,0,0,0,0,0,0)     m
+       mass            : (0,1,0,0,0,0,0)     kg
+       time            : (0,0,1,0,0,0,0)     s
+       current         : (0,0,0,1,0,0,0)     A
+       temperture      : (0,0,0,0,1,0,0)     K
+       mol             : (0,0,0,0,0,1,0)     mol
+       luminous        : (0,0,0,0,0,0,1)     cd 
+
+    Example:
+        pmd_unit('eV', 1.602176634e-19, (2, 1, -2, 0, 0, 0, 0))
+        defines that an eV is 1.602176634e-19 of base units m^2 kg/s^2, which is a Joule (J)
+    
     
     """
     def __init__(self, unitSymbol='', unitSI=0, unitDimension = (0,0,0,0,0,0,0)):
@@ -42,6 +57,24 @@ class pmd_unit:
     
     def __repr__(self):
         return  f"pmd_unit('{self.unitSymbol}', {self.unitSI}, {self.unitDimension})"
+        
+def multiply_units(u1, u2):
+    """
+    Multiplies two pmd_unit symbols
+    """
+
+    s1 = u1.unitSymbol
+    s2 = u2.unitSymbol
+    if s1==s2:
+        symbol = f'({s1})^2'
+    else:
+        symbol = s1+'*'+s2
+    d1 = u1.unitDimension
+    d2 = u2.unitDimension
+    dim=tuple(sum(x) for x in zip(d1, d2))
+    unitSI = u1.unitSI * u2.unitSI
+    
+    return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)        
         
         
 DIMENSION = {
@@ -103,19 +136,19 @@ unit = {
     'm'          : pmd_unit('m', 1, 'length'),
     'kg'         : pmd_unit('kg', 1, 'mass'),
     's'          : pmd_unit('s', 1, 'time'),
-    'amp'        : pmd_unit('Amp', 1, 'current'),
+    'A'          : pmd_unit('A', 1, 'current'),
     'K'          : pmd_unit('K', 1, 'temperture'),
     'mol'        : pmd_unit('mol', 1, 'mol'),
     'cd'         : pmd_unit('cd', 1, 'luminous'),
     'C'          : pmd_unit('C', 1, 'charge'),
     'charge_num' : pmd_unit('charge #', 1, 'charge'),
-    'V/m'    : pmd_unit('V/m', 1, 'electric_field'),
+    'V/m'        : pmd_unit('V/m', 1, 'electric_field'),
     'V'          : pmd_unit('V', 1, 'electric_potential'),
     'c_light'    : pmd_unit('vel/c', c_light, 'velocity'),
-    'm/s'    : pmd_unit('m/s', 1, 'velocity'),
+    'm/s'        : pmd_unit('m/s', 1, 'velocity'),
     'eV'         : pmd_unit('eV', e_charge, 'energy'),
-    'eV/c'   : pmd_unit('eV/c', e_charge/c_light, 'momentum'),
-    'Tesla'      : pmd_unit('Tesla', 1, 'tesla')
+    'eV/c'       : pmd_unit('eV/c', e_charge/c_light, 'momentum'),
+    'T'          : pmd_unit('T', 1, 'tesla')
     }    
 
 
@@ -232,36 +265,40 @@ def nice_array(a):
 
 PARTICLEGROUP_UNITS = {}
 for k in ['status']:
-    PARTICLEGROUP_UNITS[k] = '1'
+    PARTICLEGROUP_UNITS[k] = unit['1']
 for k in ['t']:
-    PARTICLEGROUP_UNITS[k] = 's'
+    PARTICLEGROUP_UNITS[k] = unit['s']
 for k in ['energy', 'kinetic_energy', 'mass', 'higher_order_energy_spread']:
-    PARTICLEGROUP_UNITS[k] = 'eV'
+    PARTICLEGROUP_UNITS[k] = unit['eV']
 for k in ['px', 'py', 'pz', 'p']:
-    PARTICLEGROUP_UNITS[k] = 'eV/c'
+    PARTICLEGROUP_UNITS[k] = unit['eV/c']
 for k in ['x', 'y', 'z']:
-    PARTICLEGROUP_UNITS[k] = 'm' 
+    PARTICLEGROUP_UNITS[k] = unit['m']
 for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma']:    
-    PARTICLEGROUP_UNITS[k] = '1'
+    PARTICLEGROUP_UNITS[k] = unit['1']
 for k in ['charge', 'species_charge', 'weight']:
-    PARTICLEGROUP_UNITS[k] = 'C'
+    PARTICLEGROUP_UNITS[k] = unit['C']
 for k in ['average_current']:
-    PARTICLEGROUP_UNITS[k] = 'A'
+    PARTICLEGROUP_UNITS[k] = unit['A']
 for k in ['norm_emit_x', 'norm_emit_y']:
-    PARTICLEGROUP_UNITS[k] = 'm*rad'
+    PARTICLEGROUP_UNITS[k] = unit['m']
 
 def pg_units(key):
     """
     Returns a str representing the units of any attribute
     """
-    if key.startswith('sigma_'):
-        return PARTICLEGROUP_UNITS[key[6:]]     
-    elif key.startswith('mean_'):
-        return PARTICLEGROUP_UNITS[key[5:]]
-    elif key.startswith('min_'):
-        return PARTICLEGROUP_UNITS[key[4:]]
-    elif key.startswith('max_'):
-        return PARTICLEGROUP_UNITS[key[4:]]
-    else:
-        return PARTICLEGROUP_UNITS[key]    
+    for prefix in ['sigma_', 'mean_', 'min_', 'max', 'ptp_']:
+        if key.startswith(prefix):
+            nkey = key.strip(prefix)
+            return PARTICLEGROUP_UNITS[nkey]
+    
+    if key.startswith('cov_'):
+        subkeys = key.strip('cov_').split('__')
+        unit0 = PARTICLEGROUP_UNITS[subkeys[0]] 
+
+        unit1 = PARTICLEGROUP_UNITS[subkeys[1]] 
+        
+        return multiply_units(unit0, unit1)
+    
+    return PARTICLEGROUP_UNITS[key]    
     

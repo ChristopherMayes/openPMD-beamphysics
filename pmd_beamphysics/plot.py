@@ -35,8 +35,8 @@ def slice_plot(particle_group, stat_key='sigma_x', n_slice=40, slice_key='z'):
     y2, _, prey2 = nice_array(slice_dat[y2_key])
     
     # Add prefix to units
-    x_units = prex+particle_group.units(x_key)
-    y_units = prey+particle_group.units(y_key)
+    x_units = prex+particle_group.units(x_key).unitSymbol
+    y_units = prey+particle_group.units(y_key).unitSymbol
     
     # Convert to Amps if possible
     y2_units = f'C/{particle_group.units(x_key)}'
@@ -74,8 +74,8 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=100):
 
     w = particle_group['weight']
     
-    u1 = particle_group.units(key1)
-    u2 = particle_group.units(key2)
+    u1 = particle_group.units(key1).unitSymbol
+    u2 = particle_group.units(key2).unitSymbol
     ux = p1+u1
     uy = p2+u2
     
@@ -135,8 +135,8 @@ def density_and_slice_plot(particle_group, key1='t', key2='p', stat_keys=['norm_
     y, f2, p2 = nice_array(particle_group[key2])
     w = particle_group['weight']
     
-    u1 = particle_group.units(key1)
-    u2 = particle_group.units(key2)
+    u1 = particle_group.units(key1).unitSymbol
+    u2 = particle_group.units(key2).unitSymbol
     ux = p1+u1
     uy = p2+u2
     
@@ -166,7 +166,7 @@ def density_and_slice_plot(particle_group, key1='t', key2='p', stat_keys=['norm_
     ax2 = ax.twinx()
     #ax2.set_ylim(0, 1e-6)
     x2 = slice_dat['mean_'+key1] / f1
-    ulist = [particle_group.units(k) for k in stat_keys]
+    ulist = [particle_group.units(k).unitSymbol for k in stat_keys]
     
     max2 = max([slice_dat[k].ptp() for k in stat_keys])
     

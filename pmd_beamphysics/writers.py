@@ -61,8 +61,7 @@ def write_pmd_bunch(h5, data, name=None):
         g2 = write_component_data(g, g2_name, data[key])
         
         # Units
-        unit_name = pg_units(key)
-        u = unit[unit_name]
+        u = pg_units(key)
         #print(u.unitSymbol, u.unitSI, u.unitDimension)
         g2.attrs['unitSI'] = u.unitSI
         g2.attrs['unitDimension'] = u.unitDimension

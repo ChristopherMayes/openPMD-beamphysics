@@ -75,7 +75,25 @@ def multiply_units(u1, u2):
     unitSI = u1.unitSI * u2.unitSI
     
     return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)        
-        
+     
+def divide_units(u1, u2):
+    """
+    Divides two pmd_unit symbols : u1/u2
+    """
+
+    s1 = u1.unitSymbol
+    s2 = u2.unitSymbol
+    if s1==s2:
+        symbol =  '1'
+    else:
+        symbol = s1+'/'+s2
+    d1 = u1.unitDimension
+    d2 = u2.unitDimension
+    dim=tuple(a-b for a,b in zip(d1, d2))
+    unitSI = u1.unitSI / u2.unitSI
+    
+    return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)       
+    
         
 DIMENSION = {
    
@@ -131,10 +149,11 @@ SI_name = {v: k for k, v in SI_symbol.items()}
 
 
 
-unit = { 
+known_unit = { 
     '1'          : pmd_unit('', 1, '1'),
     'm'          : pmd_unit('m', 1, 'length'),
     'kg'         : pmd_unit('kg', 1, 'mass'),
+    'g'          : pmd_unit('g', .001, 'mass'),
     's'          : pmd_unit('s', 1, 'time'),
     'A'          : pmd_unit('A', 1, 'current'),
     'K'          : pmd_unit('K', 1, 'temperture'),
@@ -147,9 +166,31 @@ unit = {
     'c_light'    : pmd_unit('vel/c', c_light, 'velocity'),
     'm/s'        : pmd_unit('m/s', 1, 'velocity'),
     'eV'         : pmd_unit('eV', e_charge, 'energy'),
+    'J'          : pmd_unit('J', 1, 'energy'),
     'eV/c'       : pmd_unit('eV/c', e_charge/c_light, 'momentum'),
     'T'          : pmd_unit('T', 1, 'tesla')
-    }    
+    } 
+
+def unit(symbol):
+    """
+    Returns a pmd_unit from a known symbol.
+    
+    * is allowed between two known symbols: 
+    """
+    if symbol in known_unit:
+        return known_unit[symbol]
+    
+    if '*' in symbol:
+        subunits = [known_unit[s] for s in symbol.split('*')]
+        # Require these to be in known units
+        assert len(subunits) == 2, 'TODO: more complicated units'
+        return multiply_units(subunits[0], subunits[1])
+    
+    raise ValueError(f'Unknown unit symbol: {symbol}')
+        
+    
+
+
 
 
 
@@ -265,25 +306,25 @@ def nice_array(a):
 
 PARTICLEGROUP_UNITS = {}
 for k in ['status']:
-    PARTICLEGROUP_UNITS[k] = unit['1']
+    PARTICLEGROUP_UNITS[k] = unit('1')
 for k in ['t']:
-    PARTICLEGROUP_UNITS[k] = unit['s']
+    PARTICLEGROUP_UNITS[k] = unit('s')
 for k in ['energy', 'kinetic_energy', 'mass', 'higher_order_energy_spread']:
-    PARTICLEGROUP_UNITS[k] = unit['eV']
+    PARTICLEGROUP_UNITS[k] = unit('eV')
 for k in ['px', 'py', 'pz', 'p']:
-    PARTICLEGROUP_UNITS[k] = unit['eV/c']
+    PARTICLEGROUP_UNITS[k] = unit('eV/c')
 for k in ['x', 'y', 'z']:
-    PARTICLEGROUP_UNITS[k] = unit['m']
+    PARTICLEGROUP_UNITS[k] = unit('m')
 for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma']:    
-    PARTICLEGROUP_UNITS[k] = unit['1']
+    PARTICLEGROUP_UNITS[k] = unit('1')
 for k in ['charge', 'species_charge', 'weight']:
-    PARTICLEGROUP_UNITS[k] = unit['C']
+    PARTICLEGROUP_UNITS[k] = unit('C')
 for k in ['average_current']:
-    PARTICLEGROUP_UNITS[k] = unit['A']
+    PARTICLEGROUP_UNITS[k] = unit('A')
 for k in ['norm_emit_x', 'norm_emit_y']:
-    PARTICLEGROUP_UNITS[k] = unit['m']
+    PARTICLEGROUP_UNITS[k] = unit('m')
 for k in ['xp', 'yp']:
-    PARTICLEGROUP_UNITS[k] = unit['1']
+    PARTICLEGROUP_UNITS[k] = unit('1')
 
 def pg_units(key):
     """
@@ -304,3 +345,92 @@ def pg_units(key):
     
     return PARTICLEGROUP_UNITS[key]    
     
+    
+# -------------------------
+# h5 tools
+
+def write_unit_h5(h5, u):
+    """
+    Writes an pmd_unit to an h5 handle
+    """
+
+    h5.attrs['unitSI'] = u.unitSI
+    h5.attrs['unitDimension'] = u.unitDimension
+    h5.attrs['unitSymbol'] = u.unitSymbol
+    
+def read_unit_h5(h5):
+    """
+    Reads unit data from an h5 handle and returns a pmd_unit object
+    """
+    a = h5.attrs
+    
+    unitSI = a['unitSI']
+    unitDimension = a['unitDimension']
+    if 'unitSymbol' not in a:
+        unitSymbol = 'unknown'
+    else:
+        unitSymbol=a['unitSymbol']
+        
+    return pmd_unit(unitSymbol=unitSymbol, unitSI=unitSI, unitDimension=unitDimension)
+
+
+    
+
+
+
+def read_dataset_and_unit_h5(h5, expected_unit=None, convert=True):
+    """
+    Reads a dataset that has openPMD unit attributes.
+    
+    expected_unit can be a pmd_unit object, or a known unit str. Examples: 'kg', 'J', 'eV'
+    
+    If expected_unit is given, will check that the units are compatible.
+    
+    If convert, the data will be returned with the expected_units. 
+    
+    
+    Returns a tuple:
+        np.array, pmd_unit
+        
+    """
+    
+    # Read the unit that is there. 
+    u = read_unit_h5(h5)
+    
+    # Simple case
+    if not expected_unit:
+        return np.array(h5), u
+    
+    if isinstance(expected_unit, str):
+        # Try to get unit
+        expected_unit = unit(expected_unit)
+        
+    # Check dimensions
+    du = divide_units(u, expected_unit)
+
+    assert du.unitDimension ==  (0,0,0,0,0,0,0), 'incompatible units'
+    
+    if convert:
+        fac = du.unitSI
+        return fac*np.array(h5), expected_unit
+    else:
+        return np.array(h5), u
+
+    
+def write_dataset_and_unit_h5(h5, name, data, unit):
+    """
+    Writes data and pmd_unit to h5[name]
+    
+    See: read_dataset_and_unit_h5
+    """
+    h5[name] = data
+    write_unit_h5(h5[name], unit)
+    
+    
+
+    
+    
+
+
+    
+

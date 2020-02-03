@@ -151,6 +151,7 @@ SI_name = {v: k for k, v in SI_symbol.items()}
 
 known_unit = { 
     '1'          : pmd_unit('', 1, '1'),
+    'rad'        : pmd_unit('rad', 1, '1'), 
     'm'          : pmd_unit('m', 1, 'length'),
     'kg'         : pmd_unit('kg', 1, 'mass'),
     'g'          : pmd_unit('g', .001, 'mass'),
@@ -324,7 +325,7 @@ for k in ['average_current']:
 for k in ['norm_emit_x', 'norm_emit_y']:
     PARTICLEGROUP_UNITS[k] = unit('m')
 for k in ['xp', 'yp']:
-    PARTICLEGROUP_UNITS[k] = unit('1')
+    PARTICLEGROUP_UNITS[k] = unit('rad')
 
 def pg_units(key):
     """
@@ -332,7 +333,7 @@ def pg_units(key):
     """
     for prefix in ['sigma_', 'mean_', 'min_', 'max', 'ptp_']:
         if key.startswith(prefix):
-            nkey = key.strip(prefix)
+            nkey = key[len(prefix):]
             return PARTICLEGROUP_UNITS[nkey]
     
     if key.startswith('cov_'):

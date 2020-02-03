@@ -18,6 +18,7 @@ charge_state = {'electron': -1}
 # Classes
 
 
+
 class ParticleGroup:
     """
     Particle Group class
@@ -171,10 +172,14 @@ class ParticleGroup:
     def avg(self, key):
         """Statistical average"""
         dat = getattr(self, key) # equivalent to self.key for accessing properties above
+        if np.isscalar(dat): 
+            return dat
         return np.average(dat, weights=self.weight)
     def std(self, key):
         """Standard deviation (actually sample)"""
-        dat = getattr(self, key) 
+        dat = getattr(self, key)
+        if np.isscalar(dat):
+            return 0
         avg_dat = self.avg(key)
         return np.sqrt(np.average( (dat - avg_dat)**2, weights=self.weight))
     def cov(self, *keys):
@@ -323,6 +328,7 @@ class ParticleGroup:
     def __str__(self):
         s = f'ParticleGroup with {self.n_particle} particles with total charge {self.charge} C'
         return s
+
 
 
 

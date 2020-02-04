@@ -42,27 +42,62 @@ class pmd_unit:
         pmd_unit('eV', 1.602176634e-19, (2, 1, -2, 0, 0, 0, 0))
         defines that an eV is 1.602176634e-19 of base units m^2 kg/s^2, which is a Joule (J)
     
+    If unitSI=0 (default), init with a known symbol:
+        pmd_unit('T')
+    returns:
+        pmd_unit('T', 1, (0, 1, -2, -1, 0, 0, 0))
     
     """
     def __init__(self, unitSymbol='', unitSI=0, unitDimension = (0,0,0,0,0,0,0)):
-        self.unitSymbol = unitSymbol       
-        self.unitSI = unitSI
+        
+        # Allow to return an internally known unit
+        if unitSI==0:
+            if unitSymbol in known_unit:
+                # Copy internals
+                u =  known_unit[unitSymbol]
+                unitSI= u.unitSI  
+                unitDimension = u.unitDimension
+            else:
+                raise ValueError(f'unknown unitSymbol: {unitSymbol}')
+                
+        self._unitSymbol = unitSymbol       
+        self._unitSI = unitSI
         if isinstance(unitDimension, str):
-             self.unitDimension = DIMENSION[unitDimension]
+             self._unitDimension = DIMENSION[unitDimension]
         else:
-            self.unitDimension = unitDimension
+            self._unitDimension = unitDimension
+            
+    @property 
+    def unitSymbol(self):
+        return self._unitSymbol
+    @property
+    def unitSI(self):
+        return self._unitSI
+    @property
+    def unitDimension(self):
+        return self._unitDimension 
 
     def __str__(self):
         return self.unitSymbol
     
     def __repr__(self):
         return  f"pmd_unit('{self.unitSymbol}', {self.unitSI}, {self.unitDimension})"
-        
+  
+
+def is_identity(u):
+    """Checks if the unit is equivalent to 1"""
+    return u.unitSI == 1 and u.unitDimension == (0,0,0,0,0,0,0)
+
 def multiply_units(u1, u2):
     """
     Multiplies two pmd_unit symbols
     """
 
+    if is_identity(u1):
+        return u2
+    if is_identity(u2):
+        return u1    
+    
     s1 = u1.unitSymbol
     s2 = u2.unitSymbol
     if s1==s2:
@@ -75,25 +110,7 @@ def multiply_units(u1, u2):
     unitSI = u1.unitSI * u2.unitSI
     
     return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)        
-     
-def divide_units(u1, u2):
-    """
-    Divides two pmd_unit symbols : u1/u2
-    """
-
-    s1 = u1.unitSymbol
-    s2 = u2.unitSymbol
-    if s1==s2:
-        symbol =  '1'
-    else:
-        symbol = s1+'/'+s2
-    d1 = u1.unitDimension
-    d2 = u2.unitDimension
-    dim=tuple(a-b for a,b in zip(d1, d2))
-    unitSI = u1.unitSI / u2.unitSI
-    
-    return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)       
-    
+        
         
 DIMENSION = {
    
@@ -151,7 +168,7 @@ SI_name = {v: k for k, v in SI_symbol.items()}
 
 known_unit = { 
     '1'          : pmd_unit('', 1, '1'),
-    'rad'        : pmd_unit('rad', 1, '1'), 
+    'rad'        : pmd_unit('', 1, '1'),
     'm'          : pmd_unit('m', 1, 'length'),
     'kg'         : pmd_unit('kg', 1, 'mass'),
     'g'          : pmd_unit('g', .001, 'mass'),
@@ -190,6 +207,8 @@ def unit(symbol):
     raise ValueError(f'Unknown unit symbol: {symbol}')
         
     
+
+
 
 
 
@@ -418,14 +437,16 @@ def read_dataset_and_unit_h5(h5, expected_unit=None, convert=True):
         return np.array(h5), u
 
     
-def write_dataset_and_unit_h5(h5, name, data, unit):
+def write_dataset_and_unit_h5(h5, name, data, unit=None):
     """
     Writes data and pmd_unit to h5[name]
     
     See: read_dataset_and_unit_h5
     """
     h5[name] = data
-    write_unit_h5(h5[name], unit)
+    
+    if unit:
+        write_unit_h5(h5[name], unit)
     
     
 

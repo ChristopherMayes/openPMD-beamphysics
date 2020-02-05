@@ -109,7 +109,28 @@ def multiply_units(u1, u2):
     dim=tuple(sum(x) for x in zip(d1, d2))
     unitSI = u1.unitSI * u2.unitSI
     
-    return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)        
+    return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)     
+
+def divide_units(u1, u2):
+    """
+    Divides two pmd_unit symbols : u1/u2
+    """
+
+    if is_identity(u2):
+        return u1
+    
+    s1 = u1.unitSymbol
+    s2 = u2.unitSymbol
+    if s1==s2:
+        symbol =  '1'
+    else:
+        symbol = s1+'/'+s2
+    d1 = u1.unitDimension
+    d2 = u2.unitDimension
+    dim=tuple(a-b for a,b in zip(d1, d2))
+    unitSI = u1.unitSI / u2.unitSI
+    
+    return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)   
         
         
 DIMENSION = {
@@ -385,7 +406,7 @@ def read_unit_h5(h5):
     a = h5.attrs
     
     unitSI = a['unitSI']
-    unitDimension = a['unitDimension']
+    unitDimension = tuple(a['unitDimension'])
     if 'unitSymbol' not in a:
         unitSymbol = 'unknown'
     else:

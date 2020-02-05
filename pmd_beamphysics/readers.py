@@ -57,7 +57,7 @@ particle_record_unit_dimension = {
     'time':dimension('time'),
     'timeOffset':dimension('time'),
     'velocity':dimension('velocity'),
-    'weight':dimension('1')
+    'weight':dimension('charge')
 }
 
 
@@ -89,6 +89,9 @@ def particle_paths(h5):
     """
     basePath = h5.attrs['basePath'].decode('utf-8')
     particlesPath = h5.attrs['particlesPath'].decode('utf-8')
+    
+    if '%T' not in basePath:
+        return basePath+particlesPath
     path1, path2 = basePath.split('%T')
     tlist = list(h5[path1])
     paths =  [path1+t+path2+particlesPath for t in tlist]
@@ -243,7 +246,7 @@ def component_str(particle_group, name):
     this_dimension =  component_unit_dimension(g)
     dname = dimension_name(this_dimension)
     symbol = SI_symbol[dname]
-    
+  
     s = name+' '
     
     if is_constant_component(g):
@@ -256,7 +259,8 @@ def component_str(particle_group, name):
     if symbol != '1':
         s += f' is a {dname} with units: {symbol}'
         
-    if expected_dimension != this_dimension:
-        s +=', but expected units: '+ SI_symbol[dimension_name(this_dimension)]
+    if expected_dimension != this_dimension:   
+        
+        s +=', but expected units: '+ SI_symbol[dimension_name(expected_dimension)]
     
     return s

@@ -2,9 +2,13 @@
 from .units import dimension, dimension_name, SI_symbol, pg_units
 from .interfaces.astra import write_astra
 from .readers import particle_array
-from .writers import write_pmd_bunch
+from .writers import write_pmd_bunch, pmd_init
+
+from h5py import File
 import numpy as np
 import scipy.constants
+
+
 
 mass_of = {'electron': 0.51099895000e6 # eV/c
               }
@@ -297,7 +301,17 @@ class ParticleGroup:
         
     # openPMD    
     def write(self, h5, name=None):
-        write_pmd_bunch(h5, self, name=name)        
+        """
+        Writes to an open h5 handle, or new file if h5 is a str.
+        
+        """
+        if isinstance(h5, str):
+            g = File(h5, 'w')
+            pmd_init(g, basePath='/', particlesPath='/' )
+        else:
+            g = h5
+    
+        write_pmd_bunch(g, self, name=name)        
         
     # New constructors
     def split(self, n_chunks = 100, key='z'):

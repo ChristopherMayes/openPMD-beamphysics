@@ -58,7 +58,7 @@ def slice_plot(particle_group, stat_key='sigma_x', n_slice=40, slice_key='z'):
     ax2.fill_between(x, 0, y2, color='black', alpha = 0.2)  
     
     
-def marginal_plot(particle_group, key1='t', key2='p', bins=100):
+def marginal_plot(particle_group, key1='t', key2='p', bins=None):
     """
     Density plot and projections
     
@@ -67,6 +67,10 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=100):
         marginal_plot(P, 't', 'energy', bins=200)   
     
     """
+    
+    if not bins:
+        n = len(particle_group)
+        bins = int(np.sqrt(n/4) )
 
     # Scale to nice units and get the factor, unit prefix
     x, f1, p1 = nice_array(particle_group[key1])

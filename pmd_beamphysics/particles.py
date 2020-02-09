@@ -27,25 +27,29 @@ class ParticleGroup:
     """
     Particle Group class
     
-    Initialized on on openPMD beamphysics particle group.
+    Initialized on on openPMD beamphysics particle group:
+        h5 = open h5 handle, or str that is a file
+        data = raw data
     
     The fundamental bunch data is stored in __dict__ with keys
-        str: species
-        int: n_particle
         np.array: x, px, y, py, z, pz, t, status, weight
+        str: species
     where:
         x, y, z are positions in units of [m]
         px, py, pz are momenta in units of [eV/c]
         t is time in [s]
         weight is the macro-charge weight in [C], used for all statistical calulations.
+        species is a proper species name: 'electron', etc. 
         
     Derived data can be computed as attributes:
         .gamma, .beta, .beta_x, .beta_y, .beta_z: relativistic factors [1].
+        .r, .theta: cylidrical coordinates [m], [1]
+        .pr, .ptheta: cylindrical momenta [1]
         .energy : total energy [eV]
         .kinetic_energy: total energy - mc^2 in [eV]. 
         .p: total momentum in [eV/c]
         .mass: rest mass in [eV]
-        .xp, .yp: Slopes x' = dx/dz = dpx/dpz and y' = dy/dz = fpy/dpz [1].
+        .xp, .yp: Slopes x' = dx/dz = dpx/dpz and y' = dy/dz = dpy/dpz [1].
         
     Statistics of any of these are calculated with:
         .min(X)
@@ -87,16 +91,52 @@ class ParticleGroup:
     def __init__(self, h5=None, data=None):
     
         if h5:
-            data = load_bunch_data(h5)
-        
+            # Allow filename
+            if isinstance(h5, str) and os.path.exists(h5):
+                with File(h5, 'r') as hh5:
+                    pp = particle_paths(hh5)
+                    assert len(pp) == 1, f'Number of particle paths in {h5}: {len(pp)}'
+                    data = load_bunch_data(hh5[pp[0]])
+
+            else:
+                # Try dict
+                data = load_bunch_data(h5)
+        else:
+            # Fill out data. Exclude species.
+            data = full_data(data)
+            species = list(set(data['species']))
+            
+            # Allow for empty data (len=0). Otherwise, check species.
+            if len(species) >= 1:
+                assert len(species) == 1, f'mixed species are not allowed: {species}'
+                data['species'] = species[0]
+            
+            
         self._settable_array_keys = ['x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight']
-        self._settable_scalar_keys = ['species', 'n_particle']
+        self._settable_scalar_keys = ['species']
         self._settable_keys =  self._settable_array_keys + self._settable_scalar_keys                       
         for key in self._settable_keys:
             self.__dict__[key] = data[key]
+    
+    
+    @property
+    def n_particle(self):
+        """Total number of particles. Same as len """
+        return len(self)
+    
+    @property
+    def n_alive(self):
+        """Number of alive particles, defined by status == 1"""
+        return len(np.where(self.status==1)[0])
+    
+    @property
+    def n_dead(self):
+        """Number of alive particles, defined by status != 1"""
+        return self.n_particle - self.n_alive
+    
         
-
     def units(self, key):
+        """Returns the units of any key"""
         return pg_units(key)
         
     @property
@@ -127,7 +167,7 @@ class ParticleGroup:
         """Kinetic energy in eV"""
         return self.energy - self.mass
     
-    # Slopes. Note that these are relatie to pz
+    # Slopes. Note that these are relative to pz
     @property
     def xp(self):
         return self.px/self.pz  
@@ -135,6 +175,22 @@ class ParticleGroup:
     def yp(self):
         return self.py/self.pz    
     
+    # Cylindrical coordinates. Note that these are ali
+    @property
+    def r(self):
+        return np.hypot(self.x, self.y)
+    @property    
+    def theta(self):
+        return np.arctan2(self.y, self.x)
+    @property
+    def pr(self):
+        return np.hypot(self.px, self.py)
+    @property    
+    def ptheta(self):
+        return np.arctan2(self.py, self.px)    
+    
+    
+    # Relativistic quantities
     @property
     def gamma(self):
         """Relativistic gamma"""
@@ -155,6 +211,8 @@ class ParticleGroup:
     def beta_z(self):
         """Relativistic beta, z component"""
         return self.pz/self.energy
+    
+    
     
     def delta(self, key):
         """Attribute (array) relative to its mean"""
@@ -231,13 +289,24 @@ class ParticleGroup:
     
     def __getitem__(self, key):
         """
-        Returns a property or statistical quantity that can be computed. 
+        Returns a property or statistical quantity that can be computed:
+        P['x'] returns the x array
+        P['sigmx_x'] returns the std(x) scalar
+        P['norm_emit_x'] returns the norm_emit_x scalar
+        
+        Parts can also be given. Example: P[0:10] returns a new ParticleGroup with the first 10 elements.
         """
+        
+        # Allow for non-string operations: 
+        if not isinstance(key, str):
+            return particle_parts(self, key)
+    
         if key.startswith('cov_'):
             subkeys = key[4:].split('__')
             assert len(subkeys) == 2, f'Too many properties in covariance request: {key}'
             return self.cov(*subkeys)[0,1]
-            
+        elif key.startswith('delta_'):
+            return self.delta(key[6:])
         elif key.startswith('sigma_'):
             return self.std(key[6:])
         elif key.startswith('mean_'):
@@ -251,6 +320,9 @@ class ParticleGroup:
         
         else:
             return getattr(self, key) 
+    
+    def where(self, x):
+        return self[np.where(x)]
     
     # TODO: should the user be allowed to do this?
     #def __setitem__(self, key, value):    
@@ -339,12 +411,24 @@ class ParticleGroup:
         """
         return join_particle_groups(self, other)
     
+    
+    def __len__(self):
+        return len(self[self._settable_array_keys[0]])
+    
     def __str__(self):
         s = f'ParticleGroup with {self.n_particle} particles with total charge {self.charge} C'
         return s
 
+    def __repr__(self):
+        memloc = hex(id(self))
+        return f'<ParticleGroup with {self.n_particle} particles at {memloc}>'
+            
+            
+    
 
 
+
+    
 
 
 #-----------------------------------------
@@ -360,7 +444,7 @@ def load_bunch_data(h5):
     attrs = dict(h5.attrs)
     data = {}
     data['species'] = attrs['speciesType'].decode('utf-8') # String
-    data['n_particle'] = int(attrs['numParticles'])
+    n_particle = int(attrs['numParticles'])
     data['total_charge'] = attrs['totalCharge']*attrs['chargeUnitSI']
     
     for key in ['x', 'px', 'y', 'py', 'z', 'pz', 't']:
@@ -369,26 +453,55 @@ def load_bunch_data(h5):
     if 'particleStatus' in h5:
         data['status'] = particle_array(h5, 'particleStatus')
     else:
-        data['status'] = np.full(data['n_particle'], 1)
+        data['status'] = np.full(n_particle, 1)
     
     # Make sure weight is populated
     if 'weight' in h5:
         weight = particle_array(h5, 'weight')
         if len(weight) == 1:
-            weight = np.full(data['n_particle'], weight[0])
+            weight = np.full(n_particle, weight[0])
     else:
-        weight = np.full(data['n_particle'], data['total_charge']/data['n_particle'])
+        weight = np.full(n_particle, data['total_charge']/n_particle)
     data['weight'] = weight
         
     return data
 
 
 
+def full_data(data, exclude=None):
+    """
+    Expands keyed data into np arrays, assuring that the lengths of all items are the same. 
+    
+    Allows for some keys to be scalars or length 1, and fills them out with np.full.
+    
+    
+    """
+    
+    full_data = {}
+    scalars = {}
+    for k, v in data.items():
+        if np.isscalar(v):
+            scalars[k] = v
+        elif len(v) == 1:
+            scalars[k] = v[0]
+        else:
+            # must be array
+            full_data[k] = np.array(v)
+    
+    # Check for single particle
+    if len(full_data) == 0:
+        return {k:np.array([v]) for k, v in scalars.items()}
+            
+    # Array data should all have the same length
+    nlist = [len(v) for _, v in full_data.items()]
+    assert len(set(nlist)) == 1, f'arrays must have the same length. Found len: { {k:len(v) for k, v in full_data.items()} }'
+    
+    for k, v in scalars.items():
+        full_data[k] = np.full(nlist[0], v)
+    
+    return full_data
 
-           
-    
-    
-    
+
 def split_particles(particle_group, n_chunks = 100, key='z'):
     """
     Splits a particle group into even chunks. Returns a list of particle groups. 
@@ -406,19 +519,18 @@ def split_particles(particle_group, n_chunks = 100, key='z'):
     for chunk in np.array_split(iz, n_chunks):
         # Prepare data
         data = {}
-        keys = ['x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight'] 
-        for k in keys:
+        #keys = ['x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight'] 
+        for k in particle_group._settable_array_keys:
             data[k] = getattr(particle_group, k)[chunk]
         # These should be scalars
-        data['n_particle'] = len(chunk)
         data['species'] = particle_group.species
         
         # New object
         p = ParticleGroup(data=data)
         plist.append(p)
         
-    return plist    
-   
+    return plist
+
 def resample(particle_group, n):
     """
     Resamples a ParticleGroup randomly.
@@ -437,9 +549,27 @@ def resample(particle_group, n):
         data[key] = particle_group[key][ixlist]
     data['species'] = particle_group['species']
     data['weight'] *= n_old/n # Need to re-weight
-    data['n_particle'] = n
     
     return ParticleGroup(data=data)
+
+
+
+def particle_parts(particle_group, x):
+    """
+    Gets parts of a ParticleGroup object. Returns a new ParticleGroup
+    """
+    data = {}
+    for k in particle_group._settable_array_keys:
+        data[k] = particle_group[k][x]
+
+    for k in particle_group._settable_scalar_keys:
+        data[k] = particle_group[k]
+
+    return ParticleGroup(data=data)
+           
+    
+    
+
 
     
 def join_particle_groups(*particle_groups):

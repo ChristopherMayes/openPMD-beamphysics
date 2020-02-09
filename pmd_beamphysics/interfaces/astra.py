@@ -5,7 +5,7 @@ def write_astra(beam,
                 outfile,
                 verbose=False,
                 species='electron',
-                probe=True):
+                probe=False):
     """
     Writes Astra style particles from a beam.
     

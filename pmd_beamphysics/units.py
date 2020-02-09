@@ -352,11 +352,11 @@ for k in ['t']:
     PARTICLEGROUP_UNITS[k] = unit('s')
 for k in ['energy', 'kinetic_energy', 'mass', 'higher_order_energy_spread']:
     PARTICLEGROUP_UNITS[k] = unit('eV')
-for k in ['px', 'py', 'pz', 'p']:
+for k in ['px', 'py', 'pz', 'p', 'pr']:
     PARTICLEGROUP_UNITS[k] = unit('eV/c')
-for k in ['x', 'y', 'z']:
+for k in ['x', 'y', 'z', 'r']:
     PARTICLEGROUP_UNITS[k] = unit('m')
-for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma']:    
+for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma', 'theta', 'ptheta']:    
     PARTICLEGROUP_UNITS[k] = unit('1')
 for k in ['charge', 'species_charge', 'weight']:
     PARTICLEGROUP_UNITS[k] = unit('C')
@@ -371,7 +371,7 @@ def pg_units(key):
     """
     Returns a str representing the units of any attribute
     """
-    for prefix in ['sigma_', 'mean_', 'min_', 'max', 'ptp_']:
+    for prefix in ['sigma_', 'mean_', 'min_', 'max_', 'ptp_', 'delta_']:
         if key.startswith(prefix):
             nkey = key[len(prefix):]
             return PARTICLEGROUP_UNITS[nkey]

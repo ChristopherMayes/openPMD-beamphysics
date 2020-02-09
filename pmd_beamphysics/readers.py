@@ -91,7 +91,7 @@ def particle_paths(h5):
     particlesPath = h5.attrs['particlesPath'].decode('utf-8')
     
     if '%T' not in basePath:
-        return basePath+particlesPath
+        return [basePath+particlesPath]
     path1, path2 = basePath.split('%T')
     tlist = list(h5[path1])
     paths =  [path1+t+path2+particlesPath for t in tlist]

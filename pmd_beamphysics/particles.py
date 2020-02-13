@@ -22,7 +22,6 @@ charge_state = {'electron': -1}
 # Classes
 
 
-
 class ParticleGroup:
     """
     Particle Group class
@@ -271,10 +270,21 @@ class ParticleGroup:
     def higher_order_energy_spread(self, order=2):
         """
         Fits a quadratic (order=2) to the Energy vs. time, subtracts it, finds the rms of the residual in eV.
+        
+        If all particles are at the same
         """
-        best_fit_coeffs = np.polynomial.polynomial.polyfit(self.t, self.energy, order)
-        best_fit = np.polynomial.polynomial.polyval(self.t, best_fit_coeffs)
-        return np.std(self.energy - best_fit)        
+        
+        if self.std('z') < 1e-12:
+            # must be at a screen. Use t
+            t = self.t
+        else:
+            # All particles at the same time. Use z to calc t
+            t = self.z/c_light
+        energy = self.energy
+        
+        best_fit_coeffs = np.polynomial.polynomial.polyfit(t, energy, order)
+        best_fit = np.polynomial.polynomial.polyval(t, best_fit_coeffs)
+        return np.std(energy - best_fit)        
     @property
     def average_current(self):
         """
@@ -425,6 +435,7 @@ class ParticleGroup:
             
             
     
+
 
 
 

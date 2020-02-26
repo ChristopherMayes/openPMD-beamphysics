@@ -1,6 +1,6 @@
-
 from .units import dimension, dimension_name, SI_symbol, pg_units
 from .interfaces.astra import write_astra
+from .interfaces.opal import write_opal
 from .readers import particle_array
 from .writers import write_pmd_bunch, pmd_init
 
@@ -380,6 +380,8 @@ class ParticleGroup:
     # Writers
     def write_astra(self, filePath, verbose=False):
         write_astra(self, filePath, verbose=verbose)
+    def write_opal(self, filePath, verbose=False):
+        write_opal(self, filePath, verbose=verbose)
         
     # openPMD    
     def write(self, h5, name=None):

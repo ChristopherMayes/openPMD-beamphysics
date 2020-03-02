@@ -1,13 +1,13 @@
 import numpy as np
 
 
-def write_astra(beam,
+def write_astra(particle_group,
                 outfile,
                 verbose=False,
                 species='electron',
                 probe=False):
     """
-    Writes Astra style particles from a beam.
+    Writes Astra style particles from particle_group type data.
     
     For now, the species must be electrons. 
     
@@ -18,12 +18,12 @@ def write_astra(beam,
         if verbose:
             print(*a, **k)
     
-    vprint(f'writing {beam.n_particle} particles to {outfile}')
+    vprint(f'writing {particle_group.n_particle} particles to {outfile}')
 
     assert species == 'electron' # TODO: add more species
     
     # number of lines in file
-    size = beam.n_particle + 1 # Allow one for reference particle
+    size = particle_group.n_particle + 1 # Allow one for reference particle
     i_start = 1 # Start for data particles
     if probe:
         # Add six probe particles, according to the manual
@@ -41,17 +41,17 @@ def write_astra(beam,
     ref_particle = {'q':0}
     sigma = {}
     for k in ['x', 'y', 'z', 'px', 'py', 'pz', 't']:
-        ref_particle[k] = beam.avg(k)
-        sigma[k] =  beam.std(k)
+        ref_particle[k] = particle_group.avg(k)
+        sigma[k] =  particle_group.std(k)
     ref_particle['t'] *= 1e9 # s -> nS
         
     # Make structured array
     dtype = np.dtype(list(zip(names, types)))
     data = np.zeros(size, dtype=dtype)
     for k in ['x', 'y', 'z', 'px', 'py', 'pz', 't']:
-        data[k][i_start:] = getattr(beam, k)
+        data[k][i_start:] = getattr(particle_group, k)
     data['t'] *= 1e9 # s -> nS
-    data['q'][i_start:] = beam.weight*1e9 # C -> nC
+    data['q'][i_start:] = particle_group.weight*1e9 # C -> nC
     
     # Set these to be the same
     data['index'] = 1    # electron

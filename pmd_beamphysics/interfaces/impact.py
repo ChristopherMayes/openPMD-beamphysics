@@ -92,7 +92,7 @@ def write_impact(particle_group,
     n_particle = particle_group.n_particle
     
     vprint(f'writing {n_particle} particles to {outfile}')
-    vprint(f'Cathode start with cathode_kinetic_energy_ref = {cathode_kinetic_energy_ref} eV')
+    
     
     mc2 = particle_group.mass
     
@@ -102,6 +102,7 @@ def write_impact(particle_group,
     
     # Handle z
     if cathode_kinetic_energy_ref:
+        vprint(f'Cathode start with cathode_kinetic_energy_ref = {cathode_kinetic_energy_ref} eV')
         
         # Impact-T conversion factor in eV
         output['Bkenergy'] = cathode_kinetic_energy_ref
@@ -140,7 +141,15 @@ def write_impact(particle_group,
         
     else:
         z = particle_group['z']
+        
+        t = np.unique(particle_group['t'])
+        assert len(t) == 1, 'All particles must be a the same time'
+        t = t[0]
+        output['Tini'] = t
+        output['Flagimg'] = 0 # Turn off Cathose start
         gamma_beta_z = particle_group['pz']/mc2
+        
+        vprint(f'Normal start with at time {t} s')
     
     # Form data table
     dat = np.array([

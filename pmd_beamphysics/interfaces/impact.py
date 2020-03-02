@@ -4,7 +4,7 @@ c_light = 299792458.
 
 
 
-def impact_particles_to_particle_data(tout, mc2=0, species=None, time=0, macrocharge=0, cathode_kinetic_energy_ref=None):
+def impact_particles_to_particle_data(tout, mc2=0, species=None, time=0, macrocharge=0, cathode_kinetic_energy_ref=None, verbose=False):
     """
     Convert impact particles to data for ParticleGroup
     
@@ -44,6 +44,9 @@ def impact_particles_to_particle_data(tout, mc2=0, species=None, time=0, macroch
         betac = np.sqrt(1-1/gamma**2)*c_light
         
         t = tout['z']/betac
+        if verbose:
+            print(f'Converting z to t according to cathode_kinetic_energy_ref = {cathode_kinetic_energy_ref} eV')
+        
         
     else:
         z = tout['z']
@@ -118,7 +121,9 @@ def write_impact(particle_group,
         output['Temission'] = t_ptp + 2*t_pad
         
         # This is the time that particles are shifted
-        output['Temission_shift'] = t_shift
+        #output['Temission_shift'] = t_shift
+        # Change actual initial time to this shift
+        output['Tini'] = t_shift
         
         tout = t+t_shift
         

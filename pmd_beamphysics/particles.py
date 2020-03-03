@@ -2,13 +2,13 @@ from .units import dimension, dimension_name, SI_symbol, pg_units
 from .interfaces.astra import write_astra
 from .interfaces.opal import write_opal
 from .interfaces.impact import write_impact
-from .readers import particle_array
+from .readers import particle_array, particle_paths
 from .writers import write_pmd_bunch, pmd_init
 
 from h5py import File
 import numpy as np
 import scipy.constants
-
+import os
 
 
 mass_of = {'electron': 0.51099895000e6 # eV/c

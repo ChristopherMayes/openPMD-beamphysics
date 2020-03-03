@@ -57,4 +57,3 @@ def write_opal(ParticleGroup,
 
     return None
 
-

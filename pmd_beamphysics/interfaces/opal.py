@@ -1,59 +1,62 @@
 import numpy as np
    
-def write_opal(ParticleGroup,           
+def write_opal(particle_group,           
                outfile,
                dist_type = 'emitted',
                verbose=False): 
 
     """
-    Writes Astra style particles from a beam. 
-    For now, the species must be electrons.   
-
-    There are two types of distributions OPAL can read 
-        from a file, Emitted or Injected. 
+    OPAL's ASCII format is described in:
+    
         https://gitlab.psi.ch/OPAL/Manual-2.2/wikis/distribution
     
-    The difference between the two is how the 
-        longitudinal dimension is defined and treated:
-        
-        In emitted distributions, the longitudinal dimension is 
-        described by time, and the particles are emitted 
-        from the cathode plane over a set number of 'emission steps'.
-        
-        For injected distributions, the longiudinal dimension is 
-        described by z, and the particles are born instaneously 
-        in the simulation at time step 0.
+    outfile is the name out the ASCII file to be written.
+    
+    dist_type is one of:
+    
+        'emitted' : The longitudinal dimension is 
+                    described by time, and the particles are emitted 
+                    from the cathode plane over a set number of 'emission steps'.
+                    
+        'injected': the longiudinal dimension is 
+                    described by z, and the particles are born instaneously 
+                    in the simulation at time step 0.
 
     """
-    def vprint(*a, **k):
-        if verbose:
-            print(*a, **k) 
 
-    # Format particles
-    if dist_type == 'emitted': 
-        # Column names are listed here for the code readers benefit
-        # They are not used to make the file
-        emitted_names = ['x', 'GBx','y', 'GBy','t','GBz']
-        emitted_data  = np.column_stack([ParticleGroup.x, ParticleGroup.gamma*ParticleGroup.beta_x, 
-                                         ParticleGroup.y, ParticleGroup.gamma*ParticleGroup.beta_y, 
-                                         ParticleGroup.t, ParticleGroup.gamma*ParticleGroup.beta_z])
-        vprint(f'writing emitted {ParticleGroup.n_particle} particles to {dist_type}-{outfile}')
-
-        # Save distribution to text file
-        np.savetxt(dist_type+'-'+outfile, emitted_data, header=str(ParticleGroup.n_particle), comments='', fmt = '%20.12e')
-
-    elif dist_type == 'injected':
-        injected_names = ['x', 'GBx','y', 'GBy','z','GBz']
-        injected_data  = np.column_stack([ParticleGroup.x, ParticleGroup.gamma*ParticleGroup.beta_x, 
-                                          ParticleGroup.y, ParticleGroup.gamma*ParticleGroup.beta_y, 
-                                          ParticleGroup.z, ParticleGroup.gamma*ParticleGroup.beta_z])
-        vprint(f'writing injected {ParticleGroup.n_particle} particles to {dist_type}-{outfile}')
-        
-        # Save distribution to text file
-        np.savetxt(dist_type+'-'+outfile, injected_data, header=str(ParticleGroup.n_particle), comments='', fmt = '%20.12e')
+    n = particle_group.n_particle            
+    x = particle_group.x
+    y = particle_group.y
     
+    # Get longitudinal coordinate
+    if dist_type == 'emitted':
+        
+        # Check that z are all the same
+        unique_z = np.unique(particle_group['z'])
+        assert len(unique_z) == 1, 'All particles must be a the same z position'
+        
+        z = particle_group.t
+        
+    elif dist_type == 'injected':
+        
+        # Check that t are all the same
+        unique_t = np.unique(particle_group['t'])
+        assert len(unique_t) == 1, 'All particles must be a the same time'
+        
+        z = particle_group.z
+
     else:
-        print('Invalid input argument for dist_type. No file made.')
-
-    return None
-
+        raise ValueError(f'unknown dist_type: {dist_type}')
+    
+    gamma = particle_group.gamma
+    GBx = gamma*particle_group.beta_x
+    GBy = gamma*particle_group.beta_y
+    GBz = gamma*particle_group.beta_z
+    
+    header=str(n)
+    dat = np.array([x, GBx, y, GBy, z, GBz]).T
+    
+    if verbose:
+        print(f'writing {dist_type} {n} particles to {outfile}')
+    np.savetxt(outfile, dat, header=header, comments='', fmt = '%20.12e')
+        

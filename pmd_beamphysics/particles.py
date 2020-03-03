@@ -380,8 +380,8 @@ class ParticleGroup:
     # Writers
     def write_astra(self, filePath, verbose=False):
         write_astra(self, filePath, verbose=verbose)
-    def write_opal(self, filePath, verbose=False):
-        write_opal(self, filePath, verbose=verbose)
+    def write_opal(self, filePath, verbose=False, dist_type='emitted'):
+        write_opal(self, filePath, verbose=verbose, dist_type=dist_type)
         
     # openPMD    
     def write(self, h5, name=None):

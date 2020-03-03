@@ -1,11 +1,9 @@
 import numpy as np
    
-def write_opal(beam,           
-               outfile,        
-               emitted=True,   
-               injected=False, 
-               verbose=False,  
-               species='electron'): 
+def write_opal(ParticleGroup,           
+               outfile,
+               dist_type = 'emitted',
+               verbose=False): 
 
     """
     Writes Astra style particles from a beam. 
@@ -27,32 +25,36 @@ def write_opal(beam,
         in the simulation at time step 0.
 
     """
-
     def vprint(*a, **k):
         if verbose:
             print(*a, **k) 
 
-    assert species == 'electron' # TODO: add more species
-
     # Format particles
-    if emitted:
-        eoutfile      = 'emitted-'+outfile
+    if dist_type == 'emitted': 
         # Column names are listed here for the code readers benefit
         # They are not used to make the file
         emitted_names = ['x', 'GBx','y', 'GBy','t','GBz']
-        emitted_data  = np.column_stack([beam.x, beam.gamma*beam.beta_x , beam.y, beam.gamma*beam.beta_y, beam.t, beam.gamma*beam.beta_z])
-        vprint(f'writing emitted {beam.n_particle} particles to {eoutfile}')
-        # Save in the 'high_res = T' format
-        np.savetxt(eoutfile, emitted_data, header=str(beam.n_particle), comments='', fmt = '%20.12e')
+        emitted_data  = np.column_stack([ParticleGroup.x, ParticleGroup.gamma*ParticleGroup.beta_x, 
+                                         ParticleGroup.y, ParticleGroup.gamma*ParticleGroup.beta_y, 
+                                         ParticleGroup.t, ParticleGroup.gamma*ParticleGroup.beta_z])
+        vprint(f'writing emitted {ParticleGroup.n_particle} particles to {dist_type}-{outfile}')
 
-    if injected:
-        ioutfile       = 'injected-'+outfile
-        # Column names are listed here for the code readers benefit
-        # They are not used to make the file
+        # Save distribution to text file
+        np.savetxt(dist_type+'-'+outfile, emitted_data, header=str(ParticleGroup.n_particle), comments='', fmt = '%20.12e')
+
+    elif dist_type == 'injected':
         injected_names = ['x', 'GBx','y', 'GBy','z','GBz']
-        injected_data  = np.colunm_stack([beam.x, beam.gamma*beam.beta_x , beam.y, beam.gamma*beam.beta_y, beam.z, beam.gamma*beam.beta_z])
-        vprint(f'writing injected {beam.n_particle} particles to {ioutfile}')
+        injected_data  = np.column_stack([ParticleGroup.x, ParticleGroup.gamma*ParticleGroup.beta_x, 
+                                          ParticleGroup.y, ParticleGroup.gamma*ParticleGroup.beta_y, 
+                                          ParticleGroup.z, ParticleGroup.gamma*ParticleGroup.beta_z])
+        vprint(f'writing injected {ParticleGroup.n_particle} particles to {dist_type}-{outfile}')
+        
+        # Save distribution to text file
+        np.savetxt(dist_type+'-'+outfile, injected_data, header=str(ParticleGroup.n_particle), comments='', fmt = '%20.12e')
+    
+    else:
+        print('Invalid input argument for dist_type. No file made.')
 
-        # Save in the 'high_res = T' format
-        np.savetxt(ioutfile, injected_data, header=str(beam.n_particle), comments='', fmt = '%20.12e')
+    return None
+
 

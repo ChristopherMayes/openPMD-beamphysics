@@ -17,6 +17,7 @@ def impact_particles_to_particle_data(tout, mc2=0, species=None, time=0, macroch
     
     If cathode_kinetic_energy_ref is given, z will be parsed appropriately to t, and z will be set to 0. 
     
+    Otherwise, particles will be set to the same time.
     
     """
     
@@ -38,7 +39,9 @@ def impact_particles_to_particle_data(tout, mc2=0, species=None, time=0, macroch
     
     # Handle z
     if cathode_kinetic_energy_ref:
+        # Cathode start
         z = np.full(n_particle, 0.0)
+        
         # Note that this is purely a conversion factor. 
         gamma = 1.0 + cathode_kinetic_energy_ref/mc2
         betac = np.sqrt(1-1/gamma**2)*c_light
@@ -49,6 +52,7 @@ def impact_particles_to_particle_data(tout, mc2=0, species=None, time=0, macroch
         
         
     else:
+        # Free space start
         z = tout['z']
         t = np.full(n_particle, time)
     
@@ -81,6 +85,8 @@ def write_impact(particle_group,
     
     If cathode_kinetic_energy_ref is given, t will be used to compute z for cathode emission.
     
+    Otherwise, particles must have the same time, and should be started in free space.
+    
     A dict is returned with info about emission, for use in Impact-T
     
     """
@@ -102,6 +108,8 @@ def write_impact(particle_group,
     
     # Handle z
     if cathode_kinetic_energy_ref:
+        # Cathode start
+    
         vprint(f'Cathode start with cathode_kinetic_energy_ref = {cathode_kinetic_energy_ref} eV')
         
         # Impact-T conversion factor in eV
@@ -140,6 +148,7 @@ def write_impact(particle_group,
         gamma_beta_z = pz/mc2
         
     else:
+        # Free space start
         z = particle_group['z']
         
         t = np.unique(particle_group['t'])

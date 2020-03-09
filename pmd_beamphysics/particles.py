@@ -1,7 +1,11 @@
 from .units import dimension, dimension_name, SI_symbol, pg_units
+
 from .interfaces.astra import write_astra
-from .interfaces.opal import write_opal
+from .interfaces.bmad import write_bmad
+from .interfaces.gpt import write_gpt
 from .interfaces.impact import write_impact
+from .interfaces.opal import write_opal
+
 from .readers import particle_array, particle_paths
 from .writers import write_pmd_bunch, pmd_init
 
@@ -381,12 +385,19 @@ class ParticleGroup:
     # Writers
     def write_astra(self, filePath, verbose=False):
         write_astra(self, filePath, verbose=verbose)
+        
+    def write_bmad(self, filePath, verbose=False):
+        write_bmad(self, filePath, p0c=None, t_ref=0, verbose=verbose)        
 
+    def write_gpt(self, filePath, verbose=False):
+        write_gpt(self, filePath, verbose=verbose)    
+    
+    def write_impact(self, filePath, verbose=False, cathode_kinetic_energy_ref=None):
+        return write_impact(self, filePath, verbose=verbose, cathode_kinetic_energy_ref=cathode_kinetic_energy_ref)            
+        
     def write_opal(self, filePath, verbose=False, dist_type='emitted'):
         write_opal(self, filePath, verbose=verbose, dist_type=dist_type)
     
-    def write_impact(self, filePath, verbose=False, cathode_kinetic_energy_ref=None):
-        return write_impact(self, filePath, verbose=verbose, cathode_kinetic_energy_ref=cathode_kinetic_energy_ref)        
         
     # openPMD    
     def write(self, h5, name=None):

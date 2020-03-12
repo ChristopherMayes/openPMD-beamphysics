@@ -334,7 +334,7 @@ def nice_array(a):
     else:
         a = np.array(a)
         x = a.ptp()
-        
+     
     fac, prefix = nice_scale_prefix( x )
     
     return a/fac, fac,  prefix

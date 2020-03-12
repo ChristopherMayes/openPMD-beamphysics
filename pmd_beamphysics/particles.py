@@ -407,7 +407,7 @@ class ParticleGroup:
         """
         if isinstance(h5, str):
             g = File(h5, 'w')
-            pmd_init(g, basePath='/', particlesPath='/' )
+            pmd_init(g, basePath='/', particlesPath='.' )
         else:
             g = h5
     

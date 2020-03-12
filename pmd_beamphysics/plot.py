@@ -14,6 +14,18 @@ cmap.set_under('white')
 
 
 
+def plt_histogram(a, weights=None, bins=40):
+    """
+    This produces the same plot as plt.hist
+    
+    For reference only
+    
+    Note that bins='auto', etc cannot be used if there are weights.
+    """
+    cnts, bins = np.histogram(a, weights=weights, bins=bins)
+    plt.bar(bins[:-1] + np.diff(bins) / 2, cnts, np.diff(bins))
+
+
 def slice_plot(particle_group, stat_key='sigma_x', n_slice=40, slice_key='z'):
     """
     Complete slice plotting routine. Will plot the density of the slice key on the right axis. 
@@ -104,10 +116,29 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None):
     #extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
     #ax_joint.imshow(H.T, cmap=cmap, vmin=1e-16, origin='lower', extent=extent, aspect='auto')
     
-    dx = x.ptp()/bins
-    dy = y.ptp()/bins
-    ax_marg_x.hist(x, weights=w/dx/f1, bins=bins, color='gray')
-    ax_marg_y.hist(y, orientation="horizontal", weights=w/dy, bins=bins, color='gray')
+    
+    
+    # Top histogram
+    # Old method:
+    #dx = x.ptp()/bins
+    #ax_marg_x.hist(x, weights=w/dx/f1, bins=bins, color='gray')
+    hist, bin_edges = np.histogram(x, bins=bins, weights=w)
+    hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
+    hist_width =  np.diff(bin_edges)
+    hist_y, hist_f, hist_prefix = nice_array(hist)
+    ax_marg_x.bar(hist_x, hist_y, hist_width, color='gray')
+    ax_marg_x.set_ylabel(f'{hist_prefix}C/{u1}')
+    
+    # Side histogram
+    # Old method:
+    #dy = y.ptp()/bins
+    #ax_marg_y.hist(y, orientation="horizontal", weights=w/dy, bins=bins, color='gray')
+    hist, bin_edges = np.histogram(y, bins=bins, weights=w)
+    hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
+    hist_width =  np.diff(bin_edges)
+    hist_y, hist_f, hist_prefix = nice_array(hist)
+    ax_marg_y.barh(hist_x, hist_y, hist_width, color='gray')
+    ax_marg_y.set_xlabel(f'{hist_prefix}C/{uy}')
     
     # Turn off tick labels on marginals
     plt.setp(ax_marg_x.get_xticklabels(), visible=False)
@@ -116,12 +147,8 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None):
     # Set labels on joint
     ax_joint.set_xlabel(labelx)
     ax_joint.set_ylabel(labely)
-    
-    # Set labels on marginals
-    ax_marg_x.set_ylabel(f'C/{u1}')
-    ax_marg_y.set_xlabel(f'C/{uy}')
+
     plt.show()
-    
     
     
 def density_and_slice_plot(particle_group, key1='t', key2='p', stat_keys=['norm_emit_x', 'norm_emit_y'], bins=100, n_slice=30):

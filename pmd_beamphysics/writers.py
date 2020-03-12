@@ -12,7 +12,7 @@ def fstr(s):
 
 
 
-def pmd_init(h5, basePath='/screen/%T/', particlesPath='/' ):
+def pmd_init(h5, basePath='/data/%T/', particlesPath='./' ):
     """
     Root attribute initialization.
     

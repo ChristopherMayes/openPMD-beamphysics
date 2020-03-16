@@ -47,16 +47,22 @@ def write_gpt(particle_group,
         print(f'writing {n} particles to {outfile}')
     
     
+    # Write ASCII
     np.savetxt(outfile, outdat, header=header, comments='', fmt = '%20.12e')
     
-    
     if asci2gdf_bin:
+        
+        tempfile = outfile+'.txt'
+        os.rename(outfile, tempfile)
+        
         asci2gdf_bin = os.path.expandvars(asci2gdf_bin)
         assert os.path.exists(asci2gdf_bin), f'{asci2gdf_bin} does not exist'
-        cmd = [asci2gdf_bin, '-o', outfile, outfile]
+        cmd = [asci2gdf_bin, '-o', outfile, tempfile]
         if verbose:
             print(' '.join(cmd))
         subprocess.run(cmd)
+        # Cleanup
+        os.remove(tempfile)
     else: 
         print(f'ASCII particles written. Convert to GDF using: asci2df -o particles.gdf {outfile}')
 

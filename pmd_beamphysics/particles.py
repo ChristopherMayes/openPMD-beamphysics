@@ -389,8 +389,8 @@ class ParticleGroup:
     def write_bmad(self, filePath, verbose=False):
         write_bmad(self, filePath, p0c=None, t_ref=0, verbose=verbose)        
 
-    def write_gpt(self, filePath, verbose=False):
-        write_gpt(self, filePath, verbose=verbose)    
+    def write_gpt(self, filePath, asci2gdf_bin=None, verbose=False):
+        write_gpt(self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose)    
     
     def write_impact(self, filePath, verbose=False, cathode_kinetic_energy_ref=None):
         return write_impact(self, filePath, verbose=verbose, cathode_kinetic_energy_ref=cathode_kinetic_energy_ref)            

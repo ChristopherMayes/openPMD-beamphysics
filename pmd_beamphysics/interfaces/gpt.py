@@ -1,9 +1,12 @@
 from pmd_beamphysics.units import e_charge
 
 import numpy as np
+import subprocess
+import os
    
 def write_gpt(particle_group,           
                outfile,
+               asci2gdf_bin=None,
                verbose=False): 
 
     """
@@ -42,7 +45,22 @@ def write_gpt(particle_group,
     
     if verbose:
         print(f'writing {n} particles to {outfile}')
-        
+    
+    
     np.savetxt(outfile, outdat, header=header, comments='', fmt = '%20.12e')
+    
+    
+    if asci2gdf_bin:
+        asci2gdf_bin = os.path.expandvars(asci2gdf_bin)
+        assert os.path.exists(asci2gdf_bin), f'{asci2gdf_bin} does not exist'
+        cmd = [asci2gdf_bin, '-o', outfile, outfile]
+        if verbose:
+            print(' '.join(cmd))
+        subprocess.run(cmd)
+    else: 
+        print(f'ASCII particles written. Convert to GDF using: asci2df -o particles.gdf {outfile}')
 
+        
+
+    
         

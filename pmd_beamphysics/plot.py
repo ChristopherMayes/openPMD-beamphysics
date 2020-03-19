@@ -127,7 +127,13 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None):
     hist_width =  np.diff(bin_edges)
     hist_y, hist_f, hist_prefix = nice_array(hist)
     ax_marg_x.bar(hist_x, hist_y, hist_width, color='gray')
-    ax_marg_x.set_ylabel(f'{hist_prefix}C/{u1}')
+    # Special label for C/s = A
+    if u1 == 's':
+        _, hist_prefix = nice_scale_prefix(hist_f/f1)
+        ax_marg_x.set_ylabel(f'{hist_prefix}A')
+    else:
+        ax_marg_x.set_ylabel(f'{hist_prefix}C/{ux}')
+    
     
     # Side histogram
     # Old method:

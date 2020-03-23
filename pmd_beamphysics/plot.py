@@ -109,7 +109,7 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None):
     #ax_info.table(cellText=['a'])
     
     # Proper weighting
-    ax_joint.hexbin(x, y, C=w, reduce_C_function=np.sum, gridsize=bins, cmap=cmap, vmin=1e-15)
+    ax_joint.hexbin(x, y, C=w, reduce_C_function=np.sum, gridsize=bins, cmap=cmap, vmin=1e-20)
     
     # Manual histogramming version
     #H, xedges, yedges = np.histogram2d(x, y, weights=w, bins=bins)

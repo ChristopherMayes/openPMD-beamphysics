@@ -123,6 +123,9 @@ def write_impact(particle_group,
         
         # All t must be negative. 
         t_ptp = t.ptp()
+        # Allow for some padding
+        if t_ptp == 0:
+            t_ptp = 1e-15  # s
         t_pad = t_ptp*1e-3 # 0.1% pad 
         t_shift = -t.max() -t_pad
         

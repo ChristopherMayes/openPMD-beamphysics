@@ -158,7 +158,7 @@ def write_impact(particle_group,
         assert len(t) == 1, 'All particles must be a the same time'
         t = t[0]
         output['Tini'] = t
-        output['Flagimg'] = 0 # Turn off Cathose start
+        output['Flagimg'] = 0 # Turn off Cathode start
         gamma_beta_z = particle_group['pz']/mc2
         
         vprint(f'Normal start with at time {t} s')

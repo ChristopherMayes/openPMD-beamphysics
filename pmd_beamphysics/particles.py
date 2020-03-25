@@ -12,6 +12,7 @@ from .writers import write_pmd_bunch, pmd_init
 from h5py import File
 import numpy as np
 import scipy.constants
+from copy import deepcopy
 import os
 
 
@@ -416,7 +417,11 @@ class ParticleGroup:
     # New constructors
     def split(self, n_chunks = 100, key='z'):
         return split_particles(self, n_chunks=n_chunks, key=key)
-    
+   
+    def copy(self):
+        """Returns a deep copy"""
+        return deepcopy(self)
+
     # Resample
     def resample(self, n):
         """

@@ -27,7 +27,6 @@ charge_state = {'electron': -1}
 #-----------------------------------------
 # Classes
 
-
 class ParticleGroup:
     """
     Particle Group class
@@ -70,6 +69,11 @@ class ParticleGroup:
         .norm_emit_y
         .higher_order_energy_spread
         .average_current
+            
+    The weight is required and must sum to > 0. The sum of the weights is:
+        .charge
+    This can also be set:
+        .charge = 1.234 # pC, will rescale the .weight array
             
     All attributes can be accessed with brackets:
         [key]
@@ -157,6 +161,12 @@ class ParticleGroup:
     @property
     def charge(self):
         return np.sum(self.weight)
+    @charge.setter
+    def charge(self, val):
+        """Rescale weight array so that it sum to this value"""
+        assert val >0, 'charge must be >0. This is used to weight the particles.'
+        self.weight *= val/self.charge
+        
     
     # Relativistic properties
     @property
@@ -417,11 +427,11 @@ class ParticleGroup:
     # New constructors
     def split(self, n_chunks = 100, key='z'):
         return split_particles(self, n_chunks=n_chunks, key=key)
-   
+    
     def copy(self):
         """Returns a deep copy"""
-        return deepcopy(self)
-
+        return deepcopy(self)    
+    
     # Resample
     def resample(self, n):
         """
@@ -457,12 +467,6 @@ class ParticleGroup:
         return f'<ParticleGroup with {self.n_particle} particles at {memloc}>'
             
             
-    
-
-
-
-
-    
 
 
 #-----------------------------------------

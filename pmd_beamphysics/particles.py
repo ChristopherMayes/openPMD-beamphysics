@@ -470,8 +470,32 @@ class ParticleGroup:
 
 
 #-----------------------------------------
-# helper funcion for ParticleGroup class
+# helper functions for ParticleGroup class
     
+    
+def single_particle(x=0,
+                   px=0,
+                   y=0,
+                   py=0,
+                   z=0,
+                   pz=0,
+                   t=0,
+                   weight=1,
+                   status=1,
+                   species='electron'):
+    """
+    Convenience function to make ParticleGroup with a single particle.
+    
+    Units:
+        x, y, z: m
+        px, py, pz: eV/c
+        t: s
+        weight: C
+        status=1 => live particle
+        
+    """
+    data = dict(x=x, px=px, y=y, py=py, z=z, pz=pz, t=t, weight=weight, status=status, species=species)
+    return ParticleGroup(data=data)
     
 def load_bunch_data(h5):
     """

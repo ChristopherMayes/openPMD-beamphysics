@@ -50,7 +50,7 @@ def write_bmad(particle_group,
         px = px/p0c
         py = py/p0c
         
-        z = -particle_group.beta*299792458.(t - t_ref)
+        z = -particle_group.beta*299792458(t - t_ref)
         pz = particle_group.p/p0c -1.0
         
         

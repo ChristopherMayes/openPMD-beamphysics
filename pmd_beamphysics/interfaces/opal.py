@@ -59,4 +59,45 @@ def write_opal(particle_group,
     if verbose:
         print(f'writing {dist_type} {n} particles to {outfile}')
     np.savetxt(outfile, dat, header=header, comments='', fmt = '%20.12e')
+    
+    
+    
+    
+def opal_to_data(h5):
+    """
+    Converts an OPAL step to the standard data format for openPMD-beamphysics
+    
+    In OPAL, the momenta px, py, pz are gamma*beta_x, gamma*beta_y, gamma*beta_z. 
+    
+    TODO: More species. 
+        
+    """
+    D = dict(h5.attrs)
+    mc2 = D['MASS'][0]*1e9 # GeV -> eV 
+    charge = D['CHARGE'][0] # total charge in C
+    t = D['TIME'][0] # s
+    ptypes = h5['ptype'][:]  # 0 = electron?
+    
+    pref = D['RefPartP']*mc2  # 
+    rref = D['RefPartR']
+    
+    n = len(ptypes)
+    assert all(h5['ptype'][:] == 0)
+    species = 'electron'
+    status=1
+    data = {
+        'x':h5['x'][:] + rref[0],
+        'y':h5['y'][:] + rref[1],
+        'z':h5['z'][:] + rref[2],
+        'px':h5['px'][:]*mc2 + pref[0],
+        'py':h5['py'][:]*mc2+ pref[1],
+        'pz':h5['pz'][:]*mc2+ pref[2],
+        't': np.full(n, t),
+        'status': np.full(n, status),
+        'species':species,
+        'weight': np.full(n, abs(charge)/n)
+    }
+    return data
+
+
         

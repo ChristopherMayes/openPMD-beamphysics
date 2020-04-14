@@ -101,8 +101,11 @@ class ParticleGroup:
     
         if h5:
             # Allow filename
-            if isinstance(h5, str) and os.path.exists(h5):
-                with File(h5, 'r') as hh5:
+            if isinstance(h5, str):
+                fname = os.path.expandvars(h5)
+                assert os.path.exists(fname), f'File does not exist: {fname}'
+  
+                with File(fname, 'r') as hh5:
                     pp = particle_paths(hh5)
                     assert len(pp) == 1, f'Number of particle paths in {h5}: {len(pp)}'
                     data = load_bunch_data(hh5[pp[0]])
@@ -417,7 +420,8 @@ class ParticleGroup:
         
         """
         if isinstance(h5, str):
-            g = File(h5, 'w')
+            fname = os.path.expandvars(h5)
+            g = File(fname, 'w')
             pmd_init(g, basePath='/', particlesPath='.' )
         else:
             g = h5

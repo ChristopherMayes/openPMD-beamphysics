@@ -2,7 +2,7 @@
 
 
 """
-from pmd_beamphysics.particles import slice_statistics
+
 from  pmd_beamphysics.units import nice_array, nice_scale_prefix
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
@@ -25,7 +25,26 @@ def plt_histogram(a, weights=None, bins=40):
     cnts, bins = np.histogram(a, weights=weights, bins=bins)
     plt.bar(bins[:-1] + np.diff(bins) / 2, cnts, np.diff(bins))
 
-
+    
+def slice_statistics(particle_group,  keys=['mean_z'], n_slice=40, slice_key='z'):
+    """
+    Slices a particle group into n slices and returns statistics from each sliced defined in keys. 
+    
+    These statistics should be scalar floats for now.
+    
+    Any key can be used to slice on. 
+    
+    """
+    sdat = {}
+    for k in keys:
+        sdat[k] = np.empty(n_slice)
+    for i, pg in enumerate(particle_group.split(n_slice, key=slice_key)):
+        for k in keys:
+            sdat[k][i] = pg[k]
+            
+    return sdat
+    
+    
 def slice_plot(particle_group, stat_key='sigma_x', n_slice=40, slice_key='z'):
     """
     Complete slice plotting routine. Will plot the density of the slice key on the right axis. 
@@ -68,7 +87,47 @@ def slice_plot(particle_group, stat_key='sigma_x', n_slice=40, slice_key='z'):
     ax2 = ax.twinx()
     ax2.set_ylabel(f'{y2_key} ({y2_units})' )
     ax2.fill_between(x, 0, y2, color='black', alpha = 0.2)  
+
     
+    
+def density_plot(particle_group, key='x', bins=None):
+    """
+    1D density plot. Also see: marginal_plot
+    
+    Example:
+    
+        density_plot(P, 'x', bins=100)   
+    
+    """
+    
+    if not bins:
+        n = len(particle_group)
+        bins = int(n/100)
+
+    # Scale to nice units and get the factor, unit prefix
+    x, f1, p1 = nice_array(particle_group[key])
+    w = particle_group['weight']
+    u1 = particle_group.units(key).unitSymbol
+    ux = p1+u1
+    
+    labelx = f'{key} ({ux})'
+    
+    fig, ax = plt.subplots()
+    
+    hist, bin_edges = np.histogram(x, bins=bins, weights=w)
+    hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
+    hist_width =  np.diff(bin_edges)
+    hist_y, hist_f, hist_prefix = nice_array(hist)
+    ax.bar(hist_x, hist_y, hist_width, color='grey')
+    # Special label for C/s = A
+    if u1 == 's':
+        _, hist_prefix = nice_scale_prefix(hist_f/f1)
+        ax.set_ylabel(f'{hist_prefix}A')
+    else:
+        ax.set_ylabel(f'{hist_prefix}C/{ux}')
+    
+
+    ax.set_xlabel(labelx)    
     
 def marginal_plot(particle_group, key1='t', key2='p', bins=None):
     """

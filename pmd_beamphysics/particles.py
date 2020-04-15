@@ -6,6 +6,8 @@ from .interfaces.gpt import write_gpt
 from .interfaces.impact import write_impact
 from .interfaces.opal import write_opal
 
+from .plot import density_plot, marginal_plot
+
 from .readers import particle_array, particle_paths
 from .writers import write_pmd_bunch, pmd_init
 
@@ -428,6 +430,16 @@ class ParticleGroup:
     
         write_pmd_bunch(g, self, name=name)        
         
+        
+    # Plot
+    # TODO: more general plotting
+    def plot(self, key1='x', key2=None, bins=None):
+        
+        if not key2:
+            return density_plot(self, key=key1, bins=bins)
+        else:
+            return marginal_plot(self, key1=key1, key2=key2, bins=bins)
+        
     # New constructors
     def split(self, n_chunks = 100, key='z'):
         return split_particles(self, n_chunks=n_chunks, key=key)
@@ -435,6 +447,9 @@ class ParticleGroup:
     def copy(self):
         """Returns a deep copy"""
         return deepcopy(self)    
+    
+    
+    # Operator overloading    
     
     # Resample
     def resample(self, n):
@@ -469,6 +484,7 @@ class ParticleGroup:
     def __repr__(self):
         memloc = hex(id(self))
         return f'<ParticleGroup with {self.n_particle} particles at {memloc}>'
+            
             
             
 
@@ -662,24 +678,7 @@ def join_particle_groups(*particle_groups):
     return ParticleGroup(data=data)    
     
     
-    
-def slice_statistics(particle_group,  keys=['mean_z'], n_slice=40, slice_key='z'):
-    """
-    Slices a particle group into n slices and returns statistics from each sliced defined in keys. 
-    
-    These statistics should be scalar floats for now.
-    
-    Any key can be used to slice on. 
-    
-    """
-    sdat = {}
-    for k in keys:
-        sdat[k] = np.empty(n_slice)
-    for i, pg in enumerate(particle_group.split(n_slice, key=slice_key)):
-        for k in keys:
-            sdat[k][i] = pg[k]
-            
-    return sdat
+
     
 
 

@@ -29,6 +29,7 @@ charge_state = {'electron': -1}
 #-----------------------------------------
 # Classes
 
+
 class ParticleGroup:
     """
     Particle Group class
@@ -37,7 +38,7 @@ class ParticleGroup:
         h5 = open h5 handle, or str that is a file
         data = raw data
     
-    The fundamental bunch data is stored in __dict__ with keys
+    The required bunch data is stored in __dict__ with keys
         np.array: x, px, y, py, z, pz, t, status, weight
         str: species
     where:
@@ -46,6 +47,12 @@ class ParticleGroup:
         t is time in [s]
         weight is the macro-charge weight in [C], used for all statistical calulations.
         species is a proper species name: 'electron', etc. 
+        
+    Optional data:
+        np.array: id
+    where:
+        id is a list of unique integers that identify the particles. 
+    
         
     Derived data can be computed as attributes:
         .gamma, .beta, .beta_x, .beta_y, .beta_z: relativistic factors [1].
@@ -127,12 +134,26 @@ class ParticleGroup:
             
             
         self._settable_array_keys = ['x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight']
+        # Optional data
+        for k in ['id']:
+            if k in data:
+                self._settable_array_keys.append(k)  
+            
         self._settable_scalar_keys = ['species']
         self._settable_keys =  self._settable_array_keys + self._settable_scalar_keys                       
         for key in self._settable_keys:
             self.__dict__[key] = data[key]
-    
-    
+            
+            
+    def assign_id(self):
+        """
+        Assigns unique ids,
+        
+        """
+        if 'id' not in self._settable_array_keys: 
+            self._settable_array_keys.append('id')
+        self.id = np.arange(self['n_particle'])            
+
     @property
     def n_particle(self):
         """Total number of particles. Same as len """
@@ -484,9 +505,7 @@ class ParticleGroup:
     def __repr__(self):
         memloc = hex(id(self))
         return f'<ParticleGroup with {self.n_particle} particles at {memloc}>'
-            
-            
-            
+                   
 
 
 #-----------------------------------------
@@ -545,6 +564,11 @@ def load_bunch_data(h5):
     else:
         weight = np.full(n_particle, data['total_charge']/n_particle)
     data['weight'] = weight
+    
+    # id should be a unique integer, no units
+    # optional
+    if 'id' in h5:
+        data['id'] = h5['id'][:]
         
     return data
 

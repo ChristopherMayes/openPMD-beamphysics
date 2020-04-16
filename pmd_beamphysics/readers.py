@@ -122,7 +122,7 @@ def component_unit_dimension(h5):
     """
     return tuple(h5.attrs['unitDimension'])
     
-def component_data(h5, slice = slice(None), unit_factor=1.0):
+def component_data(h5, slice = slice(None), unit_factor=1):
     """
     Returns a numpy array from an h5 component.
     
@@ -138,7 +138,7 @@ def component_data(h5, slice = slice(None), unit_factor=1.0):
     if 'unitSI' in h5.attrs:
         factor = h5.attrs['unitSI']
     else:
-        factor = 1.0   
+        factor = 1
     
     # Additional conversion factor
     if unit_factor:
@@ -150,7 +150,7 @@ def component_data(h5, slice = slice(None), unit_factor=1.0):
         # Retrieve dataset
         dat = h5[slice]
 
-    if factor != 1.0:
+    if factor != 1:
         dat *= factor
         
     return dat

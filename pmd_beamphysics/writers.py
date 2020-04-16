@@ -37,8 +37,10 @@ def write_pmd_bunch(h5, data, name=None):
         np.array: 'x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight'
         str: 'species'
         int: n_particle
+
+    Optional data:
+        np.array: 'id'
         
-    
     See inverse routine:
         .particles.load_bunch_data
     
@@ -54,7 +56,7 @@ def write_pmd_bunch(h5, data, name=None):
     g.attrs['totalCharge'] = data['charge']
     g.attrs['chargeUnitSI'] = 1.0
     
-    # Datasets
+    # Required Datasets
     for key in ['x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight']:
         # Get full name, write data
         g2_name = component_alias[key]
@@ -66,7 +68,12 @@ def write_pmd_bunch(h5, data, name=None):
         g2.attrs['unitSI'] = u.unitSI
         g2.attrs['unitDimension'] = u.unitDimension
         g2.attrs['unitSymbol'] = u.unitSymbol
-    
+        
+    # Optional id. This does not have any units.
+    if 'id' in data or hasattr(data, 'id'):
+        g['id'] = data['id']
+
+            
     
     
 def write_component_data(h5, name, data): 

@@ -427,8 +427,8 @@ class ParticleGroup:
     def write_bmad(self, filePath, verbose=False):
         write_bmad(self, filePath, p0c=None, t_ref=0, verbose=verbose)        
 
-    def write_elegant(self, filePath, plaindata2sdds_bin=None, verbose=False):
-        write_elegant(self, filePath, plaindata2sdds_bin=plaindata2sdds_bin, verbose=verbose)            
+    def write_elegant(self, filePath, verbose=False):
+        write_elegant(self, filePath, verbose=verbose)            
         
     def write_gpt(self, filePath, asci2gdf_bin=None, verbose=False):
         write_gpt(self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose)    

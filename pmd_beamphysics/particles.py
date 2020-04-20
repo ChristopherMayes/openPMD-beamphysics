@@ -5,6 +5,7 @@ from .interfaces.bmad import write_bmad
 from .interfaces.gpt import write_gpt
 from .interfaces.impact import write_impact
 from .interfaces.opal import write_opal
+from .interfaces.elegant import write_elegant
 
 from .plot import density_plot, marginal_plot
 
@@ -426,6 +427,9 @@ class ParticleGroup:
     def write_bmad(self, filePath, verbose=False):
         write_bmad(self, filePath, p0c=None, t_ref=0, verbose=verbose)        
 
+    def write_elegant(self, filePath, plaindata2sdds_bin=None, verbose=False):
+        write_elegant(self, filePath, plaindata2sdds_bin=plaindata2sdds_bin, verbose=verbose)            
+        
     def write_gpt(self, filePath, asci2gdf_bin=None, verbose=False):
         write_gpt(self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose)    
     

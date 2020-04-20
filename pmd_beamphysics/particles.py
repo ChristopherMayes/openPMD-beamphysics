@@ -433,8 +433,9 @@ class ParticleGroup:
     def write_gpt(self, filePath, asci2gdf_bin=None, verbose=False):
         write_gpt(self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose)    
     
-    def write_impact(self, filePath, verbose=False, cathode_kinetic_energy_ref=None):
-        return write_impact(self, filePath, verbose=verbose, cathode_kinetic_energy_ref=cathode_kinetic_energy_ref)            
+    def write_impact(self, filePath, cathode_kinetic_energy_ref=None, include_header=True, verbose=False):
+        return write_impact(self, filePath, cathode_kinetic_energy_ref=cathode_kinetic_energy_ref,
+                            include_header=include_header, verbose=verbose)          
         
     def write_opal(self, filePath, verbose=False, dist_type='emitted'):
         write_opal(self, filePath, verbose=verbose, dist_type=dist_type)

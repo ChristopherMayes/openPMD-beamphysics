@@ -74,8 +74,9 @@ def impact_particles_to_particle_data(tout, mc2=0, species=None, time=0, macroch
 
 def write_impact(particle_group,
                 outfile,
-                verbose=False,
-                cathode_kinetic_energy_ref=None):
+                cathode_kinetic_energy_ref=None,
+                include_header=True,
+                verbose=False):
     """
     Writes Impact-T style particles from particle_group type data.
     
@@ -84,6 +85,8 @@ def write_impact(particle_group,
     For now, the species must be electrons. 
     
     If cathode_kinetic_energy_ref is given, t will be used to compute z for cathode emission.
+    
+    If include_header, the number of particles will be written as the first line. Default is True. 
     
     Otherwise, particles must have the same time, and should be started in free space.
     
@@ -174,7 +177,12 @@ def write_impact(particle_group,
     ])
     
     # Save to ASCII
-    np.savetxt(outfile, dat.T, header=str(n_particle), comments='')
+    if include_header:
+        header=str(n_particle)
+    else:
+        header=''
+        
+    np.savetxt(outfile, dat.T, header=header, comments='')
     
     # Return info dict
     return output

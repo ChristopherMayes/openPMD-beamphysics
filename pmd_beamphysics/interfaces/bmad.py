@@ -44,13 +44,13 @@ def write_bmad(particle_group,
         # s-based coordinates
         
         # Check that z are all the same
-        unique_z = np.unique(z)
+        unique_z = np.unique(particle_group.z)
         assert len(unique_z) == 1, 'All particles must be a the same z position'        
         
         px = px/p0c
         py = py/p0c
         
-        z = -particle_group.beta*299792458(t - t_ref)
+        z = -particle_group.beta*299792458*(t - t_ref)
         pz = particle_group.p/p0c -1.0
         
         

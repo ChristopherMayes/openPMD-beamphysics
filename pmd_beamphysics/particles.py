@@ -424,8 +424,8 @@ class ParticleGroup:
     def write_astra(self, filePath, verbose=False):
         write_astra(self, filePath, verbose=verbose)
         
-    def write_bmad(self, filePath, verbose=False):
-        write_bmad(self, filePath, p0c=None, t_ref=0, verbose=verbose)        
+    def write_bmad(self, filePath, p0c=None, t_ref=0, verbose=False):
+        write_bmad(self, filePath, p0c=p0c, t_ref=t_ref, verbose=verbose)        
 
     def write_elegant(self, filePath, verbose=False):
         write_elegant(self, filePath, verbose=verbose)            

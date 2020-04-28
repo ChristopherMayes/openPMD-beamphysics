@@ -1,6 +1,7 @@
 from pmd_beamphysics.units import m_e
 
 import numpy as np
+import subprocess
 import os
 
 from h5py import File
@@ -161,3 +162,97 @@ def elegant_h5_to_data(h5, group='page1', species='electron'):
     }
     return data
 
+
+
+
+
+def load_sdds(sddsfile, columns, sdds2plaindata_bin='sdds2plaindata'):
+    """
+    Get tabular data from SDDS file
+    
+    """
+    
+    outfile = sddsfile+'_table'
+    cmd0 = [sdds2plaindata_bin, sddsfile, outfile, '-noRowCount','-outputMode=ascii']
+    
+    cmd = cmd0 + [f'-col={c}' for c in columns] + ['-separator= ']
+    
+    output,error  = subprocess.Popen(
+                    cmd, universal_newlines=True,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+    
+    # Read table  
+    rdat = np.loadtxt(outfile)
+
+    dat = {}
+    for i, key in  enumerate(columns):
+        dat[key] = rdat[:,i]
+    
+    # Cleanup
+    os.remove(outfile)
+    
+    return dat
+
+
+def elegant_to_data(sddsfile, charge=1.0, sdds2plaindata_bin='sdds2plaindata', species='electron'):
+    """
+    Converts elegant SDDS data to data for openPMD-beamphysics.
+    
+    Similar to elegant_h5_to_data, which is better because it checks units and does not need the conversion to ASCII
+    
+    Requires the SDDS utility sdds2plaindata
+    
+    Columns in the file should be:
+    
+    x, xp, y, xp, p=beta*gamma, t
+    m,  1,   m, 1, 1, s
+    
+    Momentum are reconstructed as:
+    
+    pz = p / sqrt(1+xp^2 + yp^2)
+    px = xp * pz
+    py = yp * pz
+    
+    In s-based codes, z=0 by definition. 
+    
+    For now, only electrons are allowed.
+    
+    
+    All particles are assumed to be live (status = 1)
+
+    TODO: More species. 
+    
+    Also see: elegant_h5_to_data
+        
+    """
+    
+    col = load_sdds(sddsfile, ['x', 'xp', 'y', 'yp', 't', 'p'], sdds2plaindata_bin=sdds2plaindata_bin)
+    
+        
+    assert species=='electron', f'{species} not allowed yet. Only electron is implemented.'    
+    mc2 = m_e
+            
+    p =  col['p']*mc2
+    xp = col['xp']
+    yp = col['yp']
+    pz = p/np.sqrt(1 + xp**2 + yp**2)
+    px = xp * pz
+    py = yp * pz   
+    
+    # number of particles
+    n = len(p)
+    
+    status=1
+    data = {
+        'x':col['x'],
+        'y':col['y'],
+        'z':np.full(n, 0),
+        'px':px,
+        'py':py,
+        'pz':pz,
+        't': col['t'],
+        'status': np.full(n, status),
+        'species':species,
+        'weight': np.full(n, abs(charge)/n)
+    }
+    return data

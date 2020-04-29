@@ -7,9 +7,12 @@ from .interfaces.impact import write_impact
 from .interfaces.opal import write_opal
 from .interfaces.elegant import write_elegant
 
+
+
 from .plot import density_plot, marginal_plot
 
 from .readers import particle_array, particle_paths
+from .statistics import norm_emit_calc
 from .writers import write_pmd_bunch, pmd_init
 
 from h5py import File
@@ -77,6 +80,7 @@ class ParticleGroup:
     Useful beam physics quantities are given as attributes:
         .norm_emit_x
         .norm_emit_y
+        .norm_emit_4d
         .higher_order_energy_spread
         .average_current
             
@@ -302,13 +306,16 @@ class ParticleGroup:
     @property
     def norm_emit_x(self):
         """Normalized emittance in the x plane"""
-        mat = self.cov('x', 'px')
-        return  np.sqrt(mat[0,0]*mat[1,1]-mat[0,1]**2)/self.mass
+        return norm_emit_calc(self, planes=['x'])
     @property
     def norm_emit_y(self):       
-        mat = self.cov('y', 'py')
-        """Normalized emittance in the y plane"""
-        return  np.sqrt(mat[0,0]*mat[1,1]-mat[0,1]**2)/self.mass
+        """Normalized emittance in the x plane"""
+        return norm_emit_calc(self, planes=['y'])
+    @property
+    def norm_emit_4d(self):       
+        """Normalized emittance in the xy planes (4D)"""
+        return norm_emit_calc(self, planes=['x', 'y'])    
+    
     @property
     def higher_order_energy_spread(self, order=2):
         """
@@ -511,6 +518,9 @@ class ParticleGroup:
         memloc = hex(id(self))
         return f'<ParticleGroup with {self.n_particle} particles at {memloc}>'
                    
+
+
+
 
 
 #-----------------------------------------

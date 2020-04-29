@@ -364,6 +364,8 @@ for k in ['average_current']:
     PARTICLEGROUP_UNITS[k] = unit('A')
 for k in ['norm_emit_x', 'norm_emit_y']:
     PARTICLEGROUP_UNITS[k] = unit('m')
+for k in ['norm_emit_4d']:
+    PARTICLEGROUP_UNITS[k] = multiply_units(unit('m'), unit('m'))
 for k in ['xp', 'yp']:
     PARTICLEGROUP_UNITS[k] = unit('rad')
 

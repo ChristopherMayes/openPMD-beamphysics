@@ -117,7 +117,7 @@ def density_plot(particle_group, key='x', bins=None):
     hist, bin_edges = np.histogram(x, bins=bins, weights=w)
     hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
     hist_width =  np.diff(bin_edges)
-    hist_y, hist_f, hist_prefix = nice_array(hist)
+    hist_y, hist_f, hist_prefix = nice_array(hist/hist_width)
     ax.bar(hist_x, hist_y, hist_width, color='grey')
     # Special label for C/s = A
     if u1 == 's':
@@ -184,7 +184,7 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None):
     hist, bin_edges = np.histogram(x, bins=bins, weights=w)
     hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
     hist_width =  np.diff(bin_edges)
-    hist_y, hist_f, hist_prefix = nice_array(hist)
+    hist_y, hist_f, hist_prefix = nice_array(hist/hist_width)
     ax_marg_x.bar(hist_x, hist_y, hist_width, color='gray')
     # Special label for C/s = A
     if u1 == 's':
@@ -201,7 +201,7 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None):
     hist, bin_edges = np.histogram(y, bins=bins, weights=w)
     hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
     hist_width =  np.diff(bin_edges)
-    hist_y, hist_f, hist_prefix = nice_array(hist)
+    hist_y, hist_f, hist_prefix = nice_array(hist/hist_width)
     ax_marg_y.barh(hist_x, hist_y, hist_width, color='gray')
     ax_marg_y.set_xlabel(f'{hist_prefix}C/{uy}')
     
@@ -213,7 +213,7 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None):
     ax_joint.set_xlabel(labelx)
     ax_joint.set_ylabel(labely)
 
-    plt.show()
+    #plt.show()
     
     
 def density_and_slice_plot(particle_group, key1='t', key2='p', stat_keys=['norm_emit_x', 'norm_emit_y'], bins=100, n_slice=30):

@@ -152,12 +152,12 @@ class ParticleGroup:
             
     def assign_id(self):
         """
-        Assigns unique ids,
+        Assigns unique ids, integers from 1 to n_particle
         
         """
         if 'id' not in self._settable_array_keys: 
             self._settable_array_keys.append('id')
-        self.id = np.arange(self['n_particle'])            
+        self.id = np.arange(1, self['n_particle']+1)            
 
     @property
     def n_particle(self):

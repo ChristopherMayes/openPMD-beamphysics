@@ -39,6 +39,12 @@ def write_gpt(particle_group,
         'q': np.full(n, q),
         'nmacro': particle_group.weight/e_charge}
     
+    if hasattr(particle_group, 'id'):
+        dat['ID'] = particle_group.id
+    else:
+        dat['ID'] = np.arange(1, particle_group['n_particle']+1)       
+    
+    
     header = ' '.join(list(dat))
 
     outdat = np.array([dat[k] for k in dat]).T

@@ -2,6 +2,7 @@ from .units import dimension, dimension_name, SI_symbol, pg_units
 
 from .interfaces.astra import write_astra
 from .interfaces.bmad import write_bmad
+from .interfaces.genesis import write_genesis4_distribution
 from .interfaces.gpt import write_gpt
 from .interfaces.impact import write_impact
 from .interfaces.opal import write_opal
@@ -436,6 +437,9 @@ class ParticleGroup:
 
     def write_elegant(self, filePath, verbose=False):
         write_elegant(self, filePath, verbose=verbose)            
+        
+    def write_genesis4(self, filePath, verbose=False):
+        write_genesis4_distribution(self, filePath, verbose=verbose)        
         
     def write_gpt(self, filePath, asci2gdf_bin=None, verbose=False):
         write_gpt(self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose)    

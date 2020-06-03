@@ -4,6 +4,41 @@ c_light = 299792458.
 
 
 
+
+def parse_impact_particles(filePath, 
+                           names=('x', 'GBx', 'y', 'GBy', 'z', 'GBz'),
+                           skiprows=0):
+    """
+    Parse Impact-T input and output particle data.
+    Typical filenames: 'partcl.data', 'fort.40', 'fort.50'.
+    
+    Note that partcl.data has the number of particles in the first line, so skiprows=1 should be used.
+    
+    Returns a structured numpy array
+    
+    Impact-T input/output particles distribions are ASCII files with columns:
+    x (m)
+    GBy = gamma*beta_x (dimensionless)
+    y (m)
+    GBy = gamma*beta_y (dimensionless)
+    z (m)
+    GBz = gamma*beta_z (dimensionless)
+    
+    Routine from lume-impact: 
+        https://github.com/ChristopherMayes/lume-impact
+    
+    """
+    
+    dtype={'names': names,
+           'formats': 6*[np.float]}
+    pdat = np.loadtxt(filePath, skiprows=skiprows, dtype=dtype,
+                     ndmin=1) # to make sure that 1 particle is parsed the same as many.
+
+    return pdat    
+    
+
+
+
 def impact_particles_to_particle_data(tout, mc2=0, species=None, time=0, macrocharge=0, cathode_kinetic_energy_ref=None, verbose=False):
     """
     Convert impact particles to data for ParticleGroup

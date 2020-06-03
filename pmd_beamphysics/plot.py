@@ -4,6 +4,7 @@
 """
 
 from  pmd_beamphysics.units import nice_array, nice_scale_prefix
+from .statistics import slice_statistics
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import numpy as np
@@ -26,23 +27,7 @@ def plt_histogram(a, weights=None, bins=40):
     plt.bar(bins[:-1] + np.diff(bins) / 2, cnts, np.diff(bins))
 
     
-def slice_statistics(particle_group,  keys=['mean_z'], n_slice=40, slice_key='z'):
-    """
-    Slices a particle group into n slices and returns statistics from each sliced defined in keys. 
-    
-    These statistics should be scalar floats for now.
-    
-    Any key can be used to slice on. 
-    
-    """
-    sdat = {}
-    for k in keys:
-        sdat[k] = np.empty(n_slice)
-    for i, pg in enumerate(particle_group.split(n_slice, key=slice_key)):
-        for k in keys:
-            sdat[k][i] = pg[k]
-            
-    return sdat
+
     
     
 def slice_plot(particle_group, stat_key='sigma_x', n_slice=40, slice_key='z'):

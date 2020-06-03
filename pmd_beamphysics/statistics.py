@@ -32,6 +32,25 @@ def norm_emit_calc(particle_group, planes=['x']):
     return norm_emit
 
 
+def twiss_calc(sigma_mat2):
+    """
+    Calculate Twiss parameters from the 2D sigma matrix. 
+    
+    Simple calculation. Makes no assumptions about units. 
+    
+    
+    """
+    assert sigma_mat2.shape == (2,2) # safety check
+    twiss={}
+    emit = np.sqrt(np.linalg.det(sigma_mat2)) 
+    twiss['alpha'] = -sigma_mat2[0,1]/emit
+    twiss['beta']  = sigma_mat2[0,0]/emit
+    twiss['gamma'] = sigma_mat2[1,1]/emit
+    twiss['emit']  = emit
+    
+    return twiss
+
+
 
 def slice_statistics(particle_group,  keys=['mean_z'], n_slice=40, slice_key='z'):
     """

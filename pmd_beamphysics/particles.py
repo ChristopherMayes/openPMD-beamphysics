@@ -2,7 +2,7 @@ from .units import dimension, dimension_name, SI_symbol, pg_units
 
 from .interfaces.astra import write_astra
 from .interfaces.bmad import write_bmad
-from .interfaces.genesis import write_genesis4_distribution
+from .interfaces.genesis import write_genesis4_distribution, genesis2_beam_data,  write_genesis2_beam_file
 from .interfaces.gpt import write_gpt
 from .interfaces.impact import write_impact
 from .interfaces.opal import write_opal
@@ -438,8 +438,14 @@ class ParticleGroup:
     def write_elegant(self, filePath, verbose=False):
         write_elegant(self, filePath, verbose=verbose)            
         
-    def write_genesis4(self, filePath, verbose=False):
-        write_genesis4_distribution(self, filePath, verbose=verbose)        
+    def write_genesis2_beam_file(self, filePath, n_slice=None, verbose=False):
+        # Get beam columns 
+        beam_columns = genesis2_beam_data(self, n_slice=n_slice)
+        # Actually write the file
+        write_genesis2_beam_file(filePath, beam_columns, verbose=verbose)  
+        
+    def write_genesis4_distribution(self, filePath, verbose=False):
+        write_genesis4_distribution(self, filePath, verbose=verbose)
         
     def write_gpt(self, filePath, asci2gdf_bin=None, verbose=False):
         write_gpt(self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose)    
@@ -522,6 +528,9 @@ class ParticleGroup:
         memloc = hex(id(self))
         return f'<ParticleGroup with {self.n_particle} particles at {memloc}>'
                    
+
+
+
 
 
 

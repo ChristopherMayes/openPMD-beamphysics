@@ -10,7 +10,7 @@ with open(path.join(cur_dir, 'requirements.txt'), 'r') as f:
 
 setup(
     name='pmd-beamphysics',
-    version = 'v0.4.1',
+    version = 'v0.4.2',
     #packages = ['pmd_beamphysics'],
     packages=find_packages(exclude=['opmd_beamphysics']),  # This is the old package
     package_dir={'pmd_beamphysics':'pmd_beamphysics'},

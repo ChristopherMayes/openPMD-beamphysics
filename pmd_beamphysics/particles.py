@@ -234,7 +234,13 @@ class ParticleGroup:
         return np.hypot(self.px, self.py)
     @property    
     def ptheta(self):
-        return np.arctan2(self.py, self.px)    
+        """     
+        theta_hat = -sin(theta) xhat + cos(theta) yhat
+        ptheta = p dot theta_hat
+        Note that L_z = r*ptheta
+        """
+        theta = self.theta
+        return -self.px * np.sin(theta)  + self.py * np.cos(theta)   
     
     
     # Relativistic quantities

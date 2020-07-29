@@ -166,7 +166,7 @@ def elegant_h5_to_data(h5, group='page1', species='electron'):
 
 
 
-def load_sdds(sddsfile, columns, sdds2plaindata_bin='sdds2plaindata'):
+def load_sdds(sddsfile, columns, sdds2plaindata_bin='sdds2plaindata', verbose=False):
     """
     Get tabular data from SDDS file
     
@@ -177,10 +177,14 @@ def load_sdds(sddsfile, columns, sdds2plaindata_bin='sdds2plaindata'):
     
     cmd = cmd0 + [f'-col={c}' for c in columns] + ['-separator= ']
     
-    output,error  = subprocess.Popen(
+    if verbose:
+        print('load_sdds command: ', ' '.join(cmd))
+    
+    output, error  = subprocess.Popen(
                     cmd, universal_newlines=True,
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-    
+    if error:
+        raise ValueError('load_sdds error: '+error)
     # Read table  
     rdat = np.loadtxt(outfile)
 
@@ -194,7 +198,7 @@ def load_sdds(sddsfile, columns, sdds2plaindata_bin='sdds2plaindata'):
     return dat
 
 
-def elegant_to_data(sddsfile, charge=1.0, sdds2plaindata_bin='sdds2plaindata', species='electron'):
+def elegant_to_data(sddsfile, charge=1.0, sdds2plaindata_bin='sdds2plaindata', species='electron', verbose=False):
     """
     Converts elegant SDDS data to data for openPMD-beamphysics.
     
@@ -226,7 +230,7 @@ def elegant_to_data(sddsfile, charge=1.0, sdds2plaindata_bin='sdds2plaindata', s
         
     """
     
-    col = load_sdds(sddsfile, ['x', 'xp', 'y', 'yp', 't', 'p'], sdds2plaindata_bin=sdds2plaindata_bin)
+    col = load_sdds(sddsfile, ['x', 'xp', 'y', 'yp', 't', 'p'], sdds2plaindata_bin=sdds2plaindata_bin, verbose=verbose)
     
         
     assert species=='electron', f'{species} not allowed yet. Only electron is implemented.'    

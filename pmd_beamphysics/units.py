@@ -343,7 +343,7 @@ def nice_array(a):
 
 
 # -------------------------
-# Units for ParitcleGroup
+# Units for ParticleGroup
 
 PARTICLEGROUP_UNITS = {}
 for k in ['status']:

@@ -8,9 +8,9 @@ from .statistics import slice_statistics
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import numpy as np
-
+from copy import copy
 #import matplotlib
-cmap = plt.get_cmap('viridis')
+cmap = copy(plt.get_cmap('viridis'))
 cmap.set_under('white')
 
 

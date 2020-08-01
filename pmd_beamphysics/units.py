@@ -77,6 +77,13 @@ class pmd_unit:
     def unitDimension(self):
         return self._unitDimension 
 
+    def __mul__(self, other):
+        return multiply_units(self, other)
+    
+    def __truediv__(self, other):
+        return divide_units(self, other)
+    
+    
     def __str__(self):
         return self.unitSymbol
     
@@ -129,6 +136,21 @@ def divide_units(u1, u2):
     d2 = u2.unitDimension
     dim=tuple(a-b for a,b in zip(d1, d2))
     unitSI = u1.unitSI / u2.unitSI
+    
+    return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)   
+        
+def sqrt_unit(u):
+    """
+    Returns the sqrt of a unit
+    """
+    u.unitDimension
+    
+    symbol = u.unitSymbol
+    if symbol not in ['', '1']:
+        symbol = f'sqrt({symbol})'
+    
+    unitSI = np.sqrt(u.unitSI)
+    dim = tuple( x/2 for x in u.unitDimension)
     
     return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)   
         

@@ -376,7 +376,7 @@ for k in ['energy', 'kinetic_energy', 'mass', 'higher_order_energy_spread']:
     PARTICLEGROUP_UNITS[k] = unit('eV')
 for k in ['px', 'py', 'pz', 'p', 'pr']:
     PARTICLEGROUP_UNITS[k] = unit('eV/c')
-for k in ['x', 'y', 'z', 'r']:
+for k in ['x', 'y', 'z', 'r', 'Jx', 'Jy']:
     PARTICLEGROUP_UNITS[k] = unit('m')
 for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma', 'theta', 'ptheta']:    
     PARTICLEGROUP_UNITS[k] = unit('1')
@@ -390,6 +390,8 @@ for k in ['norm_emit_4d']:
     PARTICLEGROUP_UNITS[k] = multiply_units(unit('m'), unit('m'))
 for k in ['xp', 'yp']:
     PARTICLEGROUP_UNITS[k] = unit('rad')
+for k in ['x_bar', 'px_bar', 'y_bar', 'py_bar']:
+    PARTICLEGROUP_UNITS[k] = sqrt_unit(unit('m'))
 
 def pg_units(key):
     """

@@ -13,7 +13,7 @@ from .interfaces.elegant import write_elegant
 from .plot import density_plot, marginal_plot
 
 from .readers import particle_array, particle_paths
-from .statistics import norm_emit_calc
+from .statistics import norm_emit_calc, normalized_particle_coordinate, particle_amplitude
 from .writers import write_pmd_bunch, pmd_init
 
 from h5py import File
@@ -69,6 +69,18 @@ class ParticleGroup:
         .mass: rest mass in [eV]
         .xp, .yp: Slopes x' = dx/dz = dpx/dpz and y' = dy/dz = dpy/dpz [1].
         
+    Normalized transvere coordinates can also be calculated as attributes:
+        .x_bar, .px_bar, .y_bar, .py_bar in [sqrt(m)]
+        The normalization is automatically calculated from the covariance matrix. 
+        See functions in .statistics for more advanced usage.
+        
+        Their cooresponding amplitudes are:
+        .Jx, .Jy [m]
+        where Jx = (x_bar^2 + px_bar^2 )/2, 
+        The momenta are normalized by the mass, so that:
+            <Jx> = norm_emit_x
+        and similar for y. 
+        
     Statistics of any of these are calculated with:
         .min(X)
         .max(X)
@@ -88,7 +100,7 @@ class ParticleGroup:
     The weight is required and must sum to > 0. The sum of the weights is:
         .charge
     This can also be set:
-        .charge = 1.234 # pC, will rescale the .weight array
+        .charge = 1.234 # C, will rescale the .weight array
             
     All attributes can be accessed with brackets:
         [key]
@@ -192,6 +204,7 @@ class ParticleGroup:
     
     @property
     def charge(self):
+        """Total charge in C"""
         return np.sum(self.weight)
     @charge.setter
     def charge(self, val):
@@ -217,20 +230,25 @@ class ParticleGroup:
     # Slopes. Note that these are relative to pz
     @property
     def xp(self):
+        """x slope px/pz (dimensionless)"""
         return self.px/self.pz  
     @property
     def yp(self):
+        """y slope py/pz (dimensionless)"""
         return self.py/self.pz    
     
     # Cylindrical coordinates. Note that these are ali
     @property
     def r(self):
+        """Radius in the xy plane: r = sqrt(x^2 + y^2) in m"""
         return np.hypot(self.x, self.y)
     @property    
     def theta(self):
+        """Angle in xy plane: theta = arctan2(y, x) in radians"""
         return np.arctan2(self.y, self.x)
     @property
     def pr(self):
+        """Momentum in the radial direction pr = sqrt(px^2 + py^2) in eV/c"""
         return np.hypot(self.px, self.py)
     @property    
     def ptheta(self):
@@ -266,11 +284,37 @@ class ParticleGroup:
         return self.pz/self.energy
     
     
+    # Normalized coordinates for x and y
+    @property 
+    def x_bar(self):
+        """Normalized x in units of sqrt(m)"""
+        return normalized_particle_coordinate(self, 'x')
+    @property     
+    def px_bar(self):
+        """Normalized px in units of sqrt(m)"""
+        return normalized_particle_coordinate(self, 'px')    
+    @property
+    def Jx(self):
+        """Normalized amplitude J in the x-px plane"""
+        return particle_amplitude(self, 'x')
+    
+    @property 
+    def y_bar(self):
+        """Normalized y in units of sqrt(m)"""
+        return normalized_particle_coordinate(self, 'y')
+    @property     
+    def py_bar(self):
+        """Normalized py in units of sqrt(m)"""
+        return normalized_particle_coordinate(self, 'py')
+    @property
+    def Jy(self):
+        """Normalized amplitude J in the y-py plane"""
+        return particle_amplitude(self, 'y')    
     
     def delta(self, key):
         """Attribute (array) relative to its mean"""
         return getattr(self, key) - self.avg(key)
-    
+      
     
     # Statistical property functions
     

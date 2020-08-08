@@ -526,12 +526,12 @@ class ParticleGroup:
         
     # Plot
     # TODO: more general plotting
-    def plot(self, key1='x', key2=None, bins=None):
+    def plot(self, key1='x', key2=None, bins=None, **kwargs):
         
         if not key2:
-            return density_plot(self, key=key1, bins=bins)
+            return density_plot(self, key=key1, bins=bins, **kwargs)
         else:
-            return marginal_plot(self, key1=key1, key2=key2, bins=bins)
+            return marginal_plot(self, key1=key1, key2=key2, bins=bins, **kwargs)
         
     # New constructors
     def split(self, n_chunks = 100, key='z'):

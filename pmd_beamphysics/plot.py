@@ -75,7 +75,7 @@ def slice_plot(particle_group, stat_key='sigma_x', n_slice=40, slice_key='z'):
 
     
     
-def density_plot(particle_group, key='x', bins=None):
+def density_plot(particle_group, key='x', bins=None, **kwargs):
     """
     1D density plot. Also see: marginal_plot
     
@@ -97,7 +97,7 @@ def density_plot(particle_group, key='x', bins=None):
     
     labelx = f'{key} ({ux})'
     
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(**kwargs)
     
     hist, bin_edges = np.histogram(x, bins=bins, weights=w)
     hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
@@ -114,7 +114,7 @@ def density_plot(particle_group, key='x', bins=None):
 
     ax.set_xlabel(labelx)    
     
-def marginal_plot(particle_group, key1='t', key2='p', bins=None):
+def marginal_plot(particle_group, key1='t', key2='p', bins=None, **kwargs):
     """
     Density plot and projections
     
@@ -142,7 +142,7 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None):
     labelx = f'{key1} ({ux})'
     labely = f'{key2} ({uy})'
     
-    fig = plt.figure()
+    fig = plt.figure(**kwargs)
     
     gs = GridSpec(4,4)
     

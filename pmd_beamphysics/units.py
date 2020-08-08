@@ -46,6 +46,11 @@ class pmd_unit:
         pmd_unit('T')
     returns:
         pmd_unit('T', 1, (0, 1, -2, -1, 0, 0, 0))
+        
+        
+    Simple equalities are provided:
+        u1 == u2
+    Returns True if the params are all the same. 
     
     """
     def __init__(self, unitSymbol='', unitSI=0, unitDimension = (0,0,0,0,0,0,0)):
@@ -82,6 +87,15 @@ class pmd_unit:
     
     def __truediv__(self, other):
         return divide_units(self, other)
+    
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.__dict__ == other.__dict__
+        else:
+            return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)    
     
     
     def __str__(self):

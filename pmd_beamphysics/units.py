@@ -386,7 +386,7 @@ for k in ['status']:
     PARTICLEGROUP_UNITS[k] = unit('1')
 for k in ['t']:
     PARTICLEGROUP_UNITS[k] = unit('s')
-for k in ['energy', 'kinetic_energy', 'mass', 'higher_order_energy_spread']:
+for k in ['energy', 'kinetic_energy', 'mass', 'higher_order_energy_spread', 'higher_order_energy']:
     PARTICLEGROUP_UNITS[k] = unit('eV')
 for k in ['px', 'py', 'pz', 'p', 'pr']:
     PARTICLEGROUP_UNITS[k] = unit('eV/c')

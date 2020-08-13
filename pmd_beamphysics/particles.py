@@ -65,6 +65,7 @@ class ParticleGroup:
         .pr, .ptheta: cylindrical momenta [1]
         .energy : total energy [eV]
         .kinetic_energy: total energy - mc^2 in [eV]. 
+        .higher_order_energy: total energy with quadratic fit in z or t subtracted [eV]
         .p: total momentum in [eV/c]
         .mass: rest mass in [eV]
         .xp, .yp: Slopes x' = dx/dz = dpx/dpz and y' = dy/dz = dpy/dpz [1].
@@ -240,11 +241,24 @@ class ParticleGroup:
     @property
     def higher_order_energy(self):
         """
-        Fits a quadratic (order=2) to the Energy vs. time, subtracts it, finds the rms of the residual in eV.
-        
-        If all particles are at the same
+        Fits a quadratic (order=2) to the Energy vs. time, and returns the energy with this subtracted. 
         """
-        order=2
+        
+        return self.higher_order_energy_calc(order=2)
+
+    @property
+    def higher_order_energy_spread(self):
+        """
+        Legacy syntax to compute the standard deviation of higher_order_energy.
+        """
+        return self.std(self.higher_order_energy)
+    
+    
+    def higher_order_energy_calc(self, order=2):
+        """
+        Fits a polynmial with order `order` to the Energy vs. time, , and returns the energy with this subtracted. 
+        """
+        #order=2
         if self.std('z') < 1e-12:
             # must be at a screen. Use t
             t = self.t
@@ -387,25 +401,7 @@ class ParticleGroup:
         """Normalized emittance in the xy planes (4D)"""
         return norm_emit_calc(self, planes=['x', 'y'])    
     
-    @property
-    def higher_order_energy_spread(self, order=2):
-        """
-        Fits a quadratic (order=2) to the Energy vs. time, subtracts it, finds the rms of the residual in eV.
-        
-        If all particles are at the same
-        """
-        
-        if self.std('z') < 1e-12:
-            # must be at a screen. Use t
-            t = self.t
-        else:
-            # All particles at the same time. Use z to calc t
-            t = self.z/c_light
-        energy = self.energy
-        
-        best_fit_coeffs = np.polynomial.polynomial.polyfit(t, energy, order)
-        best_fit = np.polynomial.polynomial.polyval(t, best_fit_coeffs)
-        return np.std(energy - best_fit)        
+    
     @property
     def average_current(self):
         """

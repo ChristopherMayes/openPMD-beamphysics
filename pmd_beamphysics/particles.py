@@ -237,6 +237,26 @@ class ParticleGroup:
         """y slope py/pz (dimensionless)"""
         return self.py/self.pz    
     
+    @property
+    def higher_order_energy(self):
+        """
+        Fits a quadratic (order=2) to the Energy vs. time, subtracts it, finds the rms of the residual in eV.
+        
+        If all particles are at the same
+        """
+        order=2
+        if self.std('z') < 1e-12:
+            # must be at a screen. Use t
+            t = self.t
+        else:
+            # All particles at the same time. Use z to calc t
+            t = self.z/c_light
+        energy = self.energy
+        
+        best_fit_coeffs = np.polynomial.polynomial.polyfit(t, energy, order)
+        best_fit = np.polynomial.polynomial.polyval(t, best_fit_coeffs)
+        return energy - best_fit
+    
     # Cylindrical coordinates. Note that these are ali
     @property
     def r(self):

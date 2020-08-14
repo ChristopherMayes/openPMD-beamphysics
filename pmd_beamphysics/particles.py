@@ -89,6 +89,7 @@ class ParticleGroup:
         .avg(X)
         .std(X)
         .cov(X, Y, ...)
+        .histogramdd(X, Y, ..., bins=10, range=None)
         with a string X as the name any of the properties above.
         
     Useful beam physics quantities are given as attributes:
@@ -150,7 +151,6 @@ class ParticleGroup:
             if len(species) >= 1:
                 assert len(species) == 1, f'mixed species are not allowed: {species}'
                 data['species'] = species[0]
-            
             
         self._settable_array_keys = ['x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight']
         # Optional data
@@ -386,6 +386,25 @@ class ParticleGroup:
         """
         dats = np.array([ getattr(self, key) for key in keys ])
         return np.cov(dats, aweights=self.weight)
+    
+    def histogramdd(self, *keys, bins=10, range=None):
+        """
+        Wrapper for numpy.histogramdd, but accepts property names as keys.
+        
+        Computes the multidimensional histogram of keys. Internally uses weights. 
+        
+        Example:
+            P.histogramdd('x', 'y', bins=50)
+        Returns:
+            np.array with shape 50x50, edge list 
+        
+        """
+        H, edges = np.histogramdd(np.array([self[k] for k in list(keys)]).T, weights=self.weight, bins=bins, range=range)
+        
+        return H, edges
+    
+    
+    
     
     # Beam statistics
     @property

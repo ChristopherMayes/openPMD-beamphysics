@@ -242,8 +242,7 @@ class ParticleGroup:
     def higher_order_energy(self):
         """
         Fits a quadratic (order=2) to the Energy vs. time, and returns the energy with this subtracted. 
-        """
-        
+        """ 
         return self.higher_order_energy_calc(order=2)
 
     @property
@@ -251,9 +250,8 @@ class ParticleGroup:
         """
         Legacy syntax to compute the standard deviation of higher_order_energy.
         """
-        return self.std(self.higher_order_energy)
-    
-    
+        return self.std('higher_order_energy')
+     
     def higher_order_energy_calc(self, order=2):
         """
         Fits a polynmial with order `order` to the Energy vs. time, , and returns the energy with this subtracted. 

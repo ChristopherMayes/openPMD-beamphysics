@@ -186,7 +186,7 @@ def load_sdds(sddsfile, columns, sdds2plaindata_bin='sdds2plaindata', verbose=Fa
     if error:
         raise ValueError('load_sdds error: '+error)
     # Read table  
-    rdat = np.loadtxt(outfile, ndmin=1)
+    rdat = np.loadtxt(outfile, ndmin=2)
 
     dat = {}
     for i, key in  enumerate(columns):

@@ -5,10 +5,9 @@ from .interfaces.bmad import write_bmad
 from .interfaces.genesis import write_genesis4_distribution, genesis2_beam_data,  write_genesis2_beam_file
 from .interfaces.gpt import write_gpt
 from .interfaces.impact import write_impact
+from .interfaces.litrack import write_litrack
 from .interfaces.opal import write_opal
 from .interfaces.elegant import write_elegant
-
-
 
 from .plot import density_plot, marginal_plot
 
@@ -536,6 +535,9 @@ class ParticleGroup:
     def write_impact(self, filePath, cathode_kinetic_energy_ref=None, include_header=True, verbose=False):
         return write_impact(self, filePath, cathode_kinetic_energy_ref=cathode_kinetic_energy_ref,
                             include_header=include_header, verbose=verbose)          
+        
+    def write_litrack(self, filePath, p0c=None, verbose=False):        
+        return write_litrack(self, outfile=filePath, p0c=p0c, verbose=verbose)      
         
     def write_opal(self, filePath, verbose=False, dist_type='emitted'):
         write_opal(self, filePath, verbose=verbose, dist_type=dist_type)

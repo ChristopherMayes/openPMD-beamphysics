@@ -12,7 +12,7 @@ from .interfaces.elegant import write_elegant
 from .plot import density_plot, marginal_plot
 
 from .readers import particle_array, particle_paths
-from .statistics import norm_emit_calc, normalized_particle_coordinate, particle_amplitude
+from .statistics import norm_emit_calc, normalized_particle_coordinate, particle_amplitude, particle_twiss_dispersion
 from .writers import write_pmd_bunch, pmd_init
 
 from h5py import File
@@ -97,6 +97,9 @@ class ParticleGroup:
         .norm_emit_4d
         .higher_order_energy_spread
         .average_current
+        
+    Twiss parameters, including dispersion, for the 'x' or 'y' plane:
+        .twiss(plane='x', fraction=0.95, p0C=None)
             
     The weight is required and must sum to > 0. The sum of the weights is:
         .charge
@@ -416,6 +419,15 @@ class ParticleGroup:
     def norm_emit_4d(self):       
         """Normalized emittance in the xy planes (4D)"""
         return norm_emit_calc(self, planes=['x', 'y'])    
+    
+    def twiss(self, plane='x', fraction=1, p0c=None):
+        """
+        Returns Twiss and Dispersion dict.
+        
+        Optionally a fraction of the particles, based on amplitiude, can be specified.
+        """
+        return particle_twiss_dispersion(self, plane=plane, fraction=fraction, p0c=p0c)
+    
     
     
     @property

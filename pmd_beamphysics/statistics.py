@@ -57,6 +57,104 @@ def twiss_calc(sigma_mat2):
     return twiss
 
 
+def twiss_dispersion_calc(sigma3):
+    """
+    Twiss and Dispersion calculation from a 3x3 sigma (covariance) matrix from particles
+    x, p, delta
+    
+    Formulas from: 
+        https://uspas.fnal.gov/materials/19Knoxville/g-2/creation-and-analysis-of-beam-distributions.html
+    
+    Returns a dict with:
+        alpha
+        beta
+        gamma
+        emit
+        eta      
+        etap
+    
+    """
+    
+    # Collect terms
+    
+    delta2 = sigma3[2,2]
+    xd = sigma3[0,2]
+    pd = sigma3[1,2]
+    
+    eb =  sigma3[0,0] - xd**2 / delta2
+    eg =  sigma3[1,1] - pd**2 / delta2
+    ea = -sigma3[0,1] + xd * pd / delta2
+    
+    emit = np.sqrt(eb*eg - ea**2)
+    
+    # Form the output dict
+    d = {}
+
+    d['alpha'] = ea/emit
+    d['beta']  = eb/emit
+    d['gamma'] = eg/emit
+    d['emit'] = emit
+    d['eta']  = xd/delta2
+    d['etap'] = pd/delta2
+
+    return d
+
+
+def particle_twiss_dispersion(particle_group, plane='x', fraction=1, p0c=None):
+    """
+    Twiss and Dispersion calc for a ParticleGroup. 
+    
+    Plane muse be:
+        'x' or 'y'
+    
+    p0c is the reference momentum. If not give, the mean p will be used.
+    
+    Returns the same output dict as twiss_dispersion_calc, but with keys suffixed with the plane, i.e.:
+     
+        alpha_x
+        beta_x
+        gamma_x
+        emit_x
+        eta_x      
+        etap_x
+        norm_emit_x
+
+    """
+    
+    assert plane in ['x', 'y']
+    
+    P = particle_group # convenience
+    
+    if fraction < 1:
+        P = P[np.argsort(P[f'J{plane}'])][0:int(fraction*len(P))]
+    
+    if not p0c:
+        p0c = P['mean_p'] 
+    
+    x = P[plane]
+    xp = P['p'+plane]/p0c
+    delta = P['p']/P['mean_p'] # - 1
+    
+    # Form covariance matrix
+    np.cov([x, xp, delta], aweights=P.weight)
+    
+    # Actual calc
+    twiss = twiss_dispersion_calc(np.cov([x, xp, delta]))
+    
+    # Add norm
+    twiss['norm_emit'] = twiss['emit'] * P['mean_p']/P.mass
+    
+    # Add suffix
+    out = {}
+    for k in twiss:
+        out[k+f'_{plane}'] = twiss[k]
+    
+    return out
+
+
+
+
+
 
 
 

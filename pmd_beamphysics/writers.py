@@ -60,14 +60,13 @@ def write_pmd_bunch(h5, data, name=None):
     for key in ['x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight']:
         # Get full name, write data
         g2_name = component_alias[key]
-        g2 = write_component_data(g, g2_name, data[key])
         
         # Units
-        u = pg_units(key)
-        #print(u.unitSymbol, u.unitSI, u.unitDimension)
-        g2.attrs['unitSI'] = u.unitSI
-        g2.attrs['unitDimension'] = u.unitDimension
-        g2.attrs['unitSymbol'] = u.unitSymbol
+        u = pg_units(key)        
+        
+        # Write
+        g2 = write_component_data(g, g2_name, data[key], unit=u)
+    
         
     # Optional id. This does not have any units.
     if 'id' in data or hasattr(data, 'id'):
@@ -76,11 +75,13 @@ def write_pmd_bunch(h5, data, name=None):
             
     
     
-def write_component_data(h5, name, data): 
+def write_component_data(h5, name, data, unit=None): 
     """
     Writes data to a dataset h5[name]
     
     If data is a constant array, a group is created with the constant value and shape
+    
+    If unit is given, this will be used 
     
     """
     # Check for constant component
@@ -92,4 +93,27 @@ def write_component_data(h5, name, data):
         h5[name] = data
         g = h5[name]
     
+    if unit:
+        g.attrs['unitSI'] = unit.unitSI
+        g.attrs['unitDimension'] = unit.unitDimension
+        g.attrs['unitSymbol'] = unit.unitSymbol
+    
     return g         
+
+
+def write_complex_component_data(h5, name, data, unit=None):
+    """
+    Writes complex component data, with real and imaginary parts put into groups:
+        r
+        i
+        
+    In the future, this will be an HDF5 struct, and won't need a custom routine.
+    
+    """
+    
+    g = h5.create_group(name)
+    
+    write_component_data(g, 'r', np.real(data), unit=unit)
+    write_component_data(g, 'i', np.imag(data), unit=unit )    
+    
+    return g

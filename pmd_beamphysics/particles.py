@@ -12,7 +12,7 @@ from .interfaces.elegant import write_elegant
 from .plot import density_plot, marginal_plot
 
 from .readers import particle_array, particle_paths
-from .statistics import norm_emit_calc, normalized_particle_coordinate, particle_amplitude, particle_twiss_dispersion
+from .statistics import norm_emit_calc, normalized_particle_coordinate, particle_amplitude, particle_twiss_dispersion, matched_particles
 from .writers import write_pmd_bunch, pmd_init
 
 from h5py import File
@@ -100,7 +100,10 @@ class ParticleGroup:
         
     Twiss parameters, including dispersion, for the 'x' or 'y' plane:
         .twiss(plane='x', fraction=0.95, p0C=None)
-            
+    Twiss matched particles, using a simple linear transformation:
+        .twiss_match(self, beta=None, alpha=None, plane='x', p0c=None, inplace=False)
+    
+                
     The weight is required and must sum to > 0. The sum of the weights is:
         .charge
     This can also be set:
@@ -427,6 +430,17 @@ class ParticleGroup:
         Optionally a fraction of the particles, based on amplitiude, can be specified.
         """
         return particle_twiss_dispersion(self, plane=plane, fraction=fraction, p0c=p0c)
+   
+    def twiss_match(self, beta=None, alpha=None, plane='x', p0c=None, inplace=False):
+        """
+        Returns a ParticleGroup with requested Twiss parameters.
+        
+        See: statistics.matched_particles
+        """
+        
+        return matched_particles(self, beta=beta, alpha=alpha, plane=plane, inplace=inplace)
+        
+        
     
     
     

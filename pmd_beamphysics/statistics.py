@@ -57,6 +57,90 @@ def twiss_calc(sigma_mat2):
     return twiss
 
 
+
+def twiss_match(x, p, beta0=1, alpha0=0, beta1=1, alpha1=0):
+    """
+    Simple Twiss matching. 
+    
+    Takes positions x and momenta p, and transforms them according to 
+    initial Twiss parameters:
+        beta0, alpha0 
+    into final  Twiss parameters:
+        beta1, alpha1
+        
+    This is simply the matrix ransformation:    
+        xnew  = (   sqrt(beta1/beta0)                  0                 ) . ( x )
+        pnew    (  (alpha0-alpha1)/sqrt(beta0*beta1)   sqrt(beta0/beta1) )   ( p ) 
+        
+
+    Returns new x, p
+    
+    """
+    m11 = np.sqrt(beta1/beta0)
+    m21 = (alpha0-alpha1)/np.sqrt(beta0*beta1)
+    
+    xnew = x * m11
+    pnew = x * m21 + p / m11
+    
+    return xnew, pnew
+
+def matched_particles(particle_group, beta=None, alpha=None, plane='x', p0c=None, inplace=False):
+    """
+    Perfoms simple Twiss 'matching' by applying a linear transformation to
+        x, px if plane == 'x', or x, py if plane == 'y'
+    
+    Returns a new ParticleGroup
+    
+    If inplace, a copy will not be made, and changes will be done in place. 
+    
+    """
+    
+    assert plane in ('x', 'y'), f'Invalid plane: {plane}'
+    
+    if inplace:
+        P = particle_group
+    else:
+        P = particle_group.copy()
+    
+    if not p0c:
+        p0c = P['mean_p']
+    
+
+    # Use Bmad-style coordinates.
+    # Get plane. 
+    if plane == 'x':
+        x = P.x
+        p = P.px/p0c
+    else:
+        x = P.y
+        p = P.py/p0c
+        
+    # Get current Twiss
+    tx = twiss_calc(np.cov(x, p, aweights=P.weight))
+    
+    # If not specified, just fill in the current value.
+    if alpha is None:
+        alpha = tx['alpha']
+    if beta is None:
+        beta = tx['beta']
+    
+    # New coordinates
+    xnew, pnew = twiss_match(x, p, beta0=tx['beta'], alpha0=tx['alpha'], beta1=beta, alpha1=alpha)
+    
+    # Set
+    if plane == 'x':
+        P.x = xnew
+        P.px = pnew*p0c
+    else:
+        P.y = xnew
+        P.py = pnew*p0c
+        
+    return P
+
+
+
+
+
 def twiss_dispersion_calc(sigma3):
     """
     Twiss and Dispersion calculation from a 3x3 sigma (covariance) matrix from particles

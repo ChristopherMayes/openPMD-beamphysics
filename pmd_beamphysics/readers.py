@@ -134,16 +134,6 @@ def component_data(h5, slice = slice(None), unit_factor=1):
     Unit factor is an addition factor to convert from SI units to output units. 
     
     """
-    
-    # Look for custom complex number convention.
-    # TODO: this should be deprecated. 
-    if isinstance(h5, h5py.Group):
-        if ('r' in h5) and ('i' in h5):
-            re = component_data(h5['r'], slice = slice, unit_factor=unit_factor)
-            im = component_data(h5['i'], slice = slice, unit_factor=unit_factor)        
-        
-            return re + 1j*im    
-    
 
     # look for unitSI factor. 
     if 'unitSI' in h5.attrs:

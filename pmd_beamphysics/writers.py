@@ -101,19 +101,3 @@ def write_component_data(h5, name, data, unit=None):
     return g         
 
 
-def write_complex_component_data(h5, name, data, unit=None):
-    """
-    Writes complex component data, with real and imaginary parts put into groups:
-        r
-        i
-        
-    In the future, this will be an HDF5 struct, and won't need a custom routine.
-    
-    """
-    
-    g = h5.create_group(name)
-    
-    write_component_data(g, 'r', np.real(data), unit=unit)
-    write_component_data(g, 'i', np.imag(data), unit=unit )    
-    
-    return g

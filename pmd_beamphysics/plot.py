@@ -6,13 +6,17 @@
 from  pmd_beamphysics.units import nice_array, nice_scale_prefix
 from .statistics import slice_statistics
 import matplotlib.pyplot as plt
+import matplotlib
 from matplotlib.gridspec import GridSpec
 import numpy as np
 from copy import copy
-#import matplotlib
-cmap = copy(plt.get_cmap('viridis'))
-cmap.set_under('white')
+CMAP0 = copy(plt.get_cmap('viridis'))
+CMAP0.set_under('white')
 
+CMAP1 = copy(plt.get_cmap('plasma'))
+
+# For field legends
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 def plt_histogram(a, weights=None, bins=40):
@@ -153,7 +157,7 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None, **kwargs):
     #ax_info.table(cellText=['a'])
     
     # Proper weighting
-    ax_joint.hexbin(x, y, C=w, reduce_C_function=np.sum, gridsize=bins, cmap=cmap, vmin=1e-20)
+    ax_joint.hexbin(x, y, C=w, reduce_C_function=np.sum, gridsize=bins, cmap=CMAP0, vmin=1e-20)
     
     # Manual histogramming version
     #H, xedges, yedges = np.histogram2d(x, y, weights=w, bins=bins)
@@ -267,3 +271,79 @@ def density_and_slice_plot(particle_group, key1='t', key2='p', stat_keys=['norm_
     y2 = slice_dat['density']
     y2 = y2 * max2/y2.max() / f3 /2
     ax2.fill_between(x2, 0, y2, color='black', alpha = 0.1)  
+    
+    
+    
+    
+    
+    
+#-------------------------------------
+#-------------------------------------
+# Fields
+
+def plot_fieldmesh_cylindrical_2d(fm,
+                                  component=None,
+                                  time=None,
+                                  axes=None,
+                                  aspect='auto',
+                                  cmap=None,
+                                  **kwargs):
+    """
+    Plots a fieldmesh component
+    
+    
+    """
+    
+    assert fm.geometry == 'cylindrical'
+    
+    if component is None:
+        if fm.is_pure_magnetic:
+            component='B'
+        else:
+            component='E'
+    
+    if not axes:
+        fig, ax = plt.subplots(**kwargs)
+        
+        
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('right', size='5%', pad=0.05)        
+        
+    if not cmap:
+        cmap = CMAP1       
+    
+   
+    unit = fm.units(component)
+    
+    xmin, _, zmin = fm.min
+    xmax, _, zmax = fm.max
+    
+    # plt.imshow on [r, z] will put z on the horizontal axis. 
+    extent = [zmin, zmax, xmin, xmax]
+    
+    xlabel = 'z (m)'
+    ylabel = 'r (m)'
+
+    
+    dat = fm[component][:,0,:]
+    dat = np.real_if_close(dat)
+    
+    dmin = dat.min()
+    dmax = dat.max()
+    
+    ax.set_aspect(aspect)
+    # Need to flip for image
+    ax.imshow(np.flipud(dat), extent=extent, cmap=cmap, aspect=aspect)
+    
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    
+    # Add legend
+    llabel = f'{component} ({unit.unitSymbol})'
+    
+    norm = matplotlib.colors.Normalize(vmin=dmin, vmax=dmax)
+    fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap),
+             cax=cax, orientation='vertical', label=llabel)     
+    
+    
+    

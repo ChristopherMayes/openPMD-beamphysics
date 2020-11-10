@@ -13,6 +13,7 @@ m_e = scipy.constants.value('electron mass energy equivalent in MeV')*1e6
 m_p = scipy.constants.value('proton mass energy equivalent in MeV')*1e6
 c_light = 299792458
 e_charge = scipy.constants.e
+mu_0 = scipy.constants.mu_0
 
 import numpy as np
 
@@ -169,8 +170,7 @@ def sqrt_unit(u):
     return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)   
         
         
-DIMENSION = {
-   
+DIMENSION = { 
     '1'              : (0,0,0,0,0,0,0),
      # Base units
     'length'         : (1,0,0,0,0,0,0),
@@ -184,10 +184,10 @@ DIMENSION = {
     'charge'         : (0,0,1,1,0,0,0),
     'electric_field'  : (1,1,-3,-1,0,0,0),
     'electric_potential' : (1,2,-3,-1,0,0,0),
+    'magnetic_field' : (0,1,-2,-1,0,0,0),    
     'velocity'       : (1,0,-1,0,0,0,0),
     'energy'         : (2,1,-2,0,0,0,0),
-    'momentum'       : (1,1,-1,0,0,0,0),
-    'tesla'          : (0,1,-2,-1,0,0,0)
+    'momentum'       : (1,1,-1,0,0,0,0)
 }
 # Inverse
 DIMENSION_NAME = {v: k for k, v in DIMENSION.items()}
@@ -216,7 +216,7 @@ SI_symbol = {
     'velocity'       : 'm/s',
     'energy'         : 'J',
     'momentum'       : 'kg*m/s',
-    'tesla'          : 'T'
+    'magnetic_field' : 'T'
 }
 # Inverse
 SI_name = {v: k for k, v in SI_symbol.items()}
@@ -243,7 +243,7 @@ known_unit = {
     'eV'         : pmd_unit('eV', e_charge, 'energy'),
     'J'          : pmd_unit('J', 1, 'energy'),
     'eV/c'       : pmd_unit('eV/c', e_charge/c_light, 'momentum'),
-    'T'          : pmd_unit('T', 1, 'tesla')
+    'T'          : pmd_unit('T', 1, 'magnetic_field')
     } 
 
 def unit(symbol):
@@ -423,6 +423,14 @@ def pg_units(key):
         unit1 = PARTICLEGROUP_UNITS[subkeys[1]] 
         
         return multiply_units(unit0, unit1)
+   
+    # Fields
+    if key.startswith('electricField'):
+        return unit('V/m')  
+    if key.startswith('magneticField'):
+        return unit('T')
+  
+    
     
     return PARTICLEGROUP_UNITS[key]    
     

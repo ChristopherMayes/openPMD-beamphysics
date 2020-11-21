@@ -384,3 +384,43 @@ def load_field_data(h5, verbose=True):
             
     
     return data
+
+
+
+
+#----------------------
+# Analysis
+
+def accelerating_voltage_and_phase(z, Ez, frequency):
+    """
+    Computes the accelerating voltage and phase for a v=c positively charged particle in an accelerating cavity field.
+    
+        Z = \int Ez * e^{-i k z} dz 
+        
+        where k = omega/c = 2*pi*frequency/c
+        
+        voltage = abs(Z)
+        phase = arg(Z)
+    
+    Input:
+        z  (float array):   z-coordinate array (m)
+        Ez (complex array): On-axis complex Ez field array (V/m), oscillating as exp(-i omega t), with omega = 2*pi*frequency
+        
+    Output:
+        voltage, phase in (V), (radian)
+    
+    """
+    c=299792458
+    omega = 2*np.pi*frequency
+    k = omega/c
+    fz =Ez*np.exp(-1j*k*z)
+    
+    # Integrate
+    Z = np.trapz(fz, z)
+    
+    # Max voltage at phase
+    voltage = np.abs(Z)
+    phase = np.angle(Z)
+    
+    return voltage, phase
+    

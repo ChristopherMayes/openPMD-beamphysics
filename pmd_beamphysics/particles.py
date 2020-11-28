@@ -100,6 +100,8 @@ class ParticleGroup:
         
     Twiss parameters, including dispersion, for the 'x' or 'y' plane:
         .twiss(plane='x', fraction=0.95, p0C=None)
+    For convenience, plane='xy' will calculate twiss for both planes.
+    
     Twiss matched particles, using a simple linear transformation:
         .twiss_match(self, beta=None, alpha=None, plane='x', p0c=None, inplace=False)
     
@@ -427,9 +429,15 @@ class ParticleGroup:
         """
         Returns Twiss and Dispersion dict.
         
+        plane can be:
+            'x', 'y', 'xy'
+        
         Optionally a fraction of the particles, based on amplitiude, can be specified.
         """
-        return particle_twiss_dispersion(self, plane=plane, fraction=fraction, p0c=p0c)
+        d = {}
+        for p in plane:
+            d.update(particle_twiss_dispersion(self, plane=p, fraction=fraction, p0c=p0c))
+        return d
    
     def twiss_match(self, beta=None, alpha=None, plane='x', p0c=None, inplace=False):
         """

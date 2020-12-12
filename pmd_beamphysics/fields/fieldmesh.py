@@ -4,12 +4,12 @@ from pmd_beamphysics.readers import component_data, expected_record_unit_dimensi
 
 from pmd_beamphysics.writers import write_pmd_field, pmd_field_init
 
-from . import tools
+from pmd_beamphysics import tools
 
-from .plot import plot_fieldmesh_cylindrical_2d
+from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d
 
-from .interfaces.superfish import write_fish_t7, write_poisson_t7
-from .interfaces.gpt import write_gpt_fieldmesh
+from pmd_beamphysics.interfaces.superfish import write_fish_t7, write_poisson_t7
+from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
 
 from h5py import File
 import numpy as np
@@ -94,6 +94,26 @@ class FieldMesh:
     @property
     def geometry(self):
         return self.attrs['gridGeometry']
+    
+    @property
+    def scale(self):
+        return self.attrs['fieldScale']    
+    @scale.setter
+    def scale(self, val):
+        self.attrs['fieldScale']  = val
+        
+    @property
+    def phase(self):
+        """
+        Returns the complex argument phi = -2*pi*RFphase
+        to multiply the oscillating field by. 
+        
+        Can be set. 
+        """
+        return self.attrs['RFphase']*2*np.pi
+    @phase.setter
+    def phase(self, val):
+        self.attrs['RFphase']  = val/(2*np.pi)      
     
     @property
     def axis_labels(self):
@@ -190,6 +210,8 @@ class FieldMesh:
         return not np.any(a)
     
     
+    
+    # Fields
     @property
     def B(self):
         if self.geometry=='cylindrical':
@@ -205,7 +227,15 @@ class FieldMesh:
         if self.geometry=='cylindrical':
             return np.hypot(np.abs(self.Er), np.abs(self.Ez))
         else:
-            raise        
+            raise  
+            
+            
+            
+            
+    @property
+    def Br(self):
+        key = component_from_alias['Br']
+        return self[key]*self.factor
     
     
     def plot(self, component=None, time=None, axes=None, cmap=None, **kwargs):
@@ -388,39 +418,3 @@ def load_field_data(h5, verbose=True):
 
 
 
-#----------------------
-# Analysis
-
-def accelerating_voltage_and_phase(z, Ez, frequency):
-    """
-    Computes the accelerating voltage and phase for a v=c positively charged particle in an accelerating cavity field.
-    
-        Z = \int Ez * e^{-i k z} dz 
-        
-        where k = omega/c = 2*pi*frequency/c
-        
-        voltage = abs(Z)
-        phase = arg(Z)
-    
-    Input:
-        z  (float array):   z-coordinate array (m)
-        Ez (complex array): On-axis complex Ez field array (V/m), oscillating as exp(-i omega t), with omega = 2*pi*frequency
-        
-    Output:
-        voltage, phase in (V), (radian)
-    
-    """
-    c=299792458
-    omega = 2*np.pi*frequency
-    k = omega/c
-    fz =Ez*np.exp(-1j*k*z)
-    
-    # Integrate
-    Z = np.trapz(fz, z)
-    
-    # Max voltage at phase
-    voltage = np.abs(Z)
-    phase = np.angle(Z)
-    
-    return voltage, phase
-    

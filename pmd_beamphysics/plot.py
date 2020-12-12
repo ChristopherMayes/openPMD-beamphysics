@@ -239,7 +239,7 @@ def density_and_slice_plot(particle_group, key1='t', key2='p', stat_keys=['norm_
     # Manual histogramming version
     H, xedges, yedges = np.histogram2d(x, y, weights=w, bins=bins)
     extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
-    ax.imshow(H.T, cmap=cmap, vmin=1e-16, origin='lower', extent=extent, aspect='auto')
+    ax.imshow(H.T, cmap=CMAP0, vmin=1e-16, origin='lower', extent=extent, aspect='auto')
     
     # Slice data
     slice_dat = slice_statistics(particle_group, n_slice=n_slice, slice_key=key1,

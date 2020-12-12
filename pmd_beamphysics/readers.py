@@ -335,11 +335,15 @@ required_field_attrs = [
     'gridLowerBound', 'gridOriginOffset', 'gridSpacing', 'gridSize', 'harmonic'
 ]            
     
-optional_field_attrs = [
-    'name',
-    'gridCurvatureRadius', 'fundamentalFrequency', 'RFphase', 'fieldScale',
-    'masterParameter'
-]   
+# Dict with options    
+optional_field_attrs = {
+    'name':None,
+    'gridCurvatureRadius':None,
+    'fundamentalFrequency':0,
+    'RFphase':0,
+    'fieldScale':1.0,
+    'masterParameter':None
+}
 
     
 def load_field_attrs(attr, verbose=False):
@@ -362,10 +366,14 @@ def load_field_attrs(attr, verbose=False):
     for k in required_field_attrs:
         attrs[k] = a.pop(k)
 
-    # Optional
+    # Optional, filling in some defaults
     for k in optional_field_attrs:
         if k in a:
             attrs[k] = a.pop(k)
+        else:
+            v = optional_field_attrs[k]
+            if v is not None:
+                attrs[k] = v
         
     # Collect other. 
     for k, v in a.items():

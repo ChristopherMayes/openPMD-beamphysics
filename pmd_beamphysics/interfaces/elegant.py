@@ -1,4 +1,4 @@
-from pmd_beamphysics.units import m_e
+from pmd_beamphysics.units import mec2
 
 import numpy as np
 import subprocess
@@ -111,7 +111,7 @@ def elegant_h5_to_data(h5, group='page1', species='electron'):
         g = h5
         
     assert species=='electron', f'{species} not allowed yet. Only electron is implemented.'    
-    mc2 = m_e
+    mc2 = mec2
         
     # These should exist
     col = g['columns']
@@ -234,7 +234,7 @@ def elegant_to_data(sddsfile, charge=1.0, sdds2plaindata_bin='sdds2plaindata', s
     
         
     assert species=='electron', f'{species} not allowed yet. Only electron is implemented.'    
-    mc2 = m_e
+    mc2 = mec2
             
     p =  col['p']*mc2
     xp = col['xp']

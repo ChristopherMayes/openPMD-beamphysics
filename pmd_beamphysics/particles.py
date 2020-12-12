@@ -60,6 +60,7 @@ class ParticleGroup:
         .gamma, .beta, .beta_x, .beta_y, .beta_z: relativistic factors [1].
         .r, .theta: cylidrical coordinates [m], [1]
         .pr, .ptheta: momenta in the radial and angular coordinate directions [eV/c]
+        .Lz: angular momentum about the z axis [m*eV/c]
         .energy : total energy [eV]
         .kinetic_energy: total energy - mc^2 in [eV]. 
         .higher_order_energy: total energy with quadratic fit in z or t subtracted [eV]
@@ -292,17 +293,23 @@ class ParticleGroup:
         """
         theta = self.theta
         return self.px * np.cos(theta)  + self.py * np.sin(theta)   
-    
     @property    
     def ptheta(self):
         """     
         Momentum in the polar theta direction. 
         theta_hat = -sin(theta) xhat + cos(theta) yhat
         ptheta = p dot theta_hat
-        Note that L_z = r*ptheta
+        Note that Lz = r*ptheta
         """
         theta = self.theta
-        return -self.px * np.sin(theta)  + self.py * np.cos(theta)   
+        return -self.px * np.sin(theta)  + self.py * np.cos(theta)  
+    @property    
+    def Lz(self):
+        """
+        Angular momentum around the z axis in m*eV/c
+        Lz = x * py - y * px
+        """
+        return self.x*self.py - self.y*self.px
     
     
     # Relativistic quantities

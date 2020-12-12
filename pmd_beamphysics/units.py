@@ -388,11 +388,11 @@ for k in ['t']:
     PARTICLEGROUP_UNITS[k] = unit('s')
 for k in ['energy', 'kinetic_energy', 'mass', 'higher_order_energy_spread', 'higher_order_energy']:
     PARTICLEGROUP_UNITS[k] = unit('eV')
-for k in ['px', 'py', 'pz', 'p', 'pr']:
+for k in ['px', 'py', 'pz', 'p', 'pr', 'ptheta']:
     PARTICLEGROUP_UNITS[k] = unit('eV/c')
 for k in ['x', 'y', 'z', 'r', 'Jx', 'Jy']:
     PARTICLEGROUP_UNITS[k] = unit('m')
-for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma', 'theta', 'ptheta']:    
+for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma', 'theta']:    
     PARTICLEGROUP_UNITS[k] = unit('1')
 for k in ['charge', 'species_charge', 'weight']:
     PARTICLEGROUP_UNITS[k] = unit('C')
@@ -402,6 +402,8 @@ for k in ['norm_emit_x', 'norm_emit_y']:
     PARTICLEGROUP_UNITS[k] = unit('m')
 for k in ['norm_emit_4d']:
     PARTICLEGROUP_UNITS[k] = multiply_units(unit('m'), unit('m'))
+for k in ['Lz']:
+    PARTICLEGROUP_UNITS[k] = multiply_units(unit('m'), unit('eV/c'))    
 for k in ['xp', 'yp']:
     PARTICLEGROUP_UNITS[k] = unit('rad')
 for k in ['x_bar', 'px_bar', 'y_bar', 'py_bar']:

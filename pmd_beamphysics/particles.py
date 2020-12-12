@@ -1,33 +1,31 @@
-from .units import dimension, dimension_name, SI_symbol, pg_units
+from pmd_beamphysics.units import dimension, dimension_name, SI_symbol, pg_units
 
-from .interfaces.astra import write_astra
-from .interfaces.bmad import write_bmad
-from .interfaces.genesis import write_genesis4_distribution, genesis2_beam_data,  write_genesis2_beam_file
-from .interfaces.gpt import write_gpt
-from .interfaces.impact import write_impact
-from .interfaces.litrack import write_litrack
-from .interfaces.opal import write_opal
-from .interfaces.elegant import write_elegant
+from pmd_beamphysics.interfaces.astra import write_astra
+from pmd_beamphysics.interfaces.bmad import write_bmad
+from pmd_beamphysics.interfaces.genesis import write_genesis4_distribution, genesis2_beam_data,  write_genesis2_beam_file
+from pmd_beamphysics.interfaces.gpt import write_gpt
+from pmd_beamphysics.interfaces.impact import write_impact
+from pmd_beamphysics.interfaces.litrack import write_litrack
+from pmd_beamphysics.interfaces.opal import write_opal
+from pmd_beamphysics.interfaces.elegant import write_elegant
 
-from .plot import density_plot, marginal_plot
+from pmd_beamphysics.plot import density_plot, marginal_plot
 
-from .readers import particle_array, particle_paths
-from .statistics import norm_emit_calc, normalized_particle_coordinate, particle_amplitude, particle_twiss_dispersion, matched_particles
-from .writers import write_pmd_bunch, pmd_init
+from pmd_beamphysics.readers import particle_array, particle_paths
+from pmd_beamphysics.species import charge_of, mass_of
+
+from pmd_beamphysics.statistics import norm_emit_calc, normalized_particle_coordinate, particle_amplitude, particle_twiss_dispersion, matched_particles
+from pmd_beamphysics.writers import write_pmd_bunch, pmd_init
 
 from h5py import File
 import numpy as np
-import scipy.constants
 from copy import deepcopy
 import os
 
 
-mass_of = {'electron': 0.51099895000e6 # eV/c
-              }
 c_light = 299792458.
-e_charge = scipy.constants.e
-charge_of = {'electron': e_charge, 'positron':-e_charge}
-charge_state = {'electron': -1}
+
+
 
 
 #-----------------------------------------
@@ -61,7 +59,7 @@ class ParticleGroup:
     Derived data can be computed as attributes:
         .gamma, .beta, .beta_x, .beta_y, .beta_z: relativistic factors [1].
         .r, .theta: cylidrical coordinates [m], [1]
-        .pr, .ptheta: cylindrical momenta [1]
+        .pr, .ptheta: momenta in the radial and angular coordinate directions [eV/c]
         .energy : total energy [eV]
         .kinetic_energy: total energy - mc^2 in [eV]. 
         .higher_order_energy: total energy with quadratic fit in z or t subtracted [eV]
@@ -203,12 +201,12 @@ class ParticleGroup:
     @property
     def mass(self):
         """Rest mass in eV"""
-        return mass_of[self.species]
+        return mass_of(self.species)
 
     @property
     def species_charge(self):
         """Species charge in C"""
-        return charge_of[self.species]
+        return charge_of(self.species)
     
     @property
     def charge(self):
@@ -276,7 +274,7 @@ class ParticleGroup:
         best_fit = np.polynomial.polynomial.polyval(t, best_fit_coeffs)
         return energy - best_fit
     
-    # Cylindrical coordinates. Note that these are ali
+    # Polar coordinates. Note that these are centered at x=0, y=0, and not an averge center. 
     @property
     def r(self):
         """Radius in the xy plane: r = sqrt(x^2 + y^2) in m"""
@@ -287,11 +285,18 @@ class ParticleGroup:
         return np.arctan2(self.y, self.x)
     @property
     def pr(self):
-        """Momentum in the radial direction pr = sqrt(px^2 + py^2) in eV/c"""
-        return np.hypot(self.px, self.py)
+        """
+        Momentum in the radial direction in eV/c
+        r_hat = cos(theta) xhat + sin(theta) yhat
+        pr = p dot r_hat
+        """
+        theta = self.theta
+        return self.px * np.cos(theta)  + self.py * np.sin(theta)   
+    
     @property    
     def ptheta(self):
         """     
+        Momentum in the polar theta direction. 
         theta_hat = -sin(theta) xhat + cos(theta) yhat
         ptheta = p dot theta_hat
         Note that L_z = r*ptheta

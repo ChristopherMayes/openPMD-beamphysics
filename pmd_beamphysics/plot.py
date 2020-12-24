@@ -116,8 +116,10 @@ def density_plot(particle_group, key='x', bins=None, **kwargs):
         ax.set_ylabel(f'{hist_prefix}C/{ux}')
     
 
-    ax.set_xlabel(labelx)    
+    ax.set_xlabel(labelx)  
     
+    return fig
+        
 def marginal_plot(particle_group, key1='t', key2='p', bins=None, **kwargs):
     """
     Density plot and projections
@@ -202,7 +204,7 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None, **kwargs):
     ax_joint.set_xlabel(labelx)
     ax_joint.set_ylabel(labely)
 
-    #plt.show()
+    return fig    
     
     
 def density_and_slice_plot(particle_group, key1='t', key2='p', stat_keys=['norm_emit_x', 'norm_emit_y'], bins=100, n_slice=30):

@@ -345,7 +345,7 @@ def nice_scale_prefix(scale):
     
     p10 = np.log10(abs(scale))
 
-    if p10 <-2 or p10 > 2:
+    if p10 <-1.5 or p10 > 2:
         f = 10**(p10 //3 *3)
     else:
         f = 1

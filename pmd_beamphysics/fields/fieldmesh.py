@@ -8,7 +8,7 @@ from pmd_beamphysics import tools
 
 from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d
 
-from pmd_beamphysics.interfaces.superfish import write_fish_t7, write_poisson_t7
+from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
 from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
 
 from h5py import File
@@ -235,21 +235,25 @@ class FieldMesh:
     @property
     def Br(self):
         key = component_from_alias['Br']
-        return self[key]*self.factor
+        return self[key]
     
     
-    def plot(self, component=None, time=None, axes=None, cmap=None, **kwargs):
+    def plot(self, component=None, time=None, axes=None, cmap=None, return_figure=False, **kwargs):
         
         
         return plot_fieldmesh_cylindrical_2d(self,
                                              component=component,
                                              time=time,
                                              axes=axes,
+                                             return_figure=return_figure,
                                              cmap=cmap, **kwargs)
     
     
     def units(self, key):
         """Returns the units of any key"""
+        
+        # Strip any operators
+        _, key = get_operator(key)
         
         # Fill out aliases 
         if key in component_from_alias:
@@ -294,12 +298,19 @@ class FieldMesh:
         
         For dynamic (harmonic /= 0) fields, a Fish T7 file is written
         """
-        
-        if self.is_static:
-            return write_poisson_t7(self, filePath, verbose=verbose)
-        else:
-            return write_fish_t7(self, filePath, verbose=verbose)
+        return write_superfish_t7(self, filePath, verbose=verbose)
             
+            
+            
+    @classmethod
+    def from_superfish(cls, filename, type='electric', geometry='cylindrical'):
+        """
+        Class method to parse a superfish T7 style file.
+        """        
+        data = read_superfish_t7(filename, type=type, geometry=geometry)
+        c = cls(data=data)
+        return c               
+        
         
         
     def __eq__(self, other):
@@ -332,24 +343,39 @@ class FieldMesh:
         
     def __getitem__(self, key):
         """
-    
+        Returns component data from a key
+        
+        If the key starts with:
+            re_
+            im_
+            abs_
+        the appropriate numpy operator is applied.
+        
         
         
         """
                
         if key in self.components:
             return self.components[key]
-            
+        
+        # Check for operators
+        operator, key = get_operator(key)
+        
         # Aliases
         if key in component_from_alias:
             comp = component_from_alias[key]
             if comp in self.components:
-                return self.components[comp]
+                dat = self.components[comp]
             
         if key == 'E':
-            return self.E
+            dat = self.E
         if key == 'B':
-            return self.B
+            dat =  self.B
+        
+        if operator:
+            dat = operator(dat)
+            
+        return dat
         
         raise ValueError(f'Key not available: {key}')
         
@@ -360,7 +386,27 @@ class FieldMesh:
 
     
 
-
+def get_operator(key):
+    """
+    Check if a key starts with re_, im_, abs_
+    
+    returns operator, newkey
+    """
+    # Check for simple operators
+    if key.startswith('re_'):
+        operator = np.real
+        newkey = key[3:]
+    elif key.startswith('im_'):
+        operator = np.imag
+        newkey = key[3:]
+    elif key.startswith('abs_'):
+        operator = np.abs
+        newkey = key[4:]            
+    else:
+        operator = None 
+        newkey = key
+    
+    return operator, newkey
     
             
 def load_field_data(h5, verbose=True):

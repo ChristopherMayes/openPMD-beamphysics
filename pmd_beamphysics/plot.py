@@ -289,6 +289,7 @@ def plot_fieldmesh_cylindrical_2d(fm,
                                   axes=None,
                                   aspect='auto',
                                   cmap=None,
+                                  return_figure=False,
                                   **kwargs):
     """
     Plots a fieldmesh component
@@ -348,4 +349,5 @@ def plot_fieldmesh_cylindrical_2d(fm,
              cax=cax, orientation='vertical', label=llabel)     
     
     
-    
+    if return_figure:
+        return fig

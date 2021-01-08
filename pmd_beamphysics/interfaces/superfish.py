@@ -9,6 +9,10 @@ import numpy as np
 
 
 
+
+# ------------------
+# FieldMesh write T7
+
 def write_fish_t7(fm, filePath, fmt='%10.8e', verbose=False):
     """
     Writes a T7 file from FISH t7data dict. 
@@ -99,13 +103,6 @@ def fish_complex_to_real_fields(fm, verbose=False):
 
     return Er, Ez, Btheta, -iangle
     
-    
-    
-    
-    
-
-
-
 
 def write_poisson_t7(fm, filePath, fmt='%10.8e', verbose=False):
     """
@@ -143,14 +140,15 @@ def write_poisson_t7(fm, filePath, fmt='%10.8e', verbose=False):
         kr = 'Er'
         kz = 'Ez'
         ftype = 'electric'
-        
+        factor = 1
         
     else:
         kr = 'Br'
         kz = 'Bz'
         ftype = 'magnetic'
-    fr = np.real(fm[kr][:,0,:])
-    fz = np.real(fm[kz][:,0,:])
+        factor = 1e4 # T->G
+    fr = np.real(fm[kr][:,0,:])*factor
+    fz = np.real(fm[kz][:,0,:])*factor
     
     # Unroll the arrays
     dat = np.array([field.reshape(nx*ny, order='F').T for field in [fr, fz]]).T
@@ -162,5 +160,134 @@ def write_poisson_t7(fm, filePath, fmt='%10.8e', verbose=False):
     
     return filePath
 
+
+def write_superfish_t7(fm, filePath, fmt='%10.8e', verbose=False):
+    """
+    Writes a Superfish T7 file. This is a simple wrapper for:
+        write_fish_t7
+        write_poisson_t7
+    If .is_statice, a Poisson file is written. Otherwise a Fish file is written.
+    
+    """
+    if fm.is_static:
+        return write_poisson_t7(fm, filePath, verbose=verbose)
+    else:
+        return write_fish_t7(fm, filePath, verbose=verbose)
+
+
+
+# ------------------
+# Parsers for ASCII T7
+
+
+def read_superfish_t7(t7file,
+                      type='electric',
+                      geometry='cylindrical'):
+    """
+    Parses a T7 file written by Posson/Superfish.
+    
+    Fish or Poisson T7 are automatically detected according to the second line.
+    
+    For Poisson problems, the type must be specified.
+    
+    Parameters:
+    ----------
+    t7file: str
+    
+    type: str, optional
+        For Poisson files, required to be 'electric' or 'magnetic'. 
+        Not used for Fish files
+    geometry: str, optional
+        field geometry, currently required to be the default: 'cylindrical'
+    
+    Returns:
+    -------
+    FieldMesh object
+    
+    """
+    
+    # ASCII parsing
+    
+    # Read header
+    # zmin(cm), zmax(cm), nx-1
+    # freq(MHz)
+    # ymin(cm), ymax(cm), ny-1
+    with open(t7file, 'r') as f:
+        line1 = f.readline().split()
+        line2 = f.readline().split()
+        line3 = f.readline().split()
+     
+    if len(line2) == 1:
+        problem = 'fish'
+    else:
+        problem = 'poisson'
+    
+    components = {}
+    if problem=='fish':
+        # zmin(cm), zmax(cm), nz-1
+        # freq(MHz)
+        # rmin(cm), rmax(cm), nr-1
+        # 4 columns of data: Ez(MV/m), Er(MV/m), E(MV/m), Hphi(A/m)
+        
+        # FISH problem   
+        zmin, zmax, nz =  float(line1[0])*1e-2, float(line1[1])*1e-2, int(line1[2])+1
+        frequency = float(line2[0])*1e6 # MHz -> Hz
+        rmin, rmax, nr =  float(line3[0])*1e-2, float(line3[1])*1e-2, int(line3[2])+1  
+        
+        # Read and reshape
+        dat = np.loadtxt(t7file, skiprows=3)
+        #labels=['Ez', 'Er', 'E', 'Hphi']
+        dat = dat.reshape(nr, 1, nz, 4)
+        
+        components['electricField/z'] = dat[:,:,:,0].astype(np.complex) * 1e6 # MV/m -> V/m
+        components['electricField/r'] = dat[:,:,:,1].astype(np.complex) * 1e6 # MV/m -> V/m
+        components['magneticField/theta'] = dat[:,:,:,3]  * -1j*mu_0 # A/m -> T
+        
+    else:
+        # rmin(cm), rmax(cm), nx-1    # r in cylindrical geometry
+        # zmin(cm), zmax(cm), ny-1    # z in cylindrical geometry
+        
+        # POISSON problem
+        rmin, rmax, nr =  float(line1[0])*1e-2, float(line1[1])*1e-2, int(line1[2])+1
+        zmin, zmax, nz =  float(line2[0])*1e-2, float(line2[1])*1e-2, int(line2[2])+1        
+        frequency=0
+        
+        # The structure here is different 
+        dat = np.loadtxt(t7file, skiprows=2)
+        dat = dat.reshape(nz, 1, nr, 2)
+        
+        # type must be specified
+        if type == 'electric':
+            components['electricField/r'] = dat[:,:,:,0].T # V/m
+            components['electricField/z'] = dat[:,:,:,1].T # V/m
+        elif type == 'magnetic':
+            components['magneticField/r'] = dat[:,:,:,0].T*1e-4 # G -> T
+            components['magneticField/z'] = dat[:,:,:,1].T*1e-4 # G -> T
+    
+    
+    dz = (zmax-zmin)/(nz-1)
+    dr = (rmax)/(nr-1)
+    
+    # Attributes
+    attrs = {}
+    attrs['eleAnchorPt'] = 'beginning'
+    attrs['gridGeometry'] = 'cylindrical'
+    attrs['axisLabels'] = ('r', 'theta', 'z')
+    attrs['gridLowerBound'] = (0, 1, 0)
+    attrs['gridSize'] = (nr, 1, nz)        
+    attrs['gridSpacing'] = (dr, 0, dz)    
+    
+    # Set requested zmin
+    attrs['gridOriginOffset'] = (0, 0, zmin) 
+    
+    attrs['fundamentalFrequency'] = frequency
+    attrs['RFphase'] = 0
+    if frequency == 0:
+        attrs['harmonic'] = 0
+    else:
+        attrs['harmonic'] = 1
+    
+    
+    return dict(attrs=attrs, components=components)
 
 

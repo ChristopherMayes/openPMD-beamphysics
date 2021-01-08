@@ -2,7 +2,8 @@ import scipy.io as sio
 import numpy as np
 from pmd_beamphysics import ParticleGroup
 
-def read_lucretia(filename, ele_name='BEGINNING', t_ref=0, kill_dead_particles=True, verbose=False):
+def read_lucretia(filename, ele_name='BEGINNING', t_ref=0, exclude_dead_particles=True, verbose=False):
+
     """
     Load one beam in a Lucretia beam file into a ParticleGroup
     
@@ -107,7 +108,7 @@ def read_lucretia(filename, ele_name='BEGINNING', t_ref=0, kill_dead_particles=T
     
     P = ParticleGroup(data=data)
     
-    if (kill_dead_particles):
+    if (exclude_dead_particles):
         if verbose:
             print('Excluding dead particles (if any)...')
         P = P.where(P.p>0)

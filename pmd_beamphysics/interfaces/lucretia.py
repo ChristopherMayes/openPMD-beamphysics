@@ -3,6 +3,7 @@ import numpy as np
 from pmd_beamphysics import ParticleGroup
 
 def read_lucretia(filename, ele_name='BEGINNING', t_ref=0, exclude_dead_particles=True, verbose=False):
+
     """
     Load one beam in a Lucretia beam file into a ParticleGroup
     

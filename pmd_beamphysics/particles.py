@@ -6,6 +6,7 @@ from pmd_beamphysics.interfaces.genesis import write_genesis4_distribution, gene
 from pmd_beamphysics.interfaces.gpt import write_gpt
 from pmd_beamphysics.interfaces.impact import write_impact
 from pmd_beamphysics.interfaces.litrack import write_litrack
+from pmd_beamphysics.interfaces.lucretia import write_lucretia
 from pmd_beamphysics.interfaces.opal import write_opal
 from pmd_beamphysics.interfaces.elegant import write_elegant
 
@@ -585,8 +586,11 @@ class ParticleGroup:
     def write_litrack(self, filePath, p0c=None, verbose=False):        
         return write_litrack(self, outfile=filePath, p0c=p0c, verbose=verbose)      
         
+    def write_lucretia(self, filePath, ele_name='BEGINNING', t_ref=0, stop_ix=None, verbose=False):       
+        return write_lucretia(self, filePath, ele_name=ele_name, t_ref=t_ref, stop_ix=stop_ix)
+        
     def write_opal(self, filePath, verbose=False, dist_type='emitted'):
-        write_opal(self, filePath, verbose=verbose, dist_type=dist_type)
+        return write_opal(self, filePath, verbose=verbose, dist_type=dist_type)
     
         
     # openPMD    

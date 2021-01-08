@@ -1,11 +1,10 @@
 import scipy.io as sio
 import numpy as np
-from pmd_beamphysics import ParticleGroup
 
-def read_lucretia(filename, ele_name='BEGINNING', t_ref=0, exclude_dead_particles=True, verbose=False):
+def lucretia_to_data(filename, ele_name='BEGINNING', t_ref=0, exclude_dead_particles=True, verbose=False):
 
     """
-    Load one beam in a Lucretia beam file into a ParticleGroup
+    Load one beam in a Lucretia beam file as data for openPMD-beamphysics
     
     Parameters:
     ----------
@@ -20,11 +19,13 @@ def read_lucretia(filename, ele_name='BEGINNING', t_ref=0, exclude_dead_particle
             reference time of the beam in seconds. Default: 0.
     exclude_dead_particles : bool, optional
                              if True, excludes dead particles.  Default: True.
-    ----------
+
     
     Returns:
     ----------
-    A ParticleGroup object
+    data: dict
+        data for openPMD-beamphysics
+    
     ----------
 
     
@@ -69,8 +70,8 @@ def read_lucretia(filename, ele_name='BEGINNING', t_ref=0, exclude_dead_particle
     mdat = sio.loadmat(filename);
     
     coords = mdat['bstore'][ele_name][0,0]['Bunch'][0,0]['x'][0,0]
-    charges = mdat['bstore'][ele_name][0,0]['Bunch'][0,0]['Q'][0,0]
-    
+    charges = mdat['bstore'][ele_name][0,0]['Bunch'][0,0]['Q'][0,0][0]
+
     Np = coords.shape[1]
 
     x = coords[0]
@@ -94,8 +95,9 @@ def read_lucretia(filename, ele_name='BEGINNING', t_ref=0, exclude_dead_particle
 
     if verbose:
         print(Np,'particles detected,', n_dead, 'found dead!')
-    
-    data = {'x':x,
+
+    data = {
+        'x':x,
         'px':px,
         'y':y,
         'py':py,
@@ -105,24 +107,32 @@ def read_lucretia(filename, ele_name='BEGINNING', t_ref=0, exclude_dead_particle
         'status':status, 
         'weight':charges, 
         'species':'electron'}
-    
-    P = ParticleGroup(data=data)
-    
-    if (exclude_dead_particles):
-        if verbose:
-            print('Excluding dead particles (if any)...')
-        P = P.where(P.p>0)
         
-    return P
+    if exclude_dead_particles and n_dead > 0:
+
+        good = np.where(ptot>0)
+        
+        if verbose:
+            print(f'Excluding {n_dead} dead particles')
+            
+        for k, v in data.items():
+            if k == 'species':
+                continue
+            data[k] = data[k][good]
+        
+    return data
 
 
-def write_lucretia(filename, P, ele_name='BEGINNING', t_ref=0, stop_ix=None):
+def write_lucretia(P, filePath, ele_name='BEGINNING', t_ref=0, stop_ix=None, verbose=True):
     """
     Write a ParticleGroup beam into a Lucretia beam file.
     
     Parameters:
     ----------
-    filename : str
+    P: ParticleGroup
+               Particles to write. 
+    
+    filePath : str
                Lucretia '.mat' file name to be written to.
     ele_name : str
                name of the element at which the beam is located.
@@ -186,22 +196,25 @@ def write_lucretia(filename, P, ele_name='BEGINNING', t_ref=0, stop_ix=None):
     w3 = np.array([np.array([(w2,)], dtype=[(ele_name, 'O')])])
     w4 = {'bstore':w3}
     
-    sio.savemat(filename, w4)
+    if verbose:
+        print(f'writing {len(P)} particles in the Lucretia format to {filePath}')    
     
-def list_element_names(filename):
+    sio.savemat(filePath, w4)
+    
+def list_element_names(filePath):
     """
     Find the element names in a Lucretia beam file
     
     Parameters:
     ----------
-    filename : str
+    filePath : str
                Lucretia '.mat' file name.
-    ----------
+
     
     Returns:
     ----------
     A list with the element names
-    ----------
+
     """
-    dat = sio.loadmat(filename)
+    dat = sio.loadmat(filePath)
     return list(dat['bstore'].dtype.fields)

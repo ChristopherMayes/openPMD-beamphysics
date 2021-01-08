@@ -190,6 +190,17 @@ def read_superfish_t7(t7file,
     
     For Poisson problems, the type must be specified.
     
+    Superfish fields oscillate as:
+        Er, Ez ~ cos(wt)
+        Hphi   ~ -sin(wt)
+      
+    For complex fields oscillating as e^-iwt
+    
+        Re(Ex*e^-iwt)   ~ cos
+        Re(-iB*e^-iwt) ~ -sin        
+    and therefore B = -i * mu_0 * H_phi is the complex magnetic field in Tesla
+    
+
     Parameters:
     ----------
     t7file: str
@@ -202,7 +213,13 @@ def read_superfish_t7(t7file,
     
     Returns:
     -------
-    FieldMesh object
+    fieldmesh_data: dict of dicts:
+        attrs
+        components
+        
+        
+    A FieldMesh object is instantiated from this as:
+        FieldMesh(data=fieldmesh_data)
     
     """
     

@@ -1,9 +1,7 @@
 # openPMD-beamphysics
 Tools for analyzing and viewing particle data in the openPMD standard, extension beamphysics.
 
-https://github.com/DavidSagan/openPMD-standard/blob/EXT_BeamPhysics/EXT_BeamPhysics.md
-
-
+https://github.com/openPMD/openPMD-standard/blob/upcoming-2.0.0/EXT_BeamPhysics.md
 
 Installing openpmd-beamphysics
 ==============================

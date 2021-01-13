@@ -318,8 +318,8 @@ def plot_fieldmesh_cylindrical_2d(fm,
    
     unit = fm.units(component)
     
-    xmin, _, zmin = fm.min
-    xmax, _, zmax = fm.max
+    xmin, _, zmin = fm.mins
+    xmax, _, zmax = fm.maxs
     
     # plt.imshow on [r, z] will put z on the horizontal axis. 
     extent = [zmin, zmax, xmin, xmax]

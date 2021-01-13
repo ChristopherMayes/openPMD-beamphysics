@@ -44,6 +44,54 @@ class FieldMesh:
     
     Component data is always 3D.
     
+    Initialization:
+        From openPMD-beamphysics HDF5 file:
+            FieldMesh('file.h5')
+        From data dict:
+            FieldMesh(data=data)
+    
+    Derived properties:
+                
+        .r, .theta, .z
+        .Br, .Btheta, .Bz
+        .Er, .Etheta, .Ez
+        .E, .B
+        
+        .phase
+        .scale
+        .factor
+        
+        .harmonic
+        .frequency
+        
+        .shape
+        .geometry
+        .mins, .maxs, .deltas
+        .meshgrid
+        .dr, .dtheta, .dz
+    
+    Booleans:
+        .is_pure_electric
+        .is_pure_magnetic
+        .is_static
+    
+    Units and labels
+        .units
+        .axis_labels
+    
+    Plotting:
+        .plot
+    
+    Writers
+        .write
+        .write_gpt
+        .write_superfish
+        
+    Readers (class methods):
+        .from_superfish
+    
+
+    
 
     
     """
@@ -58,18 +106,21 @@ class FieldMesh:
                 with File(fname, 'r') as hh5:
                     fp = field_paths(hh5)
                     assert len(fp) == 1, f'Number of field paths in {h5}: {len(fp)}'
-                    data = load_field_data(hh5[fp[0]])
+                    data = load_field_data_h5(hh5[fp[0]])
 
             else:
                 pass
+        else:
+            print('loading data')
+            data = load_field_data_dict(data)
             
         # Internal data
         self._data = data
             
         # Aliases (Do not set these! Set via slicing: .Bz[:] = 0
-        for k in self.components:
-            alias = component_alias[k]
-            self.__dict__[alias] =  self.components[k]
+        #for k in self.components:
+        #    alias = component_alias[k]
+        #    self.__dict__[alias] =  self.components[k]
             
            
     # Direct access to internal data        
@@ -110,10 +161,22 @@ class FieldMesh:
         
         Can be set. 
         """
-        return self.attrs['RFphase']*2*np.pi
+        return -self.attrs['RFphase']*2*np.pi
     @phase.setter
     def phase(self, val):
-        self.attrs['RFphase']  = val/(2*np.pi)      
+        """
+        Complex argument in radians
+        """
+        self.attrs['RFphase']  = -val/(2*np.pi)    
+   
+    @property
+    def factor(self):
+        """
+        factor to multiply fields by, possibly complex.
+        
+        factor = scale * exp(i*phase)
+        """
+        return np.real_if_close(self.scale * np.exp(1j*self.phase))           
     
     @property
     def axis_labels(self):
@@ -140,14 +203,14 @@ class FieldMesh:
         """
         Uses gridSpacing, gridSize, and gridOriginOffset to return coordinate vectors.
         """
-        return [np.linspace(x0, x1, nx) for x0, x1, nx in zip(self.min, self.max, self.shape)]
+        return [np.linspace(x0, x1, nx) for x0, x1, nx in zip(self.mins, self.maxs, self.shape)]
         
     def coord_vec(self, key):
         """
         Gets the coordinate vector from a named axis key. 
         """
         i = self.axis_index(key)
-        return np.linspace(self.min[i], self.max[i], self.shape[i])
+        return np.linspace(self.mins[i], self.maxs[i], self.shape[i])
         
     @property 
     def meshgrid(self):
@@ -160,14 +223,14 @@ class FieldMesh:
     
     
     @property 
-    def min(self):
+    def mins(self):
         return np.array(self.attrs['gridOriginOffset'])
     @property
-    def delta(self):
+    def deltas(self):
         return np.array(self.attrs['gridSpacing'])
     @property
-    def max(self):
-        return self.delta*(np.array(self.attrs['gridSize'])-1) + self.min      
+    def maxs(self):
+        return self.deltas*(np.array(self.attrs['gridSize'])-1) + self.mins      
     
     @property
     def frequency(self):
@@ -208,36 +271,10 @@ class FieldMesh:
         """
         a = self[key]
         return not np.any(a)
-    
-    
-    
-    # Fields
-    @property
-    def B(self):
-        if self.geometry=='cylindrical':
-            return np.hypot(self['Br'], self['Bz'])
-        else:
-            raise
-            
-            
-            
+                
 
-    @property
-    def E(self):
-        if self.geometry=='cylindrical':
-            return np.hypot(np.abs(self.Er), np.abs(self.Ez))
-        else:
-            raise  
-            
-            
-            
-            
-    @property
-    def Br(self):
-        key = component_from_alias['Br']
-        return self[key]
-    
-    
+    # Plotting
+    # TODO: more general plotting
     def plot(self, component=None, time=None, axes=None, cmap=None, return_figure=False, **kwargs):
         
         
@@ -268,7 +305,7 @@ class FieldMesh:
     # openPMD    
     def write(self, h5, name=None):
         """
-        Writes to an open h5 handle, or new file if h5 is a str.
+        Writes openPMD-beamphysics format to an open h5 handle, or new file if h5 is a str.
         
         """
         if isinstance(h5, str):
@@ -319,6 +356,7 @@ class FieldMesh:
         """
         
         if not tools.data_are_equal(self.attrs, other.attrs):
+            print('here')
             return False
         
         return tools.data_are_equal(self.components, other.components)
@@ -340,6 +378,98 @@ class FieldMesh:
  #          if comp in self.components:
  #              return self.components[comp]
     
+    
+    
+
+    
+    def scaled_component(self, key):
+        """
+        
+        Retruns a component scaled by the complex factor
+            factor = scale*exp(i*phase)
+            
+            
+        """
+
+        if key in self.components:
+            dat = self.components[key] 
+        # Aliases
+        elif key in component_from_alias:
+            comp = component_from_alias[key]
+            if comp in self.components:
+                dat = self.components[comp]   
+            else:
+                # Component not present, make zeros
+                return np.zeros(self.shape)
+        else:
+            raise ValueError(f'Component not available: {key}')
+        
+        # Multiply by scale factor
+        factor = self.factor      
+        
+        if factor != 1:
+            return factor*dat
+        else:
+            return dat
+
+    # Convenient properties
+    # TODO: Automate this?
+    @property
+    def r(self):
+        return self.coord_vec('r')
+    @property
+    def theta(self):
+        return self.coord_vec('theta')
+    @property
+    def z(self):
+        return self.coord_vec('z')    
+    
+    @property
+    def dr(self):
+        return self.deltas[self.axis_index('r')]
+    @property
+    def dtheta(self):
+        return self.deltas[self.axis_index('theta')]
+    @property
+    def dz(self):
+        return self.deltas[self.axis_index('z')]    
+    
+    # TODO: Cartesian components, checking geometry
+    @property
+    def Br(self):
+        return self.scaled_component('Br')
+    @property
+    def Btheta(self):
+        return self.scaled_component('Btheta')
+    @property
+    def Bz(self):
+        return self.scaled_component('Bz')
+    @property
+    def Er(self):
+        return self.scaled_component('Er')
+    @property
+    def Etheta(self):
+        return self.scaled_component('Etheta')
+    @property
+    def Ez(self):
+        return self.scaled_component('Ez')    
+    
+    @property
+    def B(self):
+        if self.geometry=='cylindrical':
+            if self.is_static:
+                return np.hypot(self['Br'], self['Bz'])
+            else:
+                return np.abs(self['Btheta'])
+        else:
+            raise ValueError(f'Unknown geometry: {self.geometry}')    
+          
+    @property
+    def E(self):
+        if self.geometry=='cylindrical':
+            return np.hypot(np.abs(self['Er']), np.abs(self['Ez']))
+        else:
+            raise ValueError(f'Unknown geometry: {self.geometry}')    
         
     def __getitem__(self, key):
         """
@@ -354,30 +484,33 @@ class FieldMesh:
         
         
         """
-               
+        
+        # 
+        if key in ['r', 'theta', 'z']:
+            return self.coord_vec(key)
+            
+            
+        # Raw components
         if key in self.components:
             return self.components[key]
-        
+       
         # Check for operators
         operator, key = get_operator(key)
         
-        # Aliases
-        if key in component_from_alias:
-            comp = component_from_alias[key]
-            if comp in self.components:
-                dat = self.components[comp]
-            
+        # Scaled components
         if key == 'E':
             dat = self.E
-        if key == 'B':
+        elif key == 'B':
             dat =  self.B
-        
+        else:
+            dat = self.scaled_component(key)        
+                   
         if operator:
             dat = operator(dat)
             
         return dat
         
-        raise ValueError(f'Key not available: {key}')
+
         
         
     def __repr__(self):
@@ -409,7 +542,7 @@ def get_operator(key):
     return operator, newkey
     
             
-def load_field_data(h5, verbose=True):
+def load_field_data_h5(h5, verbose=True):
     """
     
     
@@ -461,6 +594,35 @@ def load_field_data(h5, verbose=True):
     
     return data
 
+def load_field_data_dict(data_dict, verbose=True):
+    """
+    Similar to load_field_data_h5, but from a dict. 
+    
+    This cannot do unit checking. 
+    """
+    
+    # The output dict
+    data = {}
+    
+    # Load attributes
+    attrs, other = load_field_attrs(data_dict['attrs'], verbose=verbose)
+    attrs.update(other)
+    data['attrs'] = attrs    
+    
+    # Go through components. Allow aliases
+    comp = data['components'] = {}
+    for k, v in data_dict['components'].items():
+        if k in component_alias:
+            comp[k] = v
+        elif k in component_from_alias:
+            k = component_from_alias[k]
+            assert k not in data
+            comp[k] = v
+        else:
+            raise ValueError(f'Unallowed component: {k}')
+    
+    
+    return data
 
 
 

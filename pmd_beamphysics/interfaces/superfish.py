@@ -29,8 +29,8 @@ def write_fish_t7(fm, filePath, fmt='%10.8e', verbose=False):
     assert fm.geometry == 'cylindrical', 'TODO: cartesian.'
     assert fm.frequency != 0, 'Frequency must be non-zero.'
     
-    rmin, _, zmin = fm.min
-    rmax, _, zmax = fm.max
+    rmin, _, zmin = fm.mins
+    rmax, _, zmax = fm.maxs
     nr, _, nz = list(fm.shape)
     
     
@@ -117,8 +117,8 @@ def write_poisson_t7(fm, filePath, fmt='%10.8e', verbose=False):
     assert fm.geometry == 'cylindrical', 'TODO: cartesian.'
     assert fm.is_static, 'Static fields are required for Poisson T7'
     
-    rmin, _, zmin = fm.min
-    rmax, _, zmax = fm.max
+    rmin, _, zmin = fm.mins
+    rmax, _, zmax = fm.maxs
     nr, _, nz = list(fm.shape)
     
     

@@ -1,4 +1,4 @@
-from pmd_beamphysics.units import dimension, dimension_name, SI_symbol, pg_units
+from pmd_beamphysics.units import dimension, dimension_name, SI_symbol, pg_units, c_light
 
 from pmd_beamphysics.interfaces.astra import write_astra
 from pmd_beamphysics.interfaces.bmad import write_bmad
@@ -24,11 +24,6 @@ from copy import deepcopy
 import os
 
 
-c_light = 299792458.
-
-
-
-
 #-----------------------------------------
 # Classes
 
@@ -41,7 +36,7 @@ class ParticleGroup:
         h5 = open h5 handle, or str that is a file
         data = raw data
     
-    The required bunch data is stored in __dict__ with keys
+    The required bunch data is stored in .data with keys
         np.array: x, px, y, py, z, pz, t, status, weight
         str: species
     where:
@@ -135,6 +130,12 @@ class ParticleGroup:
     """
     def __init__(self, h5=None, data=None):
     
+    
+        if h5 and data:
+            # TODO:
+            # Allow merging or changing some array with extra data
+            raise NotImplementedError('Cannot init on both h5 and data')
+    
         if h5:
             # Allow filename
             if isinstance(h5, str):
@@ -167,9 +168,134 @@ class ParticleGroup:
             
         self._settable_scalar_keys = ['species']
         self._settable_keys =  self._settable_array_keys + self._settable_scalar_keys                       
-        for key in self._settable_keys:
-            self.__dict__[key] = data[key]
+        # Internal data. Only allow settable keys
+        self._data = {k:data[k] for k in self._settable_keys}
+        
+    #-------------------------------------------------
+    # Access to intrinsic coordinates
+    @property
+    def x(self):
+        """
+        x coordinate in [m]
+        """
+        return self._data['x']
+    @x.setter
+    def x(self, val):
+        self._data['x'] = full_array(len(self), val)    
             
+    @property
+    def y(self):
+        """
+        y coordinate in [m]
+        """
+        return self._data['y']
+    @y.setter
+    def y(self, val):
+        self._data['y'] = full_array(len(self), val)              
+       
+    @property
+    def z(self):
+        """
+        z coordinate in [m]
+        """
+        return self._data['z']
+    @z.setter
+    def z(self, val):
+        self._data['z'] = full_array(len(self), val)      
+        
+    @property
+    def px(self):
+        """
+        px coordinate in [eV/c]
+        """
+        return self._data['px']
+    @px.setter
+    def px(self, val):
+        self._data['px'] = full_array(len(self), val)      
+        
+    @property
+    def py(self):
+        """
+        py coordinate in [eV/c]
+        """
+        return self._data['py']
+    @py.setter
+    def py(self, val):
+        self._data['py'] = full_array(len(self), val)    
+        
+    @property
+    def pz(self):
+        """
+        pz coordinate in [eV/c]
+        """
+        return self._data['pz']
+    @pz.setter
+    def pz(self, val):
+        self._data['pz'] = full_array(len(self), val)    
+        
+    @property
+    def t(self):
+        """
+        t coordinate in [s]
+        """
+        return self._data['t']
+    @t.setter
+    def t(self, val):
+        self._data['t'] = full_array(len(self), val)       
+        
+    @property
+    def status(self):
+        """
+        status coordinate in [1]
+        """
+        return self._data['status']
+    @status.setter
+    def status(self, val):
+        self._data['status'] = full_array(len(self), val)  
+
+    @property
+    def weight(self):
+        """
+        weight coordinate in [C]
+        """
+        return self._data['weight']
+    @weight.setter
+    def weight(self, val):
+        self._data['weight'] = full_array(len(self), val)            
+        
+    @property
+    def id(self):
+        """
+        id integer 
+        """
+        if 'id' not in self._data:
+            self.assign_id()      
+        
+        return self._data['id']
+    @id.setter
+    def id(self, val):
+        self._data['id'] = full_array(len(self), val)            
+    
+    
+    @property
+    def species(self):
+        """
+        species string
+        """
+        return self._data['species']
+    @species.setter
+    def species(self, val):
+        self._data['species'] = val
+        
+    @property
+    def data(self):
+        """
+        Internal data dict
+        """
+        return self._data        
+    
+    #-------------------------------------------------
+    # Derived data
             
     def assign_id(self):
         """
@@ -178,8 +304,8 @@ class ParticleGroup:
         """
         if 'id' not in self._settable_array_keys: 
             self._settable_array_keys.append('id')
-        self.id = np.arange(1, self['n_particle']+1)            
-
+        self.id = np.arange(1, self['n_particle']+1)             
+    
     @property
     def n_particle(self):
         """Total number of particles. Same as len """
@@ -647,7 +773,7 @@ class ParticleGroup:
         """Sorts internal arrays by key"""
         ixlist = np.argsort(self[key])
         for k in self._settable_array_keys:
-            self.__dict__[k] = self[k][ixlist]    
+            self._data[k] = self[k][ixlist]    
         
     # Operator overloading    
     def __add__(self, other):
@@ -657,6 +783,10 @@ class ParticleGroup:
         """
         return join_particle_groups(self, other)
     
+    # 
+    def __contains__(self, item):
+        """Checks internal data"""
+        return True if item in self._data else False    
     
     def __len__(self):
         return len(self[self._settable_array_keys[0]])
@@ -669,12 +799,6 @@ class ParticleGroup:
         memloc = hex(id(self))
         return f'<ParticleGroup with {self.n_particle} particles at {memloc}>'
                    
-
-
-
-
-
-
 
 
 #-----------------------------------------
@@ -742,6 +866,22 @@ def load_bunch_data(h5):
     return data
 
 
+def full_array(n, val):
+    """
+    Casts a value into a full array of length n
+    """
+    if np.isscalar(val):
+        return np.full(n, val)
+    n_here = len(val)
+    
+    if n_here == 1:
+        return np.full(n, val[0])
+    elif n_here != n:
+        raise ValueError(f'Length mismatch: len(val)={n_here}, but requested n={n}')
+    # Cast to array
+    return np.array(val)    
+    
+    
 
 def full_data(data, exclude=None):
     """

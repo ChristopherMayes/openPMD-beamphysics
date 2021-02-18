@@ -77,7 +77,7 @@ def write_pmd_bunch(h5, data, name=None):
     
         
     # Optional id. This does not have any units.
-    if 'id' in data or hasattr(data, 'id'):
+    if 'id' in data:
         g['id'] = data['id']
 
         
@@ -131,11 +131,10 @@ def write_component_data(h5, name, data, unit=None):
     
     """
     # Check for constant component
-    
-    udata = np.unique(data)
-    if len(udata) == 1:
+    dat0 = data[0]
+    if np.all(data == dat0):
         g = h5.create_group(name)
-        g.attrs['value'] = udata[0]
+        g.attrs['value'] = dat0
         g.attrs['shape'] = data.shape
     else:
         h5[name] = data

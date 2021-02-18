@@ -81,13 +81,13 @@ def lucretia_to_data(filename, ele_name='BEGINNING', t_ref=0, exclude_dead_parti
     z_luc = coords[4]
     ptot = coords[5]  # total momentum in GeV/c
 
-    px = px_luc * ptot * 1E9 # in eV/c
-    py = py_luc * ptot * 1E9
-    pz = np.sqrt( (ptot * 1E9)**2 - px**2 - py**2 )
+    px = px_luc * ptot * 1e9 # in eV/c
+    py = py_luc * ptot * 1e9
+    pz = np.sqrt( (ptot * 1e9)**2 - px**2 - py**2 )
 
     t = z_luc / 299792458 + t_ref
        
-    status = np.ones(Np)
+    status = np.full(Np, 1)
 
     ix = np.where(ptot==0)
     status[ix] = 0

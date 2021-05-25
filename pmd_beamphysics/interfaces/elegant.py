@@ -59,7 +59,7 @@ def write_elegant(particle_group,
 &column name=xp, type=double, description="px/pz" &end
 &column name=y,  type=double, units=m, description="y in meters" &end
 &column name=yp, type=double, description="py/pz" &end
-&column name=p,  type=double, description="relativistic gamma*beta" &end
+&column name=p,  type=double, units="m$be$nc", description="relativistic gamma*beta" &end
 &data mode=ascii &end
 {P['charge']}
 {len(P)}"""

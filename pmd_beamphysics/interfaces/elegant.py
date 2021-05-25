@@ -21,7 +21,7 @@ def write_elegant(particle_group,
         't', 'x', 'xp', 'y', 'yp', 'p'        
     where 'p' is gamma*beta, in units: 
         elegant units are:
-        s, m, 1, m, 1, 1
+        s, m, 1, m, 1, 'mass*c'
     
     All weights must be the same. 
 
@@ -45,6 +45,15 @@ def write_elegant(particle_group,
          
     if verbose:
         print(f'writing {len(P)} particles to {outfile}')
+        
+    # Correct units for p, depending on the species
+    species = particle_group.species
+    if species in ['electron', 'positron']:
+        p_units = 'units="m$be$nc", '
+    elif species in ['proton']:
+        p_units = 'units="m$bp$nc", '        
+    else:
+        p_units = ''
 
     # Note that the order of the columns matters below. 
     header = f"""SDDS1
@@ -59,7 +68,7 @@ def write_elegant(particle_group,
 &column name=xp, type=double, description="px/pz" &end
 &column name=y,  type=double, units=m, description="y in meters" &end
 &column name=yp, type=double, description="py/pz" &end
-&column name=p,  type=double, units="m$be$nc", description="relativistic gamma*beta" &end
+&column name=p,  type=double, {p_units}description="relativistic gamma*beta" &end
 &data mode=ascii &end
 {P['charge']}
 {len(P)}"""

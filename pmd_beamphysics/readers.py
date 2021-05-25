@@ -262,8 +262,6 @@ def particle_array(h5, component, slice=slice(None), include_offset=True):
         
     
 
-
-    
     
 def all_components(h5):
     """

@@ -444,6 +444,20 @@ class ParticleGroup:
     def gamma(self):
         """Relativistic gamma"""
         return self.energy/self.mass
+    
+    @gamma.setter
+    def gamma(self, val):
+        beta_x = self.beta_x
+        beta_y = self.beta_y
+        beta_z = self.beta_z
+        beta = self.beta
+        gamma_new = full_array(len(self), val)
+        energy_new = gamma_new * self.mass
+        beta_new = np.sqrt(gamma_new**2 - 1)/gamma_new
+        self._data['px'] = energy_new * beta_new * beta_x / beta
+        self._data['py'] = energy_new * beta_new * beta_y / beta
+        self._data['pz'] = energy_new * beta_new * beta_z / beta
+        
     @property
     def beta(self):
         """Relativistic beta"""
@@ -452,15 +466,28 @@ class ParticleGroup:
     def beta_x(self):
         """Relativistic beta, x component"""
         return self.px/self.energy
+    
+    @beta_x.setter
+    def beta_x(self, val):
+        self._data['px'] = full_array(len(self), val)*self.energy    
+        
     @property
     def beta_y(self):
         """Relativistic beta, y component"""
         return self.py/self.energy
+    
+    @beta_y.setter
+    def beta_y(self, val):
+        self._data['py'] = full_array(len(self), val)*self.energy    
+        
     @property
     def beta_z(self):
         """Relativistic beta, z component"""
         return self.pz/self.energy
     
+    @beta_z.setter
+    def beta_z(self, val):
+        self._data['pz'] = full_array(len(self), val)*self.energy
     
     # Normalized coordinates for x and y
     @property 

@@ -9,11 +9,12 @@ For more advanced units, use a package like Pint:
 """
 import scipy.constants
 
-m_e = scipy.constants.value('electron mass energy equivalent in MeV')*1e6
-m_p = scipy.constants.value('proton mass energy equivalent in MeV')*1e6
-c_light = 299792458
+mec2 = scipy.constants.value('electron mass energy equivalent in MeV')*1e6
+mpc2 = scipy.constants.value('proton mass energy equivalent in MeV')*1e6
+c_light = scipy.constants.c
 e_charge = scipy.constants.e
-
+mu_0 = scipy.constants.mu_0 # Note that this is no longer 4pi*10^-7 !
+ 
 import numpy as np
 
 
@@ -169,8 +170,7 @@ def sqrt_unit(u):
     return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)   
         
         
-DIMENSION = {
-   
+DIMENSION = { 
     '1'              : (0,0,0,0,0,0,0),
      # Base units
     'length'         : (1,0,0,0,0,0,0),
@@ -184,10 +184,10 @@ DIMENSION = {
     'charge'         : (0,0,1,1,0,0,0),
     'electric_field'  : (1,1,-3,-1,0,0,0),
     'electric_potential' : (1,2,-3,-1,0,0,0),
+    'magnetic_field' : (0,1,-2,-1,0,0,0),    
     'velocity'       : (1,0,-1,0,0,0,0),
     'energy'         : (2,1,-2,0,0,0,0),
-    'momentum'       : (1,1,-1,0,0,0,0),
-    'tesla'          : (0,1,-2,-1,0,0,0)
+    'momentum'       : (1,1,-1,0,0,0,0)
 }
 # Inverse
 DIMENSION_NAME = {v: k for k, v in DIMENSION.items()}
@@ -216,7 +216,7 @@ SI_symbol = {
     'velocity'       : 'm/s',
     'energy'         : 'J',
     'momentum'       : 'kg*m/s',
-    'tesla'          : 'T'
+    'magnetic_field' : 'T'
 }
 # Inverse
 SI_name = {v: k for k, v in SI_symbol.items()}
@@ -243,7 +243,7 @@ known_unit = {
     'eV'         : pmd_unit('eV', e_charge, 'energy'),
     'J'          : pmd_unit('J', 1, 'energy'),
     'eV/c'       : pmd_unit('eV/c', e_charge/c_light, 'momentum'),
-    'T'          : pmd_unit('T', 1, 'tesla')
+    'T'          : pmd_unit('T', 1, 'magnetic_field')
     } 
 
 def unit(symbol):
@@ -345,7 +345,7 @@ def nice_scale_prefix(scale):
     
     p10 = np.log10(abs(scale))
 
-    if p10 <-2 or p10 > 2:
+    if p10 <-1.5 or p10 > 2:
         f = 10**(p10 //3 *3)
     else:
         f = 1
@@ -386,13 +386,13 @@ for k in ['status']:
     PARTICLEGROUP_UNITS[k] = unit('1')
 for k in ['t']:
     PARTICLEGROUP_UNITS[k] = unit('s')
-for k in ['energy', 'kinetic_energy', 'mass', 'higher_order_energy_spread']:
+for k in ['energy', 'kinetic_energy', 'mass', 'higher_order_energy_spread', 'higher_order_energy']:
     PARTICLEGROUP_UNITS[k] = unit('eV')
-for k in ['px', 'py', 'pz', 'p', 'pr']:
+for k in ['px', 'py', 'pz', 'p', 'pr', 'ptheta']:
     PARTICLEGROUP_UNITS[k] = unit('eV/c')
 for k in ['x', 'y', 'z', 'r', 'Jx', 'Jy']:
     PARTICLEGROUP_UNITS[k] = unit('m')
-for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma', 'theta', 'ptheta']:    
+for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma', 'theta']:    
     PARTICLEGROUP_UNITS[k] = unit('1')
 for k in ['charge', 'species_charge', 'weight']:
     PARTICLEGROUP_UNITS[k] = unit('C')
@@ -402,6 +402,8 @@ for k in ['norm_emit_x', 'norm_emit_y']:
     PARTICLEGROUP_UNITS[k] = unit('m')
 for k in ['norm_emit_4d']:
     PARTICLEGROUP_UNITS[k] = multiply_units(unit('m'), unit('m'))
+for k in ['Lz']:
+    PARTICLEGROUP_UNITS[k] = multiply_units(unit('m'), unit('eV/c'))    
 for k in ['xp', 'yp']:
     PARTICLEGROUP_UNITS[k] = unit('rad')
 for k in ['x_bar', 'px_bar', 'y_bar', 'py_bar']:
@@ -423,6 +425,14 @@ def pg_units(key):
         unit1 = PARTICLEGROUP_UNITS[subkeys[1]] 
         
         return multiply_units(unit0, unit1)
+   
+    # Fields
+    if key.startswith('electricField'):
+        return unit('V/m')  
+    if key.startswith('magneticField'):
+        return unit('T')
+  
+    
     
     return PARTICLEGROUP_UNITS[key]    
     

@@ -1,6 +1,13 @@
 from .units import dimension, dimension_name, SI_symbol, pg_units, c_light, e_charge
+from .tools import decode_attrs, decode_attr
 
+
+import h5py
 import numpy as np
+
+#-----------------------------------------
+# General Utilities
+
 
 
 #-----------------------------------------
@@ -31,15 +38,20 @@ particle_record_components = {
     'velocity':['x', 'y', 'z'],
     'weight':None
 }
-"""
-Expected unit dimensions for paricle records
-"""
-particle_record_unit_dimension = {
+
+field_record_components = {
+    'electricField':['x', 'y', 'z', 'r', 'theta'],
+    'magneticField':['x', 'y', 'z', 'r', 'theta']
+}
+
+
+# Expected unit dimensions for particle and field records
+expected_record_unit_dimension = {
     'branchIndex':dimension('1'),
     'chargeState':dimension('1'),
     'electricField':dimension('electric_field'),
+    'magneticField':dimension('magnetic_field'),
     'elementIndex':dimension('1'),
-    'magneticField':dimension('tesla'),
     'locationInElement': dimension('1'),
     'momentum':dimension('momentum'),
     'momentumOffset':dimension('momentum'),
@@ -60,35 +72,36 @@ particle_record_unit_dimension = {
     'weight':dimension('charge')
 }
 
-
-
-
-
-
-
-"""
-Convenient aliases for components
-"""
-component_alias = {
-    'x':'position/x',
-    'y':'position/y',
-    'z':'position/z',
-    'px':'momentum/x',
-    'py':'momentum/y',
-    'pz':'momentum/z',
+# Convenient aliases for components
+component_from_alias = {
+   # 'x':'position/x',
+   # 'y':'position/y',
+   # 'z':'position/z',
+   # 'px':'momentum/x',
+   # 'py':'momentum/y',
+   # 'pz':'momentum/z',
     't':'time',
     'weight':'weight',
     'status':'particleStatus'
 }
+# Aliases for particles and fields
+for g, prefix in zip(['position', 'momentum', 'electricField', 'magneticField'], 
+                     ['', 'p', 'E', 'B']):
+    for c in ['x', 'y', 'z', 'r', 'theta']:
+        alias = prefix+c
+        component_from_alias[alias] = g+'/'+c      
+# Inverse
+component_alias = {v:k for k,v in component_from_alias.items()}
 
 
-def particle_paths(h5):
+
+def particle_paths(h5, key='particlesPath'):
     """
     Uses the basePath and particlesPath to find where openPMD particles should be
     
     """
     basePath = h5.attrs['basePath'].decode('utf-8')
-    particlesPath = h5.attrs['particlesPath'].decode('utf-8')
+    particlesPath = h5.attrs[key].decode('utf-8')
     
     if '%T' not in basePath:
         return [basePath+particlesPath]
@@ -96,6 +109,27 @@ def particle_paths(h5):
     tlist = list(h5[path1])
     paths =  [path1+t+path2+particlesPath for t in tlist]
     return paths
+
+
+def field_paths(h5, key='externalFieldPath'):
+    """
+    Looks for the External Fields
+    
+    """
+    if key not in h5.attrs:
+        return []
+    
+    fpath = h5.attrs[key].decode('utf-8')
+    
+    if '%T' not in fpath:
+        return [fpath]
+    
+    path1 = fpath.split('%T')[0]
+    tlist = list(h5[path1])
+    paths =  [path1+t for t in tlist]
+    return paths
+
+
 
 
 
@@ -130,7 +164,9 @@ def component_data(h5, slice = slice(None), unit_factor=1):
     
     An optional slice allows parts of the array to be retrieved. 
     
-    Unit factor is an addition factor to convert from SI units to output units. 
+    This checks for a gridDataOrder attribute: F or C. If F, the np array is transposed. 
+    
+    Unit factor is an additional factor to convert from SI units to output units. 
     
     """
 
@@ -145,9 +181,27 @@ def component_data(h5, slice = slice(None), unit_factor=1):
         factor *= unit_factor
         
     if is_constant_component(h5):
-        dat = np.full(h5.attrs['shape'], h5.attrs['value'])
+        dat = np.full(h5.attrs['shape'], h5.attrs['value'])[slice]
+    
+    # Check multidimensional for data ordering
+    elif len(h5.shape) > 1:        
+        
+        # Check for Fortran order
+        if 'gridDataOrder' in h5.attrs and decode_attr(h5.attrs['gridDataOrder'])=='F':
+            
+            if isinstance(slice, tuple):
+                # Need to transpose the slice ordering
+                slice = slice[::-1]
+    
+            # Retrieve dataset and transpose for C order
+            dat = h5[slice]
+            dat = np.transpose(dat)
+        else:
+            # C-order
+            dat = h5[slice]
+            
+    # 1-D array
     else:
-        # Retrieve dataset
         dat = h5[slice]
 
     if factor != 1:
@@ -155,7 +209,7 @@ def component_data(h5, slice = slice(None), unit_factor=1):
         
     return dat
 
-
+ 
 def offset_component_name(component_name):
     """
     Many components can also have an offset, as in:
@@ -184,8 +238,9 @@ def particle_array(h5, component, slice=slice(None), include_offset=True):
         
     """
 
-    if component in component_alias:
-        component = component_alias[component]
+    # Handle aliases
+    if component in component_from_alias:
+        component = component_from_alias[component]
 
     if component in ['momentum/x', 'momentum/y', 'momentum/z']:
         unit_factor = (c_light / e_charge  ) # convert J/(m/s) to eV/c
@@ -207,8 +262,6 @@ def particle_array(h5, component, slice=slice(None), include_offset=True):
         
     
 
-
-    
     
 def all_components(h5):
     """
@@ -242,7 +295,7 @@ def component_str(particle_group, name):
     
     g = particle_group[name]
     record_name = name.split('/')[0]
-    expected_dimension = particle_record_unit_dimension[record_name]
+    expected_dimension = expected_record_unit_dimension[record_name]
     this_dimension =  component_unit_dimension(g)
     dname = dimension_name(this_dimension)
     symbol = SI_symbol[dname]
@@ -264,3 +317,74 @@ def component_str(particle_group, name):
         s +=', but expected units: '+ SI_symbol[dimension_name(expected_dimension)]
     
     return s
+
+
+
+
+
+
+#----------------------------------
+# Fields
+
+required_field_attrs = [
+    # strings
+    'eleAnchorPt', 'gridGeometry', 'axisLabels',
+    # reals and ints
+    'gridLowerBound', 'gridOriginOffset', 'gridSpacing', 'gridSize', 'harmonic'
+]            
+    
+# Dict with options    
+optional_field_attrs = {
+    'name':None,
+    'gridCurvatureRadius':None,
+    'fundamentalFrequency':0,
+    'RFphase':0,
+    'fieldScale':1.0,
+    'masterParameter':None
+}
+
+    
+def load_field_attrs(attr, verbose=False):
+    """
+    Loads FieldMesh required and optional attributes from a dict_like object.
+    
+    Non-standard attributes will be collected in an 'other' dict.
+    
+    Returns dicts:
+        attrs, other
+    
+    """
+    # Get all attrs. Will pop. 
+    a = dict(attr)
+
+    attrs = {}
+    other = {}
+    
+    # Required 
+    for k in required_field_attrs:
+        attrs[k] = a.pop(k)
+
+    # Optional, filling in some defaults
+    for k in optional_field_attrs:
+        if k in a:
+            attrs[k] = a.pop(k)
+        else:
+            v = optional_field_attrs[k]
+            if v is not None:
+                attrs[k] = v
+        
+    # Collect other. 
+    for k, v in a.items():
+        other[k]= v
+        if verbose: 
+            print('Nonstandard attr:', k, v)
+                
+    # Decode            
+    attrs  = decode_attrs(attrs)  
+            
+    # Error checking
+    #if attrs['harmonic'] > 0:
+    #    assert 'fundamentalFrequency' in attrs, 'fundamentalFrequency required if harmonic > 0'
+    
+    return attrs, other
+

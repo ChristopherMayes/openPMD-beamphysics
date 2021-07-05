@@ -78,7 +78,7 @@ def opal_to_data(h5):
     t = D['TIME'][0] # s
     ptypes = h5['ptype'][:]  # 0 = electron?
     
-    pref = D['RefPartP']*mc2  # 
+    # Not used: pref = D['RefPartP']*mc2  # 
     rref = D['RefPartR']
     
     n = len(ptypes)
@@ -89,9 +89,9 @@ def opal_to_data(h5):
         'x':h5['x'][:] + rref[0],
         'y':h5['y'][:] + rref[1],
         'z':h5['z'][:] + rref[2],
-        'px':h5['px'][:]*mc2 + pref[0],
-        'py':h5['py'][:]*mc2+ pref[1],
-        'pz':h5['pz'][:]*mc2+ pref[2],
+        'px':h5['px'][:]*mc2,
+        'py':h5['py'][:]*mc2,
+        'pz':h5['pz'][:]*mc2,
         't': np.full(n, t),
         'status': np.full(n, status),
         'species':species,

@@ -1,4 +1,4 @@
-from pmd_beamphysics.units import m_e
+from pmd_beamphysics.units import mec2
 
 import numpy as np
 import subprocess
@@ -21,7 +21,7 @@ def write_elegant(particle_group,
         't', 'x', 'xp', 'y', 'yp', 'p'        
     where 'p' is gamma*beta, in units: 
         elegant units are:
-        s, m, 1, m, 1, 1
+        s, m, 1, m, 1, 'mass*c'
     
     All weights must be the same. 
 
@@ -45,6 +45,15 @@ def write_elegant(particle_group,
          
     if verbose:
         print(f'writing {len(P)} particles to {outfile}')
+        
+    # Correct units for p, depending on the species
+    species = particle_group.species
+    if species in ['electron', 'positron']:
+        p_units = 'units="m$be$nc", '
+    elif species in ['proton']:
+        p_units = 'units="m$bp$nc", '        
+    else:
+        p_units = ''
 
     # Note that the order of the columns matters below. 
     header = f"""SDDS1
@@ -59,7 +68,7 @@ def write_elegant(particle_group,
 &column name=xp, type=double, description="px/pz" &end
 &column name=y,  type=double, units=m, description="y in meters" &end
 &column name=yp, type=double, description="py/pz" &end
-&column name=p,  type=double, description="relativistic gamma*beta" &end
+&column name=p,  type=double, {p_units}description="relativistic gamma*beta" &end
 &data mode=ascii &end
 {P['charge']}
 {len(P)}"""
@@ -111,7 +120,7 @@ def elegant_h5_to_data(h5, group='page1', species='electron'):
         g = h5
         
     assert species=='electron', f'{species} not allowed yet. Only electron is implemented.'    
-    mc2 = m_e
+    mc2 = mec2
         
     # These should exist
     col = g['columns']
@@ -186,7 +195,7 @@ def load_sdds(sddsfile, columns, sdds2plaindata_bin='sdds2plaindata', verbose=Fa
     if error:
         raise ValueError('load_sdds error: '+error)
     # Read table  
-    rdat = np.loadtxt(outfile)
+    rdat = np.loadtxt(outfile, ndmin=2)
 
     dat = {}
     for i, key in  enumerate(columns):
@@ -234,7 +243,7 @@ def elegant_to_data(sddsfile, charge=1.0, sdds2plaindata_bin='sdds2plaindata', s
     
         
     assert species=='electron', f'{species} not allowed yet. Only electron is implemented.'    
-    mc2 = m_e
+    mc2 = mec2
             
     p =  col['p']*mc2
     xp = col['xp']

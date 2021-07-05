@@ -150,7 +150,7 @@ def write_genesis4_distribution(particle_group,
     """
     
     
-    Cooresponds to the `importdistribution` section in the Genesis4 manual. 
+    Cooresponds to the `import distribution` section in the Genesis4 manual. 
     
     Writes datesets to an h5 file:
     

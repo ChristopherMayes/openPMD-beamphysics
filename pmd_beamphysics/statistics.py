@@ -40,9 +40,9 @@ def twiss_calc(sigma_mat2):
 
     This is a simple calculation. Makes no assumptions about units. 
     
-    beta  = -<x, p>/emit
-    beta  = <x, x>/emit
-    gamma = <p, p>/emit
+    alpha = -<x, p>/emit
+    beta  =  <x, x>/emit
+    gamma =  <p, p>/emit
     emit = det(sigma_mat)
     
     """

@@ -1,3 +1,4 @@
+import versioneer
 from setuptools import setup, find_packages
 from os import path, environ
 
@@ -10,7 +11,8 @@ with open(path.join(cur_dir, 'requirements.txt'), 'r') as f:
 
 setup(
     name='pmd-beamphysics',
-    version = 'v0.5.3',
+    version=versioneer.get_version(),
+    cmdclass=versioneer.get_cmdclass(), 
     #packages = ['pmd_beamphysics'],
     packages=find_packages(exclude=['opmd_beamphysics']),  # This is the old package
     package_dir={'pmd_beamphysics':'pmd_beamphysics'},

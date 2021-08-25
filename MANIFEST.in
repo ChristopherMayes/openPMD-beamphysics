@@ -1,2 +1,4 @@
 include requirements.txt
 include LICENSE
+include versioneer.py
+include pmd_beamphysics/_version.py

@@ -156,30 +156,30 @@ def write_impact(particle_group,
         # Note that this is purely a conversion factor. 
         gamma = 1.0 + cathode_kinetic_energy_ref/mc2
         betac = np.sqrt(1-1/gamma**2)*c_light
+  
+        # z equivalent
+        z = -betac*particle_group['t']  
+
+        # Get z span
+        z_ptp = z.ptp()
+        # Add tiny padding
+        z_pad = 1e-20 # Tiny pad 
         
-        t = particle_group['t']
+        # Shift all particles, so that z < 0
+        z_shift = -(z.max() + z_pad)
+        z += z_shift
         
-        # All t must be negative. 
-        t_ptp = t.ptp()
-        # Allow for some padding
-        if t_ptp == 0:
-            t_ptp = 1e-15  # s
-        t_pad = t_ptp*1e-3 # 0.1% pad 
-        t_shift = -t.max() -t_pad
+        # Starting clock shift
+        t_shift = z_shift/betac
         
         # Suggest an emission time
-        output['Temission'] = t_ptp + 2*t_pad
+        output['Temission'] = (z_ptp + 2*z_pad)/betac
         
-        # This is the time that particles are shifted
-        #output['Temission_shift'] = t_shift
-        # Change actual initial time to this shift
+        # Change actual initial time to this shift (just set)
         output['Tini'] = t_shift
-        
-        tout = t+t_shift
-        
-        output['Temission_mean'] = tout.mean()
-        
-        z = (tout)*betac       
+    
+        # Informational
+        #output['Temission_mean'] = tout.mean()
         
         # pz
         pz = particle_group['pz']

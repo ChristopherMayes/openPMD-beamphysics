@@ -186,6 +186,11 @@ def write_impact(particle_group,
         #check for zero pz
         assert np.all(pz > 0), 'pz must be positive'
         
+        # Make sure there as at least some small pz momentum. Simply shift.
+        pz_small = 10 # eV/c
+        small_pz = pz < pz_small
+        pz[small_pz] += pz_small
+         
         gamma_beta_z = pz/mc2
         
     else:

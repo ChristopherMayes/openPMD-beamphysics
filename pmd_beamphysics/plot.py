@@ -4,6 +4,9 @@
 """
 
 from  pmd_beamphysics.units import nice_array, nice_scale_prefix
+from pmd_beamphysics.labels import texlabel
+
+
 from .statistics import slice_statistics
 import matplotlib.pyplot as plt
 import matplotlib
@@ -120,7 +123,7 @@ def density_plot(particle_group, key='x', bins=None, **kwargs):
     
     return fig
         
-def marginal_plot(particle_group, key1='t', key2='p', bins=None, **kwargs):
+def marginal_plot(particle_group, key1='t', key2='p', bins=None, use_texlabels=True, **kwargs):
     """
     Density plot and projections
     
@@ -145,9 +148,17 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None, **kwargs):
     ux = p1+u1
     uy = p2+u2
     
+    # Handle labels. 
     labelx = f'{key1} ({ux})'
-    labely = f'{key2} ({uy})'
-    
+    labely = f'{key2} ({uy})'    
+    if use_texlabels:
+        tex1 = texlabel(key1)
+        if tex1:
+            labelx = f'${texlabel(key1)}$ ({ux})'         
+        tex2 = texlabel(key2)
+        if tex2:
+            labely = f'${texlabel(key2)}$ ({uy})'
+
     fig = plt.figure(**kwargs)
     
     gs = GridSpec(4,4)
@@ -351,3 +362,8 @@ def plot_fieldmesh_cylindrical_2d(fm,
     
     if return_figure:
         return fig
+    
+    
+    
+    
+    

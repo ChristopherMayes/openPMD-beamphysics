@@ -10,7 +10,7 @@ from pmd_beamphysics.interfaces.lucretia import write_lucretia
 from pmd_beamphysics.interfaces.opal import write_opal
 from pmd_beamphysics.interfaces.elegant import write_elegant
 
-from pmd_beamphysics.plot import density_plot, marginal_plot
+from pmd_beamphysics.plot import density_plot, marginal_plot, slice_plot
 
 from pmd_beamphysics.readers import particle_array, particle_paths
 from pmd_beamphysics.species import charge_of, mass_of
@@ -125,6 +125,17 @@ class ParticleGroup:
         drift_to_z(z0)
         drift_to_t(t0)
     help to convert these. If no argument is given, particles will be drifted to the mean.
+    Related properties are:
+        .in_t_coordinates returns True if all particles have the same t corrdinate
+        .in_z_coordinates returns True if all particles have the same z corrdinate
+        
+        
+        
+    Convenient plotting is provided with: 
+        .plot(...)
+        .slice_plot(...)
+        
+        Use help(ParticleGroup.plot), etc. for usage. 
         
     
     """
@@ -615,6 +626,21 @@ class ParticleGroup:
         return matched_particles(self, beta=beta, alpha=alpha, plane=plane, inplace=inplace)
         
         
+    @property
+    def in_z_coordinates(self):
+        """
+        Returns True if all particles have the same z coordinate
+        """ 
+        # Check that z are all the same
+        return len(np.unique(self.z)) == 1           
+    
+    @property
+    def in_t_coordinates(self):
+        """
+        Returns True if all particles have the same t coordinate
+        """ 
+        # Check that t are all the same
+        return len(np.unique(self.t)) == 1        
     
     
     
@@ -762,20 +788,45 @@ class ParticleGroup:
         write_pmd_bunch(g, self, name=name)        
         
         
-    # Plot
+    # Plotting
+    # --------
     # TODO: more general plotting
-    def plot(self, key1='x', key2=None, bins=None, return_figure=False, **kwargs):
+    def plot(self, key1='x', key2=None, bins=None, return_figure=False, 
+             tex=True, **kwargs):
         """
         1d or 2d density plot. 
         """
         
         if not key2:
-            fig = density_plot(self, key=key1, bins=bins, **kwargs)
+            fig = density_plot(self, key=key1, bins=bins, tex=tex, **kwargs)
         else:
-            fig = marginal_plot(self, key1=key1, key2=key2, bins=bins, **kwargs)
+            fig = marginal_plot(self, key1=key1, key2=key2, bins=bins, tex=tex, **kwargs)
         
         if return_figure:
             return fig
+        
+    def slice_plot(self, key='sigma_x', 
+                   n_slice=100,
+                   slice_key=None,
+                   tex=True,
+                   return_figure=False,
+                   **kwargs):
+        """
+        Slice statistics plot. 
+        
+        """        
+                  
+        if not slice_key:
+            if self.in_t_coordinates:
+                slice_key = 'z'
+            else:
+                slice_key = 't'
+            
+        fig = slice_plot(self, stat_key=key, n_slice=n_slice, tex=tex, **kwargs)
+        
+        if return_figure:
+            return fig
+        
         
     # New constructors
     def split(self, n_chunks = 100, key='z'):

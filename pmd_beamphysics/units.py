@@ -162,7 +162,7 @@ def sqrt_unit(u):
     
     symbol = u.unitSymbol
     if symbol not in ['', '1']:
-        symbol = f'sqrt({symbol})'
+        symbol = fr'{symbol}$^{{ 1/2}}$'
     
     unitSI = np.sqrt(u.unitSI)
     dim = tuple( x/2 for x in u.unitDimension)

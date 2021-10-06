@@ -1,4 +1,4 @@
-
+from pmd_beamphysics.units import pg_units
 
 
 TEXLABEL = {
@@ -103,3 +103,21 @@ def texlabel(key: str):
     
     return key
     
+
+    
+    
+    
+def texlabel_with_unit(key, prefix=''):
+    """
+    Helper function to return $label (unit)$ using tex
+    """
+    u = pg_units(key).unitSymbol
+    u = prefix + u
+    
+    tex = texlabel(key)
+    if tex:
+        label = f'${tex}$ ({u})'   
+    else:
+        label = f'${key}$ ({u})'   
+        
+    return label

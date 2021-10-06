@@ -4,7 +4,7 @@
 """
 
 from  pmd_beamphysics.units import nice_array, nice_scale_prefix
-from pmd_beamphysics.labels import texlabel
+from pmd_beamphysics.labels import texlabel_with_unit
 
 
 from .statistics import slice_statistics
@@ -37,7 +37,12 @@ def plt_histogram(a, weights=None, bins=40):
 
     
     
-def slice_plot(particle_group, stat_key='sigma_x', n_slice=40, slice_key='z'):
+def slice_plot(particle_group, 
+               stat_key='sigma_x',
+               n_slice=40,
+               slice_key='z',
+               tex=True,
+               **kwargs):
     """
     Complete slice plotting routine. Will plot the density of the slice key on the right axis. 
     """
@@ -50,16 +55,13 @@ def slice_plot(particle_group, stat_key='sigma_x', n_slice=40, slice_key='z'):
     
     slice_dat['density'] = slice_dat['charge']/ slice_dat['ptp_'+slice_key]
     y2_key = 'density'
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(**kwargs)
     
     # Get nice arrays
     x, _, prex = nice_array(slice_dat[x_key])
     y, _, prey = nice_array(slice_dat[y_key])
     y2, _, prey2 = nice_array(slice_dat[y2_key])
     
-    # Add prefix to units
-    x_units = prex+particle_group.units(x_key).unitSymbol
-    y_units = prey+particle_group.units(y_key).unitSymbol
     
     # Convert to Amps if possible
     y2_units = f'C/{particle_group.units(x_key)}'
@@ -68,8 +70,19 @@ def slice_plot(particle_group, stat_key='sigma_x', n_slice=40, slice_key='z'):
     y2_units = prey2+y2_units 
     
     # Labels
-    ax.set_xlabel(f'{x_key} ({x_units})' )
-    ax.set_ylabel(f'{y_key} ({y_units})' )
+    
+    if tex:
+        labelx = texlabel_with_unit(slice_key, prefix=prex)
+        labely = texlabel_with_unit(y_key, prefix=prey)        
+    else:
+        labelx =f'{slice_key} ({x_units})'
+        labely =f'{y_key} ({y_units})'
+    
+    ax.set_xlabel(labelx)
+    ax.set_ylabel(labely)
+    
+    
+    
     
     # Main plot
     ax.plot(x, y, color = 'black')
@@ -79,10 +92,12 @@ def slice_plot(particle_group, stat_key='sigma_x', n_slice=40, slice_key='z'):
     ax2 = ax.twinx()
     ax2.set_ylabel(f'{y2_key} ({y2_units})' )
     ax2.fill_between(x, 0, y2, color='black', alpha = 0.2)  
+    
+    return fig
 
     
     
-def density_plot(particle_group, key='x', bins=None, **kwargs):
+def density_plot(particle_group, key='x', bins=None, tex=True, **kwargs):
     """
     1D density plot. Also see: marginal_plot
     
@@ -102,7 +117,12 @@ def density_plot(particle_group, key='x', bins=None, **kwargs):
     u1 = particle_group.units(key).unitSymbol
     ux = p1+u1
     
-    labelx = f'{key} ({ux})'
+
+    if tex:
+        labelx = texlabel_with_unit(key, prefix=p1)
+    else:
+        labelx = f'{key} ({ux})'
+    
     
     fig, ax = plt.subplots(**kwargs)
     
@@ -123,7 +143,7 @@ def density_plot(particle_group, key='x', bins=None, **kwargs):
     
     return fig
         
-def marginal_plot(particle_group, key1='t', key2='p', bins=None, use_texlabels=True, **kwargs):
+def marginal_plot(particle_group, key1='t', key2='p', bins=None, tex=True, **kwargs):
     """
     Density plot and projections
     
@@ -149,16 +169,14 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None, use_texlabels=T
     uy = p2+u2
     
     # Handle labels. 
-    labelx = f'{key1} ({ux})'
-    labely = f'{key2} ({uy})'    
-    if use_texlabels:
-        tex1 = texlabel(key1)
-        if tex1:
-            labelx = f'${texlabel(key1)}$ ({ux})'         
-        tex2 = texlabel(key2)
-        if tex2:
-            labely = f'${texlabel(key2)}$ ({uy})'
-
+    
+    if tex:
+        labelx = texlabel_with_unit(key1, prefix=p1)
+        labely = texlabel_with_unit(key2, prefix=p2)        
+    else:
+        labelx = f'{key1} ({ux})'
+        labely = f'{key2} ({uy})'        
+        
     fig = plt.figure(**kwargs)
     
     gs = GridSpec(4,4)

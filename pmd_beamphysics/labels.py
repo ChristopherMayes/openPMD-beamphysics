@@ -43,7 +43,7 @@ TEXLABEL = {
  'py_bar': r'\overline{p_y}'        
 }
 
-def texlabel(key: str):
+def texlabel(key: str, prefix: str = None):
     """
     Returns a tex label from a proper attribute name.
     
@@ -51,6 +51,8 @@ def texlabel(key: str):
     ----------
     key : str
         any pmd_beamphysics attribure
+    prefix: str
+        prefix to strip from key string
     
     Returns
     -------
@@ -71,6 +73,8 @@ def texlabel(key: str):
             https://matplotlib.org/stable/tutorials/text/mathtext.html
     
     """
+    if prefix:
+        key = key.replace(prefix, "")
     
     # Basic cases
     if key in TEXLABEL:

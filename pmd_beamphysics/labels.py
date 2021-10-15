@@ -30,7 +30,7 @@ TEXLABEL = {
  'charge': 'Q',
 # 'species_charge',
 # 'weight',
- #'average_current',
+ 'average_current': r'I_{av}',
  'norm_emit_x': r'\epsilon_{n, x}',
  'norm_emit_y': r'\epsilon_{n, y}',
  'norm_emit_4d':  r'\epsilon_{4D}',
@@ -97,11 +97,7 @@ def texlabel(key: str):
         tex1 = texlabel(subkeys[1])
         return fr'\left<{tex0}, {tex1}\right>'
     
-    
-    # Not found
-    #raise ValueError(f'Unable to form tex label for {key}')
-    
-    return key
+    return None
     
 
     

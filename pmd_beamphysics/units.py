@@ -106,9 +106,15 @@ class pmd_unit:
         return  f"pmd_unit('{self.unitSymbol}', {self.unitSI}, {self.unitDimension})"
   
 
+def is_dimensionless(u):
+    """Checks if the unit is dimensionless"""
+    return u.unitDimension == (0,0,0,0,0,0,0)
+
 def is_identity(u):
     """Checks if the unit is equivalent to 1"""
     return u.unitSI == 1 and u.unitDimension == (0,0,0,0,0,0,0)
+
+
 
 def multiply_units(u1, u2):
     """
@@ -162,7 +168,7 @@ def sqrt_unit(u):
     
     symbol = u.unitSymbol
     if symbol not in ['', '1']:
-        symbol = fr'{symbol}$^{{ 1/2}}$'
+        symbol = fr'\sqrt{{ {symbol} }}'
     
     unitSI = np.sqrt(u.unitSI)
     dim = tuple( x/2 for x in u.unitDimension)
@@ -225,7 +231,7 @@ SI_name = {v: k for k, v in SI_symbol.items()}
 
 known_unit = { 
     '1'          : pmd_unit('', 1, '1'),
-    'rad'        : pmd_unit('', 1, '1'),
+    'rad'        : pmd_unit('rad', 1, '1'),
     'm'          : pmd_unit('m', 1, 'length'),
     'kg'         : pmd_unit('kg', 1, 'mass'),
     'g'          : pmd_unit('g', .001, 'mass'),
@@ -263,13 +269,6 @@ def unit(symbol):
     
     raise ValueError(f'Unknown unit symbol: {symbol}')
         
-    
-
-
-
-
-
-
 
 # Dicts for prefixes
 PREFIX_FACTOR = {
@@ -392,8 +391,10 @@ for k in ['px', 'py', 'pz', 'p', 'pr', 'ptheta']:
     PARTICLEGROUP_UNITS[k] = unit('eV/c')
 for k in ['x', 'y', 'z', 'r', 'Jx', 'Jy']:
     PARTICLEGROUP_UNITS[k] = unit('m')
-for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma', 'theta']:    
+for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma']:    
     PARTICLEGROUP_UNITS[k] = unit('1')
+for k in ['theta']:    
+    PARTICLEGROUP_UNITS[k] = unit('rad')
 for k in ['charge', 'species_charge', 'weight']:
     PARTICLEGROUP_UNITS[k] = unit('C')
 for k in ['average_current']:
@@ -413,6 +414,11 @@ def pg_units(key):
     """
     Returns a str representing the units of any attribute
     """
+    
+    # Basic cases
+    if key in PARTICLEGROUP_UNITS:
+        return PARTICLEGROUP_UNITS[key]    
+    
     for prefix in ['sigma_', 'mean_', 'min_', 'max_', 'ptp_', 'delta_']:
         if key.startswith(prefix):
             nkey = key[len(prefix):]
@@ -433,8 +439,8 @@ def pg_units(key):
         return unit('T')
   
     
-    
-    return PARTICLEGROUP_UNITS[key]    
+    raise ValueError(f'No known unit for: {key}')
+
     
     
 # -------------------------

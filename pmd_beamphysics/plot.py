@@ -4,7 +4,7 @@
 """
 
 from  pmd_beamphysics.units import nice_array, nice_scale_prefix
-from pmd_beamphysics.labels import texlabel_with_unit
+from pmd_beamphysics.labels import mathlabel
 
 
 from .statistics import slice_statistics
@@ -62,6 +62,8 @@ def slice_plot(particle_group,
     y, _, prey = nice_array(slice_dat[y_key])
     y2, _, prey2 = nice_array(slice_dat[y2_key])
     
+    x_units = f'{prex}{particle_group.units(x_key)}'
+    y_units = f'{prey}{particle_group.units(y_key)}'    
     
     # Convert to Amps if possible
     y2_units = f'C/{particle_group.units(x_key)}'
@@ -71,18 +73,13 @@ def slice_plot(particle_group,
     
     # Labels
     
-    if tex:
-        labelx = texlabel_with_unit(slice_key, prefix=prex)
-        labely = texlabel_with_unit(y_key, prefix=prey)        
-    else:
-        labelx =f'{slice_key} ({x_units})'
-        labely =f'{y_key} ({y_units})'
+
+    labelx = mathlabel(slice_key, units=x_units, tex=tex)
+    labely = mathlabel(y_key, units=y_units, tex=tex)    
+    labely2 = mathlabel(y2_key, units=y2_units, tex=tex)        
     
     ax.set_xlabel(labelx)
     ax.set_ylabel(labely)
-    
-    
-    
     
     # Main plot
     ax.plot(x, y, color = 'black')
@@ -90,7 +87,7 @@ def slice_plot(particle_group,
     #ax.set_ylim(0, 1.1*ymax )
 
     ax2 = ax.twinx()
-    ax2.set_ylabel(f'{y2_key} ({y2_units})' )
+    ax2.set_ylabel(labely2)
     ax2.fill_between(x, 0, y2, color='black', alpha = 0.2)  
     
     return fig
@@ -117,13 +114,9 @@ def density_plot(particle_group, key='x', bins=None, tex=True, **kwargs):
     u1 = particle_group.units(key).unitSymbol
     ux = p1+u1
     
+    # mathtext label
+    labelx = mathlabel(key, units=ux, tex=tex)
 
-    if tex:
-        labelx = texlabel_with_unit(key, prefix=p1)
-    else:
-        labelx = f'{key} ({ux})'
-    
-    
     fig, ax = plt.subplots(**kwargs)
     
     hist, bin_edges = np.histogram(x, bins=bins, weights=w)
@@ -169,13 +162,8 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None, tex=True, **kwa
     uy = p2+u2
     
     # Handle labels. 
-    
-    if tex:
-        labelx = texlabel_with_unit(key1, prefix=p1)
-        labely = texlabel_with_unit(key2, prefix=p2)        
-    else:
-        labelx = f'{key1} ({ux})'
-        labely = f'{key2} ({uy})'        
+    labelx = mathlabel(key1, units=ux, tex=tex)
+    labely = mathlabel(key2, units=uy, tex=tex)
         
     fig = plt.figure(**kwargs)
     
@@ -236,7 +224,7 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None, tex=True, **kwa
     return fig    
     
     
-def density_and_slice_plot(particle_group, key1='t', key2='p', stat_keys=['norm_emit_x', 'norm_emit_y'], bins=100, n_slice=30):
+def density_and_slice_plot(particle_group, key1='t', key2='p', stat_keys=['norm_emit_x', 'norm_emit_y'], bins=100, n_slice=30, tex=True):
     """
     Density plot and projections
     
@@ -256,8 +244,8 @@ def density_and_slice_plot(particle_group, key1='t', key2='p', stat_keys=['norm_
     ux = p1+u1
     uy = p2+u2
     
-    labelx = f'{key1} ({ux})'
-    labely = f'{key2} ({uy})'
+    labelx = mathlabel(key1, units=ux, tex=tex)
+    labely = mathlabel(key2, units=uy, tex=tex)
     
     fig, ax = plt.subplots()
     
@@ -288,13 +276,17 @@ def density_and_slice_plot(particle_group, key1='t', key2='p', stat_keys=['norm_
     
     f3, p3 = nice_scale_prefix(max2)
     
+
+    
     u2 = ulist[0]
     assert all([u==u2 for u in ulist] )
     u2 = p3 + u2
+    labely2 = mathlabel(*stat_keys, units=u2, tex=tex)    
     for k in stat_keys:
-        ax2.plot(x2, slice_dat[k]/f3, label=k)
+        label = mathlabel(k, units=u2, tex=tex)
+        ax2.plot(x2, slice_dat[k]/f3, label=label)
     ax2.legend()     
-    ax2.set_ylabel(f'({u2})')  
+    ax2.set_ylabel(labely2)  
     ax2.set_ylim(bottom=0)
     
     

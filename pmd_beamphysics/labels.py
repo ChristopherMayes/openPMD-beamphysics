@@ -50,7 +50,7 @@ def texlabel(key: str):
     Parameters
     ----------
     key : str
-        any pmd_beamphysics attribure
+        any pmd_beamphysics attribute
     
     Returns
     -------
@@ -100,20 +100,56 @@ def texlabel(key: str):
     return None
     
 
-    
-    
-    
-def texlabel_with_unit(key, prefix=''):
+
+
+def mathlabel(*keys, units=None, tex=True):
     """
-    Helper function to return $label (unit)$ using tex
-    """
-    u = pg_units(key).unitSymbol
-    u = prefix + u
+    Helper function to return label with optional units
+    from an arbitrary number of keys
     
-    tex = texlabel(key)
-    if tex:
-        label = f'${tex}$ ({u})'   
-    else:
-        label = f'${key}$ ({u})'   
+
+    
+    Parameters
+    ----------
+    *keys : str
+        any pmd_beamphysics attributes
         
-    return label
+    units : pmd_unit or str or None
+        units to be cast to str. 
+        
+    tex : bool, default=True
+        if True, a mathtext (TeX) string wrapped in $$ will be returned.
+        Uses pmd_beamphysics.labels.texlabel to get a proper label
+        
+    Returns
+    -------
+    label: str
+        A TeX string if applicable, otherwise will return None 
+        
+        
+    Examples
+    --------
+        mathlabel('x_bar', 'sigma_x', units='µC')
+        returns:
+        '$\\overline{x}, \\sigma_{ x }~(\\mathrm{ µC } )$'
+    
+    """
+    # Cast to str
+    if units:
+        units = str(units)
+
+    if tex:
+        l = [texlabel(key) or fr'\mathrm{{ {key} }}' for key in keys]
+        label = ', '.join(l)
+        if units:
+                label = fr'{label}~(\mathrm{{ {units} }} )'
+            
+        return fr'${label}$'
+        
+    else:
+        label = ', '.join(keys)
+        
+        if units:
+            label = fr'{label} ({units})'
+            
+        return label

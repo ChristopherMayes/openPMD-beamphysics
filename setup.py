@@ -10,7 +10,7 @@ with open(path.join(cur_dir, 'requirements.txt'), 'r') as f:
 
 
 setup(
-    name='pmd-beamphysics',
+    name='openpmd-beamphysics',
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(), 
     #packages = ['pmd_beamphysics'],

@@ -907,6 +907,21 @@ def single_particle(x=0,
     data = dict(x=x, px=px, y=y, py=py, z=z, pz=pz, t=t, weight=weight, status=status, species=species)
     return ParticleGroup(data=data)
     
+    
+def centroid(particle_group: ParticleGroup) -> ParticleGroup:
+    """
+    Convenience function to return a single particle representing
+    the average of all coordinates. Only considers live particles.
+    
+    """
+    good = particle_group.status == 1
+    pg = particle_group[good]
+    data = {key:pg.avg(key) for key in ['x', 'px', 'y', 'py', 'z', 'pz', 't']}
+    data['species'] = pg.species
+    data['weight'] = pg.charge
+    data['status'] = 1
+    return ParticleGroup(data=data)  
+    
 def load_bunch_data(h5):
     """
     Load particles into structured numpy array.

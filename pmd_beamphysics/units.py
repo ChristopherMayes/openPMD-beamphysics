@@ -344,11 +344,15 @@ def nice_scale_prefix(scale):
     
     p10 = np.log10(abs(scale))
 
-    if p10 <-1.5 or p10 > 2:
+    if p10 < -24: # Limits of SI prefixes
+        f= 1e-24
+    elif p10 > 24:
+        f= 1e24
+    elif p10 <-1.5 or p10 > 2:
         f = 10**(p10 //3 *3)
     else:
         f = 1
-    
+  
     return f, SHORT_PREFIX[f]
 
 def nice_array(a):
@@ -361,6 +365,7 @@ def nice_array(a):
         (array([200., 300.]), 1e-12, 'p')
     
     """
+    #print('a', a.tolist())
     
     if np.isscalar(a):
         x = a
@@ -368,8 +373,8 @@ def nice_array(a):
         x = a[0]
     else:
         a = np.array(a)
-        x = a.ptp()
-     
+        x = max(a.ptp(), abs(np.mean(a))) # Account for tiny spread
+        
     fac, prefix = nice_scale_prefix( x )
     
     return a/fac, fac,  prefix

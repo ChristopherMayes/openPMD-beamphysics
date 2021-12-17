@@ -822,7 +822,11 @@ class ParticleGroup:
             else:
                 slice_key = 't'
             
-        fig = slice_plot(self, stat_key=key, n_slice=n_slice, tex=tex, **kwargs)
+        fig = slice_plot(self, stat_key=key,
+                         n_slice=n_slice,
+                         slice_key=slice_key,
+                         tex=tex,
+                         **kwargs)
         
         if return_figure:
             return fig

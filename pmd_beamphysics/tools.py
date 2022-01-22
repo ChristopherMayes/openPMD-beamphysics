@@ -1,11 +1,5 @@
 import numpy as np
 
-
-
-
-
-
-
 def fstr(s):
     """
     Makes a fixed string for h5 files

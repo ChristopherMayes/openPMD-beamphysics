@@ -10,6 +10,7 @@ from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d
 
 from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
 from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
+from pmd_beamphysics.interfaces.astra import read_astra_3d_fieldmaps, write_astra_3d_fieldmaps
 
 from h5py import File
 import numpy as np
@@ -25,7 +26,7 @@ c_light = 299792458.
 
 
 axis_labels_from_geometry = {
-    'cartesian': ('x', 'y', 'z'),
+    'rectangular': ('x', 'y', 'z'),
     'cylindrical': ('r', 'theta', 'z')
 }
 
@@ -84,10 +85,12 @@ class FieldMesh:
     
     Writers
         .write
+        .write_astra_3d
         .write_gpt
         .write_superfish
         
     Readers (class methods):
+        .from_astra_3d
         .from_superfish
     
 
@@ -111,7 +114,6 @@ class FieldMesh:
             else:
                 pass
         else:
-            print('loading data')
             data = load_field_data_dict(data)
             
         # Internal data
@@ -318,7 +320,9 @@ class FieldMesh:
     
         write_pmd_field(g, self.data, name=name)   
         
-       
+    def write_astra_3d(self, common_filePath, verbose=False):      
+        return  write_astra_3d_fieldmaps(self, common_filePath)
+    
     def write_gpt(self, filePath, asci2gdf_bin=None, verbose=True):
         """
         Writes a GPT field file. 
@@ -348,6 +352,16 @@ class FieldMesh:
         c = cls(data=data)
         return c               
         
+        
+    @classmethod
+    def from_astra_3d(cls, common_filename, frequency=0):
+        """
+        Class method to parse multiple 3D astra fieldmap files,
+        based on the common filename.
+        """
+        
+        data = read_astra_3d_fieldmaps(common_filename, frequency=frequency)
+        return cls(data=data)
         
         
     def __eq__(self, other):

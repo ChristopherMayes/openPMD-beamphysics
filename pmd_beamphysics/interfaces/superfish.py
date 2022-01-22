@@ -225,19 +225,31 @@ def read_superfish_t7(t7file,
     
     # ASCII parsing
     
-    # Read header
+    # Read header and data. 
     # zmin(cm), zmax(cm), nx-1
     # freq(MHz)
     # ymin(cm), ymax(cm), ny-1
     with open(t7file, 'r') as f:
         line1 = f.readline().split()
         line2 = f.readline().split()
-        line3 = f.readline().split()
-     
+        # Read all lines and flatten the data. This accepts an old superfish format
+        dat = f.read().replace('\n' , ' ').replace('\t', ' ').split()
+        dat = np.loadtxt(dat)
+        
+    # The length of the second line gives a clue about the problem type
     if len(line2) == 1:
         problem = 'fish'
+        line3 = dat[0:3] # Final header line
+        dat = dat[3:] # body data
+        n = len(dat)
+        assert n % 4 == 0, f'{n} should be divisible by 4'
+        dat = dat.reshape(n//4, 4)
+        
     else:
         problem = 'poisson'
+        n = len(dat)
+        assert n % 2 == 0, f'{n} should be divisible by 2'
+        dat = dat.reshape(len(dat)//2, 2)
     
     components = {}
     if problem=='fish':
@@ -252,7 +264,7 @@ def read_superfish_t7(t7file,
         rmin, rmax, nr =  float(line3[0])*1e-2, float(line3[1])*1e-2, int(line3[2])+1  
         
         # Read and reshape
-        dat = np.loadtxt(t7file, skiprows=3)
+        # dat = np.loadtxt(t7file, skiprows=3)
         #labels=['Ez', 'Er', 'E', 'Hphi']
         dat = dat.reshape(nr, 1, nz, 4)
         
@@ -270,7 +282,7 @@ def read_superfish_t7(t7file,
         frequency=0
         
         # The structure here is different 
-        dat = np.loadtxt(t7file, skiprows=2)
+        # dat = np.loadtxt(t7file, skiprows=2)
         dat = dat.reshape(nz, 1, nr, 2)
         
         # type must be specified

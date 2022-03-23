@@ -1,4 +1,5 @@
 import numpy as np
+from pmd_beamphysics.status import ParticleStatus
 from pmd_beamphysics.readers import component_alias
 import os
 
@@ -173,9 +174,12 @@ def write_astra(particle_group,
     # Revese: 1->5, 2->1
     status = particle_group.status
     astra_status = status.copy()
-    astra_status[ np.where(status==1) ] = 5
-    astra_status[ np.where(status==2) ] = 1
+    astra_status[ np.where(status==1) ] = 5 # Astra normal (alive)
+    astra_status[ np.where(status==2) ] = 1 # Astra passive
+    astra_status[ np.where(status==ParticleStatus.CATHODE)] = -1 # Astra cathode
+    
     data['status'][i_start:] = astra_status
+    
     # Handle reference particle. If any -1 are found, assume we are starting at the cathode
     if -1 in astra_status:
         ref_particle['status']= -1 # At cathode

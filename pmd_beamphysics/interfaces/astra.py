@@ -176,7 +176,7 @@ def write_astra(particle_group,
     astra_status = status.copy()
     astra_status[ np.where(status==1) ] = 5 # Astra normal (alive)
     astra_status[ np.where(status==2) ] = 1 # Astra passive
-    astra_status[ int(ParticleStatus.CATHODE) ] = -1 # Astra cathode
+    astra_status[ np.where(status==ParticleStatus.CATHODE)] = -1 # Astra cathode
     
     data['status'][i_start:] = astra_status
     

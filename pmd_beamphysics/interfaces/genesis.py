@@ -1,8 +1,9 @@
 
-from ..statistics import twiss_calc
-
-from h5py import File
 import numpy as np
+from h5py import File
+
+from pmd_beamphysics.statistics import twiss_calc
+from pmd_beamphysics.units import mec2, c_light
 
 
 
@@ -138,6 +139,90 @@ def write_genesis2_beam_file(fname, beam_columns, verbose=False):
         print('Beam written:', fname)
     
     return header
+
+
+
+
+def genesis2_dpa_to_data(dpa, *, xlamds, current, zsep=1, species='electron'):
+    """
+    
+    gamma, phase, x, y, px/mc, py/mc
+    .par file: phase = psi  = kw*z + field_phase
+    .dpa file: phase = kw*z    
+    
+    Parameters
+    ----------
+    
+    dpa: array 
+        Parsed .dpa file as an array with shape (n_slice, 6, n_particles_per_slice)
+    
+    xlamds: float
+        wavelength (m)
+        
+    zsep: int
+        slice separation interval
+        
+    current: array
+        current array of length n_slice (A)
+        
+        
+    species: str, required to be 'electron'
+    
+    Returns
+    -------
+    data: dict with keys: x, px, y, py, z, pz, weight, species, status
+        in the units of the openPMD-beamphysics Python package:
+        m, eV/c, m, eV/c, m, eV/c, C
+    
+    """
+    
+    assert species == 'electron'
+    mc2 = mec2
+    
+    dz = xlamds*zsep 
+    
+    nslice, dims, n1 = dpa.shape  # n1 particles in a single slice
+    assert dims == 6
+    n_particle = n1 * nslice
+    
+    gamma = dpa[:,0,:].flatten()
+    phase = dpa[:,1,:].flatten()
+    x  =  dpa[:,2,:].flatten()
+    y  =  dpa[:,3,:].flatten()
+    px =  dpa[:,4,:].flatten() * mc2
+    py =  dpa[:,5,:].flatten() * mc2
+    pz =  np.sqrt( (gamma**2 - 1)*mc2**2 -px**2 - py*2 )
+    
+    i0 = np.arange(nslice)
+    i_slice = np.repeat(i0[:, np.newaxis], n1, axis=1).flatten()
+    
+    # Spread particles out over zsep interval
+    z  = dz * (i_slice + np.mod(phase/(2*np.pi * zsep), zsep))  # z = (zsep * xlamds) * (i_slice + mod(dpa_phase/2pi, 1)) 
+    z = z.flatten()
+    #t = np.full(n_particle, 0.0)
+    
+    # z-coordinates
+    t = -z/c_light
+    z = np.full(n_particle, 0.0)
+    
+    
+    weight = np.repeat(current[:, np.newaxis], n1, axis=1).flatten() * dz / c_light / n1
+    
+    return {
+        't': t,
+        'x': x,
+        'px':px,
+        'y': y,
+        'py': py,
+        'z': z,
+        'pz': pz,
+        'species': species,
+        'weight': weight,
+        'status': np.full(n_particle, 1)
+        }
+    
+
+
 
 
 

@@ -145,10 +145,18 @@ def write_genesis2_beam_file(fname, beam_columns, verbose=False):
 
 def genesis2_dpa_to_data(dpa, *, xlamds, current, zsep=1, species='electron'):
     """
+    Converts Genesis 1.3 v2 dpa data to ParticleGroup data.
     
-    gamma, phase, x, y, px/mc, py/mc
-    .par file: phase = psi  = kw*z + field_phase
-    .dpa file: phase = kw*z    
+    The Genesis 1.3 v2 dpa phase space coordinates and units are:
+        gamma [1]
+        phase [rad]
+        x [m]
+        y [m]
+        px/mc [1]
+        py/mc [1]
+    The definition of the phase is different between the .par and .dpa files.
+        .par file: phase = psi  = kw*z + field_phase
+        .dpa file: phase = kw*z    
     
     Parameters
     ----------
@@ -160,7 +168,7 @@ def genesis2_dpa_to_data(dpa, *, xlamds, current, zsep=1, species='electron'):
         wavelength (m)
         
     zsep: int
-        slice separation interval
+        slice separation interval 
         
     current: array
         current array of length n_slice (A)
@@ -173,6 +181,8 @@ def genesis2_dpa_to_data(dpa, *, xlamds, current, zsep=1, species='electron'):
     data: dict with keys: x, px, y, py, z, pz, weight, species, status
         in the units of the openPMD-beamphysics Python package:
         m, eV/c, m, eV/c, m, eV/c, C
+        
+        These are returned in z-coordinates, with z=0. 
     
     """
     

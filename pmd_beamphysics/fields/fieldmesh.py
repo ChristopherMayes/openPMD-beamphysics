@@ -11,6 +11,7 @@ from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d
 from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
 from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
 from pmd_beamphysics.interfaces.astra import read_astra_3d_fieldmaps, write_astra_3d_fieldmaps
+from pmd_beamphysics.interfaces.impact import create_impact_solrf_rfdata
 
 from h5py import File
 import numpy as np
@@ -86,6 +87,7 @@ class FieldMesh:
     Writers
         .write
         .write_astra_3d
+        .write_impact_solrf
         .write_gpt
         .write_superfish
         
@@ -94,9 +96,6 @@ class FieldMesh:
         .from_superfish
     
 
-    
-
-    
     """
     def __init__(self, h5=None, data=None):
     
@@ -322,6 +321,59 @@ class FieldMesh:
         
     def write_astra_3d(self, common_filePath, verbose=False):      
         return  write_astra_3d_fieldmaps(self, common_filePath)
+    
+    def write_impact_solrf(self,
+                            filePath=None,
+                            *,
+                            zmirror=False,
+                            n_coef=None,
+                            err_calc=False):
+        """
+        Creates and optionally writes Impact-T rdfata-style data for the solrf element. 
+        
+        
+        Parameters
+        ----------
+        filePath: str, optional
+            File name to write the data to. Example: 'rfdata999'
+            Default: None => does not write
+            
+        zmirror: bool, optional
+            Mirror the field about z=0. This is necessary for non-periodic field such as electron guns.
+            Default: False
+        
+        n_coef: int, optional
+            Default: None => create the maximum number of coefficients
+            
+        Returns
+        -------
+        dict with:
+            rfdata: ndarray
+            
+            zmin: float
+            
+            zmax: float
+            
+            Ez_scale: float
+            
+            Bz_scale: float
+            
+            Ez_err: float, optional
+            
+            Bz_err: float, optional
+            
+        """        
+        
+        
+        dat = create_impact_solrf_rfdata(self,
+                                         zmirror=zmirror,
+                                         n_coef=n_coef,
+                                         err_calc=err_calc)
+        if filePath:
+            np.savetxt(filePath, dat['rfdata'])
+        return dat
+        
+        
     
     def write_gpt(self, filePath, asci2gdf_bin=None, verbose=True):
         """

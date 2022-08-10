@@ -5,6 +5,7 @@ c_light = 299792458.
 
 
 
+
 def parse_impact_particles(filePath, 
                            names=('x', 'GBx', 'y', 'GBy', 'z', 'GBz'),
                            skiprows=0):
@@ -225,4 +226,307 @@ def write_impact(particle_group,
     np.savetxt(outfile, dat.T, header=header, comments='')
     
     # Return info dict
+    return output
+
+
+
+
+
+
+def riffle(a, b):
+    return np.vstack((a,b)).reshape((-1,),order='F')
+
+def create_fourier_coefficients(zdata, edata, n=None):
+    """
+    Literal transcription of Ji's routine RFcoeflcls.f90
+    
+    https://github.com/impact-lbl/IMPACT-T/blob/master/utilities/RFcoeflcls.f90
+    
+    Fixes bug with scaling the field by the max or min seen.
+    
+    Vectorized two loops
+    
+    Parameters
+    ----------
+    zdata: ndarray
+        z-coordinates
+    
+    edata: ndarray
+        field-coordinates
+    
+    n: int
+        Number of Fourier coefficient to compute.
+        None => n = len(edata) //2 + 1
+        Default: None
+    
+    Returns
+    -------    
+    rfdata: ndarray of float
+        Impact-T style Fourier coefficients
+    
+    """
+    ndatareal=len(zdata)
+    
+    # Cast to np arrays for efficiency
+    zdata = np.array(zdata)
+    edata = np.array(edata)
+    
+    # Proper scaling
+    scale = max(abs(edata.min()), abs(edata.max()))
+    edata /=  scale
+    
+    if not n:
+        n = len(edata) //2 + 1
+
+    Fcoef = np.zeros(n)
+    Fcoef2 = np.zeros(n)
+    zlen = zdata[-1] - zdata[0]
+    
+    zhalf = zlen/2.0
+    zmid = (zdata[-1]+zdata[0])/2
+    h = zlen/(ndatareal-1)
+    
+    pi = np.pi
+    # print("The RF data number is: ", ndatareal, zlen, zmid, h)
+    
+    jlist = np.arange(n)
+    
+    zz = zdata[0] - zmid
+    Fcoef  = (-0.5*edata[0]*np.cos(jlist*2*pi*zz/zlen)*h)/zhalf
+    Fcoef2 = (-0.5*edata[0]*np.sin(jlist*2*pi*zz/zlen)*h)/zhalf
+    zz = zdata[-1] - zmid
+    Fcoef  += -(0.5*edata[-1]*np.cos(jlist*2*pi*zz/zlen)*h)/zhalf          
+    Fcoef2 += -(0.5*edata[-1]*np.sin(jlist*2*pi*zz/zlen)*h)/zhalf
+        
+
+    for i in range(ndatareal):
+        zz = i*h+zdata[0]
+        klo=0
+        khi=ndatareal-1
+        while (khi-klo > 1):
+            k=(khi+klo)//2
+            if(zdata[k] - zz > 1e-15):
+                khi=k
+            else:
+                klo=k
+
+        hstep=zdata[khi]-zdata[klo]
+        slope=(edata[khi]-edata[klo])/hstep
+        ez1 =edata[klo]+slope*(zz-zdata[klo])
+        zz = zdata[0]+i*h - zmid
+
+        Fcoef += (ez1*np.cos(jlist*2*pi*zz/zlen)*h)/zhalf
+        Fcoef2 += (ez1*np.sin(jlist*2*pi*zz/zlen)*h)/zhalf
+
+    return np.hstack([Fcoef[0], riffle(Fcoef[1:], Fcoef2[1:])]) 
+
+
+def field_reconsruction(z, fcoefs, z0=0, zlen=1.0):
+    """
+    Field reconsruction from Impact-T style Fourier coefficents. 
+    
+    See: pmd_beamphysics.interfaces.impact.create_fourier_coefficients
+    
+    Parameters
+    ----------
+    z: float
+        z-position to reconstruct the field at
+        
+    fcoefs: ndarray
+        Impact-T style Fourier coefficient array.
+        
+    
+    z0: float, optional
+        lower bound of the fieldmap z coordinate.
+        Default: 0
+        
+    zlen: float, optional
+        length of fieldmap
+        Default: 1
+        
+    Returns
+    -------
+    field: float
+        reconstructed field value at z
+    
+    """
+    zmid = zlen/2
+    
+    ncoefreal = (len(fcoefs) -1)//2
+    
+    Fcoef0 = fcoefs[0]    # constant factor
+    Fcoef1 = fcoefs[1::2] # cos parts
+    Fcoef2 = fcoefs[2::2] # sin parts
+
+    kk = 2*np.pi*(z-zmid -z0) / zlen
+    
+    ilist = np.arange(ncoefreal)+1
+    
+    res = Fcoef0/2 + np.sum(Fcoef1* np.cos(ilist*kk))  + np.sum(Fcoef2* np.sin(ilist*kk))
+
+    return  res
+
+
+def reconstruction_error(field, fcoefs, n_coef=None):
+    """
+    Calculate field reconstruction error for a given number of Fourier coefficients.
+    Parameters
+    ----------
+    field: ndarray
+        original field
+    fcoefs: ndarray
+        Impact-T-style Fourier coefficients
+    n_coef: int
+        Number of coefficients to use. 
+        Default: None (use all)
+        
+    Returns
+    -------
+    error: float
+    """
+    if n_coef is None:
+        n_pick = len(fcoefs)
+    else:
+        n_pick = n_coef*2 - 1
+        
+    z2 = np.linspace(0, 1, len(field))
+    field2 = np.array([field_reconsruction(z, fcoefs[:n_pick]) for z in z2])
+    error = np.sqrt(np.sum((field-field2)**2)) / len(field)
+    return error
+
+
+
+#--------------
+# FieldMesh
+
+
+def create_fourier_data(field_mesh, component, zmirror=False, n_coef=None):
+    """
+    Create Impact-T-style Fourier coefficients from an on-axis
+    field component of a FieldMesh (e.g. "Ez")
+    
+    Parameters
+    ----------
+    field_mesh: FieldMesh
+        FieldMesh to extract the on-axis field component from
+    
+    component: str
+        Any computable FieldMesh component, 
+        such as: 'Ez' or 'Bz'
+    
+    zmirror: bool, optional
+        Mirror the field about z=0.
+        Default: False
+        
+    
+    Returns
+    -------
+    dict with:
+        z: ndarray 
+            z-coordinates
+            
+        field: ndarray 
+            on-axis (r=0) field at z
+            
+        fcoefs: ndarray 
+            Impact-T-style Fourier foefficients
+    
+    """
+    
+    ir = np.where(field_mesh.r == 0)
+    if len(ir) != 1: 
+        raise ValueError('No r=0 found')
+    ir = ir[0][0] 
+    
+    
+    z0 = field_mesh.coord_vec('z')
+    
+    field = field_mesh[component]
+    field0 = np.real(field[ir, 0, :])
+    
+    if zmirror:
+        assert z0[0] == 0, 'z0[0] must be 0 to mirror fields'
+        field0 = np.hstack([field0[::-1], field0[1:]])
+        z0 = np.hstack([-z0[::-1], z0[1:]])
+        
+    # Check for zero field
+    if np.allclose(field0, 0):
+        fcoefs = np.array([0.0])        
+    else:    
+        fcoefs = create_fourier_coefficients(z0, field0, n=n_coef) 
+      
+    return {'z': z0,
+            'field': field0,
+            'fcoefs': fcoefs,
+           }
+
+
+def create_impact_solrf_rfdata(field_mesh, 
+                               zmirror=False,
+                               n_coef=None,
+                               err_calc=False):
+    """
+    
+    Parameters
+    ----------
+    field_mesh: FieldMesh
+    
+    zmirror: bool, optional
+        Mirror the field about z=0.
+        Default: False
+    
+    n_coef: int, optional
+        Default: None => create the maximum number of coefficients
+
+    err_calc: bool, optional
+        If true, calculates an error by reconstructing the field at all of the original z points.
+        Default: False
+        
+    Returns
+    -------
+    dict with:
+        rfdata: ndarray
+        
+        zmin: float
+        
+        zmax: float
+        
+    """
+    output = {}
+    
+    # Form rfdata according to the Impact-T manual
+    rfdata = []
+    for component in ('Ez', 'Bz'):
+        dat = create_fourier_data(field_mesh, component, 
+                                    zmirror=zmirror, n_coef=n_coef) 
+        
+        z = dat['z']
+        if zmirror:
+            zmin = z.min()
+            zmax = z.max()
+        else:
+            zmin = 0
+            zmax = z.ptp()
+            
+        fcoefs = dat['fcoefs']
+        
+        # Add to output
+        scale = np.abs(dat['field']).max()
+            
+        output[component+'_fcoefs'] = fcoefs
+        output[component+'_scale'] = scale
+        if err_calc:
+            if scale == 0:
+                err = 0
+            else:
+                err = reconstruction_error(dat['field']/scale, dat['fcoefs'])
+            output[component+'_err'] = err
+                                   
+        rfdata.append( [len(fcoefs), zmin, zmax, zmax-zmin])
+        rfdata.append(fcoefs)
+                                                    
+    output['zmin'] = zmin
+    output['zmax'] = zmax         
+    output['rfdata'] = np.hstack(rfdata)
+                                     
     return output

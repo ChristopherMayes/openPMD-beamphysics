@@ -1,4 +1,5 @@
 from scipy.interpolate import UnivariateSpline
+from scipy import fft
 import numpy as np
 
 def expand_1d_static_fieldmap(z0, fz0):
@@ -68,3 +69,67 @@ def expand_1d_dynamic_fieldmap(z, Ez0, frequency=0):
     
     
     return Er, Ez, Btheta
+
+
+def derivative_array(fz, dz, fourier_cutoff=30, max_order=3):
+    """
+    Create derivatives of field data `fz` with regular spacing `dz`
+    using an FFT method. 
+    
+    
+    Parameters
+    ----------
+    fz: array
+        Field values with regular spacing
+        This is assumed to be periodic
+    
+    dz: float
+        Array spacing
+        
+    fourier_cutoff: int, optional
+        Number of Fourier coeffiecients to keep. 
+        Default: 30
+        
+    max_order: int
+        Maximum order of derivives to compute
+    
+        
+    Returns
+    -------
+    array of shape ( len(fz), max_order+1 ) 
+        representing the field values and derivatives
+    
+    
+    """
+    
+    n = len(fz)
+    L = (n)*dz 
+
+    # Pad odd length
+    if n % 2 == 1:
+        odd = True
+        fz = np.append(fz, 0)
+        L = L + dz
+    else:
+        odd = False     
+        
+    # Initial FFT
+    y = fft.rfft(fz)
+    # Cuttoff 
+    y[fourier_cutoff:] = 0     
+    k = np.arange(len(y))
+
+    derivs = []
+    
+    for order in range(max_order+1):
+        a = fft.irfft(y)
+        if odd:
+            # Trim off to return the same length as fz
+            a = a[:-1] 
+        derivs.append(a)
+        y *= 2*np.pi*1j*k / (L)
+
+    out = np.array(derivs).T
+    
+    return out
+

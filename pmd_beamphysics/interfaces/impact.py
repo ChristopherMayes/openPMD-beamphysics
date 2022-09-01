@@ -1,7 +1,10 @@
 import numpy as np
+from numpy import pi
+from scipy import fft
 
 c_light = 299792458.
 
+from pmd_beamphysics.fields.expansion import spline_derivative_array
 
 
 
@@ -321,7 +324,36 @@ def create_fourier_coefficients(zdata, edata, n=None):
     return np.hstack([Fcoef[0], riffle(Fcoef[1:], Fcoef2[1:])]) 
 
 
-def field_reconsruction(z, fcoefs, z0=0, zlen=1.0):
+
+def create_fourier_coefficients_via_fft(fz, n_coef=None):
+
+    fz = np.real_if_close(fz)[:-1] # Skip last point, assumed to be periodic
+
+    # Proper scaling
+    fz = fz/ np.abs(fz).max()
+    
+    norm = len(fz)
+     
+    # Initial FFT
+    y = fft.rfft(fz/norm)
+  
+    # Cuttoff 
+    y = y[:n_coef] 
+    
+    # Shift to correspond with reconsruction
+    sign =  np.resize([-1, 1], len(y)-1)   
+    
+    # Special signs and flatten
+    fcoefs = 2*np.hstack([np.real(y[0]), riffle(  sign*np.real(y[1:]), -sign*np.imag(y[1:]))  ] )  
+
+    return fcoefs
+
+
+
+
+
+
+def fourier_field_reconsruction(z, fcoefs, z0=0, zlen=1.0, order=0):
     """
     Field reconsruction from Impact-T style Fourier coefficents. 
     
@@ -344,27 +376,26 @@ def field_reconsruction(z, fcoefs, z0=0, zlen=1.0):
         length of fieldmap
         Default: 1
         
+    order: int, optional
+        Order of the field derivative.
+        Default: 0
+        
     Returns
     -------
     field: float
         reconstructed field value at z
     
     """
-    zmid = zlen/2
-    
-    ncoefreal = (len(fcoefs) -1)//2
-    
-    Fcoef0 = fcoefs[0]    # constant factor
-    Fcoef1 = fcoefs[1::2] # cos parts
-    Fcoef2 = fcoefs[2::2] # sin parts
-
-    kk = 2*np.pi*(z-zmid -z0) / zlen
-    
-    ilist = np.arange(ncoefreal)+1
-    
-    res = Fcoef0/2 + np.sum(Fcoef1* np.cos(ilist*kk))  + np.sum(Fcoef2* np.sin(ilist*kk))
-
-    return  res
+    fcomplex = fcoefs[1::2] + 1j * fcoefs[2::2]
+    n = np.arange(len(fcomplex)) + 1 # start at n=1
+    phi = -2*pi*n*( (z-z0)/zlen - 1/2)
+         
+    if order == 0:
+         fz =  fcoefs[0]/2 + np.sum( np.exp(1j * phi) * fcomplex )
+    else:
+         fz =  np.sum( (-1j * 2*pi*n/zlen)**order  *np.exp(1j * phi) * fcomplex )
+         
+    return np.real(fz)
 
 
 def reconstruction_error(field, fcoefs, n_coef=None):
@@ -390,7 +421,7 @@ def reconstruction_error(field, fcoefs, n_coef=None):
         n_pick = n_coef*2 - 1
         
     z2 = np.linspace(0, 1, len(field))
-    field2 = np.array([field_reconsruction(z, fcoefs[:n_pick]) for z in z2])
+    field2 = np.array([fourier_field_reconsruction(z, fcoefs[:n_pick]) for z in z2])
     error = np.sqrt(np.sum((field-field2)**2)) / len(field)
     return error
 
@@ -459,6 +490,10 @@ def create_fourier_data(field_mesh, component, zmirror=False, n_coef=None):
             'field': field0,
             'fcoefs': fcoefs,
            }
+
+
+
+
 
 
 def create_impact_solrf_rfdata(field_mesh, 
@@ -530,3 +565,94 @@ def create_impact_solrf_rfdata(field_mesh,
     output['rfdata'] = np.hstack(rfdata)
                                      
     return output
+
+def create_impact_solrf_derivatives(field_mesh,
+                                    method = 'spline',
+                                    spline_s=0, 
+                                    spline_k=5):
+    """
+    
+    Creates new-style rfdata consisting of the field and its first 
+    three derivatives along the z axis for Ez and Bz. 
+    
+    FieldMesh.geometry must be 'cylindrical'
+    
+    Parameters
+    ----------
+    field_mesh: FieldMesh
+    
+    spline_s: float, default 0
+        Spline smoothing factor.
+        See: from scipy.interpolate.UnivariateSpline
+       
+    spline_k: int, default 5
+        Degree of the smoothing spline
+        See: from scipy.interpolate.UnivariateSpline       
+        
+        
+    Returns
+    -------
+    dict with:
+        rfdata: ndarray
+        
+        zmin: float
+        
+        zmax: float
+        
+    """
+    assert field_mesh.geometry == 'cylindrical'
+    if method != 'spline':
+        raise NotImplementedError(f"Unknown method '{method}', must be 'spline'")
+    
+    
+    output = {}
+    
+    # Form rfdata according to the Impact-T manual
+    rfdata = []
+    
+    z = field_mesh.coord_vec('z')
+    zmin, zmax, L = z.min(), z.max(), z.ptp()
+    
+    
+    for component in ('Ez', 'Bz'):
+        
+        fz = field_mesh[component][0,0,:]
+        
+        fz = np.real_if_close(fz)
+        assert all(np.imag(fz) == 0)
+        
+        if field_mesh.component_is_zero(component):
+            # Dummy header
+            rfdata.append( np.array([
+                [1, 0, 0, 0],
+                [0, 0, 0, 0]
+            ]))
+            output[component+'_scale'] = 0
+                
+        else:
+            darray = spline_derivative_array(z, fz, s=spline_s, k=spline_k) 
+        
+            # Scale
+            scale = np.abs(darray[:,0]).max()
+            
+            # Header        
+            rfdata.append( np.array([[len(darray),  0, L , L]])) ## TEMP
+            #rfdata.append( np.array([[len(darray),  zmin, zmax, L]]))            
+                
+            # output[component+'_darray'] = darray # debug
+            output[component+'_scale'] = scale
+            
+            rfdata.append(darray/scale)
+            
+            #print('MAX: ', rfdata[-1][:,0].max())
+                                                    
+    output['zmin'] = zmin
+    output['zmax'] = zmax         
+    output['rfdata'] = np.vstack(rfdata)
+                                     
+    return output
+
+
+
+
+

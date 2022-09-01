@@ -120,7 +120,7 @@ class FieldMesh:
                     data = load_field_data_h5(hh5[fp[0]])
 
             else:
-                pass
+                data = load_field_data_h5(h5)
         else:
             data = load_field_data_dict(data)
             

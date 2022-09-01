@@ -15,6 +15,7 @@ from pmd_beamphysics.interfaces.impact import create_impact_solrf_rfdata
 
 from pmd_beamphysics.fields.expansion import expand_fieldmesh_from_onaxis
 
+import functools
 
 from h5py import File
 import numpy as np
@@ -399,6 +400,7 @@ class FieldMesh:
         return write_gpt_fieldmesh(self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose)
     
     # Superfish
+    @functools.wraps(write_superfish_t7)
     def write_superfish(self, filePath, verbose=False):
         """
         Write a Superfish T7 file. 
@@ -412,7 +414,8 @@ class FieldMesh:
             
             
     @classmethod
-    def from_superfish(cls, filename, type='electric', geometry='cylindrical'):
+    @functools.wraps(read_superfish_t7)
+    def from_superfish(cls, filename, type=None, geometry='cylindrical'):
         """
         Class method to parse a superfish T7 style file.
         """        

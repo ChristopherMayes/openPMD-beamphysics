@@ -11,7 +11,7 @@ from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d, plot_fieldmesh_c
 from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
 from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
 from pmd_beamphysics.interfaces.astra import read_astra_3d_fieldmaps, write_astra_3d_fieldmaps
-from pmd_beamphysics.interfaces.impact import create_impact_solrf_rfdata
+from pmd_beamphysics.interfaces.impact import create_impact_solrf_fieldmap_fourier
 
 from pmd_beamphysics.fields.expansion import expand_fieldmesh_from_onaxis
 
@@ -365,29 +365,41 @@ class FieldMesh:
         Returns
         -------
         dict with:
-            rfdata: ndarray
             
-            zmin: float
+            data: ndarray
             
-            zmax: float
+            info: dict with
+                Ez_scale: float
             
-            Ez_scale: float
+                Bz_scale: float
             
-            Bz_scale: float
+                Ez_err: float, optional
+                
+                Bz_err: float, optional
             
-            Ez_err: float, optional
+            field: dict with
+                Bz: 
+                    z0: float
+                    z1: float
+                    L: float
+                    fourier_coefficients
+                Ez: 
+                    z0: float
+                    z1: float
+                    L: float
+                    fourier_coefficients                    
             
-            Bz_err: float, optional
+
             
         """        
         
         
-        dat = create_impact_solrf_rfdata(self,
+        dat = create_impact_solrf_fieldmap_fourier(self,
                                          zmirror=zmirror,
                                          n_coef=n_coef,
                                          err_calc=err_calc)
         if filePath:
-            np.savetxt(filePath, dat['rfdata'])
+            np.savetxt(filePath, dat['data'])
         return dat
         
         

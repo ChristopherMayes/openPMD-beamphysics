@@ -496,7 +496,7 @@ def create_fourier_data(field_mesh, component, zmirror=False, n_coef=None):
 
 
 
-def create_impact_solrf_rfdata(field_mesh, 
+def create_impact_solrf_fieldmap_fourier(field_mesh, 
                                zmirror=False,
                                n_coef=None,
                                err_calc=False):
@@ -531,6 +531,10 @@ def create_impact_solrf_rfdata(field_mesh,
     
     # Form rfdata according to the Impact-T manual
     rfdata = []
+    
+    info = {'format':'solrf'}
+    field = {}
+    
     for component in ('Ez', 'Bz'):
         dat = create_fourier_data(field_mesh, component, 
                                     zmirror=zmirror, n_coef=n_coef) 
@@ -547,26 +551,38 @@ def create_impact_solrf_rfdata(field_mesh,
         
         # Add to output
         scale = np.abs(dat['field']).max()
-            
-        output[component+'_fcoefs'] = fcoefs
-        output[component+'_scale'] = scale
+        
+        info[component+'_scale'] = scale
         if err_calc:
             if scale == 0:
                 err = 0
             else:
                 err = reconstruction_error(dat['field']/scale, dat['fcoefs'])
-            output[component+'_err'] = err
-                                   
+            info[component+'_err'] = err
+
+        field[component] = {
+            'z0': zmin,
+            'z1': zmax,  # = L * n periods
+            'L': zmax-zmin, 
+            'fourier_coefficients': fcoefs,
+        }
         rfdata.append( [len(fcoefs), zmin, zmax, zmax-zmin])
         rfdata.append(fcoefs)
-                                                    
-    output['zmin'] = zmin
-    output['zmax'] = zmax         
-    output['rfdata'] = np.hstack(rfdata)
-                                     
+
+    # Add more info
+    info['zmin'] = zmin
+    info['zmax'] = zmax
+
+    output = {
+     'info': info,
+     'data': np.hstack(rfdata),
+     'field': field,
+
+    }
+    
     return output
 
-def create_impact_solrf_derivatives(field_mesh,
+def create_impact_solrf_fieldmap_derivatives(field_mesh,
                                     method = 'spline',
                                     spline_s=0, 
                                     spline_k=5):
@@ -613,7 +629,8 @@ def create_impact_solrf_derivatives(field_mesh,
     z = field_mesh.coord_vec('z')
     zmin, zmax, L = z.min(), z.max(), z.ptp()
     
-    
+    info = {'format':'solrf'}
+    field = {}    
     for component in ('Ez', 'Bz'):
         
         fz = field_mesh[component][0,0,:]
@@ -621,17 +638,23 @@ def create_impact_solrf_derivatives(field_mesh,
         fz = np.real_if_close(fz)
         assert all(np.imag(fz) == 0)
         
+        field[component] = {
+                'z0': 0, # Force
+                'z1': zmax, # = L * n periods
+                'L': zmax-zmin}      
+        
         if field_mesh.component_is_zero(component):
             # Dummy header
             rfdata.append( np.array([
                 [1, 0, 0, 0],
                 [0, 0, 0, 0]
             ]))
-            output[component+'_scale'] = 0
+            info[component+'_scale'] = 0
+            field[component]['derivative_array'] = np.array([[0,0,0,0]])
                 
         else:
             darray = spline_derivative_array(z, fz, s=spline_s, k=spline_k) 
-        
+    
             # Scale
             scale = np.abs(darray[:,0]).max()
             
@@ -640,16 +663,26 @@ def create_impact_solrf_derivatives(field_mesh,
             #rfdata.append( np.array([[len(darray),  zmin, zmax, L]]))            
                 
             # output[component+'_darray'] = darray # debug
-            output[component+'_scale'] = scale
+            info[component+'_scale'] = scale
             
             rfdata.append(darray/scale)
             
             #print('MAX: ', rfdata[-1][:,0].max())
-                                                    
-    output['zmin'] = zmin
-    output['zmax'] = zmax         
-    output['rfdata'] = np.vstack(rfdata)
-                                     
+            
+            field[component]['derivative_array'] = darray/scale          
+            
+                  
+    # Add more info
+    info['zmin'] = 0
+    info['zmax'] = L
+                
+    output = {
+     'info': info,
+     'data': np.vstack(rfdata),
+     'field': field,
+
+    }
+    
     return output
 
 

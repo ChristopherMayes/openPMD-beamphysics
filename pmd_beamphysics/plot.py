@@ -198,8 +198,8 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None, tex=True, **kwa
     if u1 == 's':
         _, hist_prefix = nice_scale_prefix(hist_f/f1)
         ax_marg_x.set_ylabel(f'{hist_prefix}A')
-    else:
-        ax_marg_x.set_ylabel(f'{hist_prefix}C/{ux}')
+    else:   
+        ax_marg_x.set_ylabel(mathlabel(f'{hist_prefix}C/{ux}')) # Always use tex
     
     
     # Side histogram
@@ -211,7 +211,7 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None, tex=True, **kwa
     hist_width =  np.diff(bin_edges)
     hist_y, hist_f, hist_prefix = nice_array(hist/hist_width)
     ax_marg_y.barh(hist_x, hist_y, hist_width, color='gray')
-    ax_marg_y.set_xlabel(f'{hist_prefix}C/{uy}')
+    ax_marg_y.set_xlabel(mathlabel(f'{hist_prefix}C/{uy}'))  # Always use tex
     
     # Turn off tick labels on marginals
     plt.setp(ax_marg_x.get_xticklabels(), visible=False)

@@ -640,8 +640,8 @@ def create_impact_solrf_fieldmap_derivatives(field_mesh,
         
         field[component] = {
                 'z0': 0, # Force
-                'z1': zmax, # = L * n periods
-                'L': zmax-zmin}      
+                'z1': L, # = L * n periods
+                'L': L}      
         
         if field_mesh.component_is_zero(component):
             # Dummy header

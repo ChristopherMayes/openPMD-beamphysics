@@ -11,7 +11,7 @@ from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d, plot_fieldmesh_c
 from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
 from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
 from pmd_beamphysics.interfaces.astra import read_astra_3d_fieldmaps, write_astra_3d_fieldmaps
-from pmd_beamphysics.interfaces.impact import create_impact_solrf_fieldmap_fourier
+from pmd_beamphysics.interfaces.impact import create_impact_solrf_fieldmap_fourier, create_impact_solrf_ele
 
 from pmd_beamphysics.fields.expansion import expand_fieldmesh_from_onaxis
 
@@ -93,7 +93,7 @@ class FieldMesh:
     Writers
         .write
         .write_astra_3d
-        .write_impact_solrf
+        .to_impact_solrf
         .write_gpt
         .write_superfish
         
@@ -338,70 +338,11 @@ class FieldMesh:
         
     def write_astra_3d(self, common_filePath, verbose=False):      
         return  write_astra_3d_fieldmaps(self, common_filePath)
-    
-    def write_impact_solrf(self,
-                            filePath=None,
-                            *,
-                            zmirror=False,
-                            n_coef=None,
-                            err_calc=False):
-        """
-        Creates and optionally writes Impact-T rdfata-style data for the solrf element. 
+          
         
-        
-        Parameters
-        ----------
-        filePath: str, optional
-            File name to write the data to. Example: 'rfdata999'
-            Default: None => does not write
-            
-        zmirror: bool, optional
-            Mirror the field about z=0. This is necessary for non-periodic field such as electron guns.
-            Default: False
-        
-        n_coef: int, optional
-            Default: None => create the maximum number of coefficients
-            
-        Returns
-        -------
-        dict with:
-            
-            data: ndarray
-            
-            info: dict with
-                Ez_scale: float
-            
-                Bz_scale: float
-            
-                Ez_err: float, optional
-                
-                Bz_err: float, optional
-            
-            field: dict with
-                Bz: 
-                    z0: float
-                    z1: float
-                    L: float
-                    fourier_coefficients
-                Ez: 
-                    z0: float
-                    z1: float
-                    L: float
-                    fourier_coefficients                    
-            
-
-            
-        """        
-        
-        
-        dat = create_impact_solrf_fieldmap_fourier(self,
-                                         zmirror=zmirror,
-                                         n_coef=n_coef,
-                                         err_calc=err_calc)
-        if filePath:
-            np.savetxt(filePath, dat['data'])
-        return dat
-        
+    @functools.wraps(create_impact_solrf_ele)      
+    def to_impact_solrf(self, *args, **kwargs):
+        return create_impact_solrf_ele(self, *args, **kwargs)
         
     
     def write_gpt(self, filePath, asci2gdf_bin=None, verbose=True):

@@ -687,5 +687,177 @@ def create_impact_solrf_fieldmap_derivatives(field_mesh,
 
 
 
+def create_impact_solrf_ele(field_mesh,
+                            *, 
+                            zedge=0,
+                            name=None,
+                            scale=1,
+                            phase=0,
+                            style='fourier',
+                            n_coef=30,
+                            zmirror=None,
+                            spline_s=1e-6,
+                            spline_k = 5,
+                            radius = 0.15,
+                            x_offset = 0,
+                            y_offset = 0,
+                            file_id = 666,
+                            output_path=None):
+    """
+    Creat Impact-T solrf element from a FieldMesh
+    
+    Parameters
+    ----------
+    name: str, default: None
+    
+    zedge: float
+    
+    scale: float, default: 1
+    
+    phase: float, default: 0
+    
+    style: str, default: 'fourier'
+    
+    zmirror: bool, default: None
+        Mirror the field about z=0. This is necessary for non-periodic field such as electron guns.
+        If None, will autmatically try to detect whether this is necessary.
+        
+    spline_s: float, default: 0
+    
+    spline_k: float, default: 0
+    
+    radius: float, default: 0
+    
+    x_offset: float, default: 0
+    
+    y_offset: float, default: 0
+    
+    file_id: int, default: 666
+    
+    output_path: str, default: None
+        If given, the rfdata{file_id} file will be written to this path
+    
+    Returns
+    -------
+    dict with:
+      line: str
+          Impact-T style element line
+          
+      ele: dict
+          LUME-Impact style element
+          
+      fmap: dict with:
+            data: ndarray
+            
+            info: dict with
+                Ez_scale: float
+            
+                Bz_scale: float
+            
+                Ez_err: float, optional
+                
+                Bz_err: float, optional
+            
+            field: dict with
+                Bz: 
+                    z0: float
+                    z1: float
+                    L: float
+                    fourier_coefficients: ndarray
+                        Only present when style = 'fourier'
+                    derivative_array: ndarray
+                        Only present when style = 'derivatives'
+                Ez: 
+                    z0: float
+                    z1: float
+                    L: float
+                    fourier_coefficients: ndarray 
+                        Only present when style = 'fourier'
+                    derivative_array: ndarray
+                        Only present when style = 'derivatives'
+    
+    """
+    
 
+    if style == 'fourier':     
+        
+        # Automatically detect need to mirror
+        if zmirror is None and abs(field_mesh.Ez[0,0,0]) > 0.1:
+            zmirror = True
+        
+        fmap = create_impact_solrf_fieldmap_fourier(field_mesh, n_coef = n_coef, zmirror=zmirror, err_calc=True)
+        info = fmap['info']
+        # print(f"{info['Ez_err']} {info['Bz_err']}")
+        if info['Ez_err'] > 1e-3 or info['Bz_err'] > 1e-3:
+            raise ValueError(f'Field reconstruction error too large with n_coef = {n_coef}!')
+        
+    elif style == 'derivatives':
+        fmap = create_impact_solrf_fieldmap_derivatives(field_mesh, spline_s=spline_s, spline_k=spline_k)
+        #print(fdat)
+        #info = fmap['info']
+        #print(' Scales: ', info['Bz_scale'], info['Ez_scale'])
+        
+    else:
+        raise ValueError(f'Invalid style: {style}')
+             
+    freq = field_mesh.frequency
+    L = field_mesh.dz * (field_mesh.shape[2]-1)
 
+    
+    # Scaling
+    bscale = scale
+    if field_mesh.component_is_zero('Bz'):
+        bscale = 0
+    bscale = np.round(bscale, 12)
+    
+    escale = scale
+    if field_mesh.component_is_zero('Ez'):
+        escale = 0
+         
+    # Round    
+    s = np.round(zedge + L, 12)
+    zedge = np.round(zedge, 12)      
+    L = np.round(L, 12)
+    bscale = np.round(bscale, 12)       
+    escale = np.round(escale, 12)  
+    theta0_deg = phase * 180/np.pi
+
+    if name is None:
+        name = f"solrf_{file_id}"
+    
+    fieldmap_filename = f'rfdata{file_id}'
+    
+    if output_path is not None:
+        if not os.path.exists(output_path):
+            raise ValueError(f'output_path does not exist: {output_path}')
+        np.savetxt(os.path.join(output_path, fieldmap_filename), fmap['data'])
+    
+    ele = {
+     'L': L,
+     'type': 'solrf',
+     'zedge': zedge,
+     'rf_field_scale': escale,
+     'rf_frequency': freq,
+     'theta0_deg': theta0_deg,
+     'filename': fieldmap_filename,
+     'radius': radius,
+     'x_offset': x_offset,
+     'y_offset': y_offset,
+     'x_rotation': 0.0,
+     'y_rotation': 0.0,
+     'z_rotation': 0.0,
+     'solenoid_field_scale': bscale,
+     'name': name,
+     's': s, 
+          }
+    
+    line = f"{L} 0 0 105 {zedge} {escale} {freq} {theta0_deg} {file_id} {radius} {x_offset} {y_offset} 0 0 0 {bscale} /name:{name}"
+    
+    
+    
+    
+    return {'line': line,
+            'rfdata': fmap['data'],
+             'ele': ele,
+             'fmap': fmap}
+    

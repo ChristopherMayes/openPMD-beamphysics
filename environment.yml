@@ -1,0 +1,21 @@
+# conda env create -f environment-dev.yml
+name: pmd_beamphysics-dev
+channels:
+  - conda-forge
+dependencies:
+  - python=3.9
+  - numpy
+  - scipy>=1.0.0
+  - matplotlib
+  - h5py
+# Developer
+  - pytest
+  - jupyterlab>=3
+  - pygments
+  - mkdocs
+  - mkdocstrings
+  - mkdocs-material
+  - mkdocs-jupyter
+  - pip
+  - pip:
+    - mkdocstrings-python

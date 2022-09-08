@@ -33,109 +33,127 @@ class ParticleGroup:
     Particle Group class
     
     Initialized on on openPMD beamphysics particle group:
-        h5 = open h5 handle, or str that is a file
-        data = raw data
+
+    - **h5**: open h5 handle, or `str` that is a file
+    - **data**: raw data
     
-    The required bunch data is stored in .data with keys
-        np.array: x, px, y, py, z, pz, t, status, weight
-        str: species
+    The required bunch data is stored in `.data` with keys
+
+    - `np.array`: `x`, `px`, `y`, `py`, `z`, `pz`, `t`, `status`, `weight`
+    - `str`: `species`
+
     where:
-        x, y, z are positions in units of [m]
-        px, py, pz are momenta in units of [eV/c]
-        t is time in [s]
-        weight is the macro-charge weight in [C], used for all statistical calulations.
-        species is a proper species name: 'electron', etc. 
+    
+    - `x`, `y`, `z` are positions in units of [m]
+    - `px`, `py`, `pz` are momenta in units of [eV/c]
+    - `t` is time in [s]
+    - `weight` is the macro-charge weight in [C], used for all statistical calulations.
+    - `species` is a proper species name: `'electron'`, etc. 
         
     Optional data:
-        np.array: id
-    where:
-        id is a list of unique integers that identify the particles. 
+    
+    - `np.array`: `id`
+        
+    where `id` is a list of unique integers that identify the particles. 
     
         
     Derived data can be computed as attributes:
-        .gamma, .beta, .beta_x, .beta_y, .beta_z: relativistic factors [1].
-        .r, .theta: cylidrical coordinates [m], [1]
-        .pr, .ptheta: momenta in the radial and angular coordinate directions [eV/c]
-        .Lz: angular momentum about the z axis [m*eV/c]
-        .energy : total energy [eV]
-        .kinetic_energy: total energy - mc^2 in [eV]. 
-        .higher_order_energy: total energy with quadratic fit in z or t subtracted [eV]
-        .p: total momentum in [eV/c]
-        .mass: rest mass in [eV]
-        .xp, .yp: Slopes x' = dx/dz = dpx/dpz and y' = dy/dz = dpy/dpz [1].
+    
+    - `.gamma`, `.beta`, `.beta_x`, `.beta_y`, `.beta_z`: relativistic factors [1].
+    - `.r`, `.theta`: cylidrical coordinates [m], [1]
+    - `.pr`, `.ptheta`: momenta in the radial and angular coordinate directions [eV/c]
+    - `.Lz`: angular momentum about the z axis [m*eV/c]
+    - `.energy` : total energy [eV]
+    - `.kinetic_energy`: total energy - mc^2 in [eV]. 
+    - `.higher_order_energy`: total energy with quadratic fit in z or t subtracted [eV]
+    - `.p`: total momentum in [eV/c]
+    - `.mass`: rest mass in [eV]
+    - `.xp`, `.yp`: Slopes $x' = dx/dz = dp_x/dp_z$ and $y' = dy/dz = dp_y/dp_z$ [1].
         
     Normalized transvere coordinates can also be calculated as attributes:
-        .x_bar, .px_bar, .y_bar, .py_bar in [sqrt(m)]
-        The normalization is automatically calculated from the covariance matrix. 
-        See functions in .statistics for more advanced usage.
+    
+    - `.x_bar`, `.px_bar`, `.y_bar`, `.py_bar` in [sqrt(m)]
         
-        Their cooresponding amplitudes are:
-        .Jx, .Jy [m]
-        where Jx = (x_bar^2 + px_bar^2 )/2, 
-        The momenta are normalized by the mass, so that:
-            <Jx> = norm_emit_x
-        and similar for y. 
+    The normalization is automatically calculated from the covariance matrix. 
+    See functions in `.statistics` for more advanced usage.
+        
+    Their cooresponding amplitudes are:
+    
+    `.Jx`, `.Jy` [m]
+    
+    where `Jx = (x_bar^2 + px_bar^2 )/2`.
+    
+    The momenta are normalized by the mass, so that
+    `<Jx> = norm_emit_x`
+    and similar for `y`. 
         
     Statistics of any of these are calculated with:
-        .min(X)
-        .max(X)
-        .ptp(X)
-        .avg(X)
-        .std(X)
-        .cov(X, Y, ...)
-        .histogramdd(X, Y, ..., bins=10, range=None)
-        with a string X as the name any of the properties above.
+    
+    - `.min(X)`
+    - `.max(X)`
+    - `.ptp(X)`
+    - `.avg(X)`
+    - `.std(X)`
+    - `.cov(X, Y, ...)`
+    - `.histogramdd(X, Y, ..., bins=10, range=None)`
+    
+    with a string `X` as the name any of the properties above.
         
     Useful beam physics quantities are given as attributes:
-        .norm_emit_x
-        .norm_emit_y
-        .norm_emit_4d
-        .higher_order_energy_spread
-        .average_current
+    
+    - `.norm_emit_x`
+    - `.norm_emit_y`
+    - `.norm_emit_4d`
+    - `.higher_order_energy_spread`
+    - `.average_current`
         
-    Twiss parameters, including dispersion, for the 'x' or 'y' plane:
-        .twiss(plane='x', fraction=0.95, p0C=None)
-    For convenience, plane='xy' will calculate twiss for both planes.
+    Twiss parameters, including dispersion, for the $x$ or $y$ plane:
+    
+    - `.twiss(plane='x', fraction=0.95, p0C=None)`
+    
+    For convenience, `plane='xy'` will calculate twiss for both planes.
     
     Twiss matched particles, using a simple linear transformation:
-        .twiss_match(self, beta=None, alpha=None, plane='x', p0c=None, inplace=False)
     
-                
-    The weight is required and must sum to > 0. The sum of the weights is:
-        .charge
-    This can also be set:
-        .charge = 1.234 # C, will rescale the .weight array
+    - `.twiss_match(self, beta=None, alpha=None, plane='x', p0c=None, inplace=False)`
+              
+    The weight is required and must sum to > 0. The sum of the weights is in `.charge`.
+    This can also be set: `.charge = 1.234` # C, will rescale the .weight array
             
     All attributes can be accessed with brackets:
-        [key]
+        `[key]`
+    
     Additional keys are allowed for convenience:
-        ['min_prop']   will return  .min('prop')
-        ['max_prop']   will return  .max('prop')
-        ['ptp_prop']   will return  .ptp('prop')
-        ['mean_prop']  will return  .avg('prop')
-        ['sigma_prop'] will return  .std('prop')
-        ['cov_prop1__prop2'] will return .cov('prop1', 'prop2')[0,1]
+        `['min_prop']`   will return  `.min('prop')`
+        `['max_prop']`   will return  `.max('prop')`
+        `['ptp_prop']`   will return  `.ptp('prop')`
+        `['mean_prop']`  will return  `.avg('prop')`
+        `['sigma_prop']` will return  `.std('prop')`
+        `['cov_prop1__prop2']` will return `.cov('prop1', 'prop2')[0,1]`
         
     Units for all attributes can be accessed by:
-        .units(key)
+    
+    - `.units(key)`
     
     Particles are often stored at the same time (i.e. from a t-based code), 
     or with the same z position (i.e. from an s-based code.)
     Routines: 
-        drift_to_z(z0)
-        drift_to_t(t0)
+    
+    - `drift_to_z(z0)`
+    - `drift_to_t(t0)`
+    
     help to convert these. If no argument is given, particles will be drifted to the mean.
     Related properties are:
-        .in_t_coordinates returns True if all particles have the same t corrdinate
-        .in_z_coordinates returns True if all particles have the same z corrdinate
-        
-        
+    
+    - `.in_t_coordinates` returns `True` if all particles have the same $t$ corrdinate
+    - `.in_z_coordinates` returns `True` if all particles have the same $z$ corrdinate
         
     Convenient plotting is provided with: 
-        .plot(...)
-        .slice_plot(...)
+    
+    - `.plot(...)`
+    - `.slice_plot(...)`
         
-        Use help(ParticleGroup.plot), etc. for usage. 
+    Use `help(ParticleGroup.plot)`, etc. for usage. 
         
     
     """
@@ -607,7 +625,8 @@ class ParticleGroup:
         Returns Twiss and Dispersion dict.
         
         plane can be:
-            'x', 'y', 'xy'
+        
+        `'x'`, `'y'`, or `'xy'`
         
         Optionally a fraction of the particles, based on amplitiude, can be specified.
         """
@@ -647,8 +666,8 @@ class ParticleGroup:
     @property
     def average_current(self):
         """
-        Simple average current in A: charge / dt, with dt =  (max_t - min_t)
-        If particles are in t coordinates, will try dt = (max_z - min_z)*c_light*beta_z
+        Simple average `current = charge / dt` in [A], with `dt =  (max_t - min_t)`
+        If particles are in $t$ coordinates, will try` dt = (max_z - min_z)*c_light*beta_z`
         """
         dt = self.t.ptp()  # ptp 'peak to peak' is max - min
         if dt == 0:
@@ -659,11 +678,12 @@ class ParticleGroup:
     def __getitem__(self, key):
         """
         Returns a property or statistical quantity that can be computed:
-        P['x'] returns the x array
-        P['sigmx_x'] returns the std(x) scalar
-        P['norm_emit_x'] returns the norm_emit_x scalar
         
-        Parts can also be given. Example: P[0:10] returns a new ParticleGroup with the first 10 elements.
+        - `P['x']` returns the x array
+        - `P['sigmx_x']` returns the std(x) scalar
+        - `P['norm_emit_x']` returns the norm_emit_x scalar
+        
+        Parts can also be given. Example: `P[0:10]` returns a new ParticleGroup with the first 10 elements.
         """
         
         # Allow for non-string operations: 

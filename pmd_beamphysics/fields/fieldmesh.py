@@ -42,66 +42,75 @@ class FieldMesh:
     Class for openPMD External Field Mesh data.
     
     Initialized on on openPMD beamphysics particle group:
-        h5 = open h5 handle, or str that is a file
-        data = raw data
+    
+    - **h5**: open h5 handle, or str that is a file
+    - **data**: raw data
         
     The required data is stored in ._data, and consists of dicts:
-        'attrs'
-        'components'
+    
+    - `'attrs'`
+    - `'components'`
     
     Component data is always 3D.
     
-    Initialization:
-        From openPMD-beamphysics HDF5 file:
-            FieldMesh('file.h5')
-        From data dict:
-            FieldMesh(data=data)
+    Initialization from openPMD-beamphysics HDF5 file:
+    
+    - `FieldMesh('file.h5')`
+    
+    Initialization from a data dict:
+    
+    - `FieldMesh(data=data)`
     
     Derived properties:
                 
-        .r, .theta, .z
-        .Br, .Btheta, .Bz
-        .Er, .Etheta, .Ez
-        .E, .B
-        
-        .phase
-        .scale
-        .factor
-        
-        .harmonic
-        .frequency
-        
-        .shape
-        .geometry
-        .mins, .maxs, .deltas
-        .meshgrid
-        .dr, .dtheta, .dz
+    - `.r`, `.theta`, `.z`
+    - `.Br`, `.Btheta`, `.Bz`
+    - `.Er`, `.Etheta`, `.Ez`
+    - `.E`, `.B`
+    
+    - `.phase`
+    - `.scale`
+    - `.factor`
+    
+    - `.harmonic`
+    - `.frequency`
+    
+    - `.shape`
+    - `.geometry`
+    - `.mins`, `.maxs`, `.deltas`
+    - `.meshgrid`
+    - `.dr`, `.dtheta`, `.dz`
     
     Booleans:
-        .is_pure_electric
-        .is_pure_magnetic
-        .is_static
+    
+    - `.is_pure_electric`
+    - `.is_pure_magnetic`
+    - `.is_static`
     
     Units and labels
-        .units
-        .axis_labels
+    
+    - `.units`
+    - `.axis_labels`
     
     Plotting:
-        .plot
-        .plot_onaxis
+    
+    - `.plot`
+    - `.plot_onaxis`
     
     Writers
-        .write
-        .write_astra_3d
-        .to_impact_solrf
-        .write_gpt
-        .write_superfish
+    
+    - `.write`
+    - `.write_astra_3d`
+    - `.to_impact_solrf`
+    - `.write_gpt`
+    - `.write_superfish`
         
     Constructors (class methods):
-        .from_astra_3d
-        .from_superfish
-        .from_onaxis
-        .expand_onaxis
+    
+    - `.from_astra_3d`
+    - `.from_superfish`
+    - `.from_onaxis`
+    - `.expand_onaxis`
         
     
     
@@ -167,7 +176,7 @@ class FieldMesh:
     @property
     def phase(self):
         """
-        Returns the complex argument phi = -2*pi*RFphase
+        Returns the complex argument `phi = -2*pi*RFphase`
         to multiply the oscillating field by. 
         
         Can be set. 
@@ -185,7 +194,7 @@ class FieldMesh:
         """
         factor to multiply fields by, possibly complex.
         
-        factor = scale * exp(i*phase)
+        `factor = scale * exp(i*phase)`
         """
         return np.real_if_close(self.scale * np.exp(1j*self.phase))           
     
@@ -200,9 +209,10 @@ class FieldMesh:
         """
         Returns axis index for a named axis label key.
         
-        Example:
-            .axis_labels == ('x', 'y', 'z')
-            .axis_index('z') returns 2
+        Examples:
+        
+        - `.axis_labels == ('x', 'y', 'z')`
+        - `.axis_index('z')` returns `2`
         """
         for i, name in enumerate(self.axis_labels):
             if name == key:
@@ -312,11 +322,7 @@ class FieldMesh:
         
         # Fill out aliases 
         if key in component_from_alias:
-            key = component_from_alias[key]
-        elif key == 'E':
-            key = 'electricField'
-        elif key == 'B':
-            key = 'magneticField'            
+            key = component_from_alias[key]         
         
         return pg_units(key)    
     
@@ -360,7 +366,7 @@ class FieldMesh:
         
         For static fields, a Poisson T7 file is written.
         
-        For dynamic (harmonic /= 0) fields, a Fish T7 file is written
+        For dynamic (`harmonic /= 0`) fields, a Fish T7 file is written
         """
         return write_superfish_t7(self, filePath, verbose=verbose)
             
@@ -611,9 +617,11 @@ class FieldMesh:
         Returns component data from a key
         
         If the key starts with:
-            re_
-            im_
-            abs_
+        
+        - `re_`
+        - `im_`
+        - `abs_`
+        
         the appropriate numpy operator is applied.
         
         
@@ -658,7 +666,7 @@ class FieldMesh:
 
 def get_operator(key):
     """
-    Check if a key starts with re_, im_, abs_
+    Check if a key starts with `re_`, `im_`, `abs_`
     
     returns operator, newkey
     """
@@ -683,9 +691,9 @@ def load_field_data_h5(h5, verbose=True):
     """
     
     
-    If attrs['dataOrder'] == 'F', will transpose.
+    If `attrs['dataOrder'] == 'F'`, will transpose.
     
-    If attrs['harmonic'] == 0, components will be cast to real by np.real
+    If `attrs['harmonic'] == 0`, components will be cast to real by `np.real`
     
     Returns:
         data dict

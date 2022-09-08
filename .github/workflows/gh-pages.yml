@@ -1,0 +1,43 @@
+name: Publish Documentation
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    if: ${{ github.repository == 'ChristopherMayes/openPMD-beamphysics' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: [3.9]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+          mamba-version: "*"
+          channels: conda-forge
+          activate-environment: pmd_beamphysics-dev
+          environment-file: environment.yml
+
+      - name: Execute notebooks
+        shell: bash -l {0}
+        run: |
+          pip install --no-dependencies . 
+          scripts/execute_notebooks.bash 
+
+      - name: Build Docs
+        shell: bash -l {0}
+        run: |
+          mkdocs build
+          zip -r openPMD-beamphysics-examples.zip docs/examples/
+          mv openPMD-beamphysics-examples.zip ./site/assets/.
+          
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site/

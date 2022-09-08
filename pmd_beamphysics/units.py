@@ -414,6 +414,11 @@ for k in ['xp', 'yp']:
     PARTICLEGROUP_UNITS[k] = unit('rad')
 for k in ['x_bar', 'px_bar', 'y_bar', 'py_bar']:
     PARTICLEGROUP_UNITS[k] = sqrt_unit(unit('m'))
+for component in ['', 'x', 'y', 'z', 'theta', 'r']:
+    PARTICLEGROUP_UNITS[f'E{component}'] = unit('V/m')
+    PARTICLEGROUP_UNITS[f'B{component}'] = unit('T')    
+
+    
 
 def pg_units(key):
     """

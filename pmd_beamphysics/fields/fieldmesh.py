@@ -6,16 +6,22 @@ from pmd_beamphysics.writers import write_pmd_field, pmd_field_init
 
 from pmd_beamphysics import tools
 
-from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d
+from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d, plot_fieldmesh_cylindrical_1d
 
 from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
 from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
 from pmd_beamphysics.interfaces.astra import read_astra_3d_fieldmaps, write_astra_3d_fieldmaps
+from pmd_beamphysics.interfaces.impact import create_impact_solrf_fieldmap_fourier, create_impact_solrf_ele
+
+from pmd_beamphysics.fields.expansion import expand_fieldmesh_from_onaxis
+
+import functools
 
 from h5py import File
 import numpy as np
 from copy import deepcopy
 import os
+import functools
 
 
 c_light = 299792458.
@@ -82,21 +88,24 @@ class FieldMesh:
     
     Plotting:
         .plot
+        .plot_onaxis
     
     Writers
         .write
         .write_astra_3d
+        .to_impact_solrf
         .write_gpt
         .write_superfish
         
-    Readers (class methods):
+    Constructors (class methods):
         .from_astra_3d
         .from_superfish
+        .from_onaxis
+        .expand_onaxis
+        
+    
     
 
-    
-
-    
     """
     def __init__(self, h5=None, data=None):
     
@@ -112,7 +121,7 @@ class FieldMesh:
                     data = load_field_data_h5(hh5[fp[0]])
 
             else:
-                pass
+                data = load_field_data_h5(h5)
         else:
             data = load_field_data_dict(data)
             
@@ -279,13 +288,20 @@ class FieldMesh:
     # TODO: more general plotting
     def plot(self, component=None, time=None, axes=None, cmap=None, return_figure=False, **kwargs):
         
-        
+        if self.geometry != 'cylindrical':
+            raise NotImplementedError(f'Geometry {self.geometry} not implemented')
+            
         return plot_fieldmesh_cylindrical_2d(self,
                                              component=component,
                                              time=time,
                                              axes=axes,
                                              return_figure=return_figure,
                                              cmap=cmap, **kwargs)
+    
+    @functools.wraps(plot_fieldmesh_cylindrical_1d) 
+    def plot_onaxis(self, *args, **kwargs):
+        assert self.geometry == 'cylindrical'
+        return plot_fieldmesh_cylindrical_1d(self, *args, **kwargs)
     
     
     def units(self, key):
@@ -322,6 +338,12 @@ class FieldMesh:
         
     def write_astra_3d(self, common_filePath, verbose=False):      
         return  write_astra_3d_fieldmaps(self, common_filePath)
+          
+        
+    @functools.wraps(create_impact_solrf_ele)      
+    def to_impact_solrf(self, *args, **kwargs):
+        return create_impact_solrf_ele(self, *args, **kwargs)
+        
     
     def write_gpt(self, filePath, asci2gdf_bin=None, verbose=True):
         """
@@ -331,6 +353,7 @@ class FieldMesh:
         return write_gpt_fieldmesh(self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose)
     
     # Superfish
+    @functools.wraps(write_superfish_t7)
     def write_superfish(self, filePath, verbose=False):
         """
         Write a Superfish T7 file. 
@@ -344,7 +367,8 @@ class FieldMesh:
             
             
     @classmethod
-    def from_superfish(cls, filename, type='electric', geometry='cylindrical'):
+    @functools.wraps(read_superfish_t7)
+    def from_superfish(cls, filename, type=None, geometry='cylindrical'):
         """
         Class method to parse a superfish T7 style file.
         """        
@@ -363,6 +387,104 @@ class FieldMesh:
         data = read_astra_3d_fieldmaps(common_filename, frequency=frequency)
         return cls(data=data)
         
+    @classmethod
+    def from_onaxis(cls, *,
+                    z=None,
+                    Bz=None,
+                    Ez=None,
+                    frequency=0,
+                    harmonic=None,
+                    eleAnchorPt = 'beginning'
+                   ):
+            """
+            
+            
+            Parameters 
+            ----------
+            z: array
+                z-coordinates. Must be regularly spaced.       
+            
+            Bz: array, optional
+                magnetic field at r=0 in T
+                Default: None        
+            
+            Ez: array, optional
+                Electric field at r=0 in V/m
+                Default: None
+                
+            frequency: float, optional
+                fundamental frequency in Hz.
+                Default: 0
+                
+            harmonic: int, optional
+                Harmonic of the fundamental the field actually oscillates at.
+                Default: 1 if frequency !=0, otherwise 0. 
+                
+            eleAnchorPt: str, optional
+                Element anchor point.
+                Should be one of 'beginning', 'center', 'end'
+                Default: 'beginning'
+            
+        
+            Returns
+            -------
+            field: FieldMesh
+                Instantiated fieldmesh
+            
+            """
+    
+            # Get spacing
+            nz = len(z)
+            dz = np.diff(z)
+            if not np.allclose(dz, dz[0]):
+                raise NotImplementedError("Irregular spacing not implemented")
+            dz = dz[0]    
+        
+            components = {}
+            if Ez is not None:
+                Ez = np.squeeze(np.array(Ez))
+                if Ez.ndim != 1:
+                    raise ValueError(f'Ez ndim = {Ez.ndim} must be 1')
+                components['electricField/z'] = Ez.reshape(1,1,len(Ez))
+                
+            if Bz is not None:
+                Bz = np.squeeze(np.array(Bz))
+                if Bz.ndim != 1:
+                    raise ValueError(f'Bz ndim = {Bz.ndim} must be 1')
+                components['magneticField/z'] = Bz.reshape(1,1,len(Bz))            
+        
+            if Bz is None and Ez is None:
+                raise ValueError('Please enter Ez or Bz')
+        
+            # Handle harmonic options
+            if frequency == 0:
+                harmonic = 0
+            elif harmonic is None:
+                harmonic = 1
+        
+            attrs = {'eleAnchorPt': eleAnchorPt,
+             'gridGeometry': 'cylindrical',
+             'axisLabels': np.array(['r', 'theta', 'z'], dtype='<U5'),
+             'gridLowerBound': np.array([0, 0, 0]),
+             'gridOriginOffset': np.array([ 0. ,  0. , z.min()]),
+             'gridSpacing': np.array([0. , 0.   , dz]),
+             'gridSize': np.array([1,  1, nz]),
+             'harmonic': harmonic,
+             'fundamentalFrequency': frequency,
+             'RFphase': 0,
+             'fieldScale': 1.0} 
+            
+            data = dict(attrs=attrs, components=components)
+            return cls(data=data)        
+        
+    
+    
+    @functools.wraps(expand_fieldmesh_from_onaxis)
+    def expand_onaxis(self, *args, **kwargs):
+        return expand_fieldmesh_from_onaxis(self, *args, **kwargs)
+    
+    
+    
         
     def __eq__(self, other):
         """
@@ -370,7 +492,6 @@ class FieldMesh:
         """
         
         if not tools.data_are_equal(self.attrs, other.attrs):
-            print('here')
             return False
         
         return tools.data_are_equal(self.components, other.components)
@@ -525,7 +646,9 @@ class FieldMesh:
         return dat
         
 
-        
+    def copy(self):
+        """Returns a deep copy"""
+        return deepcopy(self)          
         
     def __repr__(self):
         memloc = hex(id(self))
@@ -637,6 +760,14 @@ def load_field_data_dict(data_dict, verbose=True):
     
     
     return data
+
+
+
+
+
+
+
+
 
 
 

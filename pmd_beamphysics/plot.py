@@ -198,8 +198,8 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None, tex=True, **kwa
     if u1 == 's':
         _, hist_prefix = nice_scale_prefix(hist_f/f1)
         ax_marg_x.set_ylabel(f'{hist_prefix}A')
-    else:
-        ax_marg_x.set_ylabel(f'{hist_prefix}C/{ux}')
+    else:   
+        ax_marg_x.set_ylabel(mathlabel(f'{hist_prefix}C/{ux}')) # Always use tex
     
     
     # Side histogram
@@ -211,7 +211,7 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None, tex=True, **kwa
     hist_width =  np.diff(bin_edges)
     hist_y, hist_f, hist_prefix = nice_array(hist/hist_width)
     ax_marg_y.barh(hist_x, hist_y, hist_width, color='gray')
-    ax_marg_y.set_xlabel(f'{hist_prefix}C/{uy}')
+    ax_marg_y.set_xlabel(mathlabel(f'{hist_prefix}C/{uy}'))  # Always use tex
     
     # Turn off tick labels on marginals
     plt.setp(ax_marg_x.get_xticklabels(), visible=False)
@@ -375,5 +375,65 @@ def plot_fieldmesh_cylindrical_2d(fm,
     
     
     
+# Intended to be used as a method in FieldMesh
+def plot_fieldmesh_cylindrical_1d(fm,
+                                  axes = None,
+                                  return_figure=False,
+                                 **kwargs):
+    """
+    
+    Plots the on-axis Ez and/or Bz from a FieldMesh
+    with cylindrical geometry.
+    
+    Parameters
+    ----------
+    axes: matplotlib axes object, default None
+        
+    return_figure: bool, default False
+
+    Returns
+    -------
+    fig, optional
+        if return_figure, returns matplotlib Figure instance
+        for further modifications.
+    
+    """
+
+
+    if not axes:
+        fig, ax = plt.subplots(**kwargs)
+
+    has_Ez = ('electricField/z' in fm.components) 
+    has_Bz = ('magneticField/z' in fm.components) 
+
+        
+    Bzlabel = r'$B_z$ (T)'    
+    z0 = fm.coord_vec('z')
+    
+    ylabel = None
+    if has_Ez:
+        Ez0 = fm['Ez'][0,0,:]
+        ax.plot(z0, Ez0, color='black', label=r'E_{z0}')
+        ylabel =  r'$E_z$ (V/m)'    
+        
+    if has_Bz:
+        Bz0 = fm['Bz'][0,0,:]   
+        if has_Ez:
+            ax2 = ax.twinx()
+            ax2.plot(z0, Bz0, color='blue', label=r'$B_{z0}$')    
+            ax2.set_ylabel(Bzlabel)
+        else:
+            ax.plot(z0, Bz0, color='blue', label=r'$B_{z0}$')    
+            ylabel = Bzlabel
+            
+    if has_Ez and has_Bz:
+        ax.legend(loc='upper left')
+        ax2.legend(loc='upper right')
+                        
+    ax.set_xlabel(r'$z$ (m)')        
+    ax.set_ylabel(ylabel)    
+        
+    if return_figure:
+        return fig        
     
     

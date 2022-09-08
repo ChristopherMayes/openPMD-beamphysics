@@ -166,13 +166,28 @@ def write_superfish_t7(fm, filePath, fmt='%10.8e', verbose=False):
     Writes a Superfish T7 file. This is a simple wrapper for:
         write_fish_t7
         write_poisson_t7
-    If .is_statice, a Poisson file is written. Otherwise a Fish file is written.
+        
+    If .is_static, a Poisson file is written. Otherwise a Fish file is written.
+    
+    Parameters
+    ----------
+    filePath: str
+        File to write to
+        
+    fmt: str, default = %10.8e'
+        Format to write numbers
+    
+    Returns
+    -------
+    filePath: str
+        File written (same as input)
+    
     
     """
     if fm.is_static:
-        return write_poisson_t7(fm, filePath, verbose=verbose)
+        return write_poisson_t7(fm, filePath, fmt=fmt, verbose=verbose)
     else:
-        return write_fish_t7(fm, filePath, verbose=verbose)
+        return write_fish_t7(fm, filePath, fmt=fmt, verbose=verbose)
 
 
 
@@ -180,8 +195,8 @@ def write_superfish_t7(fm, filePath, fmt='%10.8e', verbose=False):
 # Parsers for ASCII T7
 
 
-def read_superfish_t7(t7file,
-                      type='electric',
+def read_superfish_t7(filename,
+                      type=None,
                       geometry='cylindrical'):
     """
     Parses a T7 file written by Posson/Superfish.
@@ -203,8 +218,8 @@ def read_superfish_t7(t7file,
 
     Parameters:
     ----------
-    t7file: str
-    
+    filename: str
+        T7 filename to read
     type: str, optional
         For Poisson files, required to be 'electric' or 'magnetic'. 
         Not used for Fish files
@@ -223,13 +238,14 @@ def read_superfish_t7(t7file,
     
     """
     
+    
     # ASCII parsing
     
     # Read header and data. 
     # zmin(cm), zmax(cm), nx-1
     # freq(MHz)
     # ymin(cm), ymax(cm), ny-1
-    with open(t7file, 'r') as f:
+    with open(filename, 'r') as f:
         line1 = f.readline().split()
         line2 = f.readline().split()
         # Read all lines and flatten the data. This accepts an old superfish format
@@ -264,7 +280,7 @@ def read_superfish_t7(t7file,
         rmin, rmax, nr =  float(line3[0])*1e-2, float(line3[1])*1e-2, int(line3[2])+1  
         
         # Read and reshape
-        # dat = np.loadtxt(t7file, skiprows=3)
+        # dat = np.loadtxt(filename, skiprows=3)
         #labels=['Ez', 'Er', 'E', 'Hphi']
         dat = dat.reshape(nr, 1, nz, 4)
         
@@ -292,6 +308,8 @@ def read_superfish_t7(t7file,
         elif type == 'magnetic':
             components['magneticField/r'] = dat[:,:,:,0].T*1e-4 # G -> T
             components['magneticField/z'] = dat[:,:,:,1].T*1e-4 # G -> T
+        else:
+            raise ValueError("Poisson problems must specify type as 'electric' or 'magnetic")
     
     
     dz = (zmax-zmin)/(nz-1)

@@ -2,7 +2,7 @@
 
 **`Documentation`** |
 ------------------- |
-[![Documentation](https://img.shields.io/badge/openPMD-beamphysics-documentation-blue.svg)](https://ChristopherMayes.github.io/openpmd-Beamphysics/index.html)  |
+[![Documentation](https://img.shields.io/badge/beamphysics-documentation-blue.svg)](https://ChristopherMayes.github.io/openpmd-Beamphysics/index.html)  |
 
 
 

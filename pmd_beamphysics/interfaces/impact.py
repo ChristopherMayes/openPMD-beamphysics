@@ -845,7 +845,7 @@ def create_impact_solrf_ele(field_mesh,
      'y_offset': y_offset,
      'x_rotation': 0.0,
      'y_rotation': 0.0,
-     'z_rotation': 0.0,
+     'z_rotation': 0.0, # This is tilt, but shouldn't affect anything because of the cylindrical symmetry.
      'solenoid_field_scale': bscale,
      'name': name,
      's': s, 

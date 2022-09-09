@@ -386,7 +386,7 @@ def nice_array(a):
 # Units for ParticleGroup
 
 PARTICLEGROUP_UNITS = {}
-for k in ['n_particle', 'status']:
+for k in ['n_particle', 'status', 'id', 'n_alive', 'n_dead']:
     PARTICLEGROUP_UNITS[k] = unit('1')
 for k in ['t']:
     PARTICLEGROUP_UNITS[k] = unit('s')
@@ -417,6 +417,7 @@ for k in ['x_bar', 'px_bar', 'y_bar', 'py_bar']:
 for component in ['', 'x', 'y', 'z', 'theta', 'r']:
     PARTICLEGROUP_UNITS[f'E{component}'] = unit('V/m')
     PARTICLEGROUP_UNITS[f'B{component}'] = unit('T')    
+    
 
     
 

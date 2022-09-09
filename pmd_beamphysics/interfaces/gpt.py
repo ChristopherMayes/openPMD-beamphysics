@@ -25,7 +25,7 @@ def write_gpt(particle_group,
 
     assert particle_group.species == 'electron' # TODO: add more species
     
-    assert np.all(particle_group.weight >= 0), 'ParticleGroup.weight must be > 0'
+    assert np.all(particle_group.weight >= 0), 'ParticleGroup.weight must be >= 0'
     
     q = -e_charge
     

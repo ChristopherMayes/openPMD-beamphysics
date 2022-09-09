@@ -1812,7 +1812,7 @@ P</div>
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>&lt;ParticleGroup with 100000 particles at 0x7fd8a07ba820&gt;</pre>
+<pre>&lt;ParticleGroup with 100000 particles at 0x7fe70cb2a3a0&gt;</pre>
 </div>
 
 </div>
@@ -1984,7 +1984,7 @@ P</div>
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>&lt;ParticleGroup with 50082 particles at 0x7fd86cf0edc0&gt;</pre>
+<pre>&lt;ParticleGroup with 50082 particles at 0x7fe70cb195b0&gt;</pre>
 </div>
 
 </div>
@@ -2123,8 +2123,8 @@ class="
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2144,14 +2144,42 @@ class="
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="err">?</span><span class="n">P</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># x positions, in meters</span>
+<span class="n">P</span><span class="o">.</span><span class="n">x</span>
 </pre></div>
-<div id="cell-9" class="clipboard-copy-txt">?P</div>
+<div id="cell-9" class="clipboard-copy-txt"># x positions, in meters
+P.x</div>
     
         </div>
     </div>
 
 </div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[9]:</div>
+
+
+
+
+<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
+<pre>array([-1.20890504e-05,  2.50055966e-05,  1.84022924e-06, ...,
+       -1.87135206e-06,  1.19494768e-06, -1.04551798e-05])</pre>
+</div>
+
+</div>
+
+</div>
+
 </div>
 
 </div>
@@ -2176,11 +2204,11 @@ class="
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># x positions, in meters</span>
-<span class="n">P</span><span class="o">.</span><span class="n">x</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># relativistic gamma, calculated on the fly</span>
+<span class="n">P</span><span class="o">.</span><span class="n">gamma</span>
 </pre></div>
-<div id="cell-10" class="clipboard-copy-txt"># x positions, in meters
-P.x</div>
+<div id="cell-10" class="clipboard-copy-txt"># relativistic gamma, calculated on the fly
+P.gamma</div>
     
         </div>
     </div>
@@ -2204,8 +2232,8 @@ P.x</div>
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>array([-1.20890504e-05,  2.50055966e-05,  1.84022924e-06, ...,
-       -1.87135206e-06,  1.19494768e-06, -1.04551798e-05])</pre>
+<pre>array([15656.25362205, 15604.88772858, 15603.52416601, ...,
+       15607.30607107, 15600.10233296, 15600.23563914])</pre>
 </div>
 
 </div>
@@ -2236,70 +2264,10 @@ P.x</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># relativistic gamma, calculated on the fly</span>
-<span class="n">P</span><span class="o">.</span><span class="n">gamma</span>
-</pre></div>
-<div id="cell-11" class="clipboard-copy-txt"># relativistic gamma, calculated on the fly
-P.gamma</div>
-    
-        </div>
-    </div>
-
-</div>
-</div>
-
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
-</div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[11]:</div>
-
-
-
-
-<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>array([15656.25362205, 15604.88772858, 15603.52416601, ...,
-       15607.30607107, 15600.10233296, 15600.23563914])</pre>
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell-inputWrapper">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
-</div>
-<div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[12]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
-        
-        
-        <div class="CodeMirror cm-s-jupyter">
-        <div class="zeroclipboard-container">
-            <clipboard-copy for="cell-12">
-            <div>
-                <span class="notice" hidden>Copied!</span>
-                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
-                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
-                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
-                </svg>
-                </div>
-            </clipboard-copy>
-        </div>
             <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Both are allowed</span>
 <span class="nb">len</span><span class="p">(</span><span class="n">P</span><span class="p">),</span> <span class="n">P</span><span class="p">[</span><span class="s1">&#39;n_particle&#39;</span><span class="p">]</span>
 </pre></div>
-<div id="cell-12" class="clipboard-copy-txt"># Both are allowed
+<div id="cell-11" class="clipboard-copy-txt"># Both are allowed
 len(P), P['n_particle']</div>
     
         </div>
@@ -2318,7 +2286,7 @@ len(P), P['n_particle']</div>
 <div class="jp-OutputArea-child">
 
     
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[12]:</div>
+    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[11]:</div>
 
 
 
@@ -2351,6 +2319,65 @@ len(P), P['n_particle']</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[12]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+        
+        
+        <div class="CodeMirror cm-s-jupyter">
+        <div class="zeroclipboard-container">
+            <clipboard-copy for="cell-12">
+            <div>
+                <span class="notice" hidden>Copied!</span>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
+                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
+                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
+                </svg>
+                </div>
+            </clipboard-copy>
+        </div>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Statistics on any of these. Note that these properly use the .weight array. </span>
+<span class="n">P</span><span class="o">.</span><span class="n">avg</span><span class="p">(</span><span class="s1">&#39;gamma&#39;</span><span class="p">),</span> <span class="n">P</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="s1">&#39;p&#39;</span><span class="p">)</span>
+</pre></div>
+<div id="cell-12" class="clipboard-copy-txt"># Statistics on any of these. Note that these properly use the .weight array. 
+P.avg('gamma'), P.std('p')</div>
+    
+        </div>
+    </div>
+
+</div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[12]:</div>
+
+
+
+
+<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
+<pre>(15606.56770446094, 7440511.955100455)</pre>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
 <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[13]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
@@ -2366,11 +2393,11 @@ len(P), P['n_particle']</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Statistics on any of these. Note that these properly use the .weight array. </span>
-<span class="n">P</span><span class="o">.</span><span class="n">avg</span><span class="p">(</span><span class="s1">&#39;gamma&#39;</span><span class="p">),</span> <span class="n">P</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="s1">&#39;p&#39;</span><span class="p">)</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Covariance matrix of any list of keys</span>
+<span class="n">P</span><span class="o">.</span><span class="n">cov</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="s1">&#39;px&#39;</span><span class="p">,</span> <span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;kinetic_energy&#39;</span><span class="p">)</span>
 </pre></div>
-<div id="cell-13" class="clipboard-copy-txt"># Statistics on any of these. Note that these properly use the .weight array. 
-P.avg('gamma'), P.std('p')</div>
+<div id="cell-13" class="clipboard-copy-txt"># Covariance matrix of any list of keys
+P.cov('x', 'px', 'y', 'kinetic_energy')</div>
     
         </div>
     </div>
@@ -2394,7 +2421,14 @@ P.avg('gamma'), P.std('p')</div>
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>(15606.56770446094, 7440511.955100455)</pre>
+<pre>array([[ 3.05290090e-10,  1.93582323e-01,  2.14462846e-12,
+        -3.94841065e+00],
+       [ 1.93582323e-01,  3.26525376e+08, -2.44058325e-05,
+        -5.36815277e+08],
+       [ 2.14462846e-12, -2.44058325e-05,  4.71979014e-10,
+        -8.48100957e-01],
+       [-3.94841065e+00, -5.36815277e+08, -8.48100957e-01,
+         5.53617715e+13]])</pre>
 </div>
 
 </div>
@@ -2425,11 +2459,11 @@ P.avg('gamma'), P.std('p')</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Covariance matrix of any list of keys</span>
-<span class="n">P</span><span class="o">.</span><span class="n">cov</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="s1">&#39;px&#39;</span><span class="p">,</span> <span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;kinetic_energy&#39;</span><span class="p">)</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># These can all be accessed with brackets. sigma_ and mean_ are also allowed</span>
+<span class="n">P</span><span class="p">[</span><span class="s1">&#39;sigma_x&#39;</span><span class="p">],</span> <span class="n">P</span><span class="p">[</span><span class="s1">&#39;sigma_energy&#39;</span><span class="p">],</span> <span class="n">P</span><span class="p">[</span><span class="s1">&#39;min_y&#39;</span><span class="p">],</span> <span class="n">P</span><span class="p">[</span><span class="s1">&#39;norm_emit_x&#39;</span><span class="p">],</span> <span class="n">P</span><span class="p">[</span><span class="s1">&#39;norm_emit_4d&#39;</span><span class="p">]</span>
 </pre></div>
-<div id="cell-14" class="clipboard-copy-txt"># Covariance matrix of any list of keys
-P.cov('x', 'px', 'y', 'kinetic_energy')</div>
+<div id="cell-14" class="clipboard-copy-txt"># These can all be accessed with brackets. sigma_ and mean_ are also allowed
+P['sigma_x'], P['sigma_energy'], P['min_y'], P['norm_emit_x'], P['norm_emit_4d']</div>
     
         </div>
     </div>
@@ -2453,14 +2487,11 @@ P.cov('x', 'px', 'y', 'kinetic_energy')</div>
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>array([[ 3.05290090e-10,  1.93582323e-01,  2.14462846e-12,
-        -3.94841065e+00],
-       [ 1.93582323e-01,  3.26525376e+08, -2.44058325e-05,
-        -5.36815277e+08],
-       [ 2.14462846e-12, -2.44058325e-05,  4.71979014e-10,
-        -8.48100957e-01],
-       [-3.94841065e+00, -5.36815277e+08, -8.48100957e-01,
-         5.53617715e+13]])</pre>
+<pre>(1.7472465109340715e-05,
+ 7440511.939853717,
+ -0.00017677380499644412,
+ 4.881047612307434e-07,
+ 2.4484888474798633e-13)</pre>
 </div>
 
 </div>
@@ -2491,11 +2522,11 @@ P.cov('x', 'px', 'y', 'kinetic_energy')</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># These can all be accessed with brackets. sigma_ and mean_ are also allowed</span>
-<span class="n">P</span><span class="p">[</span><span class="s1">&#39;sigma_x&#39;</span><span class="p">],</span> <span class="n">P</span><span class="p">[</span><span class="s1">&#39;sigma_energy&#39;</span><span class="p">],</span> <span class="n">P</span><span class="p">[</span><span class="s1">&#39;min_y&#39;</span><span class="p">],</span> <span class="n">P</span><span class="p">[</span><span class="s1">&#39;norm_emit_x&#39;</span><span class="p">],</span> <span class="n">P</span><span class="p">[</span><span class="s1">&#39;norm_emit_4d&#39;</span><span class="p">]</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Covariance has a special syntax, items separated by __</span>
+<span class="n">P</span><span class="p">[</span><span class="s1">&#39;cov_x__kinetic_energy&#39;</span><span class="p">]</span>
 </pre></div>
-<div id="cell-15" class="clipboard-copy-txt"># These can all be accessed with brackets. sigma_ and mean_ are also allowed
-P['sigma_x'], P['sigma_energy'], P['min_y'], P['norm_emit_x'], P['norm_emit_4d']</div>
+<div id="cell-15" class="clipboard-copy-txt"># Covariance has a special syntax, items separated by __
+P['cov_x__kinetic_energy']</div>
     
         </div>
     </div>
@@ -2519,11 +2550,7 @@ P['sigma_x'], P['sigma_energy'], P['min_y'], P['norm_emit_x'], P['norm_emit_4d']
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>(1.7472465109340715e-05,
- 7440511.939853717,
- -0.00017677380499644412,
- 4.881047612307446e-07,
- 2.448488847479867e-13)</pre>
+<pre>-3.9484106461190627</pre>
 </div>
 
 </div>
@@ -2554,70 +2581,11 @@ P['sigma_x'], P['sigma_energy'], P['min_y'], P['norm_emit_x'], P['norm_emit_4d']
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Covariance has a special syntax, items separated by __</span>
-<span class="n">P</span><span class="p">[</span><span class="s1">&#39;cov_x__kinetic_energy&#39;</span><span class="p">]</span>
-</pre></div>
-<div id="cell-16" class="clipboard-copy-txt"># Covariance has a special syntax, items separated by __
-P['cov_x__kinetic_energy']</div>
-    
-        </div>
-    </div>
-
-</div>
-</div>
-
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
-</div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[16]:</div>
-
-
-
-
-<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>-3.9484106461190676</pre>
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell-inputWrapper">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
-</div>
-<div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[17]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
-        
-        
-        <div class="CodeMirror cm-s-jupyter">
-        <div class="zeroclipboard-container">
-            <clipboard-copy for="cell-17">
-            <div>
-                <span class="notice" hidden>Copied!</span>
-                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
-                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
-                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
-                </svg>
-                </div>
-            </clipboard-copy>
-        </div>
             <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># n-dimensional histogram. This is a wrapper for numpy.histogramdd</span>
 <span class="n">H</span><span class="p">,</span> <span class="n">edges</span> <span class="o">=</span> <span class="n">P</span><span class="o">.</span><span class="n">histogramdd</span><span class="p">(</span><span class="s1">&#39;t&#39;</span><span class="p">,</span> <span class="s1">&#39;delta_pz&#39;</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="mi">10</span><span class="p">))</span>
 <span class="n">H</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">edges</span>
 </pre></div>
-<div id="cell-17" class="clipboard-copy-txt"># n-dimensional histogram. This is a wrapper for numpy.histogramdd
+<div id="cell-16" class="clipboard-copy-txt"># n-dimensional histogram. This is a wrapper for numpy.histogramdd
 H, edges = P.histogramdd('t', 'delta_pz', bins=(5,10))
 H.shape, edges</div>
     
@@ -2637,7 +2605,7 @@ H.shape, edges</div>
 <div class="jp-OutputArea-child">
 
     
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[17]:</div>
+    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[16]:</div>
 
 
 
@@ -2679,6 +2647,69 @@ H.shape, edges</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[17]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+        
+        
+        <div class="CodeMirror cm-s-jupyter">
+        <div class="zeroclipboard-container">
+            <clipboard-copy for="cell-17">
+            <div>
+                <span class="notice" hidden>Copied!</span>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
+                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
+                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
+                </svg>
+                </div>
+            </clipboard-copy>
+        </div>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">twiss</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">)</span>
+</pre></div>
+<div id="cell-17" class="clipboard-copy-txt">P.twiss('x')</div>
+    
+        </div>
+    </div>
+
+</div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[17]:</div>
+
+
+
+
+<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
+<pre>{&#39;alpha_x&#39;: -0.7764646310859605,
+ &#39;beta_x&#39;: 9.758458404204259,
+ &#39;gamma_x&#39;: 0.16425722762079686,
+ &#39;emit_x&#39;: 3.1255806600595395e-11,
+ &#39;eta_x&#39;: -0.0005687740085942673,
+ &#39;etap_x&#39;: -9.69649743612097e-06,
+ &#39;norm_emit_x&#39;: 4.877958608683612e-07}</pre>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
 <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[18]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
@@ -2694,9 +2725,11 @@ H.shape, edges</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">twiss</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">)</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># 95% calc, x and y</span>
+<span class="n">P</span><span class="o">.</span><span class="n">twiss</span><span class="p">(</span><span class="s1">&#39;xy&#39;</span><span class="p">,</span> <span class="n">fraction</span><span class="o">=</span><span class="mf">0.95</span><span class="p">)</span>
 </pre></div>
-<div id="cell-18" class="clipboard-copy-txt">P.twiss('x')</div>
+<div id="cell-18" class="clipboard-copy-txt"># 95% calc, x and y
+P.twiss('xy', fraction=0.95)</div>
     
         </div>
     </div>
@@ -2720,13 +2753,20 @@ H.shape, edges</div>
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>{&#39;alpha_x&#39;: -0.7764646310859602,
- &#39;beta_x&#39;: 9.758458404204257,
- &#39;gamma_x&#39;: 0.1642572276207968,
- &#39;emit_x&#39;: 3.1255806600595395e-11,
- &#39;eta_x&#39;: -0.0005687740085942667,
- &#39;etap_x&#39;: -9.696497436120962e-06,
- &#39;norm_emit_x&#39;: 4.877958608683612e-07}</pre>
+<pre>{&#39;alpha_x&#39;: -0.765323995145385,
+ &#39;beta_x&#39;: 9.233496626510156,
+ &#39;gamma_x&#39;: 0.1717356795249758,
+ &#39;emit_x&#39;: 2.3954681527227138e-11,
+ &#39;eta_x&#39;: -0.0004717155629444416,
+ &#39;etap_x&#39;: -1.6006449526750024e-05,
+ &#39;norm_emit_x&#39;: 3.738408555668476e-07,
+ &#39;alpha_y&#39;: 0.9776071851091841,
+ &#39;beta_y&#39;: 14.39339077533324,
+ &#39;gamma_y&#39;: 0.13587596132863441,
+ &#39;emit_y&#39;: 2.342927040318514e-11,
+ &#39;eta_y&#39;: -4.3316354305934096e-05,
+ &#39;etap_y&#39;: -6.000905618300805e-07,
+ &#39;norm_emit_y&#39;: 3.656364435837357e-07}</pre>
 </div>
 
 </div>
@@ -2757,11 +2797,13 @@ H.shape, edges</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># 95% calc, x and y</span>
-<span class="n">P</span><span class="o">.</span><span class="n">twiss</span><span class="p">(</span><span class="s1">&#39;xy&#39;</span><span class="p">,</span> <span class="n">fraction</span><span class="o">=</span><span class="mf">0.95</span><span class="p">)</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># New particles </span>
+<span class="n">P2</span> <span class="o">=</span> <span class="n">P</span><span class="o">.</span><span class="n">twiss_match</span><span class="p">(</span><span class="n">beta</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=-</span><span class="mi">3</span><span class="p">,</span> <span class="n">plane</span> <span class="o">=</span> <span class="s1">&#39;x&#39;</span><span class="p">)</span>
+<span class="n">P2</span><span class="o">.</span><span class="n">twiss</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">)</span>
 </pre></div>
-<div id="cell-19" class="clipboard-copy-txt"># 95% calc, x and y
-P.twiss('xy', fraction=0.95)</div>
+<div id="cell-19" class="clipboard-copy-txt"># New particles 
+P2 = P.twiss_match(beta=30, alpha=-3, plane = 'x')
+P2.twiss('x')</div>
     
         </div>
     </div>
@@ -2785,87 +2827,13 @@ P.twiss('xy', fraction=0.95)</div>
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>{&#39;alpha_x&#39;: -0.7653239951453856,
- &#39;beta_x&#39;: 9.233496626510156,
- &#39;gamma_x&#39;: 0.1717356795249759,
- &#39;emit_x&#39;: 2.395468152722713e-11,
- &#39;eta_x&#39;: -0.00047171556294444176,
- &#39;etap_x&#39;: -1.600644952675002e-05,
- &#39;norm_emit_x&#39;: 3.738408555668475e-07,
- &#39;alpha_y&#39;: 0.9776071851091847,
- &#39;beta_y&#39;: 14.393390775333238,
- &#39;gamma_y&#39;: 0.13587596132863447,
- &#39;emit_y&#39;: 2.3429270403185113e-11,
- &#39;eta_y&#39;: -4.331635430593399e-05,
- &#39;etap_y&#39;: -6.000905618300888e-07,
- &#39;norm_emit_y&#39;: 3.656364435837353e-07}</pre>
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell-inputWrapper">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
-</div>
-<div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[20]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
-        
-        
-        <div class="CodeMirror cm-s-jupyter">
-        <div class="zeroclipboard-container">
-            <clipboard-copy for="cell-20">
-            <div>
-                <span class="notice" hidden>Copied!</span>
-                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
-                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
-                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
-                </svg>
-                </div>
-            </clipboard-copy>
-        </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># New particles </span>
-<span class="n">P2</span> <span class="o">=</span> <span class="n">P</span><span class="o">.</span><span class="n">twiss_match</span><span class="p">(</span><span class="n">beta</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=-</span><span class="mi">3</span><span class="p">,</span> <span class="n">plane</span> <span class="o">=</span> <span class="s1">&#39;x&#39;</span><span class="p">)</span>
-<span class="n">P2</span><span class="o">.</span><span class="n">twiss</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">)</span>
-</pre></div>
-<div id="cell-20" class="clipboard-copy-txt"># New particles 
-P2 = P.twiss_match(beta=30, alpha=-3, plane = 'x')
-P2.twiss('x')</div>
-    
-        </div>
-    </div>
-
-</div>
-</div>
-
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
-</div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[20]:</div>
-
-
-
-
-<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>{&#39;alpha_x&#39;: -2.999693564462187,
- &#39;beta_x&#39;: 29.99130803172264,
- &#39;gamma_x&#39;: 0.33336863700978053,
- &#39;emit_x&#39;: 3.125580660116352e-11,
- &#39;eta_x&#39;: -0.0009971186239124696,
- &#39;etap_x&#39;: -7.944656701598257e-05,
- &#39;norm_emit_x&#39;: 4.877958608785189e-07}</pre>
+<pre>{&#39;alpha_x&#39;: -2.9996935644621994,
+ &#39;beta_x&#39;: 29.99130803172276,
+ &#39;gamma_x&#39;: 0.3333686370097817,
+ &#39;emit_x&#39;: 3.1255806601163326e-11,
+ &#39;eta_x&#39;: -0.000997118623912468,
+ &#39;etap_x&#39;: -7.944656701598246e-05,
+ &#39;norm_emit_x&#39;: 4.877958608785158e-07}</pre>
 </div>
 
 </div>
@@ -2892,6 +2860,71 @@ P2.twiss('x')</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[20]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+        
+        
+        <div class="CodeMirror cm-s-jupyter">
+        <div class="zeroclipboard-container">
+            <clipboard-copy for="cell-20">
+            <div>
+                <span class="notice" hidden>Copied!</span>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
+                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
+                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
+                </svg>
+                </div>
+            </clipboard-copy>
+        </div>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Units can be retrieved from any computable quantitiy.</span>
+<span class="c1"># These are returned as a pmd_unit type.</span>
+<span class="n">P</span><span class="o">.</span><span class="n">units</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">),</span> <span class="n">P</span><span class="o">.</span><span class="n">units</span><span class="p">(</span><span class="s1">&#39;energy&#39;</span><span class="p">),</span> <span class="n">P</span><span class="o">.</span><span class="n">units</span><span class="p">(</span><span class="s1">&#39;norm_emit_x&#39;</span><span class="p">),</span> <span class="n">P</span><span class="o">.</span><span class="n">units</span><span class="p">(</span><span class="s1">&#39;cov_x__kinetic_energy&#39;</span><span class="p">),</span> <span class="n">P</span><span class="o">.</span><span class="n">units</span><span class="p">(</span><span class="s1">&#39;norm_emit_4d&#39;</span><span class="p">)</span>
+</pre></div>
+<div id="cell-20" class="clipboard-copy-txt"># Units can be retrieved from any computable quantitiy.
+# These are returned as a pmd_unit type.
+P.units('x'), P.units('energy'), P.units('norm_emit_x'), P.units('cov_x__kinetic_energy'), P.units('norm_emit_4d')</div>
+    
+        </div>
+    </div>
+
+</div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[20]:</div>
+
+
+
+
+<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
+<pre>(pmd_unit(&#39;m&#39;, 1, (1, 0, 0, 0, 0, 0, 0)),
+ pmd_unit(&#39;eV&#39;, 1.602176634e-19, (2, 1, -2, 0, 0, 0, 0)),
+ pmd_unit(&#39;m&#39;, 1, (1, 0, 0, 0, 0, 0, 0)),
+ pmd_unit(&#39;m*eV&#39;, 1.602176634e-19, (3, 1, -2, 0, 0, 0, 0)),
+ pmd_unit(&#39;(m)^2&#39;, 1, (2, 0, 0, 0, 0, 0, 0)))</pre>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
 <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[21]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
@@ -2907,13 +2940,9 @@ P2.twiss('x')</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Units can be retrieved from any computable quantitiy.</span>
-<span class="c1"># These are returned as a pmd_unit type.</span>
-<span class="n">P</span><span class="o">.</span><span class="n">units</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">),</span> <span class="n">P</span><span class="o">.</span><span class="n">units</span><span class="p">(</span><span class="s1">&#39;energy&#39;</span><span class="p">),</span> <span class="n">P</span><span class="o">.</span><span class="n">units</span><span class="p">(</span><span class="s1">&#39;norm_emit_x&#39;</span><span class="p">),</span> <span class="n">P</span><span class="o">.</span><span class="n">units</span><span class="p">(</span><span class="s1">&#39;cov_x__kinetic_energy&#39;</span><span class="p">),</span> <span class="n">P</span><span class="o">.</span><span class="n">units</span><span class="p">(</span><span class="s1">&#39;norm_emit_4d&#39;</span><span class="p">)</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">units</span><span class="p">(</span><span class="s1">&#39;mean_energy&#39;</span><span class="p">)</span>
 </pre></div>
-<div id="cell-21" class="clipboard-copy-txt"># Units can be retrieved from any computable quantitiy.
-# These are returned as a pmd_unit type.
-P.units('x'), P.units('energy'), P.units('norm_emit_x'), P.units('cov_x__kinetic_energy'), P.units('norm_emit_4d')</div>
+<div id="cell-21" class="clipboard-copy-txt">P.units('mean_energy')</div>
     
         </div>
     </div>
@@ -2937,11 +2966,7 @@ P.units('x'), P.units('energy'), P.units('norm_emit_x'), P.units('cov_x__kinetic
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>(pmd_unit(&#39;m&#39;, 1, (1, 0, 0, 0, 0, 0, 0)),
- pmd_unit(&#39;eV&#39;, 1.602176634e-19, (2, 1, -2, 0, 0, 0, 0)),
- pmd_unit(&#39;m&#39;, 1, (1, 0, 0, 0, 0, 0, 0)),
- pmd_unit(&#39;m*eV&#39;, 1.602176634e-19, (3, 1, -2, 0, 0, 0, 0)),
- pmd_unit(&#39;(m)^2&#39;, 1, (2, 0, 0, 0, 0, 0, 0)))</pre>
+<pre>pmd_unit(&#39;eV&#39;, 1.602176634e-19, (2, 1, -2, 0, 0, 0, 0))</pre>
 </div>
 
 </div>
@@ -2972,67 +2997,10 @@ P.units('x'), P.units('energy'), P.units('norm_emit_x'), P.units('cov_x__kinetic
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">units</span><span class="p">(</span><span class="s1">&#39;mean_energy&#39;</span><span class="p">)</span>
-</pre></div>
-<div id="cell-22" class="clipboard-copy-txt">P.units('mean_energy')</div>
-    
-        </div>
-    </div>
-
-</div>
-</div>
-
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
-</div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[22]:</div>
-
-
-
-
-<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>pmd_unit(&#39;eV&#39;, 1.602176634e-19, (2, 1, -2, 0, 0, 0, 0))</pre>
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell-inputWrapper">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
-</div>
-<div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[23]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
-        
-        
-        <div class="CodeMirror cm-s-jupyter">
-        <div class="zeroclipboard-container">
-            <clipboard-copy for="cell-23">
-            <div>
-                <span class="notice" hidden>Copied!</span>
-                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
-                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
-                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
-                </svg>
-                </div>
-            </clipboard-copy>
-        </div>
             <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># </span>
 <span class="nb">str</span><span class="p">(</span><span class="n">P</span><span class="o">.</span><span class="n">units</span><span class="p">(</span><span class="s1">&#39;cov_x__kinetic_energy&#39;</span><span class="p">))</span>
 </pre></div>
-<div id="cell-23" class="clipboard-copy-txt"># 
+<div id="cell-22" class="clipboard-copy-txt"># 
 str(P.units('cov_x__kinetic_energy'))</div>
     
         </div>
@@ -3051,7 +3019,7 @@ str(P.units('cov_x__kinetic_energy'))</div>
 <div class="jp-OutputArea-child">
 
     
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[23]:</div>
+    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[22]:</div>
 
 
 
@@ -3084,6 +3052,65 @@ str(P.units('cov_x__kinetic_energy'))</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[23]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+        
+        
+        <div class="CodeMirror cm-s-jupyter">
+        <div class="zeroclipboard-container">
+            <clipboard-copy for="cell-23">
+            <div>
+                <span class="notice" hidden>Copied!</span>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
+                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
+                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
+                </svg>
+                </div>
+            </clipboard-copy>
+        </div>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># These particles are from Bmad, at the same z and different times</span>
+<span class="n">P</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="s1">&#39;z&#39;</span><span class="p">),</span> <span class="n">P</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="s1">&#39;t&#39;</span><span class="p">)</span>
+</pre></div>
+<div id="cell-23" class="clipboard-copy-txt"># These particles are from Bmad, at the same z and different times
+P.std('z'), P.std('t')</div>
+    
+        </div>
+    </div>
+
+</div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[23]:</div>
+
+
+
+
+<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
+<pre>(0.0, 2.4466662184814374e-14)</pre>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
 <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[24]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
@@ -3099,11 +3126,13 @@ str(P.units('cov_x__kinetic_energy'))</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># These particles are from Bmad, at the same z and different times</span>
-<span class="n">P</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="s1">&#39;z&#39;</span><span class="p">),</span> <span class="n">P</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="s1">&#39;t&#39;</span><span class="p">)</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Get the central time</span>
+<span class="n">t0</span> <span class="o">=</span> <span class="n">P</span><span class="o">.</span><span class="n">avg</span><span class="p">(</span><span class="s1">&#39;t&#39;</span><span class="p">)</span>
+<span class="n">t0</span>
 </pre></div>
-<div id="cell-24" class="clipboard-copy-txt"># These particles are from Bmad, at the same z and different times
-P.std('z'), P.std('t')</div>
+<div id="cell-24" class="clipboard-copy-txt"># Get the central time
+t0 = P.avg('t')
+t0</div>
     
         </div>
     </div>
@@ -3127,7 +3156,7 @@ P.std('z'), P.std('t')</div>
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>(0.0, 2.4466662184814374e-14)</pre>
+<pre>5.163879459127423e-06</pre>
 </div>
 
 </div>
@@ -3137,8 +3166,8 @@ P.std('z'), P.std('t')</div>
 </div>
 
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3158,13 +3187,11 @@ P.std('z'), P.std('t')</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Get the central time</span>
-<span class="n">t0</span> <span class="o">=</span> <span class="n">P</span><span class="o">.</span><span class="n">avg</span><span class="p">(</span><span class="s1">&#39;t&#39;</span><span class="p">)</span>
-<span class="n">t0</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Drift all particles to this time</span>
+<span class="n">P</span><span class="o">.</span><span class="n">drift_to_t</span><span class="p">(</span><span class="n">t0</span><span class="p">)</span>
 </pre></div>
-<div id="cell-25" class="clipboard-copy-txt"># Get the central time
-t0 = P.avg('t')
-t0</div>
+<div id="cell-25" class="clipboard-copy-txt"># Drift all particles to this time
+P.drift_to_t(t0)</div>
     
         </div>
     </div>
@@ -3172,34 +3199,9 @@ t0</div>
 </div>
 </div>
 
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[25]:</div>
-
-
-
-
-<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>5.163879459127423e-06</pre>
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3219,44 +3221,10 @@ t0</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Drift all particles to this time</span>
-<span class="n">P</span><span class="o">.</span><span class="n">drift_to_t</span><span class="p">(</span><span class="n">t0</span><span class="p">)</span>
-</pre></div>
-<div id="cell-26" class="clipboard-copy-txt"># Drift all particles to this time
-P.drift_to_t(t0)</div>
-    
-        </div>
-    </div>
-
-</div>
-</div>
-
-</div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell-inputWrapper">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
-</div>
-<div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[27]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
-        
-        
-        <div class="CodeMirror cm-s-jupyter">
-        <div class="zeroclipboard-container">
-            <clipboard-copy for="cell-27">
-            <div>
-                <span class="notice" hidden>Copied!</span>
-                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
-                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
-                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
-                </svg>
-                </div>
-            </clipboard-copy>
-        </div>
             <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Now these are at different z, and the same t</span>
 <span class="n">P</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="s1">&#39;z&#39;</span><span class="p">),</span> <span class="n">P</span><span class="o">.</span><span class="n">avg</span><span class="p">(</span><span class="s1">&#39;t&#39;</span><span class="p">),</span> <span class="nb">set</span><span class="p">(</span><span class="n">P</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
 </pre></div>
-<div id="cell-27" class="clipboard-copy-txt"># Now these are at different z, and the same t
+<div id="cell-26" class="clipboard-copy-txt"># Now these are at different z, and the same t
 P.std('z'), P.avg('t'), set(P.t)</div>
     
         </div>
@@ -3275,7 +3243,7 @@ P.std('z'), P.avg('t'), set(P.t)</div>
 <div class="jp-OutputArea-child">
 
     
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[27]:</div>
+    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[26]:</div>
 
 
 
@@ -3308,6 +3276,69 @@ P.std('z'), P.avg('t'), set(P.t)</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[27]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+        
+        
+        <div class="CodeMirror cm-s-jupyter">
+        <div class="zeroclipboard-container">
+            <clipboard-copy for="cell-27">
+            <div>
+                <span class="notice" hidden>Copied!</span>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
+                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
+                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
+                </svg>
+                </div>
+            </clipboard-copy>
+        </div>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Status == 1 is alive, otherwise dead. Set the first ten particles to a different status.</span>
+<span class="c1"># n_alive, n_dead count these</span>
+<span class="n">P</span><span class="o">.</span><span class="n">status</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">10</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">P</span><span class="o">.</span><span class="n">status</span><span class="p">,</span> <span class="n">P</span><span class="o">.</span><span class="n">n_alive</span><span class="p">,</span> <span class="n">P</span><span class="o">.</span><span class="n">n_dead</span>
+</pre></div>
+<div id="cell-27" class="clipboard-copy-txt"># Status == 1 is alive, otherwise dead. Set the first ten particles to a different status.
+# n_alive, n_dead count these
+P.status[0:10] = 0
+P.status, P.n_alive, P.n_dead</div>
+    
+        </div>
+    </div>
+
+</div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[27]:</div>
+
+
+
+
+<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
+<pre>(array([0, 0, 0, ..., 1, 1, 1], dtype=int32), 99990, 10)</pre>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
 <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[28]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
@@ -3323,15 +3354,15 @@ P.std('z'), P.avg('t'), set(P.t)</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Status == 1 is alive, otherwise dead. Set the first ten particles to a different status.</span>
-<span class="c1"># n_alive, n_dead count these</span>
-<span class="n">P</span><span class="o">.</span><span class="n">status</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">10</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
-<span class="n">P</span><span class="o">.</span><span class="n">status</span><span class="p">,</span> <span class="n">P</span><span class="o">.</span><span class="n">n_alive</span><span class="p">,</span> <span class="n">P</span><span class="o">.</span><span class="n">n_dead</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Convenience routine</span>
+<span class="n">P0</span> <span class="o">=</span> <span class="n">P</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">P</span><span class="o">.</span><span class="n">status</span><span class="o">==</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">P1</span> <span class="o">=</span> <span class="n">P</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">P</span><span class="o">.</span><span class="n">status</span><span class="o">==</span><span class="mi">1</span><span class="p">)</span>
+<span class="nb">len</span><span class="p">(</span><span class="n">P0</span><span class="p">),</span> <span class="n">P0</span><span class="o">.</span><span class="n">charge</span><span class="p">,</span> <span class="n">P1</span><span class="o">.</span><span class="n">charge</span>
 </pre></div>
-<div id="cell-28" class="clipboard-copy-txt"># Status == 1 is alive, otherwise dead. Set the first ten particles to a different status.
-# n_alive, n_dead count these
-P.status[0:10] = 0
-P.status, P.n_alive, P.n_dead</div>
+<div id="cell-28" class="clipboard-copy-txt"># Convenience routine
+P0 = P.where(P.status==0)
+P1 = P.where(P.status==1)
+len(P0), P0.charge, P1.charge</div>
     
         </div>
     </div>
@@ -3355,7 +3386,7 @@ P.status, P.n_alive, P.n_dead</div>
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>(array([0, 0, 0, ..., 1, 1, 1], dtype=int32), 99990, 10)</pre>
+<pre>(10, 2.4999999999999994e-14, 2.4997499999999996e-10)</pre>
 </div>
 
 </div>
@@ -3365,8 +3396,8 @@ P.status, P.n_alive, P.n_dead</div>
 </div>
 
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3386,15 +3417,11 @@ P.status, P.n_alive, P.n_dead</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Convenience routine</span>
-<span class="n">P0</span> <span class="o">=</span> <span class="n">P</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">P</span><span class="o">.</span><span class="n">status</span><span class="o">==</span><span class="mi">0</span><span class="p">)</span>
-<span class="n">P1</span> <span class="o">=</span> <span class="n">P</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">P</span><span class="o">.</span><span class="n">status</span><span class="o">==</span><span class="mi">1</span><span class="p">)</span>
-<span class="nb">len</span><span class="p">(</span><span class="n">P0</span><span class="p">),</span> <span class="n">P0</span><span class="o">.</span><span class="n">charge</span><span class="p">,</span> <span class="n">P1</span><span class="o">.</span><span class="n">charge</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Copy is a deep copy</span>
+<span class="n">P2</span> <span class="o">=</span> <span class="n">P1</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
 </pre></div>
-<div id="cell-29" class="clipboard-copy-txt"># Convenience routine
-P0 = P.where(P.status==0)
-P1 = P.where(P.status==1)
-len(P0), P0.charge, P1.charge</div>
+<div id="cell-29" class="clipboard-copy-txt"># Copy is a deep copy
+P2 = P1.copy()</div>
     
         </div>
     </div>
@@ -3402,34 +3429,9 @@ len(P0), P0.charge, P1.charge</div>
 </div>
 </div>
 
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[29]:</div>
-
-
-
-
-<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>(10, 2.4999999999999994e-14, 2.4997499999999996e-10)</pre>
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3449,16 +3451,48 @@ len(P0), P0.charge, P1.charge</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Copy is a deep copy</span>
-<span class="n">P2</span> <span class="o">=</span> <span class="n">P1</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Charge can also be set. This will re-scale the weight array</span>
+
+<span class="n">P2</span><span class="o">.</span><span class="n">charge</span> <span class="o">=</span> <span class="mf">9.8765e-12</span>
+<span class="n">P1</span><span class="o">.</span><span class="n">weight</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">],</span> <span class="n">P2</span><span class="o">.</span><span class="n">weight</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">],</span> <span class="n">P2</span><span class="o">.</span><span class="n">charge</span>
 </pre></div>
-<div id="cell-30" class="clipboard-copy-txt"># Copy is a deep copy
-P2 = P1.copy()</div>
+<div id="cell-30" class="clipboard-copy-txt"># Charge can also be set. This will re-scale the weight array
+
+P2.charge = 9.8765e-12
+P1.weight[0:2], P2.weight[0:2], P2.charge
+</div>
     
         </div>
     </div>
 
 </div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[30]:</div>
+
+
+
+
+<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
+<pre>(array([2.5e-15, 2.5e-15]),
+ array([9.87748775e-17, 9.87748775e-17]),
+ 9.876499999999997e-12)</pre>
+</div>
+
+</div>
+
+</div>
+
 </div>
 
 </div>
@@ -3483,16 +3517,11 @@ P2 = P1.copy()</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Charge can also be set. This will re-scale the weight array</span>
-
-<span class="n">P2</span><span class="o">.</span><span class="n">charge</span> <span class="o">=</span> <span class="mf">9.8765e-12</span>
-<span class="n">P1</span><span class="o">.</span><span class="n">weight</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">],</span> <span class="n">P2</span><span class="o">.</span><span class="n">weight</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">],</span> <span class="n">P2</span><span class="o">.</span><span class="n">charge</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Some codes provide ids for particles. If not, you can assign an id. </span>
+<span class="s1">&#39;id&#39;</span> <span class="ow">in</span> <span class="n">P2</span>
 </pre></div>
-<div id="cell-31" class="clipboard-copy-txt"># Charge can also be set. This will re-scale the weight array
-
-P2.charge = 9.8765e-12
-P1.weight[0:2], P2.weight[0:2], P2.charge
-</div>
+<div id="cell-31" class="clipboard-copy-txt"># Some codes provide ids for particles. If not, you can assign an id. 
+'id' in P2</div>
     
         </div>
     </div>
@@ -3516,9 +3545,7 @@ P1.weight[0:2], P2.weight[0:2], P2.charge
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>(array([2.5e-15, 2.5e-15]),
- array([9.87748775e-17, 9.87748775e-17]),
- 9.876499999999997e-12)</pre>
+<pre>False</pre>
 </div>
 
 </div>
@@ -3549,69 +3576,10 @@ P1.weight[0:2], P2.weight[0:2], P2.charge
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Some codes provide ids for particles. If not, you can assign an id. </span>
-<span class="s1">&#39;id&#39;</span> <span class="ow">in</span> <span class="n">P2</span>
-</pre></div>
-<div id="cell-32" class="clipboard-copy-txt"># Some codes provide ids for particles. If not, you can assign an id. 
-'id' in P2</div>
-    
-        </div>
-    </div>
-
-</div>
-</div>
-
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
-</div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[32]:</div>
-
-
-
-
-<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>False</pre>
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell-inputWrapper">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
-</div>
-<div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[33]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
-        
-        
-        <div class="CodeMirror cm-s-jupyter">
-        <div class="zeroclipboard-container">
-            <clipboard-copy for="cell-33">
-            <div>
-                <span class="notice" hidden>Copied!</span>
-                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
-                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
-                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
-                </svg>
-                </div>
-            </clipboard-copy>
-        </div>
             <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># This will assign an id if none exists. This </span>
 <span class="n">P2</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span> <span class="ow">in</span> <span class="n">P2</span>
 </pre></div>
-<div id="cell-33" class="clipboard-copy-txt"># This will assign an id if none exists. This 
+<div id="cell-32" class="clipboard-copy-txt"># This will assign an id if none exists. This 
 P2.id, 'id' in P2</div>
     
         </div>
@@ -3630,7 +3598,7 @@ P2.id, 'id' in P2</div>
 <div class="jp-OutputArea-child">
 
     
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[33]:</div>
+    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[32]:</div>
 
 
 
@@ -3663,12 +3631,12 @@ P2.id, 'id' in P2</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[34]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[33]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
         <div class="zeroclipboard-container">
-            <clipboard-copy for="cell-34">
+            <clipboard-copy for="cell-33">
             <div>
                 <span class="notice" hidden>Copied!</span>
                 <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
@@ -3681,7 +3649,7 @@ P2.id, 'id' in P2</div>
             <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">import</span> <span class="nn">h5py</span>
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 </pre></div>
-<div id="cell-34" class="clipboard-copy-txt">import h5py
+<div id="cell-33" class="clipboard-copy-txt">import h5py
 import numpy as np</div>
     
         </div>
@@ -3697,12 +3665,12 @@ import numpy as np</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[35]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[34]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
         <div class="zeroclipboard-container">
-            <clipboard-copy for="cell-35">
+            <clipboard-copy for="cell-34">
             <div>
                 <span class="notice" hidden>Copied!</span>
                 <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
@@ -3720,7 +3688,7 @@ import numpy as np</div>
 <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">newh5file</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">h5</span><span class="p">:</span>
     <span class="n">P2</span> <span class="o">=</span> <span class="n">ParticleGroup</span><span class="p">(</span><span class="n">h5</span><span class="p">)</span>
 </pre></div>
-<div id="cell-35" class="clipboard-copy-txt">
+<div id="cell-34" class="clipboard-copy-txt">
 newh5file = 'particles.h5'
 
 with h5py.File(newh5file, 'w') as h5:
@@ -3742,12 +3710,12 @@ with h5py.File(newh5file, 'r') as h5:
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[36]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[35]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
         <div class="zeroclipboard-container">
-            <clipboard-copy for="cell-36">
+            <clipboard-copy for="cell-35">
             <div>
                 <span class="notice" hidden>Copied!</span>
                 <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
@@ -3762,7 +3730,7 @@ with h5py.File(newh5file, 'r') as h5:
     <span class="n">same</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">P</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">==</span> <span class="n">P2</span><span class="p">[</span><span class="n">key</span><span class="p">])</span>
     <span class="nb">print</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">same</span><span class="p">)</span>
 </pre></div>
-<div id="cell-36" class="clipboard-copy-txt"># Check if all are the same
+<div id="cell-35" class="clipboard-copy-txt"># Check if all are the same
 for key in ['x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight', 'id']:
     same = np.all(P[key] == P2[key])
     print(key, same)</div>
@@ -3799,6 +3767,65 @@ weight True
 id True
 </pre>
 </div>
+</div>
+
+</div>
+
+</div>
+
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[36]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+        
+        
+        <div class="CodeMirror cm-s-jupyter">
+        <div class="zeroclipboard-container">
+            <clipboard-copy for="cell-36">
+            <div>
+                <span class="notice" hidden>Copied!</span>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
+                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
+                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
+                </svg>
+                </div>
+            </clipboard-copy>
+        </div>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># This does the same check</span>
+<span class="n">P2</span> <span class="o">==</span> <span class="n">P</span>
+</pre></div>
+<div id="cell-36" class="clipboard-copy-txt"># This does the same check
+P2 == P</div>
+    
+        </div>
+    </div>
+
+</div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[36]:</div>
+
+
+
+
+<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
+<pre>True</pre>
+</div>
+
 </div>
 
 </div>
@@ -4349,7 +4376,7 @@ ax.hexbin(datx, daty, gridsize=40, cmap=cmap, vmin=1e-15)</div>
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>&lt;matplotlib.collections.PolyCollection at 0x7fd86ce1baf0&gt;</pre>
+<pre>&lt;matplotlib.collections.PolyCollection at 0x7fe6ce0691c0&gt;</pre>
 </div>
 
 </div>
@@ -4499,7 +4526,7 @@ plt.imshow(H.T, origin='lower', extent = extent, aspect='auto', vmin=1e-15, cmap
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>&lt;matplotlib.image.AxesImage at 0x7fd86ccf2b20&gt;</pre>
+<pre>&lt;matplotlib.image.AxesImage at 0x7fe6cdf02280&gt;</pre>
 </div>
 
 </div>

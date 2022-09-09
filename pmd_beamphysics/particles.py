@@ -890,6 +890,16 @@ class ParticleGroup:
         """Checks internal data"""
         return True if item in self._data else False    
     
+    def __eq__(self, other):
+        """Check equality of internal data"""
+        if isinstance(other, ParticleGroup):
+            for key in ['x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight', 'id']:
+                if not np.all(self[key] == other[key]):
+                    return False
+            return True
+
+        return NotImplemented    
+    
     def __len__(self):
         return len(self[self._settable_array_keys[0]])
     

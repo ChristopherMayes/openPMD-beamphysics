@@ -1,9 +1,8 @@
 from pmd_beamphysics import ParticleGroup
 import pytest
 import numpy as np
+import os
 
-
-    
 P = ParticleGroup('docs/examples/data/bmad_particles.h5')
     
 
@@ -14,6 +13,7 @@ r theta pr ptheta
 Lz
 gamma beta beta_x beta_y beta_z
 x_bar px_bar Jx Jy
+charge
 
 """.split()    
     
@@ -26,11 +26,13 @@ n_dead
 """.split()
     
     
+OPERATORS = ('min_', 'max_', 'sigma_', 'delta_', 'ptp_', 'mean_')    
+    
 @pytest.fixture(params=ARRAY_KEYS)
 def array_key(request):
     return request.param
 
-@pytest.fixture(params=('min_', 'max_', 'sigma_', 'delta_', 'ptp_', 'mean_'))
+@pytest.fixture(params=OPERATORS)
 def operator(request):
     return request.param
 
@@ -61,3 +63,19 @@ def test_array_units_exist(array_key):
 
 def test_special_units_exist(special_stat):
     P.units(special_stat)
+    
+    
+def test_twiss():
+    P.twiss('xy', fraction=0.95)
+    
+    
+def test_write_reload(tmp_path):
+    h5file = os.path.join(tmp_path, 'test.h5')
+    P.write(h5file)
+    
+    # Equality and inequality
+    P2 = ParticleGroup(h5file)
+    assert P == P2
+    
+    P2.x +=1 
+    assert P != P2

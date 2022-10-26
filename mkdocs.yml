@@ -29,14 +29,16 @@ theme:
   icon:
     repo: fontawesome/brands/github
   name: material
-  
-  custom_dir: overrides   
+
+  custom_dir: overrides
   features:
     - navigation.top
+    - navigation.tabs
+    - navigation.indexes
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: white
+      primary: black
       toggle:
         icon: material/toggle-switch-off-outline
         name: Switch to dark mode
@@ -64,6 +66,9 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/ChristopherMayes/openPMD-beamphysics
       name: openPMD-beamphysics
+
+extra_css:
+  - stylesheets/extra.css        
 
 plugins:
     - search

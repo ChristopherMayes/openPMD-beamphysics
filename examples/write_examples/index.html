@@ -39,6 +39,8 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -56,7 +58,7 @@
     
     
     
-    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="">
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="">
   
     
     
@@ -112,7 +114,7 @@
         
           
           
-          <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent=""  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+          <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent=""  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
           
             <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 6H7c-3.31 0-6 2.69-6 6s2.69 6 6 6h10c3.31 0 6-2.69 6-6s-2.69-6-6-6zm0 10H7c-2.21 0-4-1.79-4-4s1.79-4 4-4h10c2.21 0 4 1.79 4 4s-1.79 4-4 4zM7 9c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
@@ -187,6 +189,68 @@
       
         
           
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-tabs__inner md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+
+
+  <li class="md-tabs__item">
+    <a href="../.." class="md-tabs__link">
+      Home
+    </a>
+  </li>
+
+      
+        
+  
+  
+    
+  
+
+
+  
+  
+  
+    
+
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../particle_examples/" class="md-tabs__link md-tabs__link--active">
+        Examples
+      </a>
+    </li>
+  
+
+  
+
+      
+        
+  
+  
+
+
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../api/particles/" class="md-tabs__link">
+        API
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
         
       
       <main class="md-main" data-md-component="main">
@@ -199,8 +263,10 @@
                   <div class="md-sidebar__inner">
                     
 
+  
 
-<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
     <a href="../.." title="openPMD-beamphysics" class="md-nav__button md-logo" aria-label="openPMD-beamphysics" data-md-component="logo">
       
@@ -257,6 +323,14 @@
       
       
       
+        
+          
+        
+          
+        
+          
+        
+      
       
         <label class="md-nav__link" for="__nav_2">
           Examples
@@ -284,6 +358,18 @@
         <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_2_1" type="checkbox" id="__nav_2_1" checked>
       
       
+      
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
       
       
         <label class="md-nav__link" for="__nav_2_1">
@@ -398,6 +484,14 @@
       
       
       
+        
+          
+        
+          
+        
+          
+        
+      
       
         <label class="md-nav__link" for="__nav_2_2">
           Fields
@@ -473,6 +567,12 @@
       
       
       
+        
+          
+        
+          
+        
+      
       
         <label class="md-nav__link" for="__nav_2_3">
           Utilities
@@ -541,6 +641,12 @@
         <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3" type="checkbox" id="__nav_3" >
       
       
+      
+        
+          
+        
+          
+        
       
       
         <label class="md-nav__link" for="__nav_3">
@@ -1802,6 +1908,18 @@ P = ParticleGroup(H5FILE)</div>
 </div>
 </div>
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>The regular write routine writes in a proper openPMD format</p>
+
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
@@ -1823,11 +1941,9 @@ P = ParticleGroup(H5FILE)</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># The regular write routine writes in a proper openPMD format</span>
-<span class="n">P</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;openpmd_particles.h5&#39;</span><span class="p">)</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;openpmd_particles.h5&#39;</span><span class="p">)</span>
 </pre></div>
-<div id="cell-4" class="clipboard-copy-txt"># The regular write routine writes in a proper openPMD format
-P.write('openpmd_particles.h5')</div>
+<div id="cell-4" class="clipboard-copy-txt">P.write('openpmd_particles.h5')</div>
     
         </div>
     </div>
@@ -1835,6 +1951,18 @@ P.write('openpmd_particles.h5')</div>
 </div>
 </div>
 
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>An open h5 hande can also be used, but it needs to be properly initialized</p>
+
+</div>
+</div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
@@ -1857,13 +1985,11 @@ P.write('openpmd_particles.h5')</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># An open h5 hande can also be used, but it needs to be properly initialized</span>
-<span class="k">with</span> <span class="n">File</span><span class="p">(</span><span class="s1">&#39;openpmd_particles.h5&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">h5</span><span class="p">:</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="k">with</span> <span class="n">File</span><span class="p">(</span><span class="s1">&#39;openpmd_particles.h5&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">h5</span><span class="p">:</span>
     <span class="n">pmd_init</span><span class="p">(</span><span class="n">h5</span><span class="p">,</span> <span class="n">basePath</span><span class="o">=</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="n">particlesPath</span><span class="o">=</span><span class="s1">&#39;/&#39;</span> <span class="p">)</span>
     <span class="n">P</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">h5</span><span class="p">)</span>
 </pre></div>
-<div id="cell-5" class="clipboard-copy-txt"># An open h5 hande can also be used, but it needs to be properly initialized
-with File('openpmd_particles.h5', 'w') as h5:
+<div id="cell-5" class="clipboard-copy-txt">with File('openpmd_particles.h5', 'w') as h5:
     pmd_init(h5, basePath='/', particlesPath='/' )
     P.write(h5)</div>
     
@@ -1873,6 +1999,18 @@ with File('openpmd_particles.h5', 'w') as h5:
 </div>
 </div>
 
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>This can be read in by another ParticleGroup</p>
+
+</div>
+</div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
@@ -1895,11 +2033,9 @@ with File('openpmd_particles.h5', 'w') as h5:
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># This can be read in by another ParticleGroup</span>
-<span class="n">P2</span> <span class="o">=</span> <span class="n">ParticleGroup</span><span class="p">(</span><span class="s1">&#39;openpmd_particles.h5&#39;</span><span class="p">)</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P2</span> <span class="o">=</span> <span class="n">ParticleGroup</span><span class="p">(</span><span class="s1">&#39;openpmd_particles.h5&#39;</span><span class="p">)</span>
 </pre></div>
-<div id="cell-6" class="clipboard-copy-txt"># This can be read in by another ParticleGroup
-P2 = ParticleGroup('openpmd_particles.h5')</div>
+<div id="cell-6" class="clipboard-copy-txt">P2 = ParticleGroup('openpmd_particles.h5')</div>
     
         </div>
     </div>
@@ -1907,6 +2043,18 @@ P2 = ParticleGroup('openpmd_particles.h5')</div>
 </div>
 </div>
 
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>Check that they are the same:</p>
+
+</div>
+</div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
@@ -1929,11 +2077,9 @@ P2 = ParticleGroup('openpmd_particles.h5')</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Check that these are the same</span>
-<span class="nb">all</span><span class="p">(</span><span class="n">P2</span><span class="o">.</span><span class="n">x</span> <span class="o">==</span> <span class="n">P</span><span class="o">.</span><span class="n">x</span><span class="p">)</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P2</span> <span class="o">==</span> <span class="n">P</span>
 </pre></div>
-<div id="cell-7" class="clipboard-copy-txt"># Check that these are the same
-all(P2.x == P.x)</div>
+<div id="cell-7" class="clipboard-copy-txt">P2 == P</div>
     
         </div>
     </div>
@@ -2070,6 +2216,18 @@ all(P2.x == P.x)</div>
 </div>
 
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>Check the readback:</p>
+
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
@@ -2091,15 +2249,13 @@ all(P2.x == P.x)</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Check the readback</span>
-<span class="kn">from</span> <span class="nn">pmd_beamphysics.interfaces.astra</span> <span class="kn">import</span> <span class="n">parse_astra_phase_file</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span> <span class="nn">pmd_beamphysics.interfaces.astra</span> <span class="kn">import</span> <span class="n">parse_astra_phase_file</span>
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="n">P1</span> <span class="o">=</span> <span class="n">ParticleGroup</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">parse_astra_phase_file</span><span class="p">(</span><span class="s1">&#39;astra_particles.txt&#39;</span><span class="p">))</span>
 <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="s1">&#39;px&#39;</span><span class="p">,</span> <span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;py&#39;</span><span class="p">,</span> <span class="s1">&#39;z&#39;</span><span class="p">,</span> <span class="s1">&#39;pz&#39;</span><span class="p">]:</span>
     <span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">P</span><span class="p">[</span><span class="n">k</span><span class="p">],</span> <span class="n">P1</span><span class="p">[</span><span class="n">k</span><span class="p">])</span>
 </pre></div>
-<div id="cell-10" class="clipboard-copy-txt"># Check the readback
-from pmd_beamphysics.interfaces.astra import parse_astra_phase_file
+<div id="cell-10" class="clipboard-copy-txt">from pmd_beamphysics.interfaces.astra import parse_astra_phase_file
 import numpy as np
 P1 = ParticleGroup(data=parse_astra_phase_file('astra_particles.txt'))
 for k in ['x', 'px', 'y', 'py', 'z', 'pz']:
@@ -2543,6 +2699,18 @@ electron
 </div>
 
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>This is what is written:</p>
+
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell-inputWrapper">
@@ -2564,13 +2732,11 @@ electron
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># These are written</span>
-<span class="k">with</span> <span class="n">File</span><span class="p">(</span><span class="s1">&#39;genesis4_distribution.h5&#39;</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">h5</span><span class="p">:</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="k">with</span> <span class="n">File</span><span class="p">(</span><span class="s1">&#39;genesis4_distribution.h5&#39;</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">h5</span><span class="p">:</span>
     <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">h5</span><span class="p">:</span>
         <span class="nb">print</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">h5</span><span class="p">[</span><span class="n">g</span><span class="p">]))</span>
 </pre></div>
-<div id="cell-18" class="clipboard-copy-txt"># These are written
-with File('genesis4_distribution.h5', 'r') as h5:
+<div id="cell-18" class="clipboard-copy-txt">with File('genesis4_distribution.h5', 'r') as h5:
     for g in h5:
         print(g, len(h5[g]))</div>
     
@@ -2639,11 +2805,9 @@ yp 10000
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># ASCII Particles</span>
-<span class="n">P</span><span class="o">.</span><span class="n">write_gpt</span><span class="p">(</span><span class="s1">&#39;gpt_particles.txt&#39;</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">write_gpt</span><span class="p">(</span><span class="s1">&#39;gpt_particles.txt&#39;</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
-<div id="cell-19" class="clipboard-copy-txt"># ASCII Particles
-P.write_gpt('gpt_particles.txt', verbose=True)</div>
+<div id="cell-19" class="clipboard-copy-txt">P.write_gpt('gpt_particles.txt', verbose=True)</div>
     
         </div>
     </div>
@@ -2695,12 +2859,10 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># ASCII Particles</span>
-<span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expandvars</span><span class="p">(</span><span class="s1">&#39;$ASCI2GDF_BIN&#39;</span><span class="p">)):</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expandvars</span><span class="p">(</span><span class="s1">&#39;$ASCI2GDF_BIN&#39;</span><span class="p">)):</span>
     <span class="n">P</span><span class="o">.</span><span class="n">write_gpt</span><span class="p">(</span><span class="s1">&#39;gpt_particles.gdf&#39;</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">asci2gdf_bin</span><span class="o">=</span><span class="s1">&#39;$ASCI2GDF_BIN&#39;</span><span class="p">)</span>
 </pre></div>
-<div id="cell-20" class="clipboard-copy-txt"># ASCII Particles
-if os.path.exists(os.path.expandvars('$ASCI2GDF_BIN')):
+<div id="cell-20" class="clipboard-copy-txt">if os.path.exists(os.path.expandvars('$ASCI2GDF_BIN')):
     P.write_gpt('gpt_particles.gdf', verbose=True, asci2gdf_bin='$ASCI2GDF_BIN')</div>
     
         </div>
@@ -2749,7 +2911,8 @@ if os.path.exists(os.path.expandvars('$ASCI2GDF_BIN')):
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
-<h1 id="Impact-T">Impact-T<a class="anchor-link" href="#Impact-T">&#182;</a></h1>
+<h1 id="Impact-T">Impact-T<a class="anchor-link" href="#Impact-T">&#182;</a></h1><p>Impact-T particles must all be a the same time:</p>
+
 </div>
 </div>
 </div>
@@ -2774,11 +2937,9 @@ if os.path.exists(os.path.expandvars('$ASCI2GDF_BIN')):
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Impact-T particles must all be a the same time</span>
-<span class="n">P</span><span class="o">.</span><span class="n">drift_to_t</span><span class="p">(</span><span class="n">P</span><span class="p">[</span><span class="s1">&#39;mean_t&#39;</span><span class="p">])</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">drift_to_t</span><span class="p">(</span><span class="n">P</span><span class="p">[</span><span class="s1">&#39;mean_t&#39;</span><span class="p">])</span>
 </pre></div>
-<div id="cell-22" class="clipboard-copy-txt"># Impact-T particles must all be a the same time
-P.drift_to_t(P['mean_t'])</div>
+<div id="cell-22" class="clipboard-copy-txt">P.drift_to_t(P['mean_t'])</div>
     
         </div>
     </div>
@@ -2786,6 +2947,18 @@ P.drift_to_t(P['mean_t'])</div>
 </div>
 </div>
 
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>This will return settings for Impact-T to use:</p>
+
+</div>
+</div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
@@ -2808,11 +2981,9 @@ P.drift_to_t(P['mean_t'])</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># This will return settings for Impact-T to use. </span>
-<span class="n">P</span><span class="o">.</span><span class="n">write_impact</span><span class="p">(</span><span class="s1">&#39;impact_particles.txt&#39;</span><span class="p">)</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">write_impact</span><span class="p">(</span><span class="s1">&#39;impact_particles.txt&#39;</span><span class="p">)</span>
 </pre></div>
-<div id="cell-23" class="clipboard-copy-txt"># This will return settings for Impact-T to use. 
-P.write_impact('impact_particles.txt')</div>
+<div id="cell-23" class="clipboard-copy-txt">P.write_impact('impact_particles.txt')</div>
     
         </div>
     </div>
@@ -2916,7 +3087,8 @@ P.write_impact('impact_particles.txt')</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
-<h1 id="LiTrack">LiTrack<a class="anchor-link" href="#LiTrack">&#182;</a></h1>
+<h1 id="LiTrack">LiTrack<a class="anchor-link" href="#LiTrack">&#182;</a></h1><p>LiTrack particles must be at the same z:</p>
+
 </div>
 </div>
 </div>
@@ -2941,11 +3113,9 @@ P.write_impact('impact_particles.txt')</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># LiTrack particles must be at the same z</span>
-<span class="n">P</span><span class="o">.</span><span class="n">drift_to_z</span><span class="p">()</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">drift_to_z</span><span class="p">()</span>
 </pre></div>
-<div id="cell-25" class="clipboard-copy-txt"># LiTrack particles must be at the same z
-P.drift_to_z()</div>
+<div id="cell-25" class="clipboard-copy-txt">P.drift_to_z()</div>
     
         </div>
     </div>
@@ -2975,11 +3145,9 @@ P.drift_to_z()</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># This will return settings for Impact-T to use. </span>
-<span class="n">P</span><span class="o">.</span><span class="n">write_litrack</span><span class="p">(</span><span class="s1">&#39;litrack.zd&#39;</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">write_litrack</span><span class="p">(</span><span class="s1">&#39;litrack.zd&#39;</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
-<div id="cell-26" class="clipboard-copy-txt"># This will return settings for Impact-T to use. 
-P.write_litrack('litrack.zd', verbose=True)</div>
+<div id="cell-26" class="clipboard-copy-txt">P.write_litrack('litrack.zd', verbose=True)</div>
     
         </div>
     </div>
@@ -3158,6 +3326,18 @@ writing 10000 LiTrack particles to litrack.zd
 </div>
 
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>Read back:</p>
+
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell-inputWrapper">
@@ -3179,13 +3359,11 @@ writing 10000 LiTrack particles to litrack.zd
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Read back</span>
-<span class="kn">from</span> <span class="nn">pmd_beamphysics.interfaces.lucretia</span> <span class="kn">import</span> <span class="n">lucretia_to_data</span><span class="p">,</span> <span class="n">list_element_names</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span> <span class="nn">pmd_beamphysics.interfaces.lucretia</span> <span class="kn">import</span> <span class="n">lucretia_to_data</span><span class="p">,</span> <span class="n">list_element_names</span>
 
 <span class="n">ParticleGroup</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">lucretia_to_data</span><span class="p">(</span><span class="s1">&#39;lucretia.mat&#39;</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
 </pre></div>
-<div id="cell-29" class="clipboard-copy-txt"># Read back
-from pmd_beamphysics.interfaces.lucretia import lucretia_to_data, list_element_names
+<div id="cell-29" class="clipboard-copy-txt">from pmd_beamphysics.interfaces.lucretia import lucretia_to_data, list_element_names
 
 ParticleGroup(data=lucretia_to_data('lucretia.mat', verbose=True))</div>
     
@@ -3220,7 +3398,7 @@ ParticleGroup(data=lucretia_to_data('lucretia.mat', verbose=True))</div>
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>&lt;ParticleGroup with 10000 particles at 0x7fe4cc3b1dc0&gt;</pre>
+<pre>&lt;ParticleGroup with 10000 particles at 0x7f4440bcff10&gt;</pre>
 </div>
 
 </div>
@@ -3229,6 +3407,18 @@ ParticleGroup(data=lucretia_to_data('lucretia.mat', verbose=True))</div>
 
 </div>
 
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>Helper function to list the available elements:</p>
+
+</div>
+</div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
@@ -3251,11 +3441,9 @@ ParticleGroup(data=lucretia_to_data('lucretia.mat', verbose=True))</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Helpher function to list the available elements</span>
-<span class="n">list_element_names</span><span class="p">(</span><span class="s1">&#39;lucretia.mat&#39;</span><span class="p">)</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">list_element_names</span><span class="p">(</span><span class="s1">&#39;lucretia.mat&#39;</span><span class="p">)</span>
 </pre></div>
-<div id="cell-30" class="clipboard-copy-txt"># Helpher function to list the available elements
-list_element_names('lucretia.mat')</div>
+<div id="cell-30" class="clipboard-copy-txt">list_element_names('lucretia.mat')</div>
     
         </div>
     </div>
@@ -3294,7 +3482,8 @@ list_element_names('lucretia.mat')</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
-<h1 id="OPAL">OPAL<a class="anchor-link" href="#OPAL">&#182;</a></h1>
+<h1 id="OPAL">OPAL<a class="anchor-link" href="#OPAL">&#182;</a></h1><p>Injected particled must be at the same time:</p>
+
 </div>
 </div>
 </div>
@@ -3319,15 +3508,11 @@ list_element_names('lucretia.mat')</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Injected particled must be at the same time\</span>
-
-<span class="n">P</span><span class="o">.</span><span class="n">drift_to_t</span><span class="p">()</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">drift_to_t</span><span class="p">()</span>
 
 <span class="n">P</span><span class="o">.</span><span class="n">write_opal</span><span class="p">(</span><span class="s1">&#39;opal_injected.txt&#39;</span><span class="p">,</span> <span class="n">dist_type</span><span class="o">=</span><span class="s1">&#39;injected&#39;</span><span class="p">)</span>
 </pre></div>
-<div id="cell-31" class="clipboard-copy-txt"># Injected particled must be at the same time\
-
-P.drift_to_t()
+<div id="cell-31" class="clipboard-copy-txt">P.drift_to_t()
 
 P.write_opal('opal_injected.txt', dist_type='injected')</div>
     
@@ -3400,6 +3585,18 @@ P.write_opal('opal_injected.txt', dist_type='injected')</div>
 </div>
 
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>Emitted particles must be at the same z:</p>
+
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
@@ -3421,12 +3618,10 @@ P.write_opal('opal_injected.txt', dist_type='injected')</div>
                 </div>
             </clipboard-copy>
         </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Emitted particles must be at the same z</span>
-<span class="n">P</span><span class="o">.</span><span class="n">drift_to_z</span><span class="p">(</span><span class="n">P</span><span class="p">[</span><span class="s1">&#39;mean_z&#39;</span><span class="p">])</span>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">drift_to_z</span><span class="p">(</span><span class="n">P</span><span class="p">[</span><span class="s1">&#39;mean_z&#39;</span><span class="p">])</span>
 <span class="n">P</span><span class="o">.</span><span class="n">write_opal</span><span class="p">(</span><span class="s1">&#39;opal_emitted.txt&#39;</span><span class="p">,</span> <span class="n">dist_type</span><span class="o">=</span><span class="s1">&#39;emitted&#39;</span><span class="p">)</span>
 </pre></div>
-<div id="cell-33" class="clipboard-copy-txt"># Emitted particles must be at the same z
-P.drift_to_z(P['mean_z'])
+<div id="cell-33" class="clipboard-copy-txt">P.drift_to_z(P['mean_z'])
 P.write_opal('opal_emitted.txt', dist_type='emitted')</div>
     
         </div>
@@ -3661,7 +3856,7 @@ P.write_opal('opal_emitted.txt', dist_type='emitted')</div>
       <div class="md-dialog__inner md-typeset"></div>
     </div>
     
-    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.top"], "search": "../../assets/javascripts/workers/search.ecf98df9.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version.title": "Select version"}}</script>
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.top", "navigation.tabs", "navigation.indexes"], "search": "../../assets/javascripts/workers/search.ecf98df9.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version.title": "Select version"}}</script>
     
     
       <script src="../../assets/javascripts/bundle.39f04ddb.min.js"></script>

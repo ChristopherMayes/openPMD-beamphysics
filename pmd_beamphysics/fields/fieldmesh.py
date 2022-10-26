@@ -8,12 +8,14 @@ from pmd_beamphysics import tools
 
 from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d, plot_fieldmesh_cylindrical_1d
 
-from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
-from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
+from pmd_beamphysics.interfaces.ansys import read_ansys_ascii_3d_fields
 from pmd_beamphysics.interfaces.astra import read_astra_3d_fieldmaps, write_astra_3d_fieldmaps
+from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
 from pmd_beamphysics.interfaces.impact import create_impact_solrf_fieldmap_fourier, create_impact_solrf_ele
+from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
 
 from pmd_beamphysics.fields.expansion import expand_fieldmesh_from_onaxis
+from pmd_beamphysics.fields.conversion import fieldmesh_rectangular_to_cylindrically_symmetric_data
 
 import functools
 
@@ -101,12 +103,14 @@ class FieldMesh:
     
     - `.write`
     - `.write_astra_3d`
+    - `.to_cylindrical`
     - `.to_impact_solrf`
     - `.write_gpt`
     - `.write_superfish`
         
     Constructors (class methods):
     
+    - `.from_ansys_ascii_3d`
     - `.from_astra_3d`
     - `.from_superfish`
     - `.from_onaxis`
@@ -349,7 +353,22 @@ class FieldMesh:
     @functools.wraps(create_impact_solrf_ele)      
     def to_impact_solrf(self, *args, **kwargs):
         return create_impact_solrf_ele(self, *args, **kwargs)
+      
+    def to_cylindrical(self):
+        """
+        Returns a new FieldMesh in cylindrical geometry.
         
+        If the current geometry is rectangular, this
+        will use the y=0 slice.
+        
+        """
+        if self.geometry == 'rectangular':
+            return FieldMesh(data=fieldmesh_rectangular_to_cylindrically_symmetric_data(self))
+        elif self.geometry == 'cylindrical':
+            return self
+        else:
+            raise NotImplementedError(f"geometry not implemented: {self.geometry}")
+            
     
     def write_gpt(self, filePath, asci2gdf_bin=None, verbose=True):
         """
@@ -381,6 +400,46 @@ class FieldMesh:
         data = read_superfish_t7(filename, type=type, geometry=geometry)
         c = cls(data=data)
         return c               
+        
+
+    @classmethod
+    def from_ansys_ascii_3d(cls, *, 
+                   efile = None,
+                   hfile = None,
+                   frequency = None):
+        """
+        Class method to return a FieldMesh from ANSYS ASCII files.
+        
+        The format of each file is:
+        header1 (ignored)
+        header2 (ignored)
+        x y z re_fx im_fx re_fy im_fy re_fz im_fz 
+        ...
+        in C order, with oscillations as exp(i*omega*t)
+        
+        Parameters
+        ----------
+        efile: str
+            Filename with complex electric field data in V/m
+        
+        hfile: str
+            Filename with complex magnetic H field data in A/m
+        
+        frequency: float
+            Frequency in Hz
+        
+        Returns
+        -------
+        FieldMesh
+        
+        """
+        
+        if frequency is None:
+            raise ValueError(f"Please provide a frequency")
+        
+        data = read_ansys_ascii_3d_fields(efile, hfile, frequency=frequency)
+        return cls(data=data)
+        
         
         
     @classmethod
@@ -565,6 +624,15 @@ class FieldMesh:
     def z(self):
         return self.coord_vec('z')    
     
+    # Deltas
+    ## cartesian
+    @property
+    def dx(self):
+        return self.deltas[self.axis_index('x')]
+    @property
+    def dy(self):
+        return self.deltas[self.axis_index('y')]    
+    ## cylindrical
     @property
     def dr(self):
         return self.deltas[self.axis_index('r')]
@@ -573,9 +641,25 @@ class FieldMesh:
         return self.deltas[self.axis_index('theta')]
     @property
     def dz(self):
-        return self.deltas[self.axis_index('z')]    
+        return self.deltas[self.axis_index('z')]  
+
+    # Scaled components
+    # TODO: Check geometry
+    ## cartesian
+    @property
+    def Bx(self):
+        return self.scaled_component('Bx') 
+    @property
+    def By(self):
+        return self.scaled_component('By')  
+    @property
+    def Ex(self):
+        return self.scaled_component('Ex')  
+    @property
+    def Ey(self):
+        return self.scaled_component('Ey')         
     
-    # TODO: Cartesian components, checking geometry
+    ## cylindrical
     @property
     def Br(self):
         return self.scaled_component('Br')
@@ -594,6 +678,9 @@ class FieldMesh:
     @property
     def Ez(self):
         return self.scaled_component('Ez')    
+    
+ 
+    
     
     @property
     def B(self):

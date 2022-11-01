@@ -55,7 +55,7 @@ def track_field_1d(z,
                    mc2=mec2,  # electron
                    q0=-1,
                    debug=False,
-                   max_step=np.inf,
+                   max_step=None,
                   ):
     """
     Tracks a particle in a 1d complex electric field Ez, oscillating as Ez * exp(-i omega t)
@@ -75,23 +75,48 @@ def track_field_1d(z,
     ----------
     z : array_like      
         positions of the field Ez (m)
+        
     Ez : array_like, complex
         On-axis longitudinal electric field (V/m)
         
+    frequency : float
+        RF frequency in Hz
+        
     z0 :  float, optional = 0
         initial particle position (m)
+        
     pz0 : float, optional = 0
         initial particle momentum (eV/c)
+        
     t0 : float, optional = 0
         initial particle time (s)
+        
     mc2 : float, optional = mec2
         initial particle mass (eV)
+        
     q0 : float, optional = -1
         initial particle charge (e) (= -1 for electron)
-    max_step: float, optional = np.inf
+        
+    max_step: float, optional = None
         Maximum timestep for solve_ivp (s)
+        None => max_step = 1/(2*frequency)    
+        Fields typically have variation over a wavelength,
+        so this should help avoid noisy solutions.
+                
     debug, bool, optional = False
         If True, Will return the full solution to solve_ivp
+    
+    Returns
+    -------
+    z1 : float
+        final z position in (m)
+        
+    pz1 : float:
+        final particle momemtum (eV/c)
+        
+    t1 : float
+        final time (s)
+    
     
     """
     
@@ -121,23 +146,150 @@ def track_field_1d(z,
     went_max.terminal = True
     went_max.direction = 1
 
+    if max_step is None:
+        max_step = 1/(10*frequency)
+    
     # Solve
     y0 =  np.array([z0, pz0])
     sol = solve_ivp(fun, (t0, tmax), y0,
-                first_step = 1/frequency/100,
+                first_step = 1/frequency/1000,
                 events=[went_backwards, went_max],
-               # vectorized=True)   # Make it slower?
+               # vectorized=True,   # Make it slower?
+                method = 'RK45',
                     max_step=max_step)
            #      max_step=1/frequency/20)
     
     if debug:
         return sol
     
-    # Final z, p
+    # Final z, p, t
     zf = sol.y[0][-1]
     pf = sol.y[1][-1]
+    tf = sol.t[-1]
     
-    return zf, pf
+    return zf, pf, tf 
+
+
+def track_field_1df(Ez_f,
+                   zstop=0,
+                   tmax=0,
+                   z0=0,
+                   pz0=0,
+                   t0=0,
+                   mc2=mec2,  # electron
+                   q0=-1,
+                   debug=False,
+                   max_step=None,
+                    method='RK23'
+                  ):
+    """
+    Similar to track_field_1d, execpt uses a function Ez_f
+    
+    Tracks a particle in a 1d electric field Ez(z, t)
+    
+    Uses scipy.integrate.solve_ivp to track the particle. 
+    
+    Equations of motion:
+    
+    $ \frac{dz}{dt} = \frac{pc}{\sqrt{(pc)^2 + m^2 c^4)}} c $ 
+
+    $ \frac{dp}{dt} = q E_z $
+
+    $ E_z = \Re f(z) \exp(-i \omega t) $
+    
+    
+    Parameters
+    ----------
+
+        
+    Ez_f : callable
+        Ez_f(z, t) callable with two arguments z (m) and t (s)
+        On-axis longitudinal electric field (V/m)
+        
+    zstop : float
+        z stopping position (m)        
+        
+    tmax: float
+        maximum timestep (s)
+        
+    z0 :  float, optional = 0
+        initial particle position (m)
+        
+    pz0 : float, optional = 0
+        initial particle momentum (eV/c)
+        
+    t0 : float, optional = 0
+        initial particle time (s)
+        
+    mc2 : float, optional = mec2
+        initial particle mass (eV)
+        
+    q0 : float, optional = -1
+        initial particle charge (e) (= -1 for electron)
+        
+    max_step: float, optional = None
+        Maximum timestep for solve_ivp (s)
+        None => max_step = tmax/10
+        Fields typically have variation over a wavelength,
+        so this should help avoid noisy solutions.
+                
+    debug, bool, optional = False
+        If True, Will return the full solution to solve_ivp
+    
+    Returns
+    -------
+    z1 : float
+        final z position in (m)
+        
+    pz1 : float:
+        final particle momemtum (eV/c)
+        
+    t1 : float
+        final time (s)
+    
+    
+    """
+    
+    # function to integrate
+    def fun(t, y):
+        z = y[0]
+        p = y[1]  
+        zdot = p/np.hypot(p, mc2) * c_light        
+        pdot = Ez_f(z, t) * q0 * c_light
+        return np.array([zdot, pdot])
+        
+    # Events (stopping conditions)
+    def went_backwards(t, y):
+        return y[0]
+    went_backwards.terminal = True
+    went_backwards.direction = -1
+
+    def went_max(t, y): 
+        return y[0] - zstop
+    went_max.terminal = True
+    went_max.direction = 1
+
+    if max_step is None:
+        max_step = tmax/10
+    
+    # Solve
+    y0 =  np.array([z0, pz0])
+    sol = solve_ivp(fun, (t0, tmax), y0,
+                first_step = tmax/1000,
+                events=[went_backwards, went_max],
+               # vectorized=True,   # Make it slower?
+                method = method,
+                    max_step=max_step)    
+    if debug:
+        return sol
+    
+    # Final z, p, t
+    zf = sol.y[0][-1]
+    pf = sol.y[1][-1]
+    tf = sol.t[-1]
+    
+    return zf, pf, tf 
+
 
 
 
@@ -277,7 +429,7 @@ def autophase_and_scale_field(field_mesh, voltage, pz0=0, species='electron', de
     
         
     def phase_scale_f(phase_deg, scale):
-        zf, pf = track_field_1d(z,
+        zf, pf, _ = track_field_1d(z,
                    Ez*scale,
                    frequency=frequency,
                    z0=zmin,

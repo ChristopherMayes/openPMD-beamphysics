@@ -917,14 +917,14 @@ class ParticleGroup:
 # helper functions for ParticleGroup class
     
     
-def single_particle(x=0,
-                   px=0,
-                   y=0,
-                   py=0,
-                   z=0,
-                   pz=0,
-                   t=0,
-                   weight=1,
+def single_particle(x=0.0,
+                   px=0.0,
+                   y=0.0,
+                   py=0.0,
+                   z=0.0,
+                   pz=0.0,
+                   t=0.0,
+                   weight=1.0,
                    status=1,
                    species='electron'):
     """

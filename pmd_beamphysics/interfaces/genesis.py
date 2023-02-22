@@ -304,14 +304,14 @@ def genesis4_par_to_data(h5, species='electron', smear=True):
     to data for openPMD-beamphysics.
     
     Genesis4 datasets in the HDF5 file are named: 
-    'x':
+    'x'
         x position in meters
-    'px':
-        = gamma*beta_x
-    'y':
+    'px'
+        = gamma * beta_x
+    'y'
         y position in meters
     'py'
-        = gamma*beta_y'
+        = gamma * beta_y'
     'theta'
         angle within a slice in radians
     'gamma' 
@@ -341,7 +341,6 @@ def genesis4_par_to_data(h5, species='electron', smear=True):
         assert os.path.exists(h5), f'File does not exist: {h5}'
         h5 = File(h5, 'r')    
         
-    # 
     if species != 'electron':
         raise ValueError('Only electrons supported for Genesis4')
     
@@ -365,7 +364,7 @@ def genesis4_par_to_data(h5, species='electron', smear=True):
     # Useful local variables
     ds_slice = params['slicelength'] # single slice length
     s_spacing =  params['slicespacing'] # spacing between slices
-    sample = int(s_spacing/ds_slice)            
+    sample = int(s_spacing/ds_slice) # This should be an integer         
             
     x = []
     px = []

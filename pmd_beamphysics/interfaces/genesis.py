@@ -1,4 +1,4 @@
-
+import os
 import numpy as np
 from h5py import File
 
@@ -296,6 +296,140 @@ def write_genesis4_distribution(particle_group,
     
     if verbose:
         print(f'Datasets x, xp, y, yp, t, p written to: {h5file}')
+        
+        
+def genesis4_par_to_data(h5, species='electron', smear=True):
+    """
+    Converts elegant data from an h5 handle or file
+    to data for openPMD-beamphysics.
+    
+    Genesis4 datasets in the HDF5 file are named: 
+    'x':
+        x position in meters
+    'px':
+        = gamma*beta_x
+    'y':
+        y position in meters
+    'py'
+        = gamma*beta_y'
+    'theta'
+        angle within a slice in radians
+    'gamma' 
+        relativistic gamma
+    'current' 
+        Current in a single slice (scalar) in Amps
+        
+        
+    Parameters
+    ----------
+    h5: open h5py handle or str
+    
+    smear: bool:
+        Genesis4 often samples the beam by skipping slices
+        in a step called 'sample'.
+        This will smear out the theta coordinate over these slices, 
+        preserving the modulus. 
+    
+    Returns
+    -------
+    data: dict for ParitcleGroup
+        
+    
+    """
+    # Allow for opening a file
+    if isinstance(h5, str):
+        assert os.path.exists(h5), f'File does not exist: {h5}'
+        h5 = File(h5, 'r')    
+        
+    # 
+    if species != 'electron':
+        raise ValueError('Only electrons supported for Genesis4')
+        
+    scalars = ['beamletsize',
+     'one4one',
+     'refposition',
+     'slicecount',
+     'slicelength',
+     'slicespacing'] 
+    
+    params = {}
+    units = {}
+    for k in scalars:
+        assert len(h5[k]) == 1
+        params[k] = h5[k][0]
+        if 'unit' in h5[k].attrs:
+            units[k] = h5[k].attrs['unit'].decode('utf-8')    
+        
+    # Useful local variables
+    ds_slice = params['slicelength'] # single slice length
+    s_spacing =  params['slicespacing'] # spacing between slices
+    sample = int(s_spacing/ds_slice)            
+            
+    x = []
+    px = []
+    y = []
+    py = []
+    z = []
+    gamma = []
+    weight = []
+    
+    i0 = 0
+    for sname in sorted([g for g in h5 if g not in scalars]):
+        g = h5[sname]
+        x.append( g['x'][:])
+        px.append(g['px'][:]*mec2)  
+        y.append( g['y'][:])
+        py.append(g['py'][:]*mec2)  
+        gamma.append(g['gamma'][:])
+        
+        # Smear theta over sample slices
+        theta = g['theta'][:]
+        irel  = (theta / (2*np.pi) % 1) # Relative bin position (0,1)
+        n1 = len(theta)
+        if smear:
+            z1 = (irel + np.random.randint(0, high=sample, size=n1) + i0) * ds_slice  
+        else: 
+            z1 = (irel + i0 )* ds_slice
+        z.append(z1)
+        
+        # Convert current to weight (C)
+        current = g['current'][:] # I * s_spacing/c = Q 
+        assert len(current) == 1
+        q1 = np.full(n1, current) * s_spacing / c_light / n1
+        weight.append(q1) 
+        
+        i0 += sample # skip samples
+       
+    # Collect
+    x = np.hstack(x)
+    px = np.hstack(px)
+    y = np.hstack(y)
+    py = np.hstack(py)
+    gamma = np.hstack(gamma)
+    z = np.hstack(z)
+    weight = np.hstack(weight)  
+    
+    n = len(weight)
+    p = np.sqrt(gamma**2 -1) * mec2
+    pz = p**2 - px**2 - py**2
+    #px = xp * pz
+    #py = yp * pz    
+    
+    status=1
+    data = {
+        'x':x,
+        'y':y,
+        'z':z,
+        'px':px,
+        'py':py,
+        'pz':pz,
+        't': np.full(n, 0),
+        'status': np.full(n, status),
+        'species':species,
+        'weight':weight,
+    }    
+    
+    return data        
         
 
    

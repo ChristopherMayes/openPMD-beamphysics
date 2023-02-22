@@ -411,7 +411,7 @@ def genesis4_par_to_data(h5, species='electron', smear=True):
     
     n = len(weight)
     p = np.sqrt(gamma**2 -1) * mec2
-    pz = p**2 - px**2 - py**2
+    pz = np.sqrt(p**2 - px**2 - py**2)
     #px = xp * pz
     #py = yp * pz    
     

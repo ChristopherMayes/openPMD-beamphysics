@@ -344,7 +344,9 @@ def genesis4_par_to_data(h5, species='electron', smear=True):
     # 
     if species != 'electron':
         raise ValueError('Only electrons supported for Genesis4')
-        
+    
+    # Scalar arrays.
+    # TODO: use refposition?
     scalars = ['beamletsize',
      'one4one',
      'refposition',
@@ -411,9 +413,7 @@ def genesis4_par_to_data(h5, species='electron', smear=True):
     
     n = len(weight)
     p = np.sqrt(gamma**2 -1) * mec2
-    pz = np.sqrt(p**2 - px**2 - py**2)
-    #px = xp * pz
-    #py = yp * pz    
+    pz = np.sqrt(p**2 - px**2 - py**2)  
     
     status=1
     data = {

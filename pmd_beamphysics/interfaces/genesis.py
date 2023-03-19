@@ -284,15 +284,18 @@ def genesis4_beam_data(pg, n_slice=None):
         units[g4key] = unit(u)
         
     # Re-calculate these
-    data['betax'] = data['gamma'] * data['sigma_x']**2 / data['ex']
-    data['betay'] = data['gamma'] * data['sigma_y']**2 / data['ey']
+    data['betax'] = data['gamma'] * data.pop('sigma_x')**2 / data['ex']
+    data['betay'] = data['gamma'] * data.pop('sigma_y')**2 / data['ey']
     
     units['betax'] = unit('m')
     units['betay'] = unit('m')
+    
+    if 's' in data:
+        data['s'] -= data['s'].min()
         
     return data, units
 
-def write_genesis4_beam(particle_group, h5_fname, n_slice=None, verbose=False):
+def write_genesis4_beam(particle_group, h5_fname, n_slice=None, verbose=False, return_input_str=False):
     """
     Writes sliced beam data to an HDF5 file
     
@@ -308,6 +311,63 @@ def write_genesis4_beam(particle_group, h5_fname, n_slice=None, verbose=False):
         print('Genesis4 beam file written:', h5_fname) 
 
 
+    if return_input_str:
+        data_keys = list(beam_data)
+        lines = genesis4_profile_file_input_str(data_keys, h5_fname)
+        lines += genesis4_beam_input_str(data_keys)
+        return lines
+        
+def _profile_file_lines(label, h5filename, xdata_key, ydata_key, isTime=False, reverse=False):
+    lines = f"""&profile_file
+  label = {label}
+  xdata = {h5filename}/{xdata_key}
+  ydata = {h5filename}/{ydata_key}"""
+    if isTime:
+        lines +=   "\n  isTime = T"
+    if reverse:
+        lines +=   "\n  reverse = T"       
+    lines += "\n&end\n"
+    return lines
+
+def genesis4_profile_file_input_str(data_keys, h5filename):
+    """
+    Returns an input str suitable for the main Genesis4 input file
+    for profile data.
+    """
+
+    h5filename = os.path.split(h5filename)[1] # Genesis4 does not understand paths
+    
+    if 's' in data_keys:
+        xdata_key = 's'
+        isTime = False
+        reverse = False
+    elif 't' in data_keys:
+        xdata_key = 't'
+        isTime = True
+        reverse = True
+    else:
+        raise ValueError('no s or t found')
+
+    lines = ''
+    for ydata_key in data_keys:
+        if ydata_key == xdata_key:
+            continue
+        lines += _profile_file_lines(ydata_key, h5filename, xdata_key, ydata_key, isTime, reverse)
+            
+    return lines
+
+def genesis4_beam_input_str(data_keys):
+    """
+    Returns an input str suitable for the main Genesis4 input file
+    for profile data.
+    """    
+    lines = ['&beam']
+    for k in data_keys:
+        if k in ('s', 't'):
+            continue
+        lines.append(f'  {k} = @{k}')
+    lines.append('&end')
+    return '\n'.join(lines)        
 
 
 

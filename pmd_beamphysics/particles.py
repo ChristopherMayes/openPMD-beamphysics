@@ -775,8 +775,8 @@ class ParticleGroup:
         write_genesis2_beam_file(filePath, beam_columns, verbose=verbose)  
         
     @functools.wraps(write_genesis4_beam)          
-    def write_genesis4_beam(self, filePath, n_slice=None, verbose=False):
-        write_genesis4_beam(self, filePath, n_slice=n_slice, verbose=verbose)
+    def write_genesis4_beam(self, filePath, n_slice=None, return_input_str=False, verbose=False):
+        return write_genesis4_beam(self, filePath, n_slice=n_slice, return_input_str=return_input_str, verbose=verbose)
         
     def write_genesis4_distribution(self, filePath, verbose=False):
         write_genesis4_distribution(self, filePath, verbose=verbose)

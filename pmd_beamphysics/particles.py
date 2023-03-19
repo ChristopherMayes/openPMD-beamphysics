@@ -2,7 +2,7 @@ from pmd_beamphysics.units import dimension, dimension_name, SI_symbol, pg_units
 
 from pmd_beamphysics.interfaces.astra import write_astra
 from pmd_beamphysics.interfaces.bmad import write_bmad
-from pmd_beamphysics.interfaces.genesis import write_genesis4_distribution, genesis2_beam_data,  write_genesis2_beam_file
+from pmd_beamphysics.interfaces.genesis import write_genesis4_distribution, genesis2_beam_data,  write_genesis2_beam_file, write_genesis4_beam
 from pmd_beamphysics.interfaces.gpt import write_gpt
 from pmd_beamphysics.interfaces.impact import write_impact
 from pmd_beamphysics.interfaces.litrack import write_litrack
@@ -19,8 +19,10 @@ from pmd_beamphysics.statistics import norm_emit_calc, normalized_particle_coord
 from pmd_beamphysics.writers import write_pmd_bunch, pmd_init
 
 from h5py import File
+from scipy import stats as scipy_stats
 import numpy as np
 from copy import deepcopy
+import functools
 import os
 
 
@@ -772,6 +774,10 @@ class ParticleGroup:
         # Actually write the file
         write_genesis2_beam_file(filePath, beam_columns, verbose=verbose)  
         
+    @functools.wraps(write_genesis4_beam)          
+    def write_genesis4_beam(self, filePath, n_slice=None, verbose=False):
+        write_genesis4_beam(self, filePath, n_slice=n_slice, verbose=verbose)
+        
     def write_genesis4_distribution(self, filePath, verbose=False):
         write_genesis4_distribution(self, filePath, verbose=verbose)
         
@@ -1073,24 +1079,46 @@ def split_particles(particle_group, n_chunks = 100, key='z'):
         
     return plist
 
+
+
+
 def resample(particle_group, n):
     """
     Resamples a ParticleGroup randomly.
     
-    Returns a new ParticleGroup instance.
+    If weights are equal, a random subset of particles will be selected.
+    Otherwise, particles will be sampled according to their weight.
+    Note that this latter method can result in duplicate particles.
     
-    Note that this only works if the weights are the same
+    Returns a new ParticleGroup instance.
     
     """
     n_old = particle_group.n_particle
-    assert n <= n_old, 'Cannot supersample'
-    assert len(set(particle_group.weight)) == 1, 'non-unique weights for resampling.'
-    ixlist = np.random.choice(n_old, n, replace=False)
+    if n > n_old:
+        raise ValueError(f'Cannot supersample {n_old} to {n}')
+    
+    weight = particle_group.weight
+    
+    # Equal weights
+    if len(set(particle_group.weight)) == 1:
+        ixlist = np.random.choice(n_old, n, replace=False)
+        
+    # variable weights        
+    else:
+        # From SciPy example:
+        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_discrete.html#scipy.stats.rv_discrete
+        pk = weight / np.sum(weight) # Probabilities
+        xk = np.arange(len(pk)) # index
+        ixsampler = scipy_stats.rv_discrete(name='ixsampler', values=(xk, pk))        
+        ixlist = ixsampler.rvs(size=n)
+        
+    weight = np.full(n, particle_group.charge/n)
+    
     data = {}
     for key in particle_group._settable_array_keys:
         data[key] = particle_group[key][ixlist]
     data['species'] = particle_group['species']
-    data['weight'] *= n_old/n # Need to re-weight
+    data['weight'] = weight
     
     return ParticleGroup(data=data)
 

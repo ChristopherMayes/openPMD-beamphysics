@@ -3,7 +3,7 @@ import numpy as np
 from h5py import File
 
 from pmd_beamphysics.statistics import twiss_calc
-from pmd_beamphysics.units import mec2, c_light
+from pmd_beamphysics.units import mec2, c_light, write_unit_h5, unit
 
 
 
@@ -239,6 +239,78 @@ def genesis2_dpa_to_data(dpa, *, xlamds, current, zsep=1, species='electron'):
 #-------------
 # Version 4 routines
 
+
+def genesis4_beam_data(pg, n_slice=None):
+    """
+    Slices a particlegroup into n_slice and forms the sliced beam data. 
+    
+    n_slice is the number of slices. If not given, the beam will be divided 
+    so there are 100 particles in each slice. 
+    
+    Returns a dict of beam_columns, for use with write_genesis2_beam_file
+    
+    This uses the same routines as genesis2, with some relabeling
+    See: genesis2_beam_data1
+    """
+    
+    # Re-use genesis2_beam_data
+    g2data = genesis2_beam_data(pg, n_slice=n_slice)
+    
+    # Old, new, unit
+    relabel = [
+           ('tpos', 't', 's'),
+           ('zpos', 's', 'm'),
+           ('curpeak', 'current', 'A'),
+           ('gamma0', 'gamma', '1'),
+           ('delgam', 'delgam', '1'),
+           ('emitx', 'ex', 'm'),
+           ('emity', 'ey', 'm'),
+           ('rxbeam', 'sigma_x', 'm'),
+           ('rybeam', 'sigma_y', 'm'),
+           ('xbeam', 'xcenter', 'm'),
+           ('ybeam', 'ycenter', 'm'),
+           ('pxbeam', 'pxcenter', '1'),
+           ('pybeam', 'pycenter', '1'),
+           ('alphax', 'alphax', '1'),
+           ('alphay', 'alphay', '1'),
+            ] 
+    
+    data = {}
+    units = {}
+    for g2key, g4key, u in relabel:  
+        if g2key not in g2data:
+            continue          
+        data[g4key] = g2data[g2key]
+        units[g4key] = unit(u)
+        
+    # Re-calculate these
+    data['betax'] = data['gamma'] * data['sigma_x']**2 / data['ex']
+    data['betay'] = data['gamma'] * data['sigma_y']**2 / data['ey']
+    
+    units['betax'] = unit('m')
+    units['betay'] = unit('m')
+        
+    return data, units
+
+def write_genesis4_beam(particle_group, h5_fname, n_slice=None, verbose=False):
+    """
+    Writes sliced beam data to an HDF5 file
+    
+    """
+    beam_data, units = genesis4_beam_data(particle_group, n_slice = n_slice)
+    
+    with File(h5_fname, 'w') as h5:
+        for k in beam_data:
+            h5[k] = beam_data[k]
+            write_unit_h5(h5[k], units[k])
+            
+    if verbose:
+        print('Genesis4 beam file written:', h5_fname) 
+
+
+
+
+
 def write_genesis4_distribution(particle_group,
                              h5file,
                              verbose=False):
@@ -266,6 +338,8 @@ def write_genesis4_distribution(particle_group,
     If particles are at different z, they will be drifted to the same z, 
     because the output should have different times. 
     
+    If any of the weight
+    
     """
 
 
@@ -280,12 +354,15 @@ def write_genesis4_distribution(particle_group,
         # Work on a copy, because we will drift
         P = particle_group.copy()
         # Drift to z. 
-        P.drift_to_z()        
-        
-    
+        P.drift_to_z()                    
     else:
         P = particle_group
-
+        
+    if len(set(P.weight)) > 1:
+        n = len(P)
+        if verbose:
+            print(f'Resampling {n} weighted particles')      
+        P = P.resample(n)        
         
     for k in ['x', 'xp', 'y', 'yp', 't']:
         h5[k] = P[k]
@@ -388,7 +465,7 @@ def genesis4_par_to_data(h5, species='electron', smear=True):
         irel  = (theta / (2*np.pi) % 1) # Relative bin position (0,1)
         n1 = len(theta)
         if smear:
-            z1 = (irel + np.random.randint(0, high=sample, size=n1) + i0) * ds_slice  
+            z1 = (irel + np.random.randint(0, high=sample, size=n1) + i0) * ds_slice # Random smear
         else: 
             z1 = (irel + i0 )* ds_slice
         z.append(z1)

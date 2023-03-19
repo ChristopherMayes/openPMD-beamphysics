@@ -469,7 +469,7 @@ def genesis4_par_to_data(h5, species='electron', smear=True):
     
     Returns
     -------
-    data: dict for ParitcleGroup
+    data: dict for ParticleGroup
         
     
     """

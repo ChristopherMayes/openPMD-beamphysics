@@ -514,6 +514,13 @@ def genesis4_par_to_data(h5, species='electron', smear=True):
     i0 = 0
     for sname in sorted([g for g in h5 if g not in scalars]):
         g = h5[sname]
+
+        current = g['current'][:] # I * s_spacing/c = Q 
+        assert len(current) == 1
+        # Skip zero current slices. These usually have nans in the particle data.
+        if current == 0:
+            continue        
+        
         x.append( g['x'][:])
         px.append(g['px'][:]*mec2)  
         y.append( g['y'][:])
@@ -529,10 +536,9 @@ def genesis4_par_to_data(h5, species='electron', smear=True):
         else: 
             z1 = (irel + i0 )* ds_slice
         z.append(z1)
-        
+           
         # Convert current to weight (C)
-        current = g['current'][:] # I * s_spacing/c = Q 
-        assert len(current) == 1
+        # I * s_spacing/c = Q 
         q1 = np.full(n1, current) * s_spacing / c_light / n1
         weight.append(q1) 
         

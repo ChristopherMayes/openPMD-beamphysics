@@ -398,7 +398,8 @@ def write_genesis4_distribution(particle_group,
     If particles are at different z, they will be drifted to the same z, 
     because the output should have different times. 
     
-    If any of the weight
+    If any of the weights are different, the bunch will be resampled.
+    Note that this can be very slow for a large number of particles.
     
     """
 

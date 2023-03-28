@@ -6,16 +6,24 @@ from pmd_beamphysics.writers import write_pmd_field, pmd_field_init
 
 from pmd_beamphysics import tools
 
-from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d
+from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d, plot_fieldmesh_cylindrical_1d
 
-from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
-from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
+from pmd_beamphysics.interfaces.ansys import read_ansys_ascii_3d_fields
 from pmd_beamphysics.interfaces.astra import read_astra_3d_fieldmaps, write_astra_3d_fieldmaps
+from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
+from pmd_beamphysics.interfaces.impact import create_impact_solrf_fieldmap_fourier, create_impact_solrf_ele
+from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
+
+from pmd_beamphysics.fields.expansion import expand_fieldmesh_from_onaxis
+from pmd_beamphysics.fields.conversion import fieldmesh_rectangular_to_cylindrically_symmetric_data
+
+import functools
 
 from h5py import File
 import numpy as np
 from copy import deepcopy
 import os
+import functools
 
 
 c_light = 299792458.
@@ -36,67 +44,81 @@ class FieldMesh:
     Class for openPMD External Field Mesh data.
     
     Initialized on on openPMD beamphysics particle group:
-        h5 = open h5 handle, or str that is a file
-        data = raw data
+    
+    - **h5**: open h5 handle, or str that is a file
+    - **data**: raw data
         
     The required data is stored in ._data, and consists of dicts:
-        'attrs'
-        'components'
+    
+    - `'attrs'`
+    - `'components'`
     
     Component data is always 3D.
     
-    Initialization:
-        From openPMD-beamphysics HDF5 file:
-            FieldMesh('file.h5')
-        From data dict:
-            FieldMesh(data=data)
+    Initialization from openPMD-beamphysics HDF5 file:
+    
+    - `FieldMesh('file.h5')`
+    
+    Initialization from a data dict:
+    
+    - `FieldMesh(data=data)`
     
     Derived properties:
                 
-        .r, .theta, .z
-        .Br, .Btheta, .Bz
-        .Er, .Etheta, .Ez
-        .E, .B
-        
-        .phase
-        .scale
-        .factor
-        
-        .harmonic
-        .frequency
-        
-        .shape
-        .geometry
-        .mins, .maxs, .deltas
-        .meshgrid
-        .dr, .dtheta, .dz
+    - `.r`, `.theta`, `.z`
+    - `.Br`, `.Btheta`, `.Bz`
+    - `.Er`, `.Etheta`, `.Ez`
+    - `.E`, `.B`
+    
+    - `.phase`
+    - `.scale`
+    - `.factor`
+    
+    - `.harmonic`
+    - `.frequency`
+    
+    - `.shape`
+    - `.geometry`
+    - `.mins`, `.maxs`, `.deltas`
+    - `.meshgrid`
+    - `.dr`, `.dtheta`, `.dz`
     
     Booleans:
-        .is_pure_electric
-        .is_pure_magnetic
-        .is_static
+    
+    - `.is_pure_electric`
+    - `.is_pure_magnetic`
+    - `.is_static`
     
     Units and labels
-        .units
-        .axis_labels
+    
+    - `.units`
+    - `.axis_labels`
     
     Plotting:
-        .plot
+    
+    - `.plot`
+    - `.plot_onaxis`
     
     Writers
-        .write
-        .write_astra_3d
-        .write_gpt
-        .write_superfish
+    
+    - `.write`
+    - `.write_astra_3d`
+    - `.to_cylindrical`
+    - `.to_impact_solrf`
+    - `.write_gpt`
+    - `.write_superfish`
         
-    Readers (class methods):
-        .from_astra_3d
-        .from_superfish
+    Constructors (class methods):
+    
+    - `.from_ansys_ascii_3d`
+    - `.from_astra_3d`
+    - `.from_superfish`
+    - `.from_onaxis`
+    - `.expand_onaxis`
+        
+    
     
 
-    
-
-    
     """
     def __init__(self, h5=None, data=None):
     
@@ -112,7 +134,7 @@ class FieldMesh:
                     data = load_field_data_h5(hh5[fp[0]])
 
             else:
-                pass
+                data = load_field_data_h5(h5)
         else:
             data = load_field_data_dict(data)
             
@@ -158,7 +180,7 @@ class FieldMesh:
     @property
     def phase(self):
         """
-        Returns the complex argument phi = -2*pi*RFphase
+        Returns the complex argument `phi = -2*pi*RFphase`
         to multiply the oscillating field by. 
         
         Can be set. 
@@ -176,7 +198,7 @@ class FieldMesh:
         """
         factor to multiply fields by, possibly complex.
         
-        factor = scale * exp(i*phase)
+        `factor = scale * exp(i*phase)`
         """
         return np.real_if_close(self.scale * np.exp(1j*self.phase))           
     
@@ -191,9 +213,10 @@ class FieldMesh:
         """
         Returns axis index for a named axis label key.
         
-        Example:
-            .axis_labels == ('x', 'y', 'z')
-            .axis_index('z') returns 2
+        Examples:
+        
+        - `.axis_labels == ('x', 'y', 'z')`
+        - `.axis_index('z')` returns `2`
         """
         for i, name in enumerate(self.axis_labels):
             if name == key:
@@ -279,13 +302,20 @@ class FieldMesh:
     # TODO: more general plotting
     def plot(self, component=None, time=None, axes=None, cmap=None, return_figure=False, **kwargs):
         
-        
+        if self.geometry != 'cylindrical':
+            raise NotImplementedError(f'Geometry {self.geometry} not implemented')
+            
         return plot_fieldmesh_cylindrical_2d(self,
                                              component=component,
                                              time=time,
                                              axes=axes,
                                              return_figure=return_figure,
                                              cmap=cmap, **kwargs)
+    
+    @functools.wraps(plot_fieldmesh_cylindrical_1d) 
+    def plot_onaxis(self, *args, **kwargs):
+        assert self.geometry == 'cylindrical'
+        return plot_fieldmesh_cylindrical_1d(self, *args, **kwargs)
     
     
     def units(self, key):
@@ -296,11 +326,7 @@ class FieldMesh:
         
         # Fill out aliases 
         if key in component_from_alias:
-            key = component_from_alias[key]
-        elif key == 'E':
-            key = 'electricField'
-        elif key == 'B':
-            key = 'magneticField'            
+            key = component_from_alias[key]         
         
         return pg_units(key)    
     
@@ -322,6 +348,27 @@ class FieldMesh:
         
     def write_astra_3d(self, common_filePath, verbose=False):      
         return  write_astra_3d_fieldmaps(self, common_filePath)
+          
+        
+    @functools.wraps(create_impact_solrf_ele)      
+    def to_impact_solrf(self, *args, **kwargs):
+        return create_impact_solrf_ele(self, *args, **kwargs)
+      
+    def to_cylindrical(self):
+        """
+        Returns a new FieldMesh in cylindrical geometry.
+        
+        If the current geometry is rectangular, this
+        will use the y=0 slice.
+        
+        """
+        if self.geometry == 'rectangular':
+            return FieldMesh(data=fieldmesh_rectangular_to_cylindrically_symmetric_data(self))
+        elif self.geometry == 'cylindrical':
+            return self
+        else:
+            raise NotImplementedError(f"geometry not implemented: {self.geometry}")
+            
     
     def write_gpt(self, filePath, asci2gdf_bin=None, verbose=True):
         """
@@ -331,26 +378,68 @@ class FieldMesh:
         return write_gpt_fieldmesh(self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose)
     
     # Superfish
+    @functools.wraps(write_superfish_t7)
     def write_superfish(self, filePath, verbose=False):
         """
         Write a Superfish T7 file. 
         
         For static fields, a Poisson T7 file is written.
         
-        For dynamic (harmonic /= 0) fields, a Fish T7 file is written
+        For dynamic (`harmonic /= 0`) fields, a Fish T7 file is written
         """
         return write_superfish_t7(self, filePath, verbose=verbose)
             
             
             
     @classmethod
-    def from_superfish(cls, filename, type='electric', geometry='cylindrical'):
+    @functools.wraps(read_superfish_t7)
+    def from_superfish(cls, filename, type=None, geometry='cylindrical'):
         """
         Class method to parse a superfish T7 style file.
         """        
         data = read_superfish_t7(filename, type=type, geometry=geometry)
         c = cls(data=data)
         return c               
+        
+
+    @classmethod
+    def from_ansys_ascii_3d(cls, *, 
+                   efile = None,
+                   hfile = None,
+                   frequency = None):
+        """
+        Class method to return a FieldMesh from ANSYS ASCII files.
+        
+        The format of each file is:
+        header1 (ignored)
+        header2 (ignored)
+        x y z re_fx im_fx re_fy im_fy re_fz im_fz 
+        ...
+        in C order, with oscillations as exp(i*omega*t)
+        
+        Parameters
+        ----------
+        efile: str
+            Filename with complex electric field data in V/m
+        
+        hfile: str
+            Filename with complex magnetic H field data in A/m
+        
+        frequency: float
+            Frequency in Hz
+        
+        Returns
+        -------
+        FieldMesh
+        
+        """
+        
+        if frequency is None:
+            raise ValueError(f"Please provide a frequency")
+        
+        data = read_ansys_ascii_3d_fields(efile, hfile, frequency=frequency)
+        return cls(data=data)
+        
         
         
     @classmethod
@@ -363,6 +452,104 @@ class FieldMesh:
         data = read_astra_3d_fieldmaps(common_filename, frequency=frequency)
         return cls(data=data)
         
+    @classmethod
+    def from_onaxis(cls, *,
+                    z=None,
+                    Bz=None,
+                    Ez=None,
+                    frequency=0,
+                    harmonic=None,
+                    eleAnchorPt = 'beginning'
+                   ):
+            """
+            
+            
+            Parameters 
+            ----------
+            z: array
+                z-coordinates. Must be regularly spaced.       
+            
+            Bz: array, optional
+                magnetic field at r=0 in T
+                Default: None        
+            
+            Ez: array, optional
+                Electric field at r=0 in V/m
+                Default: None
+                
+            frequency: float, optional
+                fundamental frequency in Hz.
+                Default: 0
+                
+            harmonic: int, optional
+                Harmonic of the fundamental the field actually oscillates at.
+                Default: 1 if frequency !=0, otherwise 0. 
+                
+            eleAnchorPt: str, optional
+                Element anchor point.
+                Should be one of 'beginning', 'center', 'end'
+                Default: 'beginning'
+            
+        
+            Returns
+            -------
+            field: FieldMesh
+                Instantiated fieldmesh
+            
+            """
+    
+            # Get spacing
+            nz = len(z)
+            dz = np.diff(z)
+            if not np.allclose(dz, dz[0]):
+                raise NotImplementedError("Irregular spacing not implemented")
+            dz = dz[0]    
+        
+            components = {}
+            if Ez is not None:
+                Ez = np.squeeze(np.array(Ez))
+                if Ez.ndim != 1:
+                    raise ValueError(f'Ez ndim = {Ez.ndim} must be 1')
+                components['electricField/z'] = Ez.reshape(1,1,len(Ez))
+                
+            if Bz is not None:
+                Bz = np.squeeze(np.array(Bz))
+                if Bz.ndim != 1:
+                    raise ValueError(f'Bz ndim = {Bz.ndim} must be 1')
+                components['magneticField/z'] = Bz.reshape(1,1,len(Bz))            
+        
+            if Bz is None and Ez is None:
+                raise ValueError('Please enter Ez or Bz')
+        
+            # Handle harmonic options
+            if frequency == 0:
+                harmonic = 0
+            elif harmonic is None:
+                harmonic = 1
+        
+            attrs = {'eleAnchorPt': eleAnchorPt,
+             'gridGeometry': 'cylindrical',
+             'axisLabels': np.array(['r', 'theta', 'z'], dtype='<U5'),
+             'gridLowerBound': np.array([0, 0, 0]),
+             'gridOriginOffset': np.array([ 0. ,  0. , z.min()]),
+             'gridSpacing': np.array([0. , 0.   , dz]),
+             'gridSize': np.array([1,  1, nz]),
+             'harmonic': harmonic,
+             'fundamentalFrequency': frequency,
+             'RFphase': 0,
+             'fieldScale': 1.0} 
+            
+            data = dict(attrs=attrs, components=components)
+            return cls(data=data)        
+        
+    
+    
+    @functools.wraps(expand_fieldmesh_from_onaxis)
+    def expand_onaxis(self, *args, **kwargs):
+        return expand_fieldmesh_from_onaxis(self, *args, **kwargs)
+    
+    
+    
         
     def __eq__(self, other):
         """
@@ -370,7 +557,6 @@ class FieldMesh:
         """
         
         if not tools.data_are_equal(self.attrs, other.attrs):
-            print('here')
             return False
         
         return tools.data_are_equal(self.components, other.components)
@@ -438,6 +624,15 @@ class FieldMesh:
     def z(self):
         return self.coord_vec('z')    
     
+    # Deltas
+    ## cartesian
+    @property
+    def dx(self):
+        return self.deltas[self.axis_index('x')]
+    @property
+    def dy(self):
+        return self.deltas[self.axis_index('y')]    
+    ## cylindrical
     @property
     def dr(self):
         return self.deltas[self.axis_index('r')]
@@ -446,9 +641,25 @@ class FieldMesh:
         return self.deltas[self.axis_index('theta')]
     @property
     def dz(self):
-        return self.deltas[self.axis_index('z')]    
+        return self.deltas[self.axis_index('z')]  
+
+    # Scaled components
+    # TODO: Check geometry
+    ## cartesian
+    @property
+    def Bx(self):
+        return self.scaled_component('Bx') 
+    @property
+    def By(self):
+        return self.scaled_component('By')  
+    @property
+    def Ex(self):
+        return self.scaled_component('Ex')  
+    @property
+    def Ey(self):
+        return self.scaled_component('Ey')         
     
-    # TODO: Cartesian components, checking geometry
+    ## cylindrical
     @property
     def Br(self):
         return self.scaled_component('Br')
@@ -467,6 +678,9 @@ class FieldMesh:
     @property
     def Ez(self):
         return self.scaled_component('Ez')    
+    
+ 
+    
     
     @property
     def B(self):
@@ -490,9 +704,11 @@ class FieldMesh:
         Returns component data from a key
         
         If the key starts with:
-            re_
-            im_
-            abs_
+        
+        - `re_`
+        - `im_`
+        - `abs_`
+        
         the appropriate numpy operator is applied.
         
         
@@ -525,7 +741,9 @@ class FieldMesh:
         return dat
         
 
-        
+    def copy(self):
+        """Returns a deep copy"""
+        return deepcopy(self)          
         
     def __repr__(self):
         memloc = hex(id(self))
@@ -535,7 +753,7 @@ class FieldMesh:
 
 def get_operator(key):
     """
-    Check if a key starts with re_, im_, abs_
+    Check if a key starts with `re_`, `im_`, `abs_`
     
     returns operator, newkey
     """
@@ -560,9 +778,9 @@ def load_field_data_h5(h5, verbose=True):
     """
     
     
-    If attrs['dataOrder'] == 'F', will transpose.
+    If `attrs['dataOrder'] == 'F'`, will transpose.
     
-    If attrs['harmonic'] == 0, components will be cast to real by np.real
+    If `attrs['harmonic'] == 0`, components will be cast to real by `np.real`
     
     Returns:
         data dict
@@ -637,6 +855,14 @@ def load_field_data_dict(data_dict, verbose=True):
     
     
     return data
+
+
+
+
+
+
+
+
 
 
 

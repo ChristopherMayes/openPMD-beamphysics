@@ -1,4 +1,97 @@
-site_name: My Docs
+site_name: openPMD-beamphysics
+repo_url: https://github.com/ChristopherMayes/openPMD-beamphysics
+repo_name: ChristopherMayes/openPMD-beamphysics
+
+nav:
+    - Home: index.md
+    
+    - Examples:
+        - Particles:
+            - examples/particle_examples.ipynb
+            - examples/normalized_coordinates.ipynb
+            - examples/read_examples.ipynb
+            - examples/write_examples.ipynb
+            - examples/plot_examples.ipynb
+        - Fields:
+            - examples/fields/field_examples.ipynb
+            - examples/fields/field_expansion.ipynb
+            - examples/fields/field_tracking.ipynb
+        - Utilities:
+            - examples/units.ipynb
+            - examples/labels.ipynb
+
+    - API:
+      - Particles: api/particles.md
+      - Fields: api/fields.md
+
+
+theme:
+  icon:
+    repo: fontawesome/brands/github
+  name: material
+
+  custom_dir: overrides
+  features:
+    - navigation.top
+    - navigation.tabs
+    - navigation.indexes
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to light mode
+
+markdown_extensions:
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.arithmatex: # Enable MathJAX https://squidfunk.github.io/mkdocs-material/reference/mathjax/
+      generic: true  
+      
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js      
+
+extra:
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/ChristopherMayes/openPMD-beamphysics
+      name: openPMD-beamphysics
+
+extra_css:
+  - stylesheets/extra.css        
 
 plugins:
-  - mknotebooks
+    - search
+      
+    - mkdocs-jupyter:
+        include_source: True
+          
+    - mkdocstrings:
+        default_handler: python
+        handlers:
+          python:
+            selection:
+              docstring_style: "numpy"
+              inherited_members: false
+              filters:
+                - "!^_"  # exclude all members starting with _
+                - "^__init__$"  # but always include __init__ modules and methods
+            rendering:
+              show_source: true
+              show_root_heading: true
+
+
+
+
+
+

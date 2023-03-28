@@ -228,9 +228,9 @@ SI_symbol = {
 SI_name = {v: k for k, v in SI_symbol.items()}
 
 
-
 known_unit = { 
     '1'          : pmd_unit('', 1, '1'),
+    'degree'     : pmd_unit('degree', np.pi/180, '1'),
     'rad'        : pmd_unit('rad', 1, '1'),
     'm'          : pmd_unit('m', 1, 'length'),
     'kg'         : pmd_unit('kg', 1, 'mass'),
@@ -249,6 +249,9 @@ known_unit = {
     'eV'         : pmd_unit('eV', e_charge, 'energy'),
     'J'          : pmd_unit('J', 1, 'energy'),
     'eV/c'       : pmd_unit('eV/c', e_charge/c_light, 'momentum'),
+    'eV/m'       : pmd_unit('eV/m', e_charge, (1, 1, -2, 0, 0, 0, 0)),
+    'W/m^2'      : pmd_unit('W/m^2', 1, (1, 0, -3, 0, 0, 0, 0)),
+    'W'          : pmd_unit('W', 1, (1, 2, -3, 0, 0, 0, 0)),
     'T'          : pmd_unit('T', 1, 'magnetic_field')
     } 
 
@@ -386,7 +389,7 @@ def nice_array(a):
 # Units for ParticleGroup
 
 PARTICLEGROUP_UNITS = {}
-for k in ['status']:
+for k in ['n_particle', 'status', 'id', 'n_alive', 'n_dead']:
     PARTICLEGROUP_UNITS[k] = unit('1')
 for k in ['t']:
     PARTICLEGROUP_UNITS[k] = unit('s')
@@ -414,6 +417,12 @@ for k in ['xp', 'yp']:
     PARTICLEGROUP_UNITS[k] = unit('rad')
 for k in ['x_bar', 'px_bar', 'y_bar', 'py_bar']:
     PARTICLEGROUP_UNITS[k] = sqrt_unit(unit('m'))
+for component in ['', 'x', 'y', 'z', 'theta', 'r']:
+    PARTICLEGROUP_UNITS[f'E{component}'] = unit('V/m')
+    PARTICLEGROUP_UNITS[f'B{component}'] = unit('T')    
+    
+
+    
 
 def pg_units(key):
     """

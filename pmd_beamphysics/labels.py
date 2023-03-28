@@ -9,6 +9,14 @@ TEXLABEL = {
 # 'mass',
 # 'higher_order_energy_spread',
 # 'higher_order_energy',
+ 'Ex': 'E_x',
+ 'Ey': 'E_y',
+ 'Ez': 'E_z',    
+ 'Bx': 'B_x',
+ 'By': 'B_y',
+ 'Bz': 'B_z',    
+ 'Etheta': r'E_{\theta}',
+ 'Btheta': r'B_{\theta}',    
  'px': 'p_x',
  'py': 'p_y',
  'pz': 'p_z',
@@ -142,7 +150,7 @@ def mathlabel(*keys, units=None, tex=True):
         l = [texlabel(key) or fr'\mathrm{{ {key} }}' for key in keys]
         label = ', '.join(l)
         if units:
-                label = fr'{label}~(\mathrm{{ {units} }} )'
+            label = fr'{label}~(\mathrm{{ {units} }} )'
             
         return fr'${label}$'
         

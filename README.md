@@ -1,4 +1,11 @@
 # openPMD-beamphysics
+
+**`Documentation`** |
+------------------- |
+[![Documentation](https://img.shields.io/badge/beamphysics-documentation-blue.svg)](https://christophermayes.github.io/openPMD-beamphysics/)  |
+
+
+
 Tools for analyzing and viewing particle data in the openPMD standard, extension beamphysics.
 
 https://github.com/openPMD/openPMD-standard/blob/upcoming-2.0.0/EXT_BeamPhysics.md

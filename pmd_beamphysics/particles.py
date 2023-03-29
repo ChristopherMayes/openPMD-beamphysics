@@ -8,6 +8,7 @@ from pmd_beamphysics.interfaces.impact import write_impact
 from pmd_beamphysics.interfaces.litrack import write_litrack
 from pmd_beamphysics.interfaces.lucretia import write_lucretia
 from pmd_beamphysics.interfaces.opal import write_opal
+from pmd_beamphysics.interfaces.simion import write_simion
 from pmd_beamphysics.interfaces.elegant import write_elegant
 
 from pmd_beamphysics.plot import density_plot, marginal_plot, slice_plot
@@ -793,6 +794,10 @@ class ParticleGroup:
         
     def write_lucretia(self, filePath, ele_name='BEGINNING', t_ref=0, stop_ix=None, verbose=False):       
         return write_lucretia(self, filePath, ele_name=ele_name, t_ref=t_ref, stop_ix=stop_ix)
+
+    def write_simion(self, filePath, color=0, flip_z_to_x=True, verbose=False):
+        return write_simion(self, filePath, verbose=verbose, color=color, flip_z_to_x=flip_z_to_x)
+
         
     def write_opal(self, filePath, verbose=False, dist_type='emitted'):
         return write_opal(self, filePath, verbose=verbose, dist_type=dist_type)

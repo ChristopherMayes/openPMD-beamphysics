@@ -70,8 +70,8 @@ def parse_astra_phase_file(filePath):
     # macro charge in Coulomb. The sign doesn't matter, so make positive
     qmacro = np.abs(data[1:,7]*1e-9)
     
-    species_index = data[1:,8].astype(np.int)
-    status = data[1:,9].astype(np.int)  
+    species_index = data[1:,8].astype(int)
+    status = data[1:,9].astype(int)  
     
     # Select particle by status 
     #probe_particles = np.where(status == 3) 
@@ -145,7 +145,7 @@ def write_astra(particle_group,
     # Astra units and types
     #units = ['m', 'm', 'm', 'eV/c', 'eV/c', 'eV/c', 'ns', 'nC']
     names = ['x', 'y', 'z', 'px', 'py', 'pz', 't', 'q', 'index', 'status']
-    types = 8*[np.float] + 2*[np.int8]
+    types = 8*[float] + 2*[np.int8]
 
     
     # Reference particle

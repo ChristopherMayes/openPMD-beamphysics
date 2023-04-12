@@ -174,3 +174,17 @@ def simion_ion_file_particles_to_particle_data(filename, flip_x_to_z=True):
     
     return data
 
+def KE_AZ_EL_to_momentum(KE, AZ, EL):
+
+    p = np.sqrt( (KE + mec2)**2 - mec2**2) # total momentum in [eV/c]
+    phi = AZ*(np.pi/180)
+    theta = EL*(np.pi/180)
+
+    px = p*np.cos(theta)*np.cos(phi)
+    py = p*np.sin(theta)
+    pz = p*np.cos(theta)*np.sin(phi)
+
+    return (px, py, pz)
+
+
+

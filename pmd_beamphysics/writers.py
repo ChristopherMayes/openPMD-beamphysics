@@ -115,8 +115,8 @@ def write_pmd_field(h5, data, name=None):
         u = pg_units(key)   
         
         # Ensure complex
-        val = val.astype(np.complex)
-        
+        val = val.astype(complex)
+
         # Write
         g2 = write_component_data(g, key, val, unit=u)            
     

@@ -738,7 +738,7 @@ class ParticleGroup:
     
     def drift_to_z(self, z=None):
 
-        if not z:
+        if z is None:
             z = self.avg('z')
         dt = (z - self.z) / (self.beta_z * c_light)
         self.drift(dt)
@@ -752,7 +752,7 @@ class ParticleGroup:
         
         If no z is given, particles will be drifted to the average t
         """
-        if not t:
+        if t is None:
             t = self.avg('t')
         dt = t - self.t
         self.drift(dt)

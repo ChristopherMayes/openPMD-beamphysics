@@ -3463,7 +3463,7 @@ Related properties are:</p>
 
     <span class="k">def</span> <span class="nf">drift_to_z</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">z</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">z</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">z</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">z</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">avg</span><span class="p">(</span><span class="s1">&#39;z&#39;</span><span class="p">)</span>
         <span class="n">dt</span> <span class="o">=</span> <span class="p">(</span><span class="n">z</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">z</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">beta_z</span> <span class="o">*</span> <span class="n">c_light</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">drift</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
@@ -3477,7 +3477,7 @@ Related properties are:</p>
 
 <span class="sd">        If no z is given, particles will be drifted to the average t</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">t</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">t</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">t</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">avg</span><span class="p">(</span><span class="s1">&#39;t&#39;</span><span class="p">)</span>
         <span class="n">dt</span> <span class="o">=</span> <span class="n">t</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">drift</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
@@ -4912,7 +4912,7 @@ P.cov('x', 'px', 'y', 'py')</p>
 
 <span class="sd">    If no z is given, particles will be drifted to the average t</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">t</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">t</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">t</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">avg</span><span class="p">(</span><span class="s1">&#39;t&#39;</span><span class="p">)</span>
     <span class="n">dt</span> <span class="o">=</span> <span class="n">t</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">drift</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>

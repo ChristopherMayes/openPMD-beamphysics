@@ -1814,25 +1814,15 @@ Licensed under the Apache License, Version 2.0.
                     </div>
                 </clipboard-copy>
             </div>
-            <div class="highlight-ipynb hl-python "><pre><span></span><span class="c1"># Useful for debugging</span>
-<span class="o">%</span><span class="n">load_ext</span> <span class="n">autoreload</span>
-<span class="o">%</span><span class="n">autoreload</span> <span class="mi">2</span>
-
-<span class="c1"># Nicer plotting</span>
+            <div class="highlight-ipynb hl-python "><pre><span></span><span class="c1"># Nicer plotting</span>
 <span class="kn">import</span> <span class="nn">matplotlib</span>
 <span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
-<span class="o">%</span><span class="n">matplotlib</span> <span class="n">inline</span>
 <span class="o">%</span><span class="n">config</span> <span class="n">InlineBackend</span><span class="o">.</span><span class="n">figure_format</span> <span class="o">=</span> <span class="s1">&#39;retina&#39;</span>
 <span class="n">matplotlib</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s1">&#39;figure.figsize&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
 </pre></div>
-<div id="cell-1" class="clipboard-copy-txt"># Useful for debugging
-%load_ext autoreload
-%autoreload 2
-
-# Nicer plotting
+<div id="cell-1" class="clipboard-copy-txt"># Nicer plotting
 import matplotlib
 import matplotlib.pyplot as plt
-%matplotlib inline
 %config InlineBackend.figure_format = 'retina'
 matplotlib.rcParams['figure.figsize'] = (8,4)</div>
         
@@ -1933,7 +1923,7 @@ P</div>
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>&lt;ParticleGroup with 100000 particles at 0x7fcde8a85d90&gt;</pre>
+<pre>&lt;ParticleGroup with 100000 particles at 0x7fc2cfb9e520&gt;</pre>
 </div>
 
 </div>
@@ -2099,7 +2089,7 @@ P</div>
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>&lt;ParticleGroup with 50082 particles at 0x7fcdae0244f0&gt;</pre>
+<pre>&lt;ParticleGroup with 50082 particles at 0x7fc308494d60&gt;</pre>
 </div>
 
 </div>
@@ -4633,7 +4623,7 @@ ax.hexbin(datx, daty, gridsize=40, cmap=cmap, vmin=1e-15)</div>
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>&lt;matplotlib.collections.PolyCollection at 0x7fcda579df70&gt;</pre>
+<pre>&lt;matplotlib.collections.PolyCollection at 0x7fc2c71cf3a0&gt;</pre>
 </div>
 
 </div>
@@ -4782,7 +4772,7 @@ plt.imshow(H.T, origin='lower', extent = extent, aspect='auto', vmin=1e-15, cmap
 
 
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>&lt;matplotlib.image.AxesImage at 0x7fcdadfb76d0&gt;</pre>
+<pre>&lt;matplotlib.image.AxesImage at 0x7fc2c71e44f0&gt;</pre>
 </div>
 
 </div>

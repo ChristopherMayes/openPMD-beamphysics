@@ -520,6 +520,7 @@ def genesis4_par_to_data(h5, species='electron', smear=True):
         assert len(current) == 1
         # Skip zero current slices. These usually have nans in the particle data.
         if current == 0:
+            i0 += sample
             continue        
         
         x.append( g['x'][:])

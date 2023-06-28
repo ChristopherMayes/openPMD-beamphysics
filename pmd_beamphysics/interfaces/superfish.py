@@ -284,8 +284,8 @@ def read_superfish_t7(filename,
         #labels=['Ez', 'Er', 'E', 'Hphi']
         dat = dat.reshape(nr, 1, nz, 4)
         
-        components['electricField/z'] = dat[:,:,:,0].astype(np.complex) * 1e6 # MV/m -> V/m
-        components['electricField/r'] = dat[:,:,:,1].astype(np.complex) * 1e6 # MV/m -> V/m
+        components['electricField/z'] = dat[:,:,:,0].astype(complex) * 1e6 # MV/m -> V/m
+        components['electricField/r'] = dat[:,:,:,1].astype(complex) * 1e6 # MV/m -> V/m
         components['magneticField/theta'] = dat[:,:,:,3]  * -1j*mu_0 # A/m -> T
         
     else:

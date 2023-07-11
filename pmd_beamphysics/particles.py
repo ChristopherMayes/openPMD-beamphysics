@@ -20,7 +20,6 @@ from pmd_beamphysics.statistics import norm_emit_calc, normalized_particle_coord
 from pmd_beamphysics.writers import write_pmd_bunch, pmd_init
 
 from h5py import File
-from scipy import stats as scipy_stats
 import numpy as np
 from copy import deepcopy
 import functools

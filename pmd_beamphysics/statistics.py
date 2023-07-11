@@ -1,6 +1,5 @@
 import numpy as np
-
-
+from scipy import stats as scipy_stats
 
 def norm_emit_calc(particle_group, planes=['x']):
     """

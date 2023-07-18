@@ -1,6 +1,5 @@
 import numpy as np
-
-
+from scipy import stats as scipy_stats
 
 def norm_emit_calc(particle_group, planes=['x']):
     """
@@ -422,6 +421,68 @@ def slice_statistics(particle_group,  keys=['mean_z'], n_slice=40, slice_key='z'
             sdat[k][i] = pg[k]
             
     return sdat
+
+
+
+def resample_particles(particle_group, n=0):
+    """
+    Resamples a ParticleGroup randomly.
+
+    If n equals particle_group.n_particle or n=0, 
+    particle indices will be scrambled.
+    
+    Otherwise if weights are equal, a random subset of particles will be selected.
+    
+    Otherwise if weights are not equal, particles will be sampled according to their weight using a method from SciPy:
+    https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_discrete.html#scipy.stats.rv_discrete
+    Note that this latter method can result in duplicate particles, and can be very slow for a large number of particles.
+
+    Parameters
+    ----------
+    n: int, default = 0
+        Number to resample. 
+        If n = 0, this will use all particles.
+
+    Returns
+    -------
+    data: dict of ParticleGroup data
+    
+    """
+    n_old = particle_group.n_particle
+    if n == 0:
+        n = n_old
+
+    if n > n_old:
+        raise ValueError(f'Cannot supersample {n_old} to {n}')
+    
+    weight = particle_group.weight
+    
+    # Equal weights
+    if len(set(particle_group.weight)) == 1:
+        ixlist = np.random.choice(n_old, n, replace=False)
+        weight = np.full(n, particle_group.charge/n)
+        
+    # variable weights        
+    else:
+        if n == n_old:
+            ixlist = np.random.choice(n_old, n, replace=False)
+            weight = weight[ixlist] #just scramble
+        else:
+            # From SciPy example:
+            # https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_discrete.html#scipy.stats.rv_discrete
+            pk = weight / np.sum(weight) # Probabilities
+            xk = np.arange(len(pk)) # index
+            ixsampler = scipy_stats.rv_discrete(name='ixsampler', values=(xk, pk))        
+            ixlist = ixsampler.rvs(size=n)
+            weight = np.full(n, particle_group.charge/n)
+    
+    data = {}
+    for key in particle_group._settable_array_keys:
+        data[key] = particle_group[key][ixlist]
+    data['species'] = particle_group['species']
+    data['weight'] = weight
+    
+    return data
 
 
 

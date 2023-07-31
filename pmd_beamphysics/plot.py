@@ -42,6 +42,7 @@ def slice_plot(particle_group,
                n_slice=40,
                slice_key='z',
                tex=True,
+               ylim=None,
                **kwargs):
     """
     Complete slice plotting routine. Will plot the density of the slice key on the right axis. 
@@ -59,7 +60,7 @@ def slice_plot(particle_group,
     
     # Get nice arrays
     x, _, prex = nice_array(slice_dat[x_key])
-    y, _, prey = nice_array(slice_dat[y_key])
+    y, yfactor, prey = nice_array(slice_dat[y_key])
     y2, _, prey2 = nice_array(slice_dat[y2_key])
     
     x_units = f'{prex}{particle_group.units(x_key)}'
@@ -72,8 +73,6 @@ def slice_plot(particle_group,
     y2_units = prey2+y2_units 
     
     # Labels
-    
-
     labelx = mathlabel(slice_key, units=x_units, tex=tex)
     labely = mathlabel(y_key, units=y_units, tex=tex)    
     labely2 = mathlabel(y2_key, units=y2_units, tex=tex)        
@@ -83,12 +82,24 @@ def slice_plot(particle_group,
     
     # Main plot
     ax.plot(x, y, color = 'black')
-    
-    #ax.set_ylim(0, 1.1*ymax )
 
+    # rhs plot
     ax2 = ax.twinx()
     ax2.set_ylabel(labely2)
     ax2.fill_between(x, 0, y2, color='black', alpha = 0.2)  
+    ax2.set_ylim(0, None)
+    
+    # Limits
+    if ylim:
+        ymin = ylim[0]
+        ymax = ylim[1]
+        # Handle None and scaling
+        if ymin is not None:
+            ymin = ymin/yfactor
+        if ymax is not None:
+            ymax = ymax/yfactor
+        new_ylim = (ymin, ymax)
+        ax.set_ylim(new_ylim)     
     
     return fig
 

@@ -840,6 +840,7 @@ class ParticleGroup:
                    slice_key=None,
                    tex=True,
                    return_figure=False,
+                   ylim=None,
                    **kwargs):
         """
         Slice statistics plot. 
@@ -856,6 +857,7 @@ class ParticleGroup:
                          n_slice=n_slice,
                          slice_key=slice_key,
                          tex=tex,
+                         ylim=ylim,
                          **kwargs)
         
         if return_figure:

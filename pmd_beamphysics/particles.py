@@ -820,17 +820,75 @@ class ParticleGroup:
         
     # Plotting
     # --------
-    # TODO: more general plotting
-    def plot(self, key1='x', key2=None, bins=None, return_figure=False, 
-             tex=True, **kwargs):
+    def plot(self, key1='x', key2=None,
+             bins=None,
+             *,
+             xlim=None,
+             ylim=None,
+             return_figure=False, 
+
+             tex=True,  **kwargs):
         """
         1d or 2d density plot. 
+        
+        If one key is given, this will plot the density of that key.
+        Example:
+            .plot('x')
+        
+        If two keys arg given, this will plot a 2d marginal plot.
+        Example:
+            .plot('x', 'px')
+            
+        
+        Parameters
+        ----------
+        particle_group: ParticleGroup
+            The object to plot
+        
+        key1: str, default = 't'
+            Key to bin on the x-axis
+            
+        key2: str, default = None
+            Key to bin on the y-axis. 
+            
+        bins: int, default = None
+           Number of bins. If None, this will use a heuristic: bins = sqrt(n_particle/4)
+    
+        xlim: tuple, default = None
+            Manual setting of the x-axis limits. 
+            
+        ylim: tuple, default = None
+            Manual setting of the y-axis limits. 
+            
+        tex: bool, defaul = True
+            Use TEX for labels   
+            
+        return_figure: bool, default = False
+            If true, return a matplotlib.figure.Figure object
+            
+        **kwargs
+            Any additional kwargs to send to the the plot in: plt.subplots(**kwargs)
+            
+        
+        Returns
+        -------
+        None or fig: matplotlib.figure.Figure
+            This only returns a figure object if return_figure=T, otherwise returns None
+            
         """
         
         if not key2:
-            fig = density_plot(self, key=key1, bins=bins, tex=tex, **kwargs)
+            fig = density_plot(self, key=key1,
+                               bins=bins,
+                               xlim=xlim,
+                               tex=tex, **kwargs)
         else:
-            fig = marginal_plot(self, key1=key1, key2=key2, bins=bins, tex=tex, **kwargs)
+            fig = marginal_plot(self, key1=key1, key2=key2,
+                                bins=bins,
+                                xlim=xlim,
+                                ylim=ylim,
+                                tex=tex,
+                                **kwargs)
         
         if return_figure:
             return fig

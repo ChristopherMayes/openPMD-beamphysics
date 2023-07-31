@@ -41,11 +41,37 @@ def slice_plot(particle_group,
                stat_key='sigma_x',
                n_slice=40,
                slice_key='z',
-               tex=True,
                ylim=None,
+               tex=True,
                **kwargs):
     """
     Complete slice plotting routine. Will plot the density of the slice key on the right axis. 
+    
+    Parameters
+    ----------
+    particle_group: ParticleGroup
+        The object to plot
+    
+    stat_key: str, default = 'sigma_x'
+        Key to calculate the statistics
+        
+    n_slice: int, default = 40
+        Number of slices 
+        
+    slice_key: str, default = 'z'
+        Should be 'z' or 't'
+        
+    ylim: tuple, default = None
+        Manual setting of the y-axis limits. 
+        
+    tex: bool, defaul = True
+        Use TEX for labels
+        
+    
+    Returns
+    -------
+    fig: matplotlib.figure.Figure
+
     """
     
     x_key = 'mean_'+slice_key
@@ -105,7 +131,11 @@ def slice_plot(particle_group,
 
     
     
-def density_plot(particle_group, key='x', bins=None, tex=True, **kwargs):
+def density_plot(particle_group, key='x',
+                 bins=None,
+                 *, 
+                 xlim=None,
+                 tex=True, **kwargs):
     """
     1D density plot. Also see: marginal_plot
     
@@ -145,15 +175,63 @@ def density_plot(particle_group, key='x', bins=None, tex=True, **kwargs):
 
     ax.set_xlabel(labelx)  
     
+    # Limits
+    if xlim:
+        xmin = xlim[0]
+        xmax = xlim[1]
+        # Handle None and scaling
+        if xmin is not None:
+            xmin = xmin/f1
+        if xmax is not None:
+            xmax = xmax/f1
+        new_xlim = (xmin, xmax)
+        ax.set_xlim(new_xlim)          
+    
     return fig
         
-def marginal_plot(particle_group, key1='t', key2='p', bins=None, tex=True, **kwargs):
+def marginal_plot(particle_group, key1='t', key2='p', 
+                  bins=None,
+                  *,
+                  xlim=None,
+                  ylim=None,
+                  tex=True,
+                  **kwargs):
     """
     Density plot and projections
     
     Example:
     
         marginal_plot(P, 't', 'energy', bins=200)   
+        
+        
+    Parameters
+    ----------
+    particle_group: ParticleGroup
+        The object to plot
+    
+    key1: str, default = 't'
+        Key to bin on the x-axis
+        
+    key2: str, default = 'p'
+        Key to bin on the y-axis        
+        
+    bins: int, default = None
+       Number of bins. If None, this will use a heuristic: bins = sqrt(n_particle/4)
+
+    xlim: tuple, default = None
+        Manual setting of the x-axis limits. 
+        
+    ylim: tuple, default = None
+        Manual setting of the y-axis limits. 
+        
+    tex: bool, defaul = True
+        Use TEX for labels
+        
+    
+    Returns
+    -------
+    fig: matplotlib.figure.Figure        
+        
     
     """
     
@@ -231,6 +309,31 @@ def marginal_plot(particle_group, key1='t', key2='p', bins=None, tex=True, **kwa
     # Set labels on joint
     ax_joint.set_xlabel(labelx)
     ax_joint.set_ylabel(labely)
+    
+    # Limits
+    if xlim:
+        xmin = xlim[0]
+        xmax = xlim[1]
+        # Handle None and scaling
+        if xmin is not None:
+            xmin = xmin/f1
+        if xmax is not None:
+            xmax = xmax/f1
+        new_xlim = (xmin, xmax)
+        ax_joint.set_xlim(new_xlim)      
+        ax_marg_x.set_xlim(new_xlim)     
+    
+    if ylim:
+        ymin = ylim[0]
+        ymax = ylim[1]
+        # Handle None and scaling
+        if ymin is not None:
+            ymin = ymin/f2
+        if ymax is not None:
+            ymax = ymax/f2
+        new_ylim = (ymin, ymax)
+        ax_joint.set_ylim(new_ylim)      
+        ax_marg_y.set_ylim(new_ylim) 
 
     return fig    
     

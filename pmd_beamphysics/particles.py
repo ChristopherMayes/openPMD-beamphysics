@@ -759,8 +759,9 @@ class ParticleGroup:
         self.t = np.full(self.n_particle, t)
     
     # Writers
-    def write_astra(self, filePath, verbose=False):
-        write_astra(self, filePath, verbose=verbose)
+    @functools.wraps(write_astra)    
+    def write_astra(self, filePath, verbose=False, probe=False):
+        write_astra(self, filePath, verbose=verbose, probe=probe)
         
     def write_bmad(self, filePath, p0c=None, t_ref=0, verbose=False):
         write_bmad(self, filePath, p0c=p0c, t_ref=t_ref, verbose=verbose)        

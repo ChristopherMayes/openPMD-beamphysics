@@ -153,7 +153,10 @@ def write_astra(particle_group,
     sigma = {}
     for k in ['x', 'y', 'z', 'px', 'py', 'pz', 't']:
         ref_particle[k] = particle_group.avg(k)
-        sigma[k] =  particle_group.std(k)
+        std = particle_group.std(k)
+        if std == 0:
+            std = 1e-12 # Give some size
+        sigma[k] = std
     ref_particle['t'] *= 1e9 # s -> nS
         
     # Make structured array
@@ -203,6 +206,7 @@ def write_astra(particle_group,
         data[5]['x'] = 1.5*sigma['x'];data[5]['t'] =  1.5*sigma['t']
         data[6]['y'] = 1.5*sigma['y'];data[6]['t'] = -1.5*sigma['t']        
         data[1:7]['status'] = -3
+        data[1:7]['q'] = 0.5e-5 # ? Seems to be required 
         data[1:7]['pz'] = 0 #? This is what the Astra Generator does
     
     # Save in the 'high_res = T' format

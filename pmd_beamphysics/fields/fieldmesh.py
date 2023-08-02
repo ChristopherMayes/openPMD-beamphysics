@@ -9,7 +9,7 @@ from pmd_beamphysics import tools
 from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d, plot_fieldmesh_cylindrical_1d
 
 from pmd_beamphysics.interfaces.ansys import read_ansys_ascii_3d_fields
-from pmd_beamphysics.interfaces.astra import read_astra_3d_fieldmaps, write_astra_3d_fieldmaps
+from pmd_beamphysics.interfaces.astra import write_astra_1d_fieldmap, read_astra_3d_fieldmaps, write_astra_3d_fieldmaps, astra_1d_fieldmap_data
 from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
 from pmd_beamphysics.interfaces.impact import create_impact_solrf_fieldmap_fourier, create_impact_solrf_ele
 from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
@@ -102,8 +102,10 @@ class FieldMesh:
     Writers
     
     - `.write`
+    - `.write_astra_1d`
     - `.write_astra_3d`
     - `.to_cylindrical`
+    - `.to_astra_1d`
     - `.to_impact_solrf`
     - `.write_gpt`
     - `.write_superfish`
@@ -345,7 +347,16 @@ class FieldMesh:
             g = h5
     
         write_pmd_field(g, self.data, name=name)   
-        
+   
+    @functools.wraps(write_astra_1d_fieldmap)
+    def write_astra_1d(self, filePath):      
+        return  write_astra_1d_fieldmap(self, filePath)
+    
+    def to_astra_1d(self):
+        z, fz = astra_1d_fieldmap_data(self)   
+        dat = np.array([z, fz]).T 
+        return {'attrs': {'type': 'astra_1d'}, 'data': dat}
+
     def write_astra_3d(self, common_filePath, verbose=False):      
         return  write_astra_3d_fieldmaps(self, common_filePath)
           

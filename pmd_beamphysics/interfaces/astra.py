@@ -214,6 +214,85 @@ def write_astra(particle_group,
 
     
     
+    
+def write_astra_1d_fieldmap(fm, filePath): 
+    """
+    Writes an Astra fieldmap file from a FieldMesh object.
+    
+    Requires cylindrical geometry for now.
+    
+    Parameters
+    ----------
+    filePath: str
+        Filename to write to
+
+    """
+    
+    z, fz = astra_1d_fieldmap_data(fm)
+    
+    # Flatten dat   
+    dat = np.array([z, fz]).T    
+    
+    np.savetxt(filePath, dat, comments='') 
+    
+    
+    
+def astra_1d_fieldmap_data(fm): 
+    """
+    Astra fieldmap data.
+    
+    Requires cylindrical geometry for now.
+    
+    Returns
+    -------
+    z: array-like
+        z coordinate in meters
+    
+    fz: array-like
+        field amplitude corresponding to z
+    
+    """    
+    
+    
+    assert fm.geometry == 'cylindrical', f'Geometry: {fm.geometry} not implemented'
+    
+    assert fm.shape[1] == 1, 'Cylindrical symmetry required'
+    
+    dat = {}
+    z = fm.coord_vec('z')
+    
+    if fm.is_static:
+        if fm.is_pure_magnetic:
+            fz = np.real(fm['Bz'][0,0,:])
+        elif fm.is_pure_electric:
+            fz = np.real(fm['Ez'][0,0,:])           
+        else:
+            raise ValueError('Mixed static field TODO')
+            
+    else:
+        # Assume RF cavity, rotate onto the real axis
+        # Get complex fields
+        fz = fm.Ez[0,0,:]
+        
+        # Get imaginary argument (angle)
+        iangle = np.unique(np.mod(np.angle(fz), np.pi))
+    
+        # Make sure there is only one
+        assert len(iangle) == 1, print(iangle)
+        iangle = iangle[0]
+        
+        if iangle != 0:
+            rot = np.exp(-1j*iangle)
+            # print(f'Rotating complex field by {-iangle}')
+        else:
+            rot = 1   
+        fz = np.real(fz*rot)
+            
+    return z, fz  
+    
+    
+    
+    
 def vec_spacing(vec):
     """
     Returns the spacing and minimum of a coordinate.

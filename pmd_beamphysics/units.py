@@ -251,8 +251,8 @@ known_unit = {
     'eV/c'       : pmd_unit('eV/c', e_charge/c_light, 'momentum'),
     'eV/m'       : pmd_unit('eV/m', e_charge, (1, 1, -2, 0, 0, 0, 0)),
     'W'          : pmd_unit('W',       1, (2, 1, -3, 0, 0, 0, 0)),
+    'W/rad^2'    : pmd_unit('W/rad^2', 1, (2, 1, -3, 0, 0, 0, 0)),       
     'W/m^2'      : pmd_unit('W/m^2',   1, (0, 1, -3, 0, 0, 0, 0)),
-    'W/rad^2'    : pmd_unit('W/rad^2', 1, (2, 1, -3, 0, 0, 0, 0)),    
     'T'          : pmd_unit('T', 1, 'magnetic_field')
     } 
 

@@ -3,7 +3,7 @@
 
 """
 
-from  pmd_beamphysics.units import nice_array, nice_scale_prefix
+from pmd_beamphysics.units import nice_array, plottable_array, nice_scale_prefix
 from pmd_beamphysics.labels import mathlabel
 
 
@@ -41,8 +41,10 @@ def slice_plot(particle_group,
                stat_key='sigma_x',
                n_slice=40,
                slice_key='z',
+               xlim=None,
                ylim=None,
                tex=True,
+               nice=True,
                **kwargs):
     """
     Complete slice plotting routine. Will plot the density of the slice key on the right axis. 
@@ -85,9 +87,10 @@ def slice_plot(particle_group,
     fig, ax = plt.subplots(**kwargs)
     
     # Get nice arrays
-    x, _, prex = nice_array(slice_dat[x_key])
-    y, yfactor, prey = nice_array(slice_dat[y_key])
-    y2, _, prey2 = nice_array(slice_dat[y2_key])
+    x, f1, prex, xmin, xmax       = plottable_array(slice_dat[x_key], nice=nice, lim=xlim)
+    y, f2, prey, ymin, ymax = plottable_array(slice_dat[y_key], nice=nice, lim=ylim)
+    # Density on r.h.s
+    y2, _, prey2, _, _ = plottable_array(slice_dat[y2_key], nice=nice, lim=None)
     
     x_units = f'{prex}{particle_group.units(x_key)}'
     y_units = f'{prey}{particle_group.units(y_key)}'    
@@ -115,18 +118,12 @@ def slice_plot(particle_group,
     ax2.fill_between(x, 0, y2, color='black', alpha = 0.2)  
     ax2.set_ylim(0, None)
     
-    # Limits
+    # Actual plot limits, considering scaling
+    if xlim:
+        ax.set_xlim( xmin/f1, xmax/f1) 
     if ylim:
-        ymin = ylim[0]
-        ymax = ylim[1]
-        # Handle None and scaling
-        if ymin is not None:
-            ymin = ymin/yfactor
-        if ymax is not None:
-            ymax = ymax/yfactor
-        new_ylim = (ymin, ymax)
-        ax.set_ylim(new_ylim)     
-    
+        ax.set_ylim( ymin/f2, ymax/f2)              
+
     return fig
 
     
@@ -135,7 +132,9 @@ def density_plot(particle_group, key='x',
                  bins=None,
                  *, 
                  xlim=None,
-                 tex=True, **kwargs):
+                 tex=True,
+                 nice=True,
+                 **kwargs):
     """
     1D density plot. Also see: marginal_plot
     
@@ -150,7 +149,7 @@ def density_plot(particle_group, key='x',
         bins = int(n/100)
 
     # Scale to nice units and get the factor, unit prefix
-    x, f1, p1 = nice_array(particle_group[key])
+    x, f1, p1, xmin, xmax = plottable_array(particle_group[key], nice=nice, lim=xlim)
     w = particle_group['weight']
     u1 = particle_group.units(key).unitSymbol
     ux = p1+u1
@@ -177,15 +176,7 @@ def density_plot(particle_group, key='x',
     
     # Limits
     if xlim:
-        xmin = xlim[0]
-        xmax = xlim[1]
-        # Handle None and scaling
-        if xmin is not None:
-            xmin = xmin/f1
-        if xmax is not None:
-            xmax = xmax/f1
-        new_xlim = (xmin, xmax)
-        ax.set_xlim(new_xlim)          
+        ax.set_xlim(xmin/f1, xmax/f1)
     
     return fig
         
@@ -195,6 +186,7 @@ def marginal_plot(particle_group, key1='t', key2='p',
                   xlim=None,
                   ylim=None,
                   tex=True,
+                  nice=True,
                   **kwargs):
     """
     Density plot and projections
@@ -224,8 +216,10 @@ def marginal_plot(particle_group, key1='t', key2='p',
     ylim: tuple, default = None
         Manual setting of the y-axis limits. 
         
-    tex: bool, defaul = True
+    tex: bool, default = True
         Use TEX for labels
+        
+    nice: bool, default = True
         
     
     Returns
@@ -233,16 +227,19 @@ def marginal_plot(particle_group, key1='t', key2='p',
     fig: matplotlib.figure.Figure        
         
     
-    """
-    
+    """    
     if not bins:
         n = len(particle_group)
         bins = int(np.sqrt(n/4) )
 
     # Scale to nice units and get the factor, unit prefix
-    x, f1, p1 = nice_array(particle_group[key1])
-    y, f2, p2 = nice_array(particle_group[key2])
-
+    x = particle_group[key1]
+    y = particle_group[key2]
+    
+    # Form nice arrays
+    x, f1, p1, xmin, xmax = plottable_array(x, nice=nice, lim=xlim)
+    y, f2, p2, ymin, ymax = plottable_array(y, nice=nice, lim=ylim)
+    
     w = particle_group['weight']
     
     u1 = particle_group.units(key1).unitSymbol
@@ -271,8 +268,6 @@ def marginal_plot(particle_group, key1='t', key2='p',
     #H, xedges, yedges = np.histogram2d(x, y, weights=w, bins=bins)
     #extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
     #ax_joint.imshow(H.T, cmap=cmap, vmin=1e-16, origin='lower', extent=extent, aspect='auto')
-    
-    
     
     # Top histogram
     # Old method:
@@ -310,32 +305,16 @@ def marginal_plot(particle_group, key1='t', key2='p',
     ax_joint.set_xlabel(labelx)
     ax_joint.set_ylabel(labely)
     
-    # Limits
+    # Actual plot limits, considering scaling
     if xlim:
-        xmin = xlim[0]
-        xmax = xlim[1]
-        # Handle None and scaling
-        if xmin is not None:
-            xmin = xmin/f1
-        if xmax is not None:
-            xmax = xmax/f1
-        new_xlim = (xmin, xmax)
-        ax_joint.set_xlim(new_xlim)      
-        ax_marg_x.set_xlim(new_xlim)     
-    
+        ax_joint.set_xlim( xmin/f1, xmax/f1)      
+        ax_marg_x.set_xlim(xmin/f1, xmax/f1)
+        
     if ylim:
-        ymin = ylim[0]
-        ymax = ylim[1]
-        # Handle None and scaling
-        if ymin is not None:
-            ymin = ymin/f2
-        if ymax is not None:
-            ymax = ymax/f2
-        new_ylim = (ymin, ymax)
-        ax_joint.set_ylim(new_ylim)      
-        ax_marg_y.set_ylim(new_ylim) 
+        ax_joint.set_ylim( ymin/f2, ymax/f2)     
+        ax_marg_y.set_ylim(ymin/f2, ymax/f2)
 
-    return fig    
+    return fig   
     
     
 def density_and_slice_plot(particle_group, key1='t', key2='p', stat_keys=['norm_emit_x', 'norm_emit_y'], bins=100, n_slice=30, tex=True):
@@ -349,8 +328,8 @@ def density_and_slice_plot(particle_group, key1='t', key2='p', stat_keys=['norm_
     """
 
     # Scale to nice units and get the factor, unit prefix
-    x, f1, p1 = nice_array(particle_group[key1])
-    y, f2, p2 = nice_array(particle_group[key2])
+    x, f1, p1, xmin, xmax = plottable_array(particle_group[key1])
+    y, f2, p2, ymin, ymax = plottable_array(particle_group[key2])
     w = particle_group['weight']
     
     u1 = particle_group.units(key1).unitSymbol

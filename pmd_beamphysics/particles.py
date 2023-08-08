@@ -826,8 +826,8 @@ class ParticleGroup:
              xlim=None,
              ylim=None,
              return_figure=False, 
-
-             tex=True,  **kwargs):
+             tex=True, nice=True,
+             **kwargs):
         """
         1d or 2d density plot. 
         
@@ -855,13 +855,16 @@ class ParticleGroup:
            Number of bins. If None, this will use a heuristic: bins = sqrt(n_particle/4)
     
         xlim: tuple, default = None
-            Manual setting of the x-axis limits. 
+            Manual setting of the x-axis limits. Note that these are in raw, unscaled units. 
             
         ylim: tuple, default = None
-            Manual setting of the y-axis limits. 
+            Manual setting of the y-axis limits. Note that these are in raw, unscaled units. 
             
-        tex: bool, defaul = True
+        tex: bool, default = True
             Use TEX for labels   
+            
+        nice: bool, default = True
+            Scale to nice units
             
         return_figure: bool, default = False
             If true, return a matplotlib.figure.Figure object
@@ -881,13 +884,16 @@ class ParticleGroup:
             fig = density_plot(self, key=key1,
                                bins=bins,
                                xlim=xlim,
-                               tex=tex, **kwargs)
+                               tex=tex,
+                               nice=nice,
+                               **kwargs)
         else:
             fig = marginal_plot(self, key1=key1, key2=key2,
                                 bins=bins,
                                 xlim=xlim,
                                 ylim=ylim,
                                 tex=tex,
+                                nice=nice,
                                 **kwargs)
         
         if return_figure:
@@ -897,7 +903,9 @@ class ParticleGroup:
                    n_slice=100,
                    slice_key=None,
                    tex=True,
+                   nice=True,
                    return_figure=False,
+                   xlim=None,
                    ylim=None,
                    **kwargs):
         """
@@ -915,6 +923,8 @@ class ParticleGroup:
                          n_slice=n_slice,
                          slice_key=slice_key,
                          tex=tex,
+                         nice=nice,
+                         xlim=xlim,
                          ylim=ylim,
                          **kwargs)
         

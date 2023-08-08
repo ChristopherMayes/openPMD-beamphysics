@@ -175,7 +175,7 @@ def sqrt_unit(u):
     
     return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)   
         
-        
+# length mass time current temperature mol luminous
 DIMENSION = { 
     '1'              : (0,0,0,0,0,0,0),
      # Base units
@@ -187,14 +187,14 @@ DIMENSION = {
     'mol'            : (0,0,0,0,0,1,0),
     'luminous'       : (0,0,0,0,0,0,1),
     #
-    'charge'         : (0,0,1,1,0,0,0),
-    'electric_field'  : (1,1,-3,-1,0,0,0),
+    'charge'             : (0,0,1,1,0,0,0),
+    'electric_field'     : (1,1,-3,-1,0,0,0),
     'electric_potential' : (1,2,-3,-1,0,0,0),
-    'magnetic_field' : (0,1,-2,-1,0,0,0),    
-    'velocity'       : (1,0,-1,0,0,0,0),
-    'energy'         : (2,1,-2,0,0,0,0),
-    'momentum'       : (1,1,-1,0,0,0,0)
-}
+    'magnetic_field'     : (0,1,-2,-1,0,0,0),    
+    'velocity'           : (1,0,-1,0,0,0,0),
+    'energy'             : (2,1,-2,0,0,0,0),
+    'momentum'           : (1,1,-1,0,0,0,0)
+}    
 # Inverse
 DIMENSION_NAME = {v: k for k, v in DIMENSION.items()}
 
@@ -227,7 +227,7 @@ SI_symbol = {
 # Inverse
 SI_name = {v: k for k, v in SI_symbol.items()}
 
-
+# length mass time current temperature mol luminous
 known_unit = { 
     '1'          : pmd_unit('', 1, '1'),
     'degree'     : pmd_unit('degree', np.pi/180, '1'),
@@ -250,10 +250,13 @@ known_unit = {
     'J'          : pmd_unit('J', 1, 'energy'),
     'eV/c'       : pmd_unit('eV/c', e_charge/c_light, 'momentum'),
     'eV/m'       : pmd_unit('eV/m', e_charge, (1, 1, -2, 0, 0, 0, 0)),
-    'W/m^2'      : pmd_unit('W/m^2', 1, (1, 0, -3, 0, 0, 0, 0)),
-    'W'          : pmd_unit('W', 1, (1, 2, -3, 0, 0, 0, 0)),
+    'W'          : pmd_unit('W',       1, (2, 1, -3, 0, 0, 0, 0)),
+    'W/m^2'      : pmd_unit('W/m^2',   1, (0, 1, -3, 0, 0, 0, 0)),
+    'W/rad^2'    : pmd_unit('W/rad^2', 1, (2, 1, -3, 0, 0, 0, 0)),    
     'T'          : pmd_unit('T', 1, 'magnetic_field')
     } 
+
+
 
 def unit(symbol):
     """
@@ -367,9 +370,7 @@ def nice_array(a):
     Returns:
         (array([200., 300.]), 1e-12, 'p')
     
-    """
-    #print('a', a.tolist())
-    
+    """    
     if np.isscalar(a):
         x = a
     elif len(a) == 1:
@@ -381,6 +382,48 @@ def nice_array(a):
     fac, prefix = nice_scale_prefix( x )
     
     return a/fac, fac,  prefix
+
+
+def plottable_array(x, nice=True, lim=None):
+    """
+    Similar to nice_array, but also considers limits for plotting
+    
+    Parameters
+    ----------
+    x: array-like
+    nice: bool, default = True
+        Scale array by some nice factor. 
+    xlim: tuple, default = None
+    
+    Returns
+    -------
+    scaled_array: np.ndarray
+    factor: float
+    prefix: str
+    xmin: float
+    xmax : float
+    
+    """
+    if lim is not None:
+        if lim[0] is None:
+            xmin = x.min()
+        else:
+            xmin = lim[0]
+        if lim[1] is None:
+            xmax = x.max()
+        else:
+            xmax = lim[1]            
+ 
+    else:
+        xmin = x.min()
+        xmax = x.max() 
+    
+    if nice:
+        _, factor, p1 = nice_array([xmin, xmax]) 
+    else:
+        factor, p1 = 1, ''
+        
+    return x/factor, factor, p1, xmin, xmax
 
 
 

@@ -38,9 +38,9 @@ def plt_histogram(a, weights=None, bins=40):
     
     
 def slice_plot(particle_group, 
-               stat_key='sigma_x',
+               *keys,
                n_slice=40,
-               slice_key='z',
+               slice_key=None,
                xlim=None,
                ylim=None,
                tex=True,
@@ -54,46 +54,93 @@ def slice_plot(particle_group,
     particle_group: ParticleGroup
         The object to plot
     
-    stat_key: str, default = 'sigma_x'
-        Key to calculate the statistics
+    keys: iterable of str
+        Keys to calculate the statistics, e.g. `sigma_x`.
         
     n_slice: int, default = 40
         Number of slices 
         
-    slice_key: str, default = 'z'
-        Should be 'z' or 't'
+    slice_key: str, default = None 
+         The dimension to slice in. This is typically `t` or `z`.
+         `delta_t`, etc. are also allowed.
+         If None, `t` or `z` will automatically be determined.
         
     ylim: tuple, default = None
         Manual setting of the y-axis limits. 
         
-    tex: bool, defaul = True
+    tex: bool, default = True
         Use TEX for labels
         
-    
     Returns
     -------
     fig: matplotlib.figure.Figure
 
     """
+
+    # Allow a single key
+    #if isinstance(keys, str):
+   # 
+   #     keys = (keys, )
     
+    if slice_key is None:
+        if particle_group.in_t_coordinates:
+            slice_key = 'z'
+        else:
+            slice_key = 't'  
+            
+    # Special case for delta_
+    if slice_key.startswith('delta_'):
+        slice_key = slice_key[6:]
+        has_delta_prefix = True
+    else:
+        has_delta_prefix = False
+    
+    # Get all data
     x_key = 'mean_'+slice_key
-    y_key = stat_key
-    slice_dat = slice_statistics(particle_group, n_slice=n_slice, slice_key=slice_key,
-                            keys=[x_key, y_key, 'ptp_'+slice_key, 'charge'])
-    
-    
+    slice_dat = particle_group.slice_statistics(*keys, n_slice=n_slice, slice_key=slice_key)
     slice_dat['density'] = slice_dat['charge']/ slice_dat['ptp_'+slice_key]
     y2_key = 'density'
+
+    # X-axis
+    x = slice_dat['mean_'+slice_key]  
+    if has_delta_prefix:
+        x -= particle_group['mean_'+slice_key]
+        slice_key = 'delta_'+slice_key # restore        
+        
+    x, f1, p1, xmin, xmax = plottable_array(x, nice=nice, lim=xlim)
+    ux = p1+str(particle_group.units(slice_key))
+    
+    # Y-axis
+    
+    # Units check
+    ulist = [particle_group.units(k).unitSymbol for k in keys]
+    uy = ulist[0]
+    if not all([u==uy for u in ulist] ):
+        raise ValueError(f'Incompatible units: {ulist}')
+    
+    ymin = max([slice_dat[k].min() for k in keys])
+    ymax = max([slice_dat[k].max() for k in keys])
+    
+    _, f2, p2, ymin, ymax = plottable_array(np.array([ymin, ymax]), nice=nice, lim=ylim)
+    uy = p2 + uy
+        
+    # Form Figure
     fig, ax = plt.subplots(**kwargs)
     
-    # Get nice arrays
-    x, f1, prex, xmin, xmax       = plottable_array(slice_dat[x_key], nice=nice, lim=xlim)
-    y, f2, prey, ymin, ymax = plottable_array(slice_dat[y_key], nice=nice, lim=ylim)
+    # Main curves  
+    if len(keys) == 1:
+        color = 'black'
+    else:
+        color = None
+    
+    for k in keys:
+        label = mathlabel(k, units=uy, tex=tex)
+        ax.plot(x, slice_dat[k]/f2, label=label, color=color)
+    if len(keys) > 1:
+        ax.legend()      
+
     # Density on r.h.s
     y2, _, prey2, _, _ = plottable_array(slice_dat[y2_key], nice=nice, lim=None)
-    
-    x_units = f'{prex}{particle_group.units(x_key)}'
-    y_units = f'{prey}{particle_group.units(y_key)}'    
     
     # Convert to Amps if possible
     y2_units = f'C/{particle_group.units(x_key)}'
@@ -102,15 +149,13 @@ def slice_plot(particle_group,
     y2_units = prey2+y2_units 
     
     # Labels
-    labelx = mathlabel(slice_key, units=x_units, tex=tex)
-    labely = mathlabel(y_key, units=y_units, tex=tex)    
+    labelx = mathlabel(slice_key, units=ux, tex=tex)
+    labely = mathlabel(*keys, units=uy, tex=tex)    
     labely2 = mathlabel(y2_key, units=y2_units, tex=tex)        
     
     ax.set_xlabel(labelx)
     ax.set_ylabel(labely)
-    
-    # Main plot
-    ax.plot(x, y, color = 'black')
+
 
     # rhs plot
     ax2 = ax.twinx()

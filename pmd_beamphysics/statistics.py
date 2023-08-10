@@ -404,7 +404,7 @@ def normalized_particle_coordinate(particle_group, key, twiss=None, mass_normali
 # ---------------
 # Other utilities
     
-def slice_statistics(particle_group,  keys=['mean_z'], n_slice=40, slice_key='z'):
+def slice_statistics(particle_group,  keys=['mean_z'], n_slice=40, slice_key=None):
     """
     Slices a particle group into n slices and returns statistics from each sliced defined in keys. 
     
@@ -413,12 +413,48 @@ def slice_statistics(particle_group,  keys=['mean_z'], n_slice=40, slice_key='z'
     Any key can be used to slice on. 
     
     """
+    
+    if slice_key is None:
+        if particle_group.in_t_coordinates:
+            slice_key = 'z'
+        else:
+            slice_key = 't'   
+            
     sdat = {}
+    twiss_planes = set()
+    twiss = {}    
+    
+    normal_keys = set()
+
     for k in keys:
         sdat[k] = np.empty(n_slice)
+        if k.startswith('twiss'):
+            if k == 'twiss' or k == 'twiss_xy':
+                twiss_planes.add('x')
+                twiss_planes.add('y')
+            else:
+                plane = k[-1] # 
+                assert plane in ('x', 'y')
+                twiss_planes.add(plane)
+        else:
+            normal_keys.add(k)
+    
+    twiss_plane = ''.join(twiss_planes) # flatten
+    assert twiss_plane in ('x', 'y', 'xy', 'yx', '')
+                                    
     for i, pg in enumerate(particle_group.split(n_slice, key=slice_key)):
-        for k in keys:
+        for k in normal_keys:
             sdat[k][i] = pg[k]
+    
+        # Handle twiss
+        if twiss_plane:
+            twiss = pg.twiss(plane=twiss_plane)
+            for k in twiss:
+                full_key = f'twiss_{k}'
+                if full_key not in sdat:
+                    sdat[full_key] = np.empty(n_slice)
+                sdat[full_key][i] = twiss[k]
+                                     
             
     return sdat
 

@@ -16,7 +16,7 @@ from pmd_beamphysics.plot import density_plot, marginal_plot, slice_plot
 from pmd_beamphysics.readers import particle_array, particle_paths
 from pmd_beamphysics.species import charge_of, mass_of
 
-from pmd_beamphysics.statistics import norm_emit_calc, normalized_particle_coordinate, particle_amplitude, particle_twiss_dispersion, matched_particles, resample_particles
+from pmd_beamphysics.statistics import norm_emit_calc, normalized_particle_coordinate, particle_amplitude, particle_twiss_dispersion, matched_particles, resample_particles, slice_statistics
 from pmd_beamphysics.writers import write_pmd_bunch, pmd_init
 
 from h5py import File
@@ -549,30 +549,30 @@ class ParticleGroup:
     
     def delta(self, key):
         """Attribute (array) relative to its mean"""
-        return getattr(self, key) - self.avg(key)
+        return self[key] - self.avg(key)
       
     
     # Statistical property functions
     
     def min(self, key):
         """Minimum of any key"""
-        return np.min(getattr(self, key))
+        return np.min(self[key]) # was: getattr(self, key)
     def max(self, key):
         """Maximum of any key"""
-        return np.max(getattr(self, key)) 
+        return np.max(self[key]) 
     def ptp(self, key):
         """Peak-to-Peak = max - min of any key"""
-        return np.ptp(getattr(self, key))     
+        return np.ptp(self[key])     
         
     def avg(self, key):
         """Statistical average"""
-        dat = getattr(self, key) # equivalent to self.key for accessing properties above
+        dat = self[key]  # equivalent to self.key for accessing properties above
         if np.isscalar(dat): 
             return dat
         return np.average(dat, weights=self.weight)
     def std(self, key):
         """Standard deviation (actually sample)"""
-        dat = getattr(self, key)
+        dat = self[key]
         if np.isscalar(dat):
             return 0
         avg_dat = self.avg(key)
@@ -586,7 +586,7 @@ class ParticleGroup:
         P.cov('x', 'px', 'y', 'py')
     
         """
-        dats = np.array([ getattr(self, key) for key in keys ])
+        dats = np.array([ self[key] for key in keys ])
         return np.cov(dats, aweights=self.weight)
     
     def histogramdd(self, *keys, bins=10, range=None):
@@ -604,9 +604,7 @@ class ParticleGroup:
         H, edges = np.histogramdd(np.array([self[k] for k in list(keys)]).T, weights=self.weight, bins=bins, range=range)
         
         return H, edges
-    
-    
-    
+ 
     
     # Beam statistics
     @property
@@ -900,7 +898,41 @@ class ParticleGroup:
         if return_figure:
             return fig
         
-    def slice_plot(self, key='sigma_x', 
+        
+        
+        
+    def slice_statistics(self, *keys,
+                   n_slice=100,
+                   slice_key=None):
+        """
+        Slice statistics
+        
+        """      
+        
+        if slice_key is None:
+            if self.in_t_coordinates:
+                slice_key = 'z'
+                
+            else:
+                slice_key = 't'  
+        
+        if slice_key in ('t', 'delta_t'):
+            density_name = 'current'
+        else:
+            density_name = 'density'
+                
+        keys = set(keys)
+        keys.add('mean_'+slice_key)
+        keys.add('ptp_'+slice_key)
+        keys.add('charge')
+        slice_dat = slice_statistics(self, n_slice=n_slice, slice_key=slice_key,
+                                keys=keys)
+          
+        slice_dat[density_name] = slice_dat['charge']/ slice_dat['ptp_'+slice_key]
+
+        return slice_dat
+        
+    def slice_plot(self, *keys,
                    n_slice=100,
                    slice_key=None,
                    tex=True,
@@ -908,19 +940,9 @@ class ParticleGroup:
                    return_figure=False,
                    xlim=None,
                    ylim=None,
-                   **kwargs):
-        """
-        Slice statistics plot. 
+                   **kwargs):   
         
-        """        
-                  
-        if not slice_key:
-            if self.in_t_coordinates:
-                slice_key = 'z'
-            else:
-                slice_key = 't'
-            
-        fig = slice_plot(self, stat_key=key,
+        fig = slice_plot(self, *keys,
                          n_slice=n_slice,
                          slice_key=slice_key,
                          tex=tex,
@@ -930,7 +952,7 @@ class ParticleGroup:
                          **kwargs)
         
         if return_figure:
-            return fig
+            return fig        
         
         
     # New constructors
@@ -1129,7 +1151,7 @@ def split_particles(particle_group, n_chunks = 100, key='z'):
     """
     
     # Sorting
-    zlist = getattr(particle_group, key) 
+    zlist = particle_group[key] 
     iz = np.argsort(zlist)
 
     # Split particles into chunks

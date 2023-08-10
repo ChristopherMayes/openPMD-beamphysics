@@ -464,6 +464,16 @@ for component in ['', 'x', 'y', 'z', 'theta', 'r']:
     PARTICLEGROUP_UNITS[f'E{component}'] = unit('V/m')
     PARTICLEGROUP_UNITS[f'B{component}'] = unit('T')    
     
+# Twiss
+for plane in ('x', 'y'):
+    for k in ('alpha', 'etap'):
+        PARTICLEGROUP_UNITS[f'twiss_{k}_{plane}'] = unit('1') 
+    for k in ('beta', 'eta', 'emit', 'norm_emit'):
+        PARTICLEGROUP_UNITS[f'twiss_{k}_{plane}'] = unit('m') 
+    for k in ('gamma', ):
+        PARTICLEGROUP_UNITS[f'twiss_{k}_{plane}'] = divide_units(unit('1'), unit('m') )
+        
+    
 
     
 
@@ -479,7 +489,7 @@ def pg_units(key):
     for prefix in ['sigma_', 'mean_', 'min_', 'max_', 'ptp_', 'delta_']:
         if key.startswith(prefix):
             nkey = key[len(prefix):]
-            return PARTICLEGROUP_UNITS[nkey]
+            return pg_units(nkey)
     
     if key.startswith('cov_'):
         subkeys = key.strip('cov_').split('__')

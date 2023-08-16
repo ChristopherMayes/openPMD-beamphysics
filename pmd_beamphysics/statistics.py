@@ -1,5 +1,7 @@
 import numpy as np
 from scipy import stats as scipy_stats
+from scipy.constants import c
+
 
 def norm_emit_calc(particle_group, planes=['x']):
     """
@@ -344,7 +346,7 @@ def normalized_particle_coordinate(particle_group, key, twiss=None, mass_normali
     and the
     
     Intended use is for key to be one of:
-        x, px, y py
+        x, px, y, py, z, pz
         
     and the corresponding normalized coordinates are named with suffix _bar, i.e.:
         x_bar, px_bar, y_bar, py_bar
@@ -378,16 +380,24 @@ def normalized_particle_coordinate(particle_group, key, twiss=None, mass_normali
         momentum = False
         key1 = key
         key2 = 'p'+key
-            
-    x = particle_group[key1]
-    
-    if mass_normalize:
-        # Note: do not do /=, because this will replace the ParticleGroup's internal array!
-        p = particle_group[key2]/particle_group.mass
+
+    # get position and momentum
+    # handle longitudinal case
+    if key1 == "z":
+        x = particle_group.delta("t")*c
+    else:
+        x = particle_group[key1]
+
+    if key2 == "pz":
+        p = particle_group.delta("pz")
     else:
         p = particle_group[key2]
     
-     
+    if mass_normalize:
+        # Note: do not do /=, because this will replace the ParticleGroup's internal array!
+        p = p / particle_group.mass
+
+
     # User could supply twiss    
     if not twiss:
         sigma_mat2 = np.cov(x, p, aweights=particle_group.weight)

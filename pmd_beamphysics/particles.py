@@ -545,8 +545,23 @@ class ParticleGroup:
     @property
     def Jy(self):
         """Normalized amplitude J in the y-py plane"""
-        return particle_amplitude(self, 'y')    
-    
+        return particle_amplitude(self, 'y')
+
+    @property
+    def z_bar(self):
+        """Normalized y in units of sqrt(m)"""
+        return normalized_particle_coordinate(self, 'z')
+
+    @property
+    def pz_bar(self):
+        """Normalized py in units of sqrt(m)"""
+        return normalized_particle_coordinate(self, 'pz')
+
+    @property
+    def Jz(self):
+        """Normalized amplitude J in the y-py plane"""
+        return (self.z_bar**2 + self.pz_bar**2) / 2
+
     def delta(self, key):
         """Attribute (array) relative to its mean"""
         return self[key] - self.avg(key)

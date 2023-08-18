@@ -340,6 +340,15 @@ def particle_amplitude(particle_group, plane='x', twiss=None, mass_normalize=Tru
     return J 
 
 def normalized_6D_coordinates(particle_group, mass_normalize=True):
+    """
+    Compute coordinates in 6D phase space normalized to the measured beam
+    matrix. Default behavior is to normalize momenta by mass such that the normalized
+    unit is in 1/sqrt(m).
+
+    :param particle_group:
+    :param mass_normalize:
+    :return:
+    """
     vnames = ["x", "px", "y", "py", "t", "pz"]
     data = np.copy(np.stack([particle_group[name] for name in vnames]).T)
 

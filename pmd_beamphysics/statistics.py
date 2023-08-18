@@ -346,14 +346,24 @@ def normalized_6D_coordinates(particle_group, mass_normalize=True):
     unit is in 1/sqrt(m).
 
     If x is a vector of particle coordinates in 6D space:
-    x_bar = S^{-1}x where SS^T = cov(x, x)
+    x_bar = S^{-1}x where SS^T = cov(x, x) and x_bar is the coordinates in normalized
+    space.
 
-    :param particle_group:
-    :param mass_normalize:
-    :return:
+    Parameters
+    ----------
+    particle_group: ParticleGroup
+        Particle group to be transformed
+    mass_normalize: bool, defualt: True
+        Flag to divide by particle mass to return nomalized momentum units in 1/sqrt(m).
+
+    Returns
+    -------
+    res : ndarray
+        Particle coordinates in normalized phase space
+
     """
     longitudinal_coordinate = "t" if particle_group.in_z_coordinates else "z"
-    
+
     vnames = ["x", "px", "y", "py", longitudinal_coordinate, "pz"]
     data = np.copy(np.stack([particle_group[name] for name in vnames]).T)
 

@@ -345,11 +345,16 @@ def normalized_6D_coordinates(particle_group, mass_normalize=True):
     matrix. Default behavior is to normalize momenta by mass such that the normalized
     unit is in 1/sqrt(m).
 
+    If x is a vector of particle coordinates in 6D space:
+    x_bar = S^{-1}x where SS^T = cov(x, x)
+
     :param particle_group:
     :param mass_normalize:
     :return:
     """
-    vnames = ["x", "px", "y", "py", "t", "pz"]
+    longitudinal_coordinate = "t" if particle_group.in_z_coordinates else "z"
+    
+    vnames = ["x", "px", "y", "py", longitudinal_coordinate, "pz"]
     data = np.copy(np.stack([particle_group[name] for name in vnames]).T)
 
     # get delta t and pz

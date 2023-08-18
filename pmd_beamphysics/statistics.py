@@ -333,31 +333,31 @@ def particle_amplitude(particle_group, plane='x', twiss=None, mass_normalize=Tru
 
         J = amplitude_calc(x, p, beta=twiss['beta'], alpha=twiss['alpha'])
     else:
-        vnames = ["x", "px", "y", "py", "t", "pz"]
-        data = np.copy(np.stack([particle_group[name] for name in vnames]).T)
-
-        # get delta t and pz
-        data[:, -2] = data[:, -2] - np.mean(data[:, -2])
-        data[:, -1] = data[:, -1] - np.mean(data[:, -1])
-
-        if mass_normalize:
-            for i in [1, 3, 5]:
-                data[:, i] = data[:, i] / particle_group.mass
-
-        if twiss is not None:
-            raise ValueError("cannot specify twiss parameters for 6D amplitude "
-                             "calculation")
-
-        cov = np.cov(data.T, aweights=particle_group.weight)
-
-        # transform particle coordinates into normalized coordinates using inverse of
-        # Cholesky decomp
-        t_data = (np.linalg.inv(np.linalg.cholesky(cov)) @ data.T).T
+        t_data = normalized_6D_coordinates(particle_group, mass_normalize)
 
         J = np.linalg.norm(t_data, axis=1)
     
     return J 
 
+def normalized_6D_coordinates(particle_group, mass_normalize=True):
+    vnames = ["x", "px", "y", "py", "t", "pz"]
+    data = np.copy(np.stack([particle_group[name] for name in vnames]).T)
+
+    # get delta t and pz
+    data[:, -2] = data[:, -2] - np.mean(data[:, -2])
+    data[:, -1] = data[:, -1] - np.mean(data[:, -1])
+
+    if mass_normalize:
+        for i in [1, 3, 5]:
+            data[:, i] = data[:, i] / particle_group.mass
+
+    cov = np.cov(data.T, aweights=particle_group.weight)
+
+    # transform particle coordinates into normalized coordinates using inverse of
+    # Cholesky decomp
+    t_data = (np.linalg.inv(np.linalg.cholesky(cov)) @ data.T).T
+
+    return t_data
     
 def normalized_particle_coordinate(particle_group, key, twiss=None, mass_normalize=True):
     """

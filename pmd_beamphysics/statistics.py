@@ -521,4 +521,90 @@ def resample_particles(particle_group, n=0):
     return data
 
 
+def bunching(z: np.ndarray, wavelength: float, weight: np.ndarray = None) -> float:
+    """
+    Calculate the normalized bunching parameter, which is the magnitude of the 
+    complex sum of weighted exponentials at a given point.
+
+    The formula for bunching is given by:
+
+    $$
+    B(z, \lambda) = \frac{\left|\sum w_i e^{i k z_i}\right|}{\sum w_i}
+    $$
+
+    where:
+    - \( z \) is the position array,
+    - \( \lambda \) is the wavelength,
+    - \( k = \frac{2\pi}{\lambda} \) is the wave number,
+    - \( w_i \) are the weights.
+
+    Parameters
+    ----------
+    z : np.ndarray
+        Array of positions where the bunching parameter is calculated.
+    wavelength : float
+        Wavelength of the wave.
+    weight : np.ndarray, optional
+        Weights for each exponential term. Default is 1 for all terms.
+
+    Returns
+    -------
+    float
+        The normalized bunching parameter.
+
+    Raises
+    ------
+    ValueError
+        If `wavelength` is not a positive number.
+    """
+    if wavelength <= 0:
+        raise ValueError("Wavelength must be a positive number.")
+        
+    if weight is None:
+        weight = np.ones(len(z))
+    if len(weight) != len(z):
+        raise ValueError(f"Weight array has length {len(weight)} != length of the z array, {len(z)}")         
+    
+    k = 2 * np.pi / wavelength
+    f = np.exp(1j * k * z)
+    return np.abs(np.sum(weight * f)) / np.sum(weight)
+
+def parse_bunching_str(s):
+    """
+    Parse a string of the on of the forms to extract the wavelength:
+        'bunching_1.23e-4' 
+        'bunching_1.23e-4_nm' 
+        
+    Returns
+    -------
+    wavelength: float
+    
+    """
+    assert s.startswith('bunching_')
+    
+    x = s.split('_')
+    
+    wavelength = float(x[1])
+    
+    if len(x) == 2:
+        factor = 1
+    elif len(x) == 3:
+        unit = x[2]
+        if unit == 'm':
+            factor = 1
+        elif unit == 'mm':
+            factor = 1e-3
+        elif unit == 'µm' or unit == 'um':
+            factor = 1e-6
+        elif unit == 'nm':
+            factor = 1e-9
+        else:
+            raise ValueError(f'Unparsable unit: {unit}')
+    else:
+        raise ValueError(f'Cannot parse {s}')
+
+    
+    return wavelength * factor
+
+
 

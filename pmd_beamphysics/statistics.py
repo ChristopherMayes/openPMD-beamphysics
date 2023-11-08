@@ -521,4 +521,54 @@ def resample_particles(particle_group, n=0):
     return data
 
 
+def bunching(z: np.ndarray, wavelength: float, weight: np.ndarray = None) -> float:
+    """
+    Calculate the normalized bunching parameter, which is the magnitude of the 
+    complex sum of weighted exponentials at a given point.
+
+    The formula for bunching is given by:
+
+    $$
+    B(z, \lambda) = \frac{\left|\sum w_i e^{i k z_i}\right|}{\sum w_i}
+    $$
+
+    where:
+    - \( z \) is the position array,
+    - \( \lambda \) is the wavelength,
+    - \( k = \frac{2\pi}{\lambda} \) is the wave number,
+    - \( w_i \) are the weights.
+
+    Parameters
+    ----------
+    z : np.ndarray
+        Array of positions where the bunching parameter is calculated.
+    wavelength : float
+        Wavelength of the wave.
+    weight : np.ndarray, optional
+        Weights for each exponential term. Default is 1 for all terms.
+
+    Returns
+    -------
+    float
+        The normalized bunching parameter.
+
+    Raises
+    ------
+    ValueError
+        If `wavelength` is not a positive number.
+    """
+    if wavelength <= 0:
+        raise ValueError("Wavelength must be a positive number.")
+        
+    if weight is None:
+        weight = np.ones(len(z))
+    if len(weight) != len(z):
+        raise ValueError(f"Weight array has length {len(weight)} != length of the z array, {len(z)}")         
+    
+    k = 2 * np.pi / wavelength
+    f = np.exp(1j * k * z)
+    return np.abs(np.sum(weight * f)) / np.sum(weight)
+
+
+
 

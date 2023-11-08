@@ -1,4 +1,4 @@
-from pmd_beamphysics.units import pg_units
+from pmd_beamphysics.units import pg_units, parse_bunching_str, nice_array
 
 
 TEXLABEL = {
@@ -118,6 +118,11 @@ def texlabel(key: str):
         tex0 = texlabel(subkeys[0])
         tex1 = texlabel(subkeys[1])
         return fr'\left<{tex0}, {tex1}\right>'
+    
+    if key.startswith('bunching'):
+        wavelength = parse_bunching_str(key)
+        x, _, prefix = nice_array(wavelength)
+        return f'\mathrm{{bunching~at}}~{x:.1f}~\mathrm{{ {prefix}m }}'
     
     return None
     

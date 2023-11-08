@@ -1,4 +1,4 @@
-from pmd_beamphysics.units import dimension, dimension_name, SI_symbol, pg_units, c_light
+from pmd_beamphysics.units import dimension, dimension_name, SI_symbol, pg_units, c_light, parse_bunching_str
 
 from pmd_beamphysics.interfaces.astra import write_astra
 from pmd_beamphysics.interfaces.bmad import write_bmad
@@ -17,6 +17,8 @@ from pmd_beamphysics.readers import particle_array, particle_paths
 from pmd_beamphysics.species import charge_of, mass_of
 
 from pmd_beamphysics.statistics import norm_emit_calc, normalized_particle_coordinate, particle_amplitude, particle_twiss_dispersion, matched_particles, resample_particles, slice_statistics
+import pmd_beamphysics.statistics as statistics 
+
 from pmd_beamphysics.writers import write_pmd_bunch, pmd_init
 
 from h5py import File
@@ -675,6 +677,48 @@ class ParticleGroup:
             dt = self.z.ptp() / (self.avg('beta_z')*c_light)
         return self.charge / dt
     
+    def bunching(self, wavelength):
+        """
+        Calculate the normalized bunching parameter, which is the magnitude of the 
+        complex sum of weighted exponentials at a given point.
+    
+        The formula for bunching is given by:
+    
+        $$
+        B(z, \lambda) = \frac{\left|\sum w_i e^{i k z_i}\right|}{\sum w_i}
+        $$
+    
+        where:
+        - \( z \) is the position array,
+        - \( \lambda \) is the wavelength,
+        - \( k = \frac{2\pi}{\lambda} \) is the wave number,
+        - \( w_i \) are the weights.
+    
+        Parameters
+        ----------
+        wavelength : float
+            Wavelength of the wave.
+
+    
+        Returns
+        -------
+        float
+            The normalized bunching parameter.
+    
+        Raises
+        ------
+        ValueError
+            If `wavelength` is not a positive number.
+        """        
+        
+        if self.in_z_coordinates:
+            # Approximate z
+            z = self.t * self.avg('beta_z')*c_light
+        else:
+            z = self.z
+        
+        return statistics.bunching(z, wavelength, weight=self.weight)
+    
     def __getitem__(self, key):
         """
         Returns a property or statistical quantity that can be computed:
@@ -705,7 +749,10 @@ class ParticleGroup:
         elif key.startswith('max_'):
             return self.max(key[4:])     
         elif key.startswith('ptp_'):
-            return self.ptp(key[4:])         
+            return self.ptp(key[4:])   
+        elif key.startswith('bunching_'):
+            wavelength = parse_bunching_str(key)
+            return self.bunching(wavelength)
         
         else:
             return getattr(self, key) 

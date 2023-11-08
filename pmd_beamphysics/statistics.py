@@ -569,42 +569,6 @@ def bunching(z: np.ndarray, wavelength: float, weight: np.ndarray = None) -> flo
     f = np.exp(1j * k * z)
     return np.abs(np.sum(weight * f)) / np.sum(weight)
 
-def parse_bunching_str(s):
-    """
-    Parse a string of the on of the forms to extract the wavelength:
-        'bunching_1.23e-4' 
-        'bunching_1.23e-4_nm' 
-        
-    Returns
-    -------
-    wavelength: float
-    
-    """
-    assert s.startswith('bunching_')
-    
-    x = s.split('_')
-    
-    wavelength = float(x[1])
-    
-    if len(x) == 2:
-        factor = 1
-    elif len(x) == 3:
-        unit = x[2]
-        if unit == 'm':
-            factor = 1
-        elif unit == 'mm':
-            factor = 1e-3
-        elif unit == 'µm' or unit == 'um':
-            factor = 1e-6
-        elif unit == 'nm':
-            factor = 1e-9
-        else:
-            raise ValueError(f'Unparsable unit: {unit}')
-    else:
-        raise ValueError(f'Cannot parse {s}')
-
-    
-    return wavelength * factor
 
 
 

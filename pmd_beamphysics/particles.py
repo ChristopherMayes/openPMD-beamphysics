@@ -1,4 +1,4 @@
-from pmd_beamphysics.units import dimension, dimension_name, SI_symbol, pg_units, c_light
+from pmd_beamphysics.units import dimension, dimension_name, SI_symbol, pg_units, c_light, parse_bunching_str
 
 from pmd_beamphysics.interfaces.astra import write_astra
 from pmd_beamphysics.interfaces.bmad import write_bmad
@@ -750,7 +750,7 @@ class ParticleGroup:
         elif key.startswith('ptp_'):
             return self.ptp(key[4:])   
         elif key.startswith('bunching_'):
-            wavelength = statistics.parse_bunching_str(key)
+            wavelength = parse_bunching_str(key)
             return self.bunching(wavelength)
         
         else:

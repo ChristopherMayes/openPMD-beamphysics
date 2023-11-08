@@ -442,7 +442,7 @@ for k in ['px', 'py', 'pz', 'p', 'pr', 'ptheta']:
     PARTICLEGROUP_UNITS[k] = unit('eV/c')
 for k in ['x', 'y', 'z', 'r', 'Jx', 'Jy']:
     PARTICLEGROUP_UNITS[k] = unit('m')
-for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma']:    
+for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma', 'bunching']:    
     PARTICLEGROUP_UNITS[k] = unit('1')
 for k in ['theta']:    
     PARTICLEGROUP_UNITS[k] = unit('rad')
@@ -504,10 +504,53 @@ def pg_units(key):
         return unit('V/m')  
     if key.startswith('magneticField'):
         return unit('T')
+    if key.startswith('bunching_'):
+        return unit('1')
   
     
     raise ValueError(f'No known unit for: {key}')
 
+ 
+# -------------------------
+# Special parsers
+    
+def parse_bunching_str(s):
+    """
+    Parse a string of the on of the forms to extract the wavelength:
+        'bunching_1.23e-4' 
+        'bunching_1.23e-4_nm' 
+        
+    Returns
+    -------
+    wavelength: float
+    
+    """
+    assert s.startswith('bunching_')
+    
+    x = s.split('_')
+    
+    wavelength = float(x[1])
+    
+    if len(x) == 2:
+        factor = 1
+    elif len(x) == 3:
+        unit = x[2]
+        if unit == 'm':
+            factor = 1
+        elif unit == 'mm':
+            factor = 1e-3
+        elif unit == 'µm' or unit == 'um':
+            factor = 1e-6
+        elif unit == 'nm':
+            factor = 1e-9
+        else:
+            raise ValueError(f'Unparsable unit: {unit}')
+    else:
+        raise ValueError(f'Cannot parse {s}')
+
+    
+    return wavelength * factor
+    
     
     
 # -------------------------
@@ -591,6 +634,9 @@ def write_dataset_and_unit_h5(h5, name, data, unit=None):
     
     if unit:
         write_unit_h5(h5[name], unit)
+        
+        
+        
     
     
 

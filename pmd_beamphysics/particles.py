@@ -712,7 +712,8 @@ class ParticleGroup:
         """        
         
         if self.in_z_coordinates:
-            z = self.t / (self.avg('beta_z')*c_light)
+            # Approximate z
+            z = self.t * self.avg('beta_z')*c_light
         else:
             z = self.z
         

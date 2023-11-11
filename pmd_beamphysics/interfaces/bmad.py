@@ -1,10 +1,16 @@
 import numpy as np
 from pmd_beamphysics.units import c_light
 from pmd_beamphysics.species import mass_of
-    
+ 
+# Remove from below, because this docstring is used directly in ParticleGroup
+#     pg : ParticleGroup
+#        The ParticleGroup instance to convert.
 def particlegroup_to_bmad(pg, p0c=None, tref=None):
     """
-    Convert a ParticleGroup to Bmad phase space coordinates.
+    Convert a ParticleGroup instance to Bmad phase space coordinates.
+    
+    This function maps the properties of a ParticleGroup to their corresponding
+    Bmad phase space coordinates as per the following mapping:
     
     Bmad      openPMD-beamphysics
     ----      -------------------
@@ -18,44 +24,32 @@ def particlegroup_to_bmad(pg, p0c=None, tref=None):
     
     Parameters
     ----------
-    p0c: float, optional
-        Reference momentum * c in eV.
-        Default: None => use pg['mean_p']
-        
-    tref: float, optional
-        Reference time in s
-        Default: None => use pg['mean_t']
+    p0c : float, optional
+        Reference momentum times the speed of light (in eV).
+        Default is None, which uses pg['mean_p'].
+    tref : float, optional
+        Reference time (in seconds).
+        Default is None, which uses pg['mean_t'].
     
     Returns
     -------
-    bmad_data: dict
-        Dict with keys:
-        'x'
-        'px'
-        'y'
-        'py'
-        'z'
-        'pz', 
-        'charge'
-        'spcecies',
-        'tref'
-        'state'
-    
+    dict
+        A dictionary containing Bmad phase space coordinates.
     """
     
     if p0c is None:
         p0c = pg['mean_p']
     if tref is None:
         tref = pg['mean_t']
- 
-    # Convert to Bmad units
-    dat = {
+    
+    # Conversion to Bmad units
+    bmad_data = {
         'x': pg.x,
         'y': pg.y,
-        'px': pg.px/p0c,
-        'py': pg.py/p0c,
-        'z': -pg.beta*c_light*(pg.t - tref),
-        'pz':  pg.p/p0c -1,
+        'px': pg.px / p0c,
+        'py': pg.py / p0c,
+        'z': -pg.beta * c_light * (pg.t - tref),
+        'pz': pg.p / p0c - 1,
         'charge': pg.weight,
         'species': pg.species,
         'p0c': p0c,
@@ -63,69 +57,56 @@ def particlegroup_to_bmad(pg, p0c=None, tref=None):
         'state': pg.status,
     }
     
-    return dat
+    return bmad_data
 
 
 def bmad_to_particlegroup_data(bmad_data):
     """
-    Convert Bmad particle data as a dict 
-    to ParticleGroup data.
+    Convert Bmad particle data to a ParticleGroup data dictionary.
     
-    See: ParticleGroup.to_bmad or particlegroup_to_bmad
+    This function reverses the conversion done by particlegroup_to_bmad, mapping
+    Bmad phase space coordinates back to a ParticleGroup data format.
     
     Parameters
     ----------
-    bmad_data: dict
-        Dict with keys:
-        'x'
-        'px'
-        'y'
-        'py'
-        'z'
-        'pz', 
-        'charge'
-        'spcecies',
-        'tref'
-        'state'
+    bmad_data : dict
+        A dictionary containing Bmad phase space coordinates.
     
     Returns
     -------
-    data: dict
-        dict of data suitable to instantiate a ParticleGroup
-    
+    dict
+        A dictionary of data suitable for instantiating a ParticleGroup.
     """
     
-    # Convert to ParticleGroup units
+    # Conversion to ParticleGroup units
     species = bmad_data['species']
     mc2 = mass_of(species)
     
     p0c = bmad_data['p0c']
-    if 'tref' in bmad_data:
-        tref = bmad_data['tref']
-    else:    
-        tref = 0
+    tref = bmad_data.get('tref', 0)
     
-    p = (1+bmad_data['pz']) * p0c
-    px = bmad_data['px']*p0c
-    py =  bmad_data['py']*p0c
+    p = (1 + bmad_data['pz']) * p0c
+    px = bmad_data['px'] * p0c
+    py = bmad_data['py'] * p0c
     pz = np.sqrt(p**2 - px**2 - py**2)
-    gamma2 = (p/mc2)**2 +1
-    beta = np.sqrt(1-1/gamma2)
+    gamma2 = (p / mc2)**2 + 1
+    beta = np.sqrt(1 - 1 / gamma2)
     
-    dat = {
-        'x':  bmad_data['x'],
+    pg_data = {
+        'x': bmad_data['x'],
         'px': px,
-        'y':  bmad_data['y'],
+        'y': bmad_data['y'],
         'py': py,
-        'z': np.zeros( len(p) ), # zero by definition in z-coordinates
+        'z': np.zeros(len(p)),  # Zero by definition in z-coordinates
         'pz': pz,
-        't': tref - bmad_data['z']/(beta*c_light),
+        't': tref - bmad_data['z'] / (beta * c_light),
         'species': species,
         'weight': bmad_data['charge'],
         'status': bmad_data['state'],
     }
     
-    return dat
+    return pg_data
+
     
     
     

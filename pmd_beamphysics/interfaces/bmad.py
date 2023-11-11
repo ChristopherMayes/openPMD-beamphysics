@@ -18,8 +18,6 @@ def particlegroup_to_bmad(pg, p0c=None, tref=None):
     
     Parameters
     ----------
-    pg: ParticleGroup
-    
     p0c: float, optional
         Reference momentum * c in eV.
         Default: None => use pg['mean_p']
@@ -67,16 +65,28 @@ def particlegroup_to_bmad(pg, p0c=None, tref=None):
     
     return dat
 
+
 def bmad_to_particlegroup_data(bmad_data):
     """
     Convert Bmad particle data as a dict 
     to ParticleGroup data.
     
-    See: particlegroup_to_bmad
+    See: ParticleGroup.to_bmad or particlegroup_to_bmad
     
     Parameters
     ----------
     bmad_data: dict
+        Dict with keys:
+        'x'
+        'px'
+        'y'
+        'py'
+        'z'
+        'pz', 
+        'charge'
+        'spcecies',
+        'tref'
+        'state'
     
     Returns
     -------

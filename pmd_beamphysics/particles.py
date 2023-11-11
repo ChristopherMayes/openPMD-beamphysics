@@ -813,13 +813,38 @@ class ParticleGroup:
     
     
     @functools.wraps(bmad.particlegroup_to_bmad)
-    def as_bmad(self, p0c=None, tref=None):
+    def to_bmad(self, p0c=None, tref=None):
         return bmad.particlegroup_to_bmad(self, p0c=p0c, tref=tref)
     
     
     @classmethod
     @functools.wraps(bmad.bmad_to_particlegroup_data)
     def from_bmad(cls, bmad_dict):
+        """
+        Convert Bmad particle data as a dict 
+        to ParticleGroup data.
+        
+        See: ParticleGroup.to_bmad or particlegroup_to_bmad
+        
+        Parameters
+        ----------
+        bmad_data: dict
+            Dict with keys:
+            'x'
+            'px'
+            'y'
+            'py'
+            'z'
+            'pz', 
+            'charge'
+            'spcecies',
+            'tref'
+            'state'
+        
+        Returns
+        -------
+        ParticleGroup
+        """        
         data = bmad.bmad_to_particlegroup_data(bmad_dict)
         return cls(data=data)
     

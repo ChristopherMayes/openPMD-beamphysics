@@ -837,7 +837,7 @@ class ParticleGroup:
             'z'
             'pz', 
             'charge'
-            'spcecies',
+            'species',
             'tref'
             'state'
         

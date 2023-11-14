@@ -10,6 +10,7 @@ from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d, plot_fieldmesh_c
 
 from pmd_beamphysics.interfaces.ansys import read_ansys_ascii_3d_fields
 from pmd_beamphysics.interfaces.astra import write_astra_1d_fieldmap, read_astra_3d_fieldmaps, write_astra_3d_fieldmaps, astra_1d_fieldmap_data
+from pmd_beamphysics.interfaces.cst import read_cst_ascii_3d_fields
 from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
 from pmd_beamphysics.interfaces.impact import create_impact_solrf_fieldmap_fourier, create_impact_solrf_ele
 from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
@@ -449,6 +450,43 @@ class FieldMesh:
             raise ValueError(f"Please provide a frequency")
         
         data = read_ansys_ascii_3d_fields(efile, hfile, frequency=frequency)
+        return cls(data=data)
+
+    @classmethod
+    def from_cst_ascii_3d(cls, *, 
+                   efile = None,
+                   hfile = None,
+                   frequency = None):
+        """
+        Class method to return a FieldMesh from CST ASCII files.
+        
+        The format of each file is:
+        header: "x" [x] "y" [y], etc
+        x y z re_fx im_fx re_fy im_fy re_fz im_fz 
+        ...
+        in F order, with oscillations as exp(i*omega*t)
+        
+        Parameters
+        ----------
+        efile: str
+            Filename with complex electric field data in V/m
+        
+        hfile: str
+            Filename with complex magnetic H field data in A/m
+        
+        frequency: float
+            Frequency in Hz
+        
+        Returns
+        -------
+        FieldMesh
+        
+        """
+        
+        if frequency is None:
+            raise ValueError(f"Please provide a frequency")
+        
+        data = read_cst_ascii_3d_fields(efile, hfile, frequency=frequency)
         return cls(data=data)
         
         

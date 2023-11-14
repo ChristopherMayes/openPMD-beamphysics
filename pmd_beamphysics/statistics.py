@@ -549,8 +549,8 @@ def bunching(z: np.ndarray, wavelength: float, weight: np.ndarray = None) -> flo
 
     Returns
     -------
-    float
-        The normalized bunching parameter.
+    complex
+        The normalized bunching parameter
 
     Raises
     ------
@@ -567,7 +567,7 @@ def bunching(z: np.ndarray, wavelength: float, weight: np.ndarray = None) -> flo
     
     k = 2 * np.pi / wavelength
     f = np.exp(1j * k * z)
-    return np.abs(np.sum(weight * f)) / np.sum(weight)
+    return np.sum(weight * f) / np.sum(weight)
 
 
 

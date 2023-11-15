@@ -1064,8 +1064,8 @@ class ParticleGroup:
         return deepcopy(self)    
     
     @functools.wraps(resample_particles)
-    def resample(self, n=0):
-        data = resample_particles(self, n)
+    def resample(self, n=0, equal_weights=False):
+        data = resample_particles(self, n, equal_weights=equal_weights)
         return ParticleGroup(data=data)
     
     # Internal sorting

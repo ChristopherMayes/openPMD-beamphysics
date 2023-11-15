@@ -398,7 +398,8 @@ def write_genesis4_distribution(particle_group,
     If particles are at different z, they will be drifted to the same z, 
     because the output should have different times. 
     
-    If any of the weights are different, the bunch will be resampled.
+    If any of the weights are different, the bunch will be resampled
+    to have equal weights.
     Note that this can be very slow for a large number of particles.
     
     """
@@ -423,7 +424,7 @@ def write_genesis4_distribution(particle_group,
         n = len(P)
         if verbose:
             print(f'Resampling {n} weighted particles')      
-        P = P.resample(n)        
+        P = P.resample(n, equal_weights=True)        
         
     for k in ['x', 'xp', 'y', 'yp', 't']:
         h5[k] = P[k]

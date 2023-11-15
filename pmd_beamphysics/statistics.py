@@ -460,7 +460,7 @@ def slice_statistics(particle_group,  keys=['mean_z'], n_slice=40, slice_key=Non
 
 
 
-def resample_particles(particle_group, n=0):
+def resample_particles(particle_group, n=0, equal_weights=False):
     """
     Resamples a ParticleGroup randomly.
 
@@ -478,6 +478,9 @@ def resample_particles(particle_group, n=0):
     n: int, default = 0
         Number to resample. 
         If n = 0, this will use all particles.
+
+    equal_weights: bool, default = False
+        If True, will ensure that all particles have equal weights. 
 
     Returns
     -------
@@ -498,19 +501,21 @@ def resample_particles(particle_group, n=0):
         ixlist = np.random.choice(n_old, n, replace=False)
         weight = np.full(n, particle_group.charge/n)
         
-    # variable weights        
+    # variable weights found      
+    elif equal_weights or n != n_old:
+        # From SciPy example:
+        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_discrete.html#scipy.stats.rv_discrete
+        pk = weight / np.sum(weight) # Probabilities
+        xk = np.arange(len(pk)) # index
+        ixsampler = scipy_stats.rv_discrete(name='ixsampler', values=(xk, pk))        
+        ixlist = ixsampler.rvs(size=n)
+        weight = np.full(n, particle_group.charge/n)       
+        
     else:
-        if n == n_old:
-            ixlist = np.random.choice(n_old, n, replace=False)
-            weight = weight[ixlist] #just scramble
-        else:
-            # From SciPy example:
-            # https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_discrete.html#scipy.stats.rv_discrete
-            pk = weight / np.sum(weight) # Probabilities
-            xk = np.arange(len(pk)) # index
-            ixsampler = scipy_stats.rv_discrete(name='ixsampler', values=(xk, pk))        
-            ixlist = ixsampler.rvs(size=n)
-            weight = np.full(n, particle_group.charge/n)
+        assert n == n_old
+        ixlist = np.random.choice(n_old, n, replace=False)
+        weight = weight[ixlist] #just scramble
+
     
     data = {}
     for key in particle_group._settable_array_keys:

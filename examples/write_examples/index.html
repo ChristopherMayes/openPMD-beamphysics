@@ -1847,7 +1847,7 @@ electron
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="elegant">elegant<a class="anchor-link" href="#elegant">¶</a></h1>
+<h1 id="bmad-dict">Bmad dict<a class="anchor-link" href="#bmad-dict">¶</a></h1>
 </div>
 </div>
 </div>
@@ -1870,9 +1870,113 @@ electron
 </div>
 </clipboard-copy>
 </div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">to_bmad</span><span class="p">()</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-13">P.to_bmad()</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child jp-OutputArea-executeResult">
+<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[13]:</div>
+<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain" tabindex="0">
+<pre>{'x': array([-0.00118486, -0.00051813, -0.0017735 , ..., -0.00052658,
+         0.00252813,  0.00113815]),
+ 'y': array([-0.00210137, -0.00217835,  0.00286498, ..., -0.00161154,
+         0.00160049, -0.0010351 ]),
+ 'px': array([-0.69011879,  1.25144906, -0.50416317, ...,  0.60249121,
+         0.505233  ,  0.74928061]),
+ 'py': array([-0.68837433,  0.54735875,  0.02140365, ..., -0.07882388,
+         0.29433475, -0.25918357]),
+ 'z': array([ 2.55529374e-07, -4.68009162e-07, -5.64739756e-08, ...,
+        -9.69805227e-09,  4.20165276e-07,  2.70278113e-07]),
+ 'pz': array([ 0.01222356,  0.41059669, -0.4315584 , ..., -0.3093279 ,
+         0.02463904,  0.08781142]),
+ 'charge': array([1.e-15, 1.e-15, 1.e-15, ..., 1.e-15, 1.e-15, 1.e-15]),
+ 'species': 'electron',
+ 'p0c': 441.52466167250947,
+ 'tref': 1.8196640012738955e-14,
+ 'state': array([1, 1, 1, ..., 1, 1, 1])}</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>Check that the conversion preserves information. Note that <code>==</code> uses <code>np.allclose</code>, because there is roundoff error in the conversion.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [14]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy for="cell-14">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="k">assert</span> <span class="n">P</span> <span class="o">==</span> <span class="n">P</span><span class="o">.</span><span class="n">from_bmad</span><span class="p">(</span><span class="n">P</span><span class="o">.</span><span class="n">to_bmad</span><span class="p">())</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-14">assert P == P.from_bmad(P.to_bmad()) </div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h1 id="elegant">elegant<a class="anchor-link" href="#elegant">¶</a></h1>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [15]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy for="cell-15">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">write_elegant</span><span class="p">(</span><span class="s1">'elegant_particles.txt'</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-13">P.write_elegant('elegant_particles.txt', verbose=True)</div>
+<div class="clipboard-copy-txt" id="cell-15">P.write_elegant('elegant_particles.txt', verbose=True)</div>
 </div>
 </div>
 </div>
@@ -1897,10 +2001,10 @@ electron
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [14]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [16]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-14">
+<clipboard-copy for="cell-16">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -1912,7 +2016,7 @@ electron
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="err">!</span><span class="n">head</span> <span class="o">-</span><span class="n">n</span> <span class="mi">20</span> <span class="n">elegant_particles</span><span class="o">.</span><span class="n">txt</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-14">!head -n 20 elegant_particles.txt</div>
+<div class="clipboard-copy-txt" id="cell-16">!head -n 20 elegant_particles.txt</div>
 </div>
 </div>
 </div>
@@ -1967,10 +2071,10 @@ electron
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [15]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [17]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-15">
+<clipboard-copy for="cell-17">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -1982,7 +2086,7 @@ electron
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">write_genesis2_beam_file</span><span class="p">(</span><span class="s1">'genesis2.beam'</span><span class="p">,</span> <span class="n">n_slice</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-15">P.write_genesis2_beam_file('genesis2.beam', n_slice=50, verbose=True)</div>
+<div class="clipboard-copy-txt" id="cell-17">P.write_genesis2_beam_file('genesis2.beam', n_slice=50, verbose=True)</div>
 </div>
 </div>
 </div>
@@ -2007,10 +2111,10 @@ electron
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [16]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [18]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-16">
+<clipboard-copy for="cell-18">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2022,7 +2126,7 @@ electron
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="err">!</span><span class="n">head</span> <span class="n">genesis2</span><span class="o">.</span><span class="n">beam</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-16">!head genesis2.beam</div>
+<div class="clipboard-copy-txt" id="cell-18">!head genesis2.beam</div>
 </div>
 </div>
 </div>
@@ -2078,10 +2182,10 @@ electron
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [17]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [19]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-17">
+<clipboard-copy for="cell-19">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2093,7 +2197,7 @@ electron
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">input_str</span> <span class="o">=</span> <span class="n">P</span><span class="o">.</span><span class="n">write_genesis4_beam</span><span class="p">(</span><span class="s1">'genesis4_beam.h5'</span><span class="p">,</span> <span class="n">n_slice</span><span class="o">=</span><span class="mi">123</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">return_input_str</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-17">input_str = P.write_genesis4_beam('genesis4_beam.h5', n_slice=123, verbose=True, return_input_str=True)</div>
+<div class="clipboard-copy-txt" id="cell-19">input_str = P.write_genesis4_beam('genesis4_beam.h5', n_slice=123, verbose=True, return_input_str=True)</div>
 </div>
 </div>
 </div>
@@ -2129,10 +2233,10 @@ electron
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [18]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [20]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-18">
+<clipboard-copy for="cell-20">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2144,7 +2248,7 @@ electron
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">input_str</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-18">print(input_str)</div>
+<div class="clipboard-copy-txt" id="cell-20">print(input_str)</div>
 </div>
 </div>
 </div>
@@ -2285,10 +2389,10 @@ electron
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [19]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [21]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-19">
+<clipboard-copy for="cell-21">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2302,7 +2406,7 @@ electron
     <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">h5</span><span class="p">:</span>
         <span class="nb">print</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">h5</span><span class="p">[</span><span class="n">g</span><span class="p">]),</span> <span class="n">h5</span><span class="p">[</span><span class="n">g</span><span class="p">]</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">'unitSymbol'</span><span class="p">])</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-19">with File('genesis4_beam.h5', 'r') as h5:
+<div class="clipboard-copy-txt" id="cell-21">with File('genesis4_beam.h5', 'r') as h5:
     for g in h5:
         print(g, len(h5[g]), h5[g].attrs['unitSymbol'])</div>
 </div>
@@ -2353,10 +2457,10 @@ ycenter 123 m
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [20]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [22]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-20">
+<clipboard-copy for="cell-22">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2368,7 +2472,7 @@ ycenter 123 m
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">write_genesis4_distribution</span><span class="p">(</span><span class="s1">'genesis4_distribution.h5'</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-20">P.write_genesis4_distribution('genesis4_distribution.h5', verbose=True)</div>
+<div class="clipboard-copy-txt" id="cell-22">P.write_genesis4_distribution('genesis4_distribution.h5', verbose=True)</div>
 </div>
 </div>
 </div>
@@ -2404,10 +2508,10 @@ ycenter 123 m
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [21]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [23]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-21">
+<clipboard-copy for="cell-23">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2421,7 +2525,7 @@ ycenter 123 m
     <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">h5</span><span class="p">:</span>
         <span class="nb">print</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">h5</span><span class="p">[</span><span class="n">g</span><span class="p">]))</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-21">with File('genesis4_distribution.h5', 'r') as h5:
+<div class="clipboard-copy-txt" id="cell-23">with File('genesis4_distribution.h5', 'r') as h5:
     for g in h5:
         print(g, len(h5[g]))</div>
 </div>
@@ -2464,10 +2568,10 @@ yp 10000
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [22]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [24]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-22">
+<clipboard-copy for="cell-24">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2479,7 +2583,7 @@ yp 10000
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">write_gpt</span><span class="p">(</span><span class="s1">'gpt_particles.txt'</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-22">P.write_gpt('gpt_particles.txt', verbose=True)</div>
+<div class="clipboard-copy-txt" id="cell-24">P.write_gpt('gpt_particles.txt', verbose=True)</div>
 </div>
 </div>
 </div>
@@ -2505,10 +2609,10 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [23]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [25]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-23">
+<clipboard-copy for="cell-25">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2521,7 +2625,7 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expandvars</span><span class="p">(</span><span class="s1">'$ASCI2GDF_BIN'</span><span class="p">)):</span>
     <span class="n">P</span><span class="o">.</span><span class="n">write_gpt</span><span class="p">(</span><span class="s1">'gpt_particles.gdf'</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">asci2gdf_bin</span><span class="o">=</span><span class="s1">'$ASCI2GDF_BIN'</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-23">if os.path.exists(os.path.expandvars('$ASCI2GDF_BIN')):
+<div class="clipboard-copy-txt" id="cell-25">if os.path.exists(os.path.expandvars('$ASCI2GDF_BIN')):
     P.write_gpt('gpt_particles.gdf', verbose=True, asci2gdf_bin='$ASCI2GDF_BIN')</div>
 </div>
 </div>
@@ -2534,10 +2638,10 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [24]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [26]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-24">
+<clipboard-copy for="cell-26">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2549,7 +2653,7 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="ch">#!head gpt_particles.txt</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-24">#!head gpt_particles.txt</div>
+<div class="clipboard-copy-txt" id="cell-26">#!head gpt_particles.txt</div>
 </div>
 </div>
 </div>
@@ -2572,10 +2676,10 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [25]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [27]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-25">
+<clipboard-copy for="cell-27">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2587,7 +2691,7 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">drift_to_t</span><span class="p">(</span><span class="n">P</span><span class="p">[</span><span class="s1">'mean_t'</span><span class="p">])</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-25">P.drift_to_t(P['mean_t'])</div>
+<div class="clipboard-copy-txt" id="cell-27">P.drift_to_t(P['mean_t'])</div>
 </div>
 </div>
 </div>
@@ -2610,10 +2714,10 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [26]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [28]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-26">
+<clipboard-copy for="cell-28">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2625,7 +2729,7 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">write_impact</span><span class="p">(</span><span class="s1">'impact_particles.txt'</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-26">P.write_impact('impact_particles.txt')</div>
+<div class="clipboard-copy-txt" id="cell-28">P.write_impact('impact_particles.txt')</div>
 </div>
 </div>
 </div>
@@ -2635,7 +2739,7 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
 </div>
 <div class="jp-OutputArea jp-Cell-outputArea">
 <div class="jp-OutputArea-child jp-OutputArea-executeResult">
-<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[26]:</div>
+<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[28]:</div>
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain" tabindex="0">
 <pre>{'input_particle_file': 'impact_particles.txt',
  'Np': 10000,
@@ -2652,10 +2756,10 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [27]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [29]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-27">
+<clipboard-copy for="cell-29">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2667,7 +2771,7 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="err">!</span><span class="n">head</span> <span class="n">impact_particles</span><span class="o">.</span><span class="n">txt</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-27">!head impact_particles.txt</div>
+<div class="clipboard-copy-txt" id="cell-29">!head impact_particles.txt</div>
 </div>
 </div>
 </div>
@@ -2712,10 +2816,10 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [28]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [30]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-28">
+<clipboard-copy for="cell-30">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2727,7 +2831,7 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">drift_to_z</span><span class="p">()</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-28">P.drift_to_z()</div>
+<div class="clipboard-copy-txt" id="cell-30">P.drift_to_z()</div>
 </div>
 </div>
 </div>
@@ -2739,10 +2843,10 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [29]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [31]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-29">
+<clipboard-copy for="cell-31">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2754,7 +2858,7 @@ ASCII particles written. Convert to GDF using: asci2df -o particles.gdf gpt_part
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">write_litrack</span><span class="p">(</span><span class="s1">'litrack.zd'</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-29">P.write_litrack('litrack.zd', verbose=True)</div>
+<div class="clipboard-copy-txt" id="cell-31">P.write_litrack('litrack.zd', verbose=True)</div>
 </div>
 </div>
 </div>
@@ -2772,7 +2876,7 @@ writing 10000 LiTrack particles to litrack.zd
 </div>
 </div>
 <div class="jp-OutputArea-child jp-OutputArea-executeResult">
-<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[29]:</div>
+<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[31]:</div>
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain" tabindex="0">
 <pre>'litrack.zd'</pre>
 </div>
@@ -2786,10 +2890,10 @@ writing 10000 LiTrack particles to litrack.zd
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [30]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [32]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-30">
+<clipboard-copy for="cell-32">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2801,7 +2905,7 @@ writing 10000 LiTrack particles to litrack.zd
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="err">!</span><span class="n">head</span> <span class="o">-</span><span class="n">n</span> <span class="mi">20</span> <span class="n">litrack</span><span class="o">.</span><span class="n">zd</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-30">!head -n 20 litrack.zd</div>
+<div class="clipboard-copy-txt" id="cell-32">!head -n 20 litrack.zd</div>
 </div>
 </div>
 </div>
@@ -2856,10 +2960,10 @@ writing 10000 LiTrack particles to litrack.zd
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [31]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [33]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-31">
+<clipboard-copy for="cell-33">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2871,7 +2975,7 @@ writing 10000 LiTrack particles to litrack.zd
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">write_lucretia</span><span class="p">(</span><span class="s1">'lucretia.mat'</span><span class="p">,</span> <span class="n">ele_name</span><span class="o">=</span><span class="s1">'BEGINNING'</span><span class="p">,</span> <span class="n">t_ref</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">stop_ix</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-31">P.write_lucretia('lucretia.mat', ele_name='BEGINNING', t_ref=0, stop_ix=None, verbose=True)</div>
+<div class="clipboard-copy-txt" id="cell-33">P.write_lucretia('lucretia.mat', ele_name='BEGINNING', t_ref=0, stop_ix=None, verbose=True)</div>
 </div>
 </div>
 </div>
@@ -2907,10 +3011,10 @@ writing 10000 LiTrack particles to litrack.zd
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [32]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [34]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-32">
+<clipboard-copy for="cell-34">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2924,7 +3028,7 @@ writing 10000 LiTrack particles to litrack.zd
 
 <span class="n">ParticleGroup</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">lucretia_to_data</span><span class="p">(</span><span class="s1">'lucretia.mat'</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-32">from pmd_beamphysics.interfaces.lucretia import lucretia_to_data, list_element_names
+<div class="clipboard-copy-txt" id="cell-34">from pmd_beamphysics.interfaces.lucretia import lucretia_to_data, list_element_names
 
 ParticleGroup(data=lucretia_to_data('lucretia.mat', verbose=True))</div>
 </div>
@@ -2944,9 +3048,9 @@ ParticleGroup(data=lucretia_to_data('lucretia.mat', verbose=True))</div>
 </div>
 </div>
 <div class="jp-OutputArea-child jp-OutputArea-executeResult">
-<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[32]:</div>
+<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[34]:</div>
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain" tabindex="0">
-<pre>&lt;ParticleGroup with 10000 particles at 0x7f8078fee1f0&gt;</pre>
+<pre>&lt;ParticleGroup with 10000 particles at 0x7f1f2425f4f0&gt;</pre>
 </div>
 </div>
 </div>
@@ -2969,10 +3073,10 @@ ParticleGroup(data=lucretia_to_data('lucretia.mat', verbose=True))</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [33]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [35]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-33">
+<clipboard-copy for="cell-35">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -2984,7 +3088,7 @@ ParticleGroup(data=lucretia_to_data('lucretia.mat', verbose=True))</div>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">list_element_names</span><span class="p">(</span><span class="s1">'lucretia.mat'</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-33">list_element_names('lucretia.mat')</div>
+<div class="clipboard-copy-txt" id="cell-35">list_element_names('lucretia.mat')</div>
 </div>
 </div>
 </div>
@@ -2994,7 +3098,7 @@ ParticleGroup(data=lucretia_to_data('lucretia.mat', verbose=True))</div>
 </div>
 <div class="jp-OutputArea jp-Cell-outputArea">
 <div class="jp-OutputArea-child jp-OutputArea-executeResult">
-<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[33]:</div>
+<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[35]:</div>
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain" tabindex="0">
 <pre>['BEGINNING']</pre>
 </div>
@@ -3019,10 +3123,10 @@ ParticleGroup(data=lucretia_to_data('lucretia.mat', verbose=True))</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [34]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [36]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-34">
+<clipboard-copy for="cell-36">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3036,7 +3140,7 @@ ParticleGroup(data=lucretia_to_data('lucretia.mat', verbose=True))</div>
 
 <span class="n">P</span><span class="o">.</span><span class="n">write_opal</span><span class="p">(</span><span class="s1">'opal_injected.txt'</span><span class="p">,</span> <span class="n">dist_type</span><span class="o">=</span><span class="s1">'injected'</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-34">P.drift_to_t()
+<div class="clipboard-copy-txt" id="cell-36">P.drift_to_t()
 
 P.write_opal('opal_injected.txt', dist_type='injected')</div>
 </div>
@@ -3050,10 +3154,10 @@ P.write_opal('opal_injected.txt', dist_type='injected')</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [35]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [37]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-35">
+<clipboard-copy for="cell-37">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3065,7 +3169,7 @@ P.write_opal('opal_injected.txt', dist_type='injected')</div>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="err">!</span><span class="n">head</span> <span class="n">opal_injected</span><span class="o">.</span><span class="n">txt</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-35">!head opal_injected.txt</div>
+<div class="clipboard-copy-txt" id="cell-37">!head opal_injected.txt</div>
 </div>
 </div>
 </div>
@@ -3110,10 +3214,10 @@ P.write_opal('opal_injected.txt', dist_type='injected')</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [36]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [38]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-36">
+<clipboard-copy for="cell-38">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3126,7 +3230,7 @@ P.write_opal('opal_injected.txt', dist_type='injected')</div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">drift_to_z</span><span class="p">(</span><span class="n">P</span><span class="p">[</span><span class="s1">'mean_z'</span><span class="p">])</span>
 <span class="n">P</span><span class="o">.</span><span class="n">write_opal</span><span class="p">(</span><span class="s1">'opal_emitted.txt'</span><span class="p">,</span> <span class="n">dist_type</span><span class="o">=</span><span class="s1">'emitted'</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-36">P.drift_to_z(P['mean_z'])
+<div class="clipboard-copy-txt" id="cell-38">P.drift_to_z(P['mean_z'])
 P.write_opal('opal_emitted.txt', dist_type='emitted')</div>
 </div>
 </div>
@@ -3139,10 +3243,10 @@ P.write_opal('opal_emitted.txt', dist_type='emitted')</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [37]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [39]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-37">
+<clipboard-copy for="cell-39">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3154,7 +3258,7 @@ P.write_opal('opal_emitted.txt', dist_type='emitted')</div>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="err">!</span><span class="n">head</span> <span class="n">opal_emitted</span><span class="o">.</span><span class="n">txt</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-37">!head opal_emitted.txt</div>
+<div class="clipboard-copy-txt" id="cell-39">!head opal_emitted.txt</div>
 </div>
 </div>
 </div>
@@ -3199,10 +3303,10 @@ P.write_opal('opal_emitted.txt', dist_type='emitted')</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [38]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [40]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-38">
+<clipboard-copy for="cell-40">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3214,7 +3318,7 @@ P.write_opal('opal_emitted.txt', dist_type='emitted')</div>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">P</span><span class="o">.</span><span class="n">write_simion</span><span class="p">(</span><span class="s1">'simion_particles.ion'</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-38">P.write_simion('simion_particles.ion')</div>
+<div class="clipboard-copy-txt" id="cell-40">P.write_simion('simion_particles.ion')</div>
 </div>
 </div>
 </div>
@@ -3237,10 +3341,10 @@ P.write_opal('opal_emitted.txt', dist_type='emitted')</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [39]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [41]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy for="cell-39">
+<clipboard-copy for="cell-41">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3270,7 +3374,7 @@ P.write_opal('opal_emitted.txt', dist_type='emitted')</div>
     <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">file</span><span class="p">):</span>
         <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">file</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-39">for file in [
+<div class="clipboard-copy-txt" id="cell-41">for file in [
     'astra_particles.txt',
     'bmad_particles.txt',
     'elegant_particles.txt',
@@ -3289,33 +3393,6 @@ P.write_opal('opal_emitted.txt', dist_type='emitted')</div>
     ]:
     if os.path.exists(file):
         os.remove(file)</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell-inputWrapper" tabindex="0">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
-</div>
-<div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
-<div class="CodeMirror cm-s-jupyter">
-<div class="zeroclipboard-container">
-<clipboard-copy for="cell-40">
-<div>
-<span class="notice" hidden="">Copied!</span>
-<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
-<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
-<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
-</svg>
-</div>
-</clipboard-copy>
-</div>
-<div class="highlight-ipynb hl-python"><pre><span></span>
-</pre></div>
-<div class="clipboard-copy-txt" id="cell-40"></div>
 </div>
 </div>
 </div>

@@ -752,7 +752,7 @@ class ParticleGroup:
             return self.ptp(key[4:])   
         elif 'bunching' in key:
             wavelength = parse_bunching_str(key)
-            bunching = self.bunching(wavelength)
+            bunching = self.bunching(wavelength) # complex
             
             # abs or arg (angle):
             if 'phase_' in key:

@@ -1,7 +1,7 @@
 from pmd_beamphysics.units import dimension, dimension_name, SI_symbol, pg_units, c_light, parse_bunching_str
 
 from pmd_beamphysics.interfaces.astra import write_astra
-from pmd_beamphysics.interfaces.bmad import write_bmad
+import pmd_beamphysics.interfaces.bmad as bmad
 from pmd_beamphysics.interfaces.genesis import write_genesis4_distribution, genesis2_beam_data,  write_genesis2_beam_file, write_genesis4_beam
 from pmd_beamphysics.interfaces.gpt import write_gpt
 from pmd_beamphysics.interfaces.impact import write_impact
@@ -802,14 +802,61 @@ class ParticleGroup:
         self.drift(dt)
         # Fix t to be exactly this value
         self.t = np.full(self.n_particle, t)
+  
+
+    # -------        
+    # dict methods
     
+    # Do not do this, it breaks deepcopy
+    #def __dict__(self):
+    #    return self.data
+    
+    
+    @functools.wraps(bmad.particlegroup_to_bmad)
+    def to_bmad(self, p0c=None, tref=None):
+        return bmad.particlegroup_to_bmad(self, p0c=p0c, tref=tref)
+    
+    
+    @classmethod
+    @functools.wraps(bmad.bmad_to_particlegroup_data)
+    def from_bmad(cls, bmad_dict):
+        """
+        Convert Bmad particle data as a dict 
+        to ParticleGroup data.
+        
+        See: ParticleGroup.to_bmad or particlegroup_to_bmad
+        
+        Parameters
+        ----------
+        bmad_data: dict
+            Dict with keys:
+            'x'
+            'px'
+            'y'
+            'py'
+            'z'
+            'pz', 
+            'charge'
+            'species',
+            'tref'
+            'state'
+        
+        Returns
+        -------
+        ParticleGroup
+        """        
+        data = bmad.bmad_to_particlegroup_data(bmad_dict)
+        return cls(data=data)
+    
+    # -------
     # Writers
+    
     @functools.wraps(write_astra)    
     def write_astra(self, filePath, verbose=False, probe=False):
         write_astra(self, filePath, verbose=verbose, probe=probe)
         
     def write_bmad(self, filePath, p0c=None, t_ref=0, verbose=False):
-        write_bmad(self, filePath, p0c=p0c, t_ref=t_ref, verbose=verbose)        
+        bmad.write_bmad(self, filePath, p0c=p0c, t_ref=t_ref, verbose=verbose)        
 
     def write_elegant(self, filePath, verbose=False):
         write_elegant(self, filePath, verbose=verbose)            
@@ -1039,7 +1086,7 @@ class ParticleGroup:
         """Check equality of internal data"""
         if isinstance(other, ParticleGroup):
             for key in ['x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight', 'id']:
-                if not np.all(self[key] == other[key]):
+                if not np.allclose(self[key], other[key]):
                     return False
             return True
 

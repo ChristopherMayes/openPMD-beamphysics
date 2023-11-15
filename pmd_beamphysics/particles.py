@@ -702,7 +702,7 @@ class ParticleGroup:
     
         Returns
         -------
-        float
+        complex
             The normalized bunching parameter.
     
         Raises
@@ -750,9 +750,15 @@ class ParticleGroup:
             return self.max(key[4:])     
         elif key.startswith('ptp_'):
             return self.ptp(key[4:])   
-        elif key.startswith('bunching_'):
+        elif 'bunching' in key:
             wavelength = parse_bunching_str(key)
-            return self.bunching(wavelength)
+            bunching = self.bunching(wavelength) # complex
+            
+            # abs or arg (angle):
+            if 'phase_' in key:
+                return np.angle(bunching)
+            else:
+                return np.abs(bunching)
         
         else:
             return getattr(self, key) 

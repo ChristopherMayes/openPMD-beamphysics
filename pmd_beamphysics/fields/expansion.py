@@ -51,7 +51,6 @@ def expand_1d_dynamic_fieldmap(z, Ez0, frequency=0, spline_s=0):
     
     omega = 2*np.pi*frequency
     c_light=299792458.
-    ooc2 = (omega/c_light)**2 
     
     # Make spline and derivatives
     S = UnivariateSpline(z, Ez0, k=5, s=spline_s)

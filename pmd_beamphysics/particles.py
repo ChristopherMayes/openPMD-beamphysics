@@ -1158,8 +1158,6 @@ def load_bunch_data(h5):
     """
     Load particles into structured numpy array.
     """
-    n = len(h5['position/x'])
-    
     attrs = dict(h5.attrs)
     data = {}
     data['species'] = attrs['speciesType'].decode('utf-8') # String

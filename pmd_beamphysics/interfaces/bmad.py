@@ -150,8 +150,6 @@ def write_bmad(particle_group,
     status  = particle_group.status 
     weight  = particle_group.weight
     
-    zeros = np.full(n, 0)
-    
     if p0c:
         # s-based coordinates
         

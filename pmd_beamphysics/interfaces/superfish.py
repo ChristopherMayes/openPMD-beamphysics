@@ -277,7 +277,7 @@ def read_superfish_t7(filename,
         # FISH problem   
         zmin, zmax, nz =  float(line1[0])*1e-2, float(line1[1])*1e-2, int(line1[2])+1
         frequency = float(line2[0])*1e6 # MHz -> Hz
-        rmin, rmax, nr =  float(line3[0])*1e-2, float(line3[1])*1e-2, int(line3[2])+1  
+        _rmin, rmax, nr =  float(line3[0])*1e-2, float(line3[1])*1e-2, int(line3[2])+1  
         
         # Read and reshape
         # dat = np.loadtxt(filename, skiprows=3)
@@ -293,7 +293,7 @@ def read_superfish_t7(filename,
         # zmin(cm), zmax(cm), ny-1    # z in cylindrical geometry
         
         # POISSON problem
-        rmin, rmax, nr =  float(line1[0])*1e-2, float(line1[1])*1e-2, int(line1[2])+1
+        _rmin, rmax, nr =  float(line1[0])*1e-2, float(line1[1])*1e-2, int(line1[2])+1
         zmin, zmax, nz =  float(line2[0])*1e-2, float(line2[1])*1e-2, int(line2[2])+1        
         frequency=0
         

@@ -73,7 +73,7 @@ def write_pmd_bunch(h5, data, name=None):
         u = pg_units(key)        
         
         # Write
-        g2 = write_component_data(g, g2_name, data[key], unit=u)
+        write_component_data(g, g2_name, data[key], unit=u)
     
         
     # Optional id. This does not have any units.
@@ -118,8 +118,8 @@ def write_pmd_field(h5, data, name=None):
         val = val.astype(complex)
 
         # Write
-        g2 = write_component_data(g, key, val, unit=u)            
-    
+        write_component_data(g, key, val, unit=u)
+
     
 def write_component_data(h5, name, data, unit=None): 
     """

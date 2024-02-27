@@ -23,7 +23,6 @@ from h5py import File
 import numpy as np
 from copy import deepcopy
 import os
-import functools
 
 
 c_light = 299792458.
@@ -446,7 +445,7 @@ class FieldMesh:
         """
         
         if frequency is None:
-            raise ValueError(f"Please provide a frequency")
+            raise ValueError("Please provide a frequency")
         
         data = read_ansys_ascii_3d_fields(efile, hfile, frequency=frequency)
         return cls(data=data)

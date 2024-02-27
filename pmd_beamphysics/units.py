@@ -7,6 +7,7 @@ For more advanced units, use a package like Pint:
 
 
 """
+import numpy as np
 import scipy.constants
 
 mec2 = scipy.constants.value('electron mass energy equivalent in MeV')*1e6
@@ -14,8 +15,6 @@ mpc2 = scipy.constants.value('proton mass energy equivalent in MeV')*1e6
 c_light = scipy.constants.c
 e_charge = scipy.constants.e
 mu_0 = scipy.constants.mu_0 # Note that this is no longer 4pi*10^-7 !
- 
-import numpy as np
 
 
 class pmd_unit:

@@ -1,6 +1,6 @@
-from pmd_beamphysics.units import dimension, dimension_name, SI_symbol, pg_units
+from pmd_beamphysics.units import pg_units
 
-from pmd_beamphysics.readers import component_data, expected_record_unit_dimension, field_record_components, decode_attrs, field_paths, component_from_alias, load_field_attrs, component_alias
+from pmd_beamphysics.readers import component_data, expected_record_unit_dimension, field_record_components, field_paths, component_from_alias, load_field_attrs, component_alias
 
 from pmd_beamphysics.writers import write_pmd_field, pmd_field_init
 
@@ -11,7 +11,7 @@ from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d, plot_fieldmesh_c
 from pmd_beamphysics.interfaces.ansys import read_ansys_ascii_3d_fields
 from pmd_beamphysics.interfaces.astra import write_astra_1d_fieldmap, read_astra_3d_fieldmaps, write_astra_3d_fieldmaps, astra_1d_fieldmap_data
 from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
-from pmd_beamphysics.interfaces.impact import create_impact_solrf_fieldmap_fourier, create_impact_solrf_ele
+from pmd_beamphysics.interfaces.impact import create_impact_solrf_ele
 from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
 
 from pmd_beamphysics.fields.expansion import expand_fieldmesh_from_onaxis
@@ -23,7 +23,6 @@ from h5py import File
 import numpy as np
 from copy import deepcopy
 import os
-import functools
 
 
 c_light = 299792458.
@@ -446,7 +445,7 @@ class FieldMesh:
         """
         
         if frequency is None:
-            raise ValueError(f"Please provide a frequency")
+            raise ValueError("Please provide a frequency")
         
         data = read_ansys_ascii_3d_fields(efile, hfile, frequency=frequency)
         return cls(data=data)

@@ -67,7 +67,7 @@ def lucretia_to_data(filename, ele_name='BEGINNING', t_ref=0, exclude_dead_parti
     elif (len(ele_list) == 1):
         ele_name = ele_list[0]
         
-    mdat = sio.loadmat(filename);
+    mdat = sio.loadmat(filename)
     
     coords = mdat['bstore'][ele_name][0,0]['Bunch'][0,0]['x'][0,0]
     charges = mdat['bstore'][ele_name][0,0]['Bunch'][0,0]['Q'][0,0][0]

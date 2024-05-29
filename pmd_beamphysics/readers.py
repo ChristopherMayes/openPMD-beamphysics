@@ -1,8 +1,7 @@
-from .units import dimension, dimension_name, SI_symbol, pg_units, c_light, e_charge
+from .units import dimension, dimension_name, SI_symbol, c_light, e_charge
 from .tools import decode_attrs, decode_attr
 
 
-import h5py
 import numpy as np
 
 #-----------------------------------------

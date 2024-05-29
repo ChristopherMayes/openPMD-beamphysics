@@ -1,4 +1,4 @@
-from pmd_beamphysics.units import pg_units, parse_bunching_str, nice_array
+from pmd_beamphysics.units import parse_bunching_str, nice_array
 
 
 TEXLABEL = {
@@ -36,20 +36,20 @@ TEXLABEL = {
  'gamma': r'\gamma',
  'theta': r'\theta',
  'charge': 'Q',
- 'twiss_alpha_x'     : 'Twiss\ '+r'\alpha_x',
- 'twiss_beta_x'      : 'Twiss\ '+r'\beta_x',   
- 'twiss_gamma_x'     : 'Twiss\ '+r'\gamma_x',   
- 'twiss_eta_x'       : 'Twiss\ '+r'\eta_x',   
- 'twiss_etap_x'      : 'Twiss\ '+r"\eta'_x",     
- 'twiss_emit_x'      : 'Twiss\ '+r'\epsilon_{x}',
- 'twiss_norm_emit_x' : 'Twiss\ '+r'\epsilon_{n, x}',
- 'twiss_alpha_y'     : 'Twiss\ '+r'\alpha_y',
- 'twiss_beta_y'      : 'Twiss\ '+r'\beta_y',   
- 'twiss_gamma_y'     : 'Twiss\ '+r'\gamma_y',   
- 'twiss_eta_y'       : 'Twiss\ '+r'\eta_y',   
- 'twiss_etap_y'      : 'Twiss\ '+r"\eta'_y",     
- 'twiss_emit_y'      : 'Twiss\ '+r'\epsilon_{y}',
- 'twiss_norm_emit_y' : 'Twiss\ '+r'\epsilon_{n, y}',    
+ 'twiss_alpha_x'     : r'Twiss\ '+r'\alpha_x',
+ 'twiss_beta_x'      : r'Twiss\ '+r'\beta_x',   
+ 'twiss_gamma_x'     : r'Twiss\ '+r'\gamma_x',   
+ 'twiss_eta_x'       : r'Twiss\ '+r'\eta_x',   
+ 'twiss_etap_x'      : r'Twiss\ '+r"\eta'_x",     
+ 'twiss_emit_x'      : r'Twiss\ '+r'\epsilon_{x}',
+ 'twiss_norm_emit_x' : r'Twiss\ '+r'\epsilon_{n, x}',
+ 'twiss_alpha_y'     : r'Twiss\ '+r'\alpha_y',
+ 'twiss_beta_y'      : r'Twiss\ '+r'\beta_y',   
+ 'twiss_gamma_y'     : r'Twiss\ '+r'\gamma_y',   
+ 'twiss_eta_y'       : r'Twiss\ '+r'\eta_y',   
+ 'twiss_etap_y'      : r'Twiss\ '+r"\eta'_y",     
+ 'twiss_emit_y'      : r'Twiss\ '+r'\epsilon_{y}',
+ 'twiss_norm_emit_y' : r'Twiss\ '+r'\epsilon_{n, y}',    
 # 'species_charge',
 # 'weight',
  'average_current': r'I_{av}',
@@ -122,7 +122,7 @@ def texlabel(key: str):
     if key.startswith('bunching'):
         wavelength = parse_bunching_str(key)
         x, _, prefix = nice_array(wavelength)
-        return f'\mathrm{{bunching~at}}~{x:.1f}~\mathrm{{ {prefix}m }}'
+        return fr'\mathrm{{bunching~at}}~{x:.1f}~\mathrm{{ {prefix}m }}'
     
     return None
     

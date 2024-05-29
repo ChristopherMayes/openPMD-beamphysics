@@ -1,6 +1,6 @@
 import numpy as np
 
-from .units import unit, pg_units
+from .units import pg_units
 from .readers import component_from_alias, load_field_attrs
 from .tools import fstr, encode_attrs
 

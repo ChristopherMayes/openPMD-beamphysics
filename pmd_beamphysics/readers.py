@@ -1,8 +1,9 @@
 from .units import dimension, dimension_name, SI_symbol, c_light, e_charge
 from .tools import decode_attrs, decode_attr
 
-
 import numpy as np
+
+import warnings
 
 #-----------------------------------------
 # General Utilities
@@ -154,8 +155,16 @@ def component_unit_dimension(h5):
     Return the unit dimension tuple
     """
     return tuple(h5.attrs['unitDimension'])
+
+
+def is_legacy_fortran_data_ordering(component_data_attrs):
+    if 'gridDataOrder' in component_data_attrs:
+        warnings.warn("Legacy gridDataOrder in component. Please remove and use axisLabels at the group level.") 
+        if decode_attr(component_data_attrs['gridDataOrder'])=='F':
+            return True
+    return False
     
-def component_data(h5, slice = slice(None), unit_factor=1):
+def component_data(h5, slice = slice(None), unit_factor=1, axis_labels=None):
     """
     Returns a numpy array from an h5 component.
     
@@ -163,9 +172,10 @@ def component_data(h5, slice = slice(None), unit_factor=1):
     
     An optional slice allows parts of the array to be retrieved. 
     
-    This checks for a gridDataOrder attribute: F or C. If F, the np array is transposed. 
+    This checks for legacy gridDataOrder attribute: F or C. If F, the np array is transposed. 
     
     Unit factor is an additional factor to convert from SI units to output units. 
+
     
     """
 
@@ -182,12 +192,13 @@ def component_data(h5, slice = slice(None), unit_factor=1):
     if is_constant_component(h5):
         dat = np.full(h5.attrs['shape'], h5.attrs['value'])[slice]
     
-    # Check multidimensional for data ordering
-    elif len(h5.shape) > 1:        
-        
-        # Check for Fortran order
-        if 'gridDataOrder' in h5.attrs and decode_attr(h5.attrs['gridDataOrder'])=='F':
-            
+    # Check multidimensional for data ordering, convert to 'x', 'y', 'z' order
+    elif len(h5.shape) > 1:  
+        if axis_labels is None:
+            raise ValueError('axis_labels required for multidimensional arrays')
+                
+        # Reorder to x, y, z
+        if  axis_labels in [('z', 'y', 'x'), ('z', 'theta', 'r')]:
             if isinstance(slice, tuple):
                 # Need to transpose the slice ordering
                 slice = slice[::-1]
@@ -195,9 +206,10 @@ def component_data(h5, slice = slice(None), unit_factor=1):
             # Retrieve dataset and transpose for C order
             dat = h5[slice]
             dat = np.transpose(dat)
-        else:
-            # C-order
+        elif axis_labels in [('x', 'y', 'z'), ('r', 'theta', 'z')]:
             dat = h5[slice]
+        else:
+            raise NotImplementedError(f'axis_labels: {axis_labels}')
             
     # 1-D array
     else:
@@ -255,8 +267,7 @@ def particle_array(h5, component, slice=slice(None), include_offset=True):
     if include_offset and ocomponent in h5 :
         offset =  component_data(h5[ocomponent], slice = slice, unit_factor=unit_factor)
         dat += offset
-        
-        
+                
     return dat
         
     
@@ -330,7 +341,7 @@ required_field_attrs = [
     'eleAnchorPt', 'gridGeometry', 'axisLabels',
     # reals and ints
     'gridLowerBound', 'gridOriginOffset', 'gridSpacing', 'gridSize', 'harmonic'
-]            
+]   
     
 # Dict with options    
 optional_field_attrs = {

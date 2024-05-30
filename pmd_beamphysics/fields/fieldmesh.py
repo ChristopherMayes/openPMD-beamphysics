@@ -1,6 +1,6 @@
 from pmd_beamphysics.units import pg_units
 
-from pmd_beamphysics.readers import component_data, expected_record_unit_dimension, field_record_components, field_paths, component_from_alias, load_field_attrs, component_alias
+from pmd_beamphysics.readers import component_data, expected_record_unit_dimension, field_record_components, field_paths, component_from_alias, load_field_attrs, component_alias, is_legacy_fortran_data_ordering, decode_attr
 
 from pmd_beamphysics.writers import write_pmd_field, pmd_field_init
 
@@ -796,7 +796,7 @@ def load_field_data_h5(h5, verbose=True):
         data dict
     """
     data = {'components':{}}
-
+    
     # Load attributes
     attrs, other = load_field_attrs(h5.attrs, verbose=verbose)
     attrs.update(other)
@@ -806,15 +806,28 @@ def load_field_data_h5(h5, verbose=True):
     for g, comps in field_record_components.items():
         if g not in h5:
             continue
-        
+
+        # Extract axis labels for data transposing
+        axis_labels = tuple([decode_attr(a) for a in h5.attrs['axisLabels']]) 
+
         # Get the full openPMD unitDimension 
         required_dim = expected_record_unit_dimension[g]
-                
+
+        # Filter out only the components that we have
+        comps = [comp for comp in comps if comp in h5[g]]
+
         for comp in comps:
-            if comp not in h5[g]:
-                continue
             name = g+'/'+comp
-            cdat = component_data(h5[name])
+
+            # Handle legacy format
+            if is_legacy_fortran_data_ordering(h5[name].attrs):
+                if 'r' in comps:
+                    axis_labels = ('z', 'theta', 'r')
+                else: 
+                    axis_labels =  ('z', 'y', 'x') 
+ 
+                    
+            cdat = component_data(h5[name], axis_labels=axis_labels)
                 
             # Check dimensions
             dim = h5[name].attrs['unitDimension']

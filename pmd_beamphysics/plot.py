@@ -3,23 +3,25 @@
 
 """
 
-from pmd_beamphysics.units import nice_array, plottable_array, nice_scale_prefix
-from pmd_beamphysics.labels import mathlabel
+from copy import copy
 
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.gridspec import GridSpec
+# For field legends
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+from pmd_beamphysics.labels import mathlabel
+from pmd_beamphysics.units import (nice_array, nice_scale_prefix,
+                                   plottable_array)
 
 from .statistics import slice_statistics
-import matplotlib.pyplot as plt
-import matplotlib
-from matplotlib.gridspec import GridSpec
-import numpy as np
-from copy import copy
+
 CMAP0 = copy(plt.get_cmap('viridis'))
 CMAP0.set_under('white')
 
 CMAP1 = copy(plt.get_cmap('plasma'))
-
-# For field legends
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 def plt_histogram(a, weights=None, bins=40):

@@ -77,7 +77,7 @@ def write_pmd_bunch(h5, data, name=None):
         u = pg_units(key)        
         
         # Write
-        g2 = write_component_data(g, g2_name, data[key], unit=u)
+        write_component_data(g, g2_name, data[key], unit=u)
     
         
     # Optional id. This does not have any units.

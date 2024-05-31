@@ -258,7 +258,6 @@ def astra_1d_fieldmap_data(fm):
     
     assert fm.shape[1] == 1, 'Cylindrical symmetry required'
     
-    dat = {}
     z = fm.coord_vec('z')
     
     if fm.is_static:

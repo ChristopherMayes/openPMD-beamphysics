@@ -75,7 +75,7 @@ def run_asci2gdf(outfile, asci2gdf_bin, verbose=False):
     cmd = [asci2gdf_bin, '-o', outfile, tempfile]
     if verbose:
         print(' '.join(cmd))
-    result = subprocess.run(cmd)
+    subprocess.run(cmd)
     
     # Cleanup
     os.remove(tempfile)    

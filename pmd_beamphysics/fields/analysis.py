@@ -122,7 +122,6 @@ def track_field_1d(z,
     
     # Make interpolating function
     field = interpolate.interp1d(z, Ez * q0 * c_light, fill_value='extrapolate')
-    zmin = z.min()
     zmax = z.max()
     tmax = 100/frequency
     omega = 2*np.pi*frequency

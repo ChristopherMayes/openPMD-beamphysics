@@ -72,7 +72,7 @@ class ParticleGroup:
     - `.higher_order_energy`: total energy with quadratic fit in z or t subtracted [eV]
     - `.p`: total momentum in [eV/c]
     - `.mass`: rest mass in [eV]
-    - `.xp`, `.yp`: Slopes $x' = dx/dz = dp_x/dp_z$ and $y' = dy/dz = dp_y/dp_z$ [1].
+    - `.xp`, `.yp`: Slopes $x' = dx/dz = p_x/p_z$ and $y' = dy/dz = p_y/p_z$ [1].
         
     Normalized transvere coordinates can also be calculated as attributes:
     

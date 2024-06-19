@@ -671,7 +671,7 @@ class ParticleGroup:
         Simple average `current = charge / dt` in [A], with `dt =  (max_t - min_t)`
         If particles are in $t$ coordinates, will try` dt = (max_z - min_z)*c_light*beta_z`
         """
-        dt = self.t.ptp()  # ptp 'peak to peak' is max - min
+        dt = np.ptp(self.t)  # ptp 'peak to peak' is max - min
         if dt == 0:
             # must be in t coordinates. Calc with 
             dt = self.z.ptp() / (self.avg('beta_z')*c_light)

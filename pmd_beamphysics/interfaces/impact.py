@@ -166,7 +166,7 @@ def write_impact(particle_group,
         z = -betac*particle_group['t']  
 
         # Get z span
-        z_ptp = z.ptp()
+        z_ptp = np.ptp(z)
         # Add tiny padding
         z_pad = 1e-20 # Tiny pad 
         
@@ -546,7 +546,7 @@ def create_impact_solrf_fieldmap_fourier(field_mesh,
             zmax = z.max()
         else:
             zmin = 0
-            zmax = z.ptp()
+            zmax = np.ptp(z)
             
         fcoefs = dat['fcoefs']
         
@@ -628,7 +628,7 @@ def create_impact_solrf_fieldmap_derivatives(field_mesh,
     rfdata = []
     
     z = field_mesh.coord_vec('z')
-    L = z.ptp()
+    L = np.ptp(z)
     
     info = {'format':'solrf'}
     field = {}    

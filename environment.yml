@@ -3,7 +3,7 @@ name: pmd_beamphysics-dev
 channels:
   - conda-forge
 dependencies:
-  - python=3.9
+  - python>=3.9
   - numpy
   - scipy>=1.0.0
   - matplotlib
@@ -12,10 +12,11 @@ dependencies:
   - pytest
   - jupyterlab>=3
   - pygments
-  - mkdocs
+  - mkdocs==1.5.2
   - mkdocstrings
   - mkdocs-material
-  - mkdocs-jupyter
+  - mkdocs-jupyter==0.24.6
+  - mkdocstrings-python
   - pip
   - pip:
     - mkdocstrings-python

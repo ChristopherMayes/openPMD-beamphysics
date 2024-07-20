@@ -926,6 +926,7 @@ class ParticleGroup:
              ylim=None,
              return_figure=False, 
              tex=True, nice=True,
+             ellipse=False,
              **kwargs):
         """
         1d or 2d density plot. 
@@ -993,6 +994,7 @@ class ParticleGroup:
                                 ylim=ylim,
                                 tex=tex,
                                 nice=nice,
+                                ellipse=ellipse,
                                 **kwargs)
         
         if return_figure:

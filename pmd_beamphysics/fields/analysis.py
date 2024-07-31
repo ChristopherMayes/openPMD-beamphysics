@@ -36,7 +36,7 @@ def accelerating_voltage_and_phase(z, Ez, frequency):
     fz =Ez*np.exp(-1j*k*z)
     
     # Integrate
-    Z = np.trapz(fz, z)
+    Z = np.trapezoid(fz, z)
     
     # Max voltage at phase
     voltage = np.abs(Z)

@@ -237,11 +237,11 @@ class WavefrontParams(pydantic.BaseModel, frozen=True):
             (self.ypad, self.ypad),
         )
 
-    def get_padded_shape(self, rspace: np.ndarray) -> Tuple[int, int, int]:
-        if not len(rspace.shape) == 3:
-            raise ValueError("`rspace` is not a 3D array")
+    def get_padded_shape(self, field_rspace: np.ndarray) -> Tuple[int, int, int]:
+        if not len(field_rspace.shape) == 3:
+            raise ValueError("`field_rspace` is not a 3D array")
 
-        nt, nx, ny = rspace.shape
+        nt, nx, ny = field_rspace.shape
         return (
             nt + 2 * self.tpad,
             nx + 2 * self.xpad,
@@ -288,8 +288,8 @@ class WavefrontParams(pydantic.BaseModel, frozen=True):
         kx, ky = self.domains_kxky
         return np.exp(-1j * z * np.pi * self.lambda0 * (kx**2 + ky**2))
 
-    def drift_propagator(self, kspace: np.ndarray, z: float):
-        return kspace * self.drift_kernel(z)
+    def drift_propagator(self, field_kspace: np.ndarray, z: float):
+        return field_kspace * self.drift_kernel(z)
 
     def thin_lens_kernel(self, f_lens_x: float, f_lens_y: float):
         xx, yy = nd_space_mesh(
@@ -300,7 +300,7 @@ class WavefrontParams(pydantic.BaseModel, frozen=True):
     def create_gaussian_pulse_3d_with_q(self, nphotons: float, zR: float):
         """
         Generate a complex three-dimensional spatio-temporal Gaussian profile
-        of field Rabi frequency expressed in terms of the q parameter.
+        in terms of the q parameter.
 
         Returns
         -------
@@ -329,15 +329,15 @@ class WavefrontParams(pydantic.BaseModel, frozen=True):
 
 
 class Wavefront:
-    _rspace: Optional[np.ndarray]
-    _kspace: Optional[np.ndarray]
+    _field_rspace: Optional[np.ndarray]
+    _field_kspace: Optional[np.ndarray]
     _phasors: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]
     _operations: List[Tuple[str, Any]]
     params: WavefrontParams
 
     def __init__(
         self,
-        rspace: np.ndarray,
+        field_rspace: np.ndarray,
         *,
         params: Optional[WavefrontParams] = None,
         wavelength: float = 1.35e-8,
@@ -352,8 +352,8 @@ class Wavefront:
         sigma_t: int = 5,
     ) -> None:
         self._phasors = None
-        self._rspace = rspace
-        self._kspace = None
+        self._field_rspace = field_rspace
+        self._field_kspace = None
         self._operations = []
         if params is None:
             params = WavefrontParams(
@@ -401,21 +401,21 @@ class Wavefront:
         return self._phasors
 
     @property
-    def rspace(self) -> np.ndarray:
-        if self._rspace is None:
-            self._rspace = self.ifft()
-        return self._rspace
+    def field_rspace(self) -> np.ndarray:
+        if self._field_rspace is None:
+            self._field_rspace = self.ifft()
+        return self._field_rspace
 
     @property
-    def kspace(self) -> np.ndarray:
-        if self._kspace is None:
-            self._kspace = self.fft()
-        return self._kspace
+    def field_kspace(self) -> np.ndarray:
+        if self._field_kspace is None:
+            self._field_kspace = self.fft()
+        return self._field_kspace
 
     def fft(self, workers=-1):
-        assert self._rspace is not None
+        assert self._field_rspace is not None
         self._record("fft", workers)
-        dfl_pad = _pad_array(self.rspace, self.params.pad_shape)
+        dfl_pad = _pad_array(self.field_rspace, self.params.pad_shape)
         return fft_phased(
             dfl_pad,
             axes=(0, 1, 2),
@@ -424,10 +424,10 @@ class Wavefront:
         )
 
     def ifft(self, workers=-1):
-        assert self._kspace is not None
+        assert self._field_kspace is not None
         self._record("ifft", workers)
         return ifft_phased(
-            self._kspace,
+            self._field_kspace,
             axes=(0, 1, 2),
             phasors=self.phasors,
             workers=workers,
@@ -444,14 +444,16 @@ class Wavefront:
     def propagate_z(self, z_prop: float):
         z_prop = float(z_prop)
         self._record("propagate_z", z_prop)
-        self._kspace = self.params.drift_propagator(self.kspace, z_prop)
+        self._field_kspace = self.params.drift_propagator(self.field_kspace, z_prop)
         # Invalidate the real space data
-        self._rspace = None
-        return self._kspace
+        self._field_rspace = None
+        return self._field_kspace
 
     def focusing_element(self, f_lens_x: float, f_lens_y: float):
         self._record("focusing_element", (f_lens_x, f_lens_y))
-        self._rspace = self.rspace * self.params.thin_lens_kernel(f_lens_x, f_lens_y)
+        self._field_rspace = self.field_rspace * self.params.thin_lens_kernel(
+            f_lens_x, f_lens_y
+        )
         # Invalidate the spectral data
-        self._kspace = None
-        return self._rspace
+        self._field_kspace = None
+        return self._field_rspace

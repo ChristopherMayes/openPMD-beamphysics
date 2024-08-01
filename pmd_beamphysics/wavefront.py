@@ -156,7 +156,19 @@ def _fix_fft_dimension(dim: int):
     return dim
 
 
-OddInteger = Annotated[int, pydantic.AfterValidator(_fix_fft_dimension)]
+def _fix_grid_padding(grid: int, pad: int) -> Tuple[int, int]:
+    # Grid must be odd for us:
+    if grid % 2 == 0:
+        grid += 1
+
+    # Ensure that our FFT dimension is odd and optimal for scipy's FFT:
+    dim = _fix_fft_dimension(grid + 2 * pad)
+    assert dim % 2 == 1, "FFT dimension not odd?"
+
+    # Fix padding based on our optimal dimension:
+    pad = (dim - grid) // 2
+    assert (dim - grid) % 2 == 0, "End dimension not even as expected?"
+    return grid, pad
 
 
 class WavefrontParams(pydantic.BaseModel, frozen=True):
@@ -167,13 +179,46 @@ class WavefrontParams(pydantic.BaseModel, frozen=True):
 
     tmax: float
 
-    tgrid: OddInteger
-    xgrid: OddInteger
-    ygrid: OddInteger
+    tgrid: int
+    xgrid: int
+    ygrid: int
 
     tpad: int
     xpad: int
     ypad: int
+
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _fix_dimensions(cls, values):
+        tgrid, tpad = _fix_grid_padding(values["tgrid"], values["tpad"])
+        xgrid, xpad = _fix_grid_padding(values["xgrid"], values["xpad"])
+        ygrid, ypad = _fix_grid_padding(values["ygrid"], values["ypad"])
+
+        logger.debug(
+            "Fixing gridding: t %d -> %d padding %d -> %d",
+            values["tgrid"],
+            tgrid,
+            values["tpad"],
+            tpad,
+        )
+        logger.debug(
+            "Fixing gridding: x %d -> %d padding %d -> %d",
+            values["xgrid"],
+            xgrid,
+            values["xpad"],
+            xpad,
+        )
+        logger.debug(
+            "Fixing gridding: y %d -> %d padding %d -> %d",
+            values["ygrid"],
+            ygrid,
+            values["ypad"],
+            ypad,
+        )
+        values["tgrid"], values["tpad"] = tgrid, tpad
+        values["xgrid"], values["xpad"] = xgrid, xpad
+        values["ygrid"], values["ypad"] = ygrid, ypad
+        return values
 
     @property
     def xmax(self) -> float:

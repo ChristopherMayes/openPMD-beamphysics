@@ -15,6 +15,21 @@ import scipy.fft
 logger = logging.getLogger(__name__)
 
 
+_fft_workers = -1
+
+
+def get_num_fft_workers() -> int:
+    return _fft_workers
+
+
+def set_num_fft_workers(workers: int):
+    global _fft_workers
+
+    _fft_workers = workers
+
+    logger.info(f"Set number of FFT workers to: {workers}")
+
+
 def _pad_array(wavefront: np.ndarray, shape):
     """
     Pad an array with complex zero elements.
@@ -172,11 +187,41 @@ def _fix_grid_padding(grid: int, pad: int) -> Tuple[int, int]:
 
 
 class WavefrontParams(pydantic.BaseModel, frozen=True):
+    """
+    Wavefront parameter settings.
+
+    Grid and pad values will be automatically adjusted as follows:
+
+    * grid will be made odd for the purposes of symmetry.
+    * pad = (scipy_fft_fast_length - grid) // 2
+
+    Such that the total array size will be: `grid + 2 * pad`.
+
+    Parameters
+    ----------
+    lambda0 : float
+        Wavelength [m].
+    half_size : float
+        Half-size of the domain [m].
+    tmax : float
+        Time window size [fs].
+    tgrid : int
+        Number of grid points in time.
+    xgrid : int
+        Number of grid points in the x-axis.
+    ygrid : int
+        Number of grid points in the y-axis.
+    tpad : int
+        Number of pad points in time on each side.
+    xpad : int
+        Number of pad points in the x-axis on each side.
+    ypad : int
+        Number of pad points in the y-axis on each side.
+    """
+
     lambda0: float
 
     half_size: float
-    sigma_t: float
-
     tmax: float
 
     tgrid: int
@@ -222,18 +267,22 @@ class WavefrontParams(pydantic.BaseModel, frozen=True):
 
     @property
     def xmax(self) -> float:
+        """Half-size of the domain in x [m]."""
         return self.half_size
 
     @property
     def ymax(self) -> float:
+        """Half-size of the domain in y [m]."""
         return self.half_size
 
     @property
-    def t0(self) -> float:
+    def t_mid(self) -> float:
+        """Center of the time window size [fs]."""
         return self.tmax / 2.0
 
     @property
     def k0(self) -> float:
+        """K-value: 2 pi / lambda0"""
         return 2.0 * np.pi / self.lambda0
 
     @cached_property
@@ -256,26 +305,28 @@ class WavefrontParams(pydantic.BaseModel, frozen=True):
 
     @cached_property
     def dkx(self) -> float:
-        """Drift kernel delta x."""
+        """Fourier space step size in x."""
         kx = self.domains_kxky[0]
         return kx[1, 0] - kx[0, 0]
 
     @cached_property
     def dky(self) -> float:
-        """Drift kernel delta y."""
+        """Fourier space step size in y."""
         ky = self.domains_kxky[1]
         return ky[0, 1] - ky[0, 0]
 
     @cached_property
     def shifts(self) -> Tuple[float, float, float]:
+        """Effective half sizes with padding in t, x, and y."""
         return (
-            self.t0 + self.tpad * self.dt,
+            self.t_mid + self.tpad * self.dt,
             self.xmax + self.xpad * self.dx,
             self.ymax + self.ypad * self.dy,
         )
 
     @cached_property
     def pad_shape(self) -> Tuple[Tuple[int, int], ...]:
+        """Padding in each dimension."""
         return (
             (self.tpad, self.tpad),
             (self.xpad, self.xpad),
@@ -283,6 +334,7 @@ class WavefrontParams(pydantic.BaseModel, frozen=True):
         )
 
     def get_padded_shape(self, field_rspace: np.ndarray) -> Tuple[int, int, int]:
+        """Get the padded shape given a 3D field rspace array."""
         if not len(field_rspace.shape) == 3:
             raise ValueError("`field_rspace` is not a 3D array")
 
@@ -295,6 +347,11 @@ class WavefrontParams(pydantic.BaseModel, frozen=True):
 
     @cached_property
     def coeffs(self) -> Tuple[float, float, float]:
+        """
+        Conversion coefficients to (eV, radians, radians).
+
+        Omega, theta-x, theta-y.
+        """
         hbar = scipy.constants.hbar / scipy.constants.e * 1.0e15  # fs-eV
         return (
             2.0 * np.pi * hbar,
@@ -304,6 +361,7 @@ class WavefrontParams(pydantic.BaseModel, frozen=True):
 
     @property
     def domains_txy(self):
+        """Real-space domain of the non-padded field."""
         return (
             np.linspace(0.0, self.tmax, self.tgrid),
             np.linspace(-self.xmax, self.xmax, self.xgrid),
@@ -311,7 +369,12 @@ class WavefrontParams(pydantic.BaseModel, frozen=True):
         )
 
     @property
-    def domains_wkxky(self):
+    def domains_omega_thx_thy(self):
+        """
+        Fourier space domain of the padded field.
+
+        Units of (eV, radians, radians).
+        """
         return nd_kspace_mesh(
             coeffs=self.coeffs,
             sizes=(self.tgrid, self.xgrid, self.ygrid),
@@ -321,6 +384,11 @@ class WavefrontParams(pydantic.BaseModel, frozen=True):
 
     @property
     def domains_kxky(self):
+        """
+        Transverse Fourier space domain x and y.
+
+        In units of the scipy FFT.
+        """
         # Drift kernel meshes
         return nd_kspace_mesh(
             coeffs=(1.0, 1.0),
@@ -330,22 +398,52 @@ class WavefrontParams(pydantic.BaseModel, frozen=True):
         )
 
     def drift_kernel(self, z: float):
+        """Drift transfer function in Z [m] paraxial approximation."""
         kx, ky = self.domains_kxky
         return np.exp(-1j * z * np.pi * self.lambda0 * (kx**2 + ky**2))
 
     def drift_propagator(self, field_kspace: np.ndarray, z: float):
+        """Fresnel propagator in paraxial approximation to distance z [m]."""
         return field_kspace * self.drift_kernel(z)
 
     def thin_lens_kernel(self, f_lens_x: float, f_lens_y: float):
+        """
+        Transfer function for thin lens focusing.
+
+        Parameters
+        ----------
+        f_lens_x : float
+            Focal length of the lens in x [m].
+        f_lens_y : float
+            Focal length of the lens in y [m].
+
+        Returns
+        -------
+        np.ndarray
+        """
         xx, yy = nd_space_mesh(
             (-self.xmax, -self.ymax), (self.xmax, self.ymax), (self.xgrid, self.ygrid)
         )
         return np.exp(-1j * self.k0 / 2.0 * (xx**2 / f_lens_x + yy**2 / f_lens_y))
 
-    def create_gaussian_pulse_3d_with_q(self, nphotons: float, zR: float):
+    def create_gaussian_pulse_3d_with_q(
+        self,
+        nphotons: float,
+        zR: float,
+        sigma_t: float,
+    ):
         """
         Generate a complex three-dimensional spatio-temporal Gaussian profile
         in terms of the q parameter.
+
+        Parameters
+        ----------
+        nphotons : float
+            Number of photons.
+        zR : float
+            Rayleigh range [m].
+        sigma_t : float
+            Time RMS [fs]
 
         Returns
         -------
@@ -363,17 +461,41 @@ class WavefrontParams(pydantic.BaseModel, frozen=True):
         uy = 1.0 / np.sqrt(qy) * np.exp(-1j * self.k0 * y_mesh**2 / 2.0 / qy)
         ut = (
             1.0
-            / (np.sqrt(2.0 * np.pi) * self.sigma_t)
-            * np.exp(-((t_mesh - self.tmax / 2.0) ** 2) / 2.0 / self.sigma_t**2)
+            / (np.sqrt(2.0 * np.pi) * sigma_t)
+            * np.exp(-((t_mesh - self.t_mid) ** 2) / 2.0 / sigma_t**2)
         )
 
-        eta = 2.0 * self.k0 * zR * self.sigma_t / np.sqrt(np.pi)
+        eta = 2.0 * self.k0 * zR * sigma_t / np.sqrt(np.pi)
 
         pulse = np.sqrt(eta) * np.sqrt(nphotons) * ux * uy * ut
         return pulse.astype(np.complex64)
 
 
 class Wavefront:
+    """
+    Particle field wavefront.
+
+    Parameters
+    ----------
+    field_rspace : np.ndarray
+        Real-space field data.  3D array with dimensions of (time, x, y).
+    params : WavefrontParams, optional
+        Gridding, padding, and FFT-related parameters.  May be shared
+        among multiple Wavefront objects.
+    **kwargs :
+        If `params` is unspecified, `**kwargs` will be passed to a new
+        `WavefrontParams` instance.
+
+    Examples
+    --------
+
+    >>> params = WavefrontParams(lambda0=1.35e-8, ...)
+    >>> wave1 = Wavefront(dfl1, params=params)
+    >>> wave2 = Wavefront(dfl2, params=params)
+
+    >>> wave3 = Wavefront(dfl, lambda0=1.35e-8, ...)
+    """
+
     _field_rspace: Optional[np.ndarray]
     _field_kspace: Optional[np.ndarray]
     _phasors: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]
@@ -383,36 +505,15 @@ class Wavefront:
     def __init__(
         self,
         field_rspace: np.ndarray,
-        *,
         params: Optional[WavefrontParams] = None,
-        wavelength: float = 1.35e-8,
-        half_size: float = 3e-4,
-        tmax: int = 50,
-        tgrid: int = 801,
-        xgrid: int = 101,
-        ygrid: int = 101,
-        tpad: int = 400,
-        xpad: int = 150,
-        ypad: int = 150,
-        sigma_t: int = 5,
+        **kwargs,
     ) -> None:
         self._phasors = None
         self._field_rspace = field_rspace
         self._field_kspace = None
         self._operations = []
         if params is None:
-            params = WavefrontParams(
-                lambda0=wavelength,
-                half_size=half_size,
-                tmax=tmax,
-                tgrid=tgrid,
-                xgrid=xgrid,
-                ygrid=ygrid,
-                tpad=tpad,
-                xpad=xpad,
-                ypad=ypad,
-                sigma_t=sigma_t,
-            )
+            params = WavefrontParams(**kwargs)
 
         self.params = params
 
@@ -457,8 +558,9 @@ class Wavefront:
             self._field_kspace = self.fft()
         return self._field_kspace
 
-    def fft(self, workers=-1):
+    def fft(self):
         assert self._field_rspace is not None
+        workers = get_num_fft_workers()
         self._record("fft", workers)
         dfl_pad = _pad_array(self.field_rspace, self.params.pad_shape)
         return fft_phased(
@@ -468,8 +570,9 @@ class Wavefront:
             workers=workers,
         )
 
-    def ifft(self, workers=-1):
+    def ifft(self):
         assert self._field_kspace is not None
+        workers = get_num_fft_workers()
         self._record("ifft", workers)
         return ifft_phased(
             self._field_kspace,

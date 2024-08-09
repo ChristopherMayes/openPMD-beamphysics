@@ -1,15 +1,14 @@
 #!/usr/bin/env python
 
 from __future__ import annotations
-from functools import cached_property
-import logging
-import pydantic
 
-from typing import Annotated, Any, List, Optional, Tuple
+import copy
+import dataclasses
+import logging
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 import scipy.constants
-
 import scipy.fft
 
 logger = logging.getLogger(__name__)
@@ -161,10 +160,17 @@ def nd_space_mesh(mins=(), maxes=(), sizes=()):
     return np.meshgrid(*domains, indexing="ij")
 
 
+def is_odd(value: int) -> bool:
+    return value % 2 == 1
+
+
 def _fix_fft_dimension(dim: int):
     """Get a dimension that's efficient for the FFT - and also odd for symmetry."""
     while True:
-        dim = scipy.fft.next_fast_len(dim, real=False)
+        next_dim = scipy.fft.next_fast_len(dim, real=False)
+        if next_dim is None:
+            raise ValueError(f"Unable to get the next valid dimension for: {dim}")
+        dim = next_dim
         if dim % 2 == 1:
             break
         dim += 1
@@ -186,289 +192,286 @@ def _fix_grid_padding(grid: int, pad: int) -> Tuple[int, int]:
     return grid, pad
 
 
-class WavefrontParams(pydantic.BaseModel, frozen=True):
+def fix_padding(
+    grid: Tuple[int, ...],
+    pad: Tuple[int, ...],
+) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
+    assert len(grid) == len(pad)
+
+    result = [[], []]
+    for dim, (dim_grid, dim_pad) in enumerate(zip(grid, pad)):
+        new_grid, new_pad = _fix_grid_padding(dim_grid, dim_pad)
+        logger.debug(
+            "Grid[%d] %d -> %d pad %d -> %d", dim, dim_grid, new_grid, dim_pad, new_pad
+        )
+        result[0].append(new_grid)
+        result[1].append(new_pad)
+
+    return tuple(result[0]), tuple(result[1])
+
+
+RealSpaceRanges = Tuple[Tuple[float, float], ...]
+
+
+def get_shifts(
+    ranges: RealSpaceRanges,
+    pads: Tuple[int, ...],
+    deltas: Tuple[float, ...],
+) -> Tuple[float, ...]:
+    """Effective half sizes with padding in t, x, and y."""
+
+    assert len(ranges) == len(pads) == len(deltas) > 1
+
+    # Time domain: (0, tmax) -> centered at tmax / 2
+    mid_t = (ranges[0][1] + ranges[0][0]) / 2
+    tpad = pads[0]
+    dt = deltas[0]
+
+    return (
+        mid_t + tpad * dt,
+        *(
+            # Spatial domains are symmetric around 0: (-value, 0, value)
+            domain[1] + pad * delta
+            for domain, pad, delta in zip(ranges[1:], pads[1:], deltas[1:])
+        ),
+    )
+
+
+def calculate_k0(wavelength: float) -> float:
+    """K-value: 2 pi / wavelength"""
+    return 2.0 * np.pi / wavelength
+
+
+def conversion_coeffs(wavelength: float, dim: int) -> Tuple[float, ...]:
     """
-    Wavefront parameter settings.
+    Conversion coefficients to (eV, radians, radians, ...).
 
-    Grid and pad values will be automatically adjusted as follows:
+    Omega, theta-x, theta-y.
+    """
+    k0 = calculate_k0(wavelength)
+    hbar = scipy.constants.hbar / scipy.constants.e * 1.0e15  # fs-eV
+    return tuple([2.0 * np.pi * hbar] + [2.0 * np.pi / k0] * (dim - 1))
 
-    * grid will be made odd for the purposes of symmetry.
-    * pad = (scipy_fft_fast_length - grid) // 2
 
-    Such that the total array size will be: `grid + 2 * pad`.
+def real_space_domain(
+    ranges: RealSpaceRanges,
+    grids: Tuple[int, ...],
+):
+    """Real-space domain of the non-padded field."""
+    return tuple(
+        np.linspace(range_[0], range_[1], grid) for range_, grid in zip(ranges, grids)
+    )
+
+
+def domains_omega_thx_thy(
+    wavelength: float,
+    grids: Tuple[int, ...],
+    pads: Tuple[int, ...],
+    deltas: Tuple[float, ...],
+):
+    """
+    Fourier space domain of the padded field.
+
+    Units of (eV, radians, ...)
+    """
+    coeffs = conversion_coeffs(wavelength=wavelength, dim=len(grids))
+
+    assert len(grids) == len(pads) == len(deltas) == len(coeffs)
+    return nd_kspace_mesh(
+        coeffs=coeffs,
+        sizes=grids,
+        pads=pads,
+        steps=deltas,
+    )
+
+
+def domains_kxky(
+    grids: Tuple[int, ...],
+    pads: Tuple[int, ...],
+    deltas: Tuple[float, ...],
+):
+    """
+    Transverse Fourier space domain x and y.
+
+    In units of the scipy FFT.
+    """
+    assert len(grids) == len(pads) == len(deltas)
+    return nd_kspace_mesh(
+        coeffs=(1.0,) * (len(grids) - 1),
+        sizes=grids[1:],
+        pads=pads[1:],
+        steps=deltas[1:],
+    )
+
+
+def drift_kernel(
+    domains_kxky: List[np.ndarray],
+    z: float,
+    wavelength: float,
+):
+    """Drift transfer function in Z [m] paraxial approximation."""
+    kx, ky = domains_kxky
+    return np.exp(-1j * z * np.pi * wavelength * (kx**2 + ky**2))
+
+
+def drift_propagator(
+    field_kspace: np.ndarray,
+    domains_kxky: List[np.ndarray],
+    z: float,
+    wavelength: float,
+):
+    """Fresnel propagator in paraxial approximation to distance z [m]."""
+    return field_kspace * drift_kernel(
+        domains_kxky=domains_kxky, z=z, wavelength=wavelength
+    )
+
+
+def thin_lens_kernel(
+    wavelength: float,
+    ranges: RealSpaceRanges,
+    grid: Tuple[int, ...],
+    f_lens_x: float,
+    f_lens_y: float,
+):
+    """
+    Transfer function for thin lens focusing.
 
     Parameters
     ----------
-    lambda0 : float
-        Wavelength [m].
-    half_size : float
-        Half-size of the domain [m].
-    tmax : float
-        Time window size [fs].
-    tgrid : int
-        Number of grid points in time.
-    xgrid : int
-        Number of grid points in the x-axis.
-    ygrid : int
-        Number of grid points in the y-axis.
-    tpad : int
+    wavelength : float
+    ranges :
+    f_lens_x : float
+        Focal length of the lens in x [m].
+    f_lens_y : float
+        Focal length of the lens in y [m].
+
+    Returns
+    -------
+    np.ndarray
+    """
+    k0 = calculate_k0(wavelength)
+    mins = [range_[0] for range_ in ranges]
+    maxes = [range_[1] for range_ in ranges]
+    xx, yy = nd_space_mesh(mins, maxes, grid[1:])
+    return np.exp(-1j * k0 / 2.0 * (xx**2 / f_lens_x + yy**2 / f_lens_y))
+
+
+def create_gaussian_pulse_3d_with_q(
+    wavelength: float,
+    nphotons: float,
+    zR: float,
+    sigma_t: float,
+    ranges: RealSpaceRanges,
+    grid: Tuple[int, int, int],
+    dtype=np.complex64,
+):
+    """
+    Generate a complex three-dimensional spatio-temporal Gaussian profile
+    in terms of the q parameter.
+
+    Parameters
+    ----------
+    wavelength : float
+    nphotons : float
+        Number of photons.
+    zR : float
+        Rayleigh range [m].
+    sigma_t : float
+        Time RMS [fs]
+
+    Returns
+    -------
+    np.ndarray
+    """
+    k0 = calculate_k0(wavelength)
+    (min_t, max_t), (min_x, max_x), (min_y, max_y) = ranges
+    tgrid, xgrid, ygrid = grid
+    t_mid = (max_t + min_t) / 2.0
+    t_mesh, x_mesh, y_mesh = nd_space_mesh(
+        mins=(min_t, min_x, min_y),
+        maxes=(max_t, max_x, max_y),
+        sizes=(tgrid, xgrid, ygrid),
+    )
+    qx = 1j * zR
+    qy = 1j * zR
+
+    ux = 1.0 / np.sqrt(qx) * np.exp(-1j * k0 * x_mesh**2 / 2.0 / qx)
+    uy = 1.0 / np.sqrt(qy) * np.exp(-1j * k0 * y_mesh**2 / 2.0 / qy)
+    ut = (
+        1.0
+        / (np.sqrt(2.0 * np.pi) * sigma_t)
+        * np.exp(-((t_mesh - t_mid) ** 2) / 2.0 / sigma_t**2)
+    )
+
+    eta = 2.0 * k0 * zR * sigma_t / np.sqrt(np.pi)
+
+    pulse = np.sqrt(eta) * np.sqrt(nphotons) * ux * uy * ut
+    return pulse.astype(dtype)
+
+
+@dataclasses.dataclass(frozen=True)
+class WavefrontPadding:
+    """
+    Wavefront padding settings.
+
+    Parameters
+    ----------
+    grid : tuple of int
+        Number of grid points.
+    pad : tuple of int
         Number of pad points in time on each side.
-    xpad : int
-        Number of pad points in the x-axis on each side.
-    ypad : int
-        Number of pad points in the y-axis on each side.
     """
 
-    lambda0: float
-
-    half_size: float
-    tmax: float
-
-    tgrid: int
-    xgrid: int
-    ygrid: int
-
-    tpad: int
-    xpad: int
-    ypad: int
-
-    @pydantic.model_validator(mode="before")
-    @classmethod
-    def _fix_dimensions(cls, values):
-        tgrid, tpad = _fix_grid_padding(values["tgrid"], values["tpad"])
-        xgrid, xpad = _fix_grid_padding(values["xgrid"], values["xpad"])
-        ygrid, ypad = _fix_grid_padding(values["ygrid"], values["ypad"])
-
-        logger.debug(
-            "Fixing gridding: t %d -> %d padding %d -> %d",
-            values["tgrid"],
-            tgrid,
-            values["tpad"],
-            tpad,
-        )
-        logger.debug(
-            "Fixing gridding: x %d -> %d padding %d -> %d",
-            values["xgrid"],
-            xgrid,
-            values["xpad"],
-            xpad,
-        )
-        logger.debug(
-            "Fixing gridding: y %d -> %d padding %d -> %d",
-            values["ygrid"],
-            ygrid,
-            values["ypad"],
-            ypad,
-        )
-        values["tgrid"], values["tpad"] = tgrid, tpad
-        values["xgrid"], values["xpad"] = xgrid, xpad
-        values["ygrid"], values["ypad"] = ygrid, ypad
-        return values
+    grid: Tuple[int, ...]
+    pad: Tuple[int, ...]
 
     @property
-    def xmax(self) -> float:
-        """Half-size of the domain in x [m]."""
-        return self.half_size
+    def ifft_slices(self):
+        """Slices to extract the real space data from its padded form (i.e., post-ifft)."""
+        return [slice(pad, -pad) for pad in self.pad]
 
     @property
-    def ymax(self) -> float:
-        """Half-size of the domain in y [m]."""
-        return self.half_size
-
-    @property
-    def t_mid(self) -> float:
-        """Center of the time window size [fs]."""
-        return self.tmax / 2.0
-
-    @property
-    def k0(self) -> float:
-        """K-value: 2 pi / lambda0"""
-        return 2.0 * np.pi / self.lambda0
-
-    @cached_property
-    def dt(self) -> float:
-        """Grid delta t."""
-        t, _, _ = self.domains_txy
-        return t[1] - t[0]
-
-    @cached_property
-    def dx(self) -> float:
-        """Grid delta x."""
-        _, x, _ = self.domains_txy
-        return x[1] - x[0]
-
-    @cached_property
-    def dy(self) -> float:
-        """Grid delta y."""
-        _, _, y = self.domains_txy
-        return y[1] - y[0]
-
-    @cached_property
-    def dkx(self) -> float:
-        """Fourier space step size in x."""
-        kx = self.domains_kxky[0]
-        return kx[1, 0] - kx[0, 0]
-
-    @cached_property
-    def dky(self) -> float:
-        """Fourier space step size in y."""
-        ky = self.domains_kxky[1]
-        return ky[0, 1] - ky[0, 0]
-
-    @cached_property
-    def shifts(self) -> Tuple[float, float, float]:
-        """Effective half sizes with padding in t, x, and y."""
-        return (
-            self.t_mid + self.tpad * self.dt,
-            self.xmax + self.xpad * self.dx,
-            self.ymax + self.ypad * self.dy,
-        )
-
-    @cached_property
     def pad_shape(self) -> Tuple[Tuple[int, int], ...]:
         """Padding in each dimension."""
-        return (
-            (self.tpad, self.tpad),
-            (self.xpad, self.xpad),
-            (self.ypad, self.ypad),
-        )
+        return tuple((pad, pad) for pad in self.pad)
 
-    def get_padded_shape(self, field_rspace: np.ndarray) -> Tuple[int, int, int]:
+    @classmethod
+    def from_array(
+        cls,
+        data: np.ndarray,
+        pad: Tuple[int, ...],
+        fix: bool = True,
+    ) -> WavefrontPadding:
+        if data.ndim != len(pad):
+            raise ValueError("Dimensions of the grid and the padding must be identical")
+
+        padding = WavefrontPadding(data.shape, pad)
+        return padding.fix() if fix else padding
+
+    def fix(self) -> WavefrontPadding:
+        """
+        Grid and pad values will be automatically adjusted as follows:
+
+        * grid will be made odd for the purposes of symmetry.
+        * pad = (scipy_fft_fast_length - grid) // 2
+
+        Such that the total array size will be: `grid + 2 * pad`.
+        """
+        grid, pad = fix_padding(self.grid, self.pad)
+        return WavefrontPadding(grid, pad)
+
+    def get_padded_shape(self, field_rspace: np.ndarray) -> Tuple[int, ...]:
         """Get the padded shape given a 3D field rspace array."""
-        if not len(field_rspace.shape) == 3:
-            raise ValueError("`field_rspace` is not a 3D array")
+        nd = len(self.grid)
+        if field_rspace.ndim != nd:
+            raise ValueError(f"`field_rspace` is not an {nd}D array")
 
-        nt, nx, ny = field_rspace.shape
-        return (
-            nt + 2 * self.tpad,
-            nx + 2 * self.xpad,
-            ny + 2 * self.ypad,
-        )
+        if not all(is_odd(dim) for dim in field_rspace.shape):
+            raise ValueError(
+                f"`field_rspace` dimensions are not all odd numbers: {field_rspace.shape}"
+            )
 
-    @cached_property
-    def coeffs(self) -> Tuple[float, float, float]:
-        """
-        Conversion coefficients to (eV, radians, radians).
-
-        Omega, theta-x, theta-y.
-        """
-        hbar = scipy.constants.hbar / scipy.constants.e * 1.0e15  # fs-eV
-        return (
-            2.0 * np.pi * hbar,
-            2.0 * np.pi / self.k0,
-            2.0 * np.pi / self.k0,
-        )
-
-    @property
-    def domains_txy(self):
-        """Real-space domain of the non-padded field."""
-        return (
-            np.linspace(0.0, self.tmax, self.tgrid),
-            np.linspace(-self.xmax, self.xmax, self.xgrid),
-            np.linspace(-self.ymax, self.ymax, self.ygrid),
-        )
-
-    @property
-    def domains_omega_thx_thy(self):
-        """
-        Fourier space domain of the padded field.
-
-        Units of (eV, radians, radians).
-        """
-        return nd_kspace_mesh(
-            coeffs=self.coeffs,
-            sizes=(self.tgrid, self.xgrid, self.ygrid),
-            pads=(self.tpad, self.xpad, self.ypad),
-            steps=(self.dt, self.dx, self.dy),
-        )
-
-    @property
-    def domains_kxky(self):
-        """
-        Transverse Fourier space domain x and y.
-
-        In units of the scipy FFT.
-        """
-        # Drift kernel meshes
-        return nd_kspace_mesh(
-            coeffs=(1.0, 1.0),
-            sizes=(self.xgrid, self.ygrid),
-            pads=(self.xpad, self.ypad),
-            steps=(self.dx, self.dy),
-        )
-
-    def drift_kernel(self, z: float):
-        """Drift transfer function in Z [m] paraxial approximation."""
-        kx, ky = self.domains_kxky
-        return np.exp(-1j * z * np.pi * self.lambda0 * (kx**2 + ky**2))
-
-    def drift_propagator(self, field_kspace: np.ndarray, z: float):
-        """Fresnel propagator in paraxial approximation to distance z [m]."""
-        return field_kspace * self.drift_kernel(z)
-
-    def thin_lens_kernel(self, f_lens_x: float, f_lens_y: float):
-        """
-        Transfer function for thin lens focusing.
-
-        Parameters
-        ----------
-        f_lens_x : float
-            Focal length of the lens in x [m].
-        f_lens_y : float
-            Focal length of the lens in y [m].
-
-        Returns
-        -------
-        np.ndarray
-        """
-        xx, yy = nd_space_mesh(
-            (-self.xmax, -self.ymax), (self.xmax, self.ymax), (self.xgrid, self.ygrid)
-        )
-        return np.exp(-1j * self.k0 / 2.0 * (xx**2 / f_lens_x + yy**2 / f_lens_y))
-
-    def create_gaussian_pulse_3d_with_q(
-        self,
-        nphotons: float,
-        zR: float,
-        sigma_t: float,
-    ):
-        """
-        Generate a complex three-dimensional spatio-temporal Gaussian profile
-        in terms of the q parameter.
-
-        Parameters
-        ----------
-        nphotons : float
-            Number of photons.
-        zR : float
-            Rayleigh range [m].
-        sigma_t : float
-            Time RMS [fs]
-
-        Returns
-        -------
-        np.ndarray
-        """
-        t_mesh, x_mesh, y_mesh = nd_space_mesh(
-            mins=(0.0, -self.xmax, -self.ymax),
-            maxes=(self.tmax, self.xmax, self.ymax),
-            sizes=(self.tgrid, self.xgrid, self.ygrid),
-        )
-        qx = 1j * zR
-        qy = 1j * zR
-
-        ux = 1.0 / np.sqrt(qx) * np.exp(-1j * self.k0 * x_mesh**2 / 2.0 / qx)
-        uy = 1.0 / np.sqrt(qy) * np.exp(-1j * self.k0 * y_mesh**2 / 2.0 / qy)
-        ut = (
-            1.0
-            / (np.sqrt(2.0 * np.pi) * sigma_t)
-            * np.exp(-((t_mesh - self.t_mid) ** 2) / 2.0 / sigma_t**2)
-        )
-
-        eta = 2.0 * self.k0 * zR * sigma_t / np.sqrt(np.pi)
-
-        pulse = np.sqrt(eta) * np.sqrt(nphotons) * ux * uy * ut
-        return pulse.astype(np.complex64)
+        return tuple(dim + 2 * pad for dim, pad in zip(field_rspace.shape, self.pad))
 
 
 class Wavefront:
@@ -479,65 +482,63 @@ class Wavefront:
     ----------
     field_rspace : np.ndarray
         Real-space field data.  3D array with dimensions of (time, x, y).
-    params : WavefrontParams, optional
-        Gridding, padding, and FFT-related parameters.  May be shared
-        among multiple Wavefront objects.
-    **kwargs :
-        If `params` is unspecified, `**kwargs` will be passed to a new
-        `WavefrontParams` instance.
-
-    Examples
-    --------
-
-    >>> params = WavefrontParams(lambda0=1.35e-8, ...)
-    >>> wave1 = Wavefront(dfl1, params=params)
-    >>> wave2 = Wavefront(dfl2, params=params)
-
-    >>> wave3 = Wavefront(dfl, lambda0=1.35e-8, ...)
+    wavelength : float
+        Wavelength (lambda0) [m].
+    ranges : tuple of (float, float) pairs
+        Low and high domain range for each dimension of the wavefront.
+        First axis must be time [fs].
+        Remaining axes are expected to be spatial (x, y) [m].
     """
 
     _field_rspace: Optional[np.ndarray]
     _field_kspace: Optional[np.ndarray]
     _phasors: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]
-    _operations: List[Tuple[str, Any]]
-    params: WavefrontParams
+    _ranges: RealSpaceRanges
+    _wavelength: float
+    _operation_log: List[Tuple[str, Any]]
+    _pad: WavefrontPadding
 
     def __init__(
         self,
         field_rspace: np.ndarray,
-        params: Optional[WavefrontParams] = None,
-        **kwargs,
+        wavelength: float,
+        ranges: RealSpaceRanges,
+        pad: Optional[Tuple[int, ...]] = None,
     ) -> None:
+        if not pad:
+            pad = (40,) + (100,) * (field_rspace.ndim - 1)
         self._phasors = None
         self._field_rspace = field_rspace
+        self._field_rspace_shape = field_rspace.shape
         self._field_kspace = None
-        self._operations = []
-        if params is None:
-            params = WavefrontParams(**kwargs)
+        self._operation_log = []
+        self._wavelength = wavelength
+        self._ranges = tuple(ranges)
+        self._pad = WavefrontPadding(grid=field_rspace.shape, pad=pad).fix()
 
-        self.params = params
+    @property
+    def rspace_domain(self):
+        return real_space_domain(ranges=self._ranges, grids=self._pad.grid)
+
+    @property
+    def _real_domain_deltas(self) -> Tuple[float, ...]:
+        return tuple(dim[1] - dim[0] for dim in self.rspace_domain)
 
     def _calc_phasors(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        params = self.params
-        meshes_wkxky = nd_kspace_mesh(
-            params.coeffs,
-            (params.tgrid, params.xgrid, params.ygrid),
-            (params.tpad, params.xpad, params.ypad),
-            (params.dt, params.dx, params.dy),
+        coeffs = conversion_coeffs(
+            wavelength=self._wavelength, dim=len(self._field_rspace_shape)
         )
+
+        deltas = self._real_domain_deltas
+
+        shifts = get_shifts(ranges=self._ranges, pads=self._pad.pad, deltas=deltas)
+        meshes_wkxky = nd_kspace_mesh(coeffs, self._pad.grid, self._pad.pad, deltas)
 
         t, x, y = (
             np.exp(1j * 2.0 * np.pi * mesh * shift / coeff)
-            for coeff, mesh, shift in zip(
-                self.params.coeffs,
-                meshes_wkxky,
-                self.params.shifts,
-            )
+            for coeff, mesh, shift in zip(coeffs, meshes_wkxky, shifts)
         )
         return (t, x, y)
-
-    # TODO: tab completion with IPython can make slow properties a really bad
-    # idea; would `get_phasors`, `get_dfl`, etc. be acceptable?
 
     @property
     def phasors(self):
@@ -562,7 +563,7 @@ class Wavefront:
         assert self._field_rspace is not None
         workers = get_num_fft_workers()
         self._record("fft", workers)
-        dfl_pad = _pad_array(self.field_rspace, self.params.pad_shape)
+        dfl_pad = _pad_array(self.field_rspace, self._pad.pad_shape)
         return fft_phased(
             dfl_pad,
             axes=(0, 1, 2),
@@ -579,29 +580,143 @@ class Wavefront:
             axes=(0, 1, 2),
             phasors=self.phasors,
             workers=workers,
-        )[
-            self.params.tpad : -self.params.tpad,
-            self.params.xpad : -self.params.xpad,
-            self.params.ypad : -self.params.ypad,
-        ]
+        )[*self._pad.ifft_slices]
 
     def _record(self, operation: str, params: Any):
+        # TODO remove
         logger.debug(f"{operation}: {params}")
-        self._operations.append((operation, params))
+        self._operation_log.append((operation, params))
 
     def propagate_z(self, z_prop: float):
         z_prop = float(z_prop)
         self._record("propagate_z", z_prop)
-        self._field_kspace = self.params.drift_propagator(self.field_kspace, z_prop)
+        self._field_kspace = drift_propagator(
+            field_kspace=self.field_kspace,
+            domains_kxky=domains_kxky(
+                grids=self._pad.grid,
+                pads=self._pad.pad,
+                deltas=self._real_domain_deltas,
+            ),
+            wavelength=self._wavelength,
+            z=z_prop,
+        )
         # Invalidate the real space data
         self._field_rspace = None
         return self._field_kspace
 
+    @property
+    def wavelength(self) -> float:
+        return self._wavelength
+
+    @property
+    def pad(self):
+        return self._pad
+
+    @property
+    def ranges(self):
+        return self._ranges
+
     def focusing_element(self, f_lens_x: float, f_lens_y: float):
         self._record("focusing_element", (f_lens_x, f_lens_y))
-        self._field_rspace = self.field_rspace * self.params.thin_lens_kernel(
-            f_lens_x, f_lens_y
+        self._field_rspace = self.field_rspace * thin_lens_kernel(
+            wavelength=self.wavelength,
+            ranges=self._ranges,
+            grid=self._pad.grid,
+            f_lens_x=f_lens_x,
+            f_lens_y=f_lens_y,
         )
         # Invalidate the spectral data
         self._field_kspace = None
         return self._field_rspace
+
+    def __deepcopy__(self) -> Wavefront:
+        res = Wavefront.__new__(Wavefront)
+        res._phasors = self._phasors
+        res._field_rspace = (
+            np.copy(self._field_rspace) if self._field_rspace is not None else None
+        )
+        res._field_kspace = (
+            np.copy(self._field_kspace) if self._field_kspace is not None else None
+        )
+        res._operation_log = list(self._operation_log)
+        res._wavelength = self._wavelength
+        res._ranges = self._ranges
+        res._pad = self._pad
+        return res
+
+    def __copy__(self) -> Wavefront:
+        res = Wavefront.__new__(Wavefront)
+        res._phasors = self._phasors
+        res._field_rspace = (
+            self._field_rspace if self._field_rspace is not None else None
+        )
+        res._field_kspace = (
+            self._field_kspace if self._field_kspace is not None else None
+        )
+        res._operation_log = list(self._operation_log)
+        res._wavelength = self._wavelength
+        res._ranges = self._ranges
+        res._pad = self._pad
+        return res
+
+    @classmethod
+    def gaussian_pulse(
+        cls,
+        dims: Tuple[int, int, int],
+        wavelength: float,
+        nphotons: float,
+        zR: float,
+        sigma_t: float,
+        ranges: RealSpaceRanges,
+        pad: Optional[Tuple[int, ...]] = None,
+        dtype=np.complex64,
+    ):
+        """
+        Generate a complex three-dimensional spatio-temporal Gaussian profile
+        in terms of the q parameter.
+
+        Parameters
+        ----------
+        wavelength : float
+        nphotons : float
+            Number of photons.
+        zR : float
+            Rayleigh range [m].
+        sigma_t : float
+            Time RMS [fs]
+        t_mid : float
+            Center of the time window size [fs].
+
+        Returns
+        -------
+        np.ndarray
+        """
+        pulse = create_gaussian_pulse_3d_with_q(
+            wavelength=wavelength,
+            nphotons=nphotons,
+            zR=zR,
+            sigma_t=sigma_t,
+            ranges=ranges,
+            grid=dims,
+            dtype=dtype,
+        )
+        return cls(
+            field_rspace=pulse,
+            wavelength=wavelength,
+            ranges=ranges,
+            pad=pad,
+        )
+
+
+def propagate_z(wavefront: Wavefront, z_prop: float) -> Wavefront:
+    wavefront = copy.copy(wavefront)
+    wavefront.propagate_z(z_prop)
+    return wavefront
+
+
+def focusing_element(
+    wavefront: Wavefront, f_lens_x: float, f_lens_y: float
+) -> Wavefront:
+    wavefront = copy.copy(wavefront)
+    wavefront.focusing_element(f_lens_x, f_lens_y)
+    return wavefront

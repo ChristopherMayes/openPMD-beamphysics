@@ -60,6 +60,20 @@ def fft_phased(
     phasors,
     workers=-1,
 ) -> np.ndarray:
+    """
+    Compute the N-D discrete Fourier Transform with phasors applied.
+
+    Parameters
+    ----------
+    array : np.ndarray
+    axes : Tuple[int, ...]
+        Axis indices to apply the FFT to.
+    phasors : np.ndarray
+        Phasors
+    workers : int, default=-1
+        Maximum number of workers to use for parallel computation. If negative,
+        the value wraps around from ``os.cpu_count()``.
+    """
     array_fft = scipy.fft.fftn(array, axes=axes, workers=workers, norm="ortho")
     for phasor in phasors:
         array_fft *= phasor
@@ -86,9 +100,9 @@ def nd_kspace_domains(coeffs, sizes, pads, steps, shifted=True):
     ----------
     coeffs : tuple
         Conversion coefficients for eV, rad
-    sizes : tuple
+    sizes : tuple of ints
         Grid sizes
-    pads : tuple
+    pads : tuple of ints
         Number of padding points for each axis
     steps : tuple
         Grid step sizes
@@ -161,6 +175,17 @@ def nd_space_mesh(mins=(), maxes=(), sizes=()):
 
 
 def is_odd(value: int) -> bool:
+    """
+    Is `value` an odd integer?
+
+    Parameters
+    ----------
+    value : int
+
+    Returns
+    -------
+    bool
+    """
     return value % 2 == 1
 
 
@@ -171,24 +196,43 @@ def _fix_fft_dimension(dim: int):
         if next_dim is None:
             raise ValueError(f"Unable to get the next valid dimension for: {dim}")
         dim = next_dim
-        if dim % 2 == 1:
+        if is_odd(dim):
             break
         dim += 1
     return dim
 
 
 def _fix_grid_padding(grid: int, pad: int) -> Tuple[int, int]:
+    """
+    Fix gridding and padding values for symmetry and FFT efficiency.
+
+    This works on a single dimension.
+
+    Parameters
+    ----------
+    grid : int
+        Data gridding.
+    pad : int
+        Data padding.
+
+    Returns
+    -------
+    int
+        Adjusted data gridding.
+    int
+        Adjusted data padding.
+    """
     # Grid must be odd for us:
-    if grid % 2 == 0:
+    if not is_odd(grid):
         grid += 1
 
     # Ensure that our FFT dimension is odd and optimal for scipy's FFT:
     dim = _fix_fft_dimension(grid + 2 * pad)
-    assert dim % 2 == 1, "FFT dimension not odd?"
+    assert is_odd(dim), "FFT dimension not odd?"
 
     # Fix padding based on our optimal dimension:
     pad = (dim - grid) // 2
-    assert (dim - grid) % 2 == 0, "End dimension not even as expected?"
+    assert not is_odd(dim - grid), "End dimension not even as expected?"
     return grid, pad
 
 
@@ -196,13 +240,41 @@ def fix_padding(
     grid: Tuple[int, ...],
     pad: Tuple[int, ...],
 ) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
-    assert len(grid) == len(pad)
+    """
+    Fix gridding and padding values for symmetry and FFT efficiency.
+
+    This works on all dimensions of gridding and padding.
+
+    Parameters
+    ----------
+    grid : tuple of ints
+        Data gridding.
+    pad : tuple of ints
+        Data padding.
+
+    Returns
+    -------
+    tuple of ints
+        Adjusted data gridding.
+    tuple of ints
+        Adjusted data padding.
+    """
+    if len(grid) != len(pad):
+        raise ValueError(
+            f"Gridding and padding must be of the same dimension. "
+            f"Got: {len(grid)} and {len(pad)}"
+        )
 
     result = [[], []]
     for dim, (dim_grid, dim_pad) in enumerate(zip(grid, pad)):
         new_grid, new_pad = _fix_grid_padding(dim_grid, dim_pad)
         logger.debug(
-            "Grid[%d] %d -> %d pad %d -> %d", dim, dim_grid, new_grid, dim_pad, new_pad
+            "Grid[%d] %d -> %d pad %d -> %d",
+            dim,
+            dim_grid,
+            new_grid,
+            dim_pad,
+            new_pad,
         )
         result[0].append(new_grid)
         result[1].append(new_pad)
@@ -218,7 +290,25 @@ def get_shifts(
     pads: Tuple[int, ...],
     deltas: Tuple[float, ...],
 ) -> Tuple[float, ...]:
-    """Effective half sizes with padding in t, x, and y."""
+    """
+    Effective half sizes with padding in all dimensions.
+
+    Parameters
+    ----------
+    ranges : tuple of (float, float) pairs
+        Low and high domain range for each dimension of the wavefront.
+        First axis must be time [fs].
+        Remaining axes are expected to be spatial (x, y) [m].
+    pads : tuple of ints
+        Number of padding points for each axis
+    deltas : tuple of floats
+        Grid delta steps.
+
+    Returns
+    -------
+    tuple of floats
+        Effective half sizes with padding in all dimensions.
+    """
 
     assert len(ranges) == len(pads) == len(deltas) > 1
 
@@ -238,7 +328,7 @@ def get_shifts(
 
 
 def calculate_k0(wavelength: float) -> float:
-    """K-value: 2 pi / wavelength"""
+    """K-value angular wavenumber: 2 pi / wavelength."""
     return 2.0 * np.pi / wavelength
 
 
@@ -339,7 +429,11 @@ def thin_lens_kernel(
     Parameters
     ----------
     wavelength : float
-    ranges :
+        Wavelength (lambda0) [m].
+    ranges : tuple of (float, float) pairs
+        Low and high domain range for each dimension of the wavefront.
+        First axis must be time [fs].
+        Remaining axes are expected to be spatial (x, y) [m].
     f_lens_x : float
         Focal length of the lens in x [m].
     f_lens_y : float
@@ -488,11 +582,14 @@ class Wavefront:
         Low and high domain range for each dimension of the wavefront.
         First axis must be time [fs].
         Remaining axes are expected to be spatial (x, y) [m].
+    pad : tuple of int, optional
+        Padding for each of the dimensions.  Defaults to 40 for the time
+        dimension and 100 for the remaining dimensions.
     """
 
     _field_rspace: Optional[np.ndarray]
     _field_kspace: Optional[np.ndarray]
-    _phasors: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]
+    _phasors: Optional[Tuple[np.ndarray, ...]]
     _ranges: RealSpaceRanges
     _wavelength: float
     _operation_log: List[Tuple[str, Any]]
@@ -518,13 +615,21 @@ class Wavefront:
 
     @property
     def rspace_domain(self):
+        """
+        Real-space domain values in all dimensions.
+
+        For each dimension of the wavefront, this is the evenly-spaced set of values over
+        its specified range.
+        """
         return real_space_domain(ranges=self._ranges, grids=self._pad.grid)
 
     @property
     def _real_domain_deltas(self) -> Tuple[float, ...]:
+        """Spacing for each dimension of the real space domain."""
         return tuple(dim[1] - dim[0] for dim in self.rspace_domain)
 
-    def _calc_phasors(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _calc_phasors(self) -> Tuple[np.ndarray, ...]:
+        """Calculate phasors for each dimension of the real-space domain."""
         coeffs = conversion_coeffs(
             wavelength=self._wavelength, dim=len(self._field_rspace_shape)
         )
@@ -534,14 +639,14 @@ class Wavefront:
         shifts = get_shifts(ranges=self._ranges, pads=self._pad.pad, deltas=deltas)
         meshes_wkxky = nd_kspace_mesh(coeffs, self._pad.grid, self._pad.pad, deltas)
 
-        t, x, y = (
+        return tuple(
             np.exp(1j * 2.0 * np.pi * mesh * shift / coeff)
             for coeff, mesh, shift in zip(coeffs, meshes_wkxky, shifts)
         )
-        return (t, x, y)
 
     @property
-    def phasors(self):
+    def phasors(self) -> Tuple[np.ndarray, ...]:
+        """Phasors for each dimension of the real-space domain."""
         if self._phasors is None:
             self._phasors = self._calc_phasors()
 
@@ -549,20 +654,30 @@ class Wavefront:
 
     @property
     def field_rspace(self) -> np.ndarray:
+        """Real-space wavefront field data."""
         if self._field_rspace is None:
-            self._field_rspace = self.ifft()
+            self._field_rspace = self._ifft()
         return self._field_rspace
 
     @property
     def field_kspace(self) -> np.ndarray:
+        """K-space wavefront field data."""
         if self._field_kspace is None:
-            self._field_kspace = self.fft()
+            self._field_kspace = self._fft()
         return self._field_kspace
 
-    def fft(self):
+    def _fft(self):
+        """
+        Calculate the FFT (rspace -> kspace) on the user data.
+
+        Requires that the `_field_rspace` data is available.
+
+        This is intended to be handled by the `Wavefront` class itself, such
+        that the user does not need to pay attention to whether the real-space
+        or k-space wavefront data is up-to-date.
+        """
         assert self._field_rspace is not None
         workers = get_num_fft_workers()
-        self._record("fft", workers)
         dfl_pad = _pad_array(self.field_rspace, self._pad.pad_shape)
         return fft_phased(
             dfl_pad,
@@ -571,10 +686,18 @@ class Wavefront:
             workers=workers,
         )
 
-    def ifft(self):
+    def _ifft(self):
+        """
+        Calculate the inverse FFT (kspace -> rspace) on the user data.
+
+        Requires that the `_field_kspace` data is available.
+
+        This is intended to be handled by the `Wavefront` class itself, such
+        that the user does not need to pay attention to whether the real-space
+        or k-space wavefront data is up-to-date.
+        """
         assert self._field_kspace is not None
         workers = get_num_fft_workers()
-        self._record("ifft", workers)
         return ifft_phased(
             self._field_kspace,
             axes=(0, 1, 2),
@@ -582,14 +705,27 @@ class Wavefront:
             workers=workers,
         )[*self._pad.ifft_slices]
 
-    def _record(self, operation: str, params: Any):
-        # TODO remove
-        logger.debug(f"{operation}: {params}")
-        self._operation_log.append((operation, params))
-
     def propagate_z(self, z_prop: float):
+        """
+        Propagate this Wavefront in-place along Z in meters.
+
+        Parameters
+        ----------
+        z_prop : float
+            Distance in meters.
+
+        Returns
+        -------
+        np.ndarray
+            Propagated k-space data.
+
+        See Also
+        --------
+        `propagate_z`
+            For a version which returns a propagated copy of the wavefront,
+            instead of performing it in-place.
+        """
         z_prop = float(z_prop)
-        self._record("propagate_z", z_prop)
         self._field_kspace = drift_propagator(
             field_kspace=self.field_kspace,
             domains_kxky=domains_kxky(
@@ -606,10 +742,12 @@ class Wavefront:
 
     @property
     def wavelength(self) -> float:
+        """Wavelength of the wavefront [m]."""
         return self._wavelength
 
     @property
     def pad(self):
+        """Padding settings."""
         return self._pad
 
     @property
@@ -617,7 +755,27 @@ class Wavefront:
         return self._ranges
 
     def focusing_element(self, f_lens_x: float, f_lens_y: float):
-        self._record("focusing_element", (f_lens_x, f_lens_y))
+        """
+        Apply thin lens focusing.
+
+        Parameters
+        ----------
+        f_lens_x : float
+            Focal length of the lens in x [m].
+        f_lens_y : float
+            Focal length of the lens in y [m].
+
+        Returns
+        -------
+        np.ndarray
+            Focused r-space data.
+
+        See Also
+        --------
+        `focusing_element`
+            For a version which returns a focused copy of the wavefront,
+            instead of performing it in-place.
+        """
         self._field_rspace = self.field_rspace * thin_lens_kernel(
             wavelength=self.wavelength,
             ranges=self._ranges,
@@ -709,6 +867,25 @@ class Wavefront:
 
 
 def propagate_z(wavefront: Wavefront, z_prop: float) -> Wavefront:
+    """
+    Propagate a Wavefront along Z in meters and get a new `Wavefront` object.
+
+    Parameters
+    ----------
+    wavefront : Wavefront
+    z_prop : float
+        Distance in meters.
+
+    Returns
+    -------
+    Wavefront
+        Propagated Wavefront object.
+
+    See Also
+    --------
+    `Wavefront.propagate_z`
+        For an in-place version.
+    """
     wavefront = copy.copy(wavefront)
     wavefront.propagate_z(z_prop)
     return wavefront
@@ -717,6 +894,27 @@ def propagate_z(wavefront: Wavefront, z_prop: float) -> Wavefront:
 def focusing_element(
     wavefront: Wavefront, f_lens_x: float, f_lens_y: float
 ) -> Wavefront:
+    """
+    Apply thin lens focusing to `wavefront` and get a new `Wavefront` object.
+
+    Parameters
+    ----------
+    wavefront : Wavefront
+    f_lens_x : float
+        Focal length of the lens in x [m].
+    f_lens_y : float
+        Focal length of the lens in y [m].
+
+    Returns
+    -------
+    Wavefront
+        Focused Wavefront.
+
+    See Also
+    --------
+    `Wavefront.focusing_element`
+        For an in-place version.
+    """
     wavefront = copy.copy(wavefront)
     wavefront.focusing_element(f_lens_x, f_lens_y)
     return wavefront

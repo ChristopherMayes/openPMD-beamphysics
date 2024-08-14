@@ -490,6 +490,13 @@ def create_gaussian_pulse_3d_with_q(
         Rayleigh range [m].
     sigma_t : float
         Time RMS [fs]
+    ranges : tuple of (float, float) pairs
+        Low and high domain range for each dimension of the wavefront.
+        First axis must be time [s].
+        Remaining axes are expected to be spatial (x, y) [m].
+    grid : tuple of ints
+        Data gridding.
+    dtype : np.dtype, default=np.complex64
 
     Returns
     -------
@@ -540,7 +547,7 @@ class WavefrontPadding:
     @property
     def ifft_slices(self):
         """Slices to extract the real space data from its padded form (i.e., post-ifft)."""
-        return [slice(pad, -pad) for pad in self.pad]
+        return tuple(slice(pad, -pad) for pad in self.pad)
 
     @property
     def pad_shape(self) -> Tuple[Tuple[int, int], ...]:
@@ -719,7 +726,7 @@ class Wavefront:
             axes=(0, 1, 2),
             phasors=self.phasors,
             workers=workers,
-        )[*self._pad.ifft_slices]
+        )[self._pad.ifft_slices]
 
     def propagate_z(self, z_prop: float, *, inplace: bool = False) -> Wavefront:
         """
@@ -875,8 +882,6 @@ class Wavefront:
             Rayleigh range [m].
         sigma_t : float
             Time RMS [fs]
-        t_mid : float
-            Center of the time window size [fs].
 
         Returns
         -------

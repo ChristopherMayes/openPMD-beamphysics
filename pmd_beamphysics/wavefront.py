@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 import logging
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Sequence, Tuple
 
 import numpy as np
 import scipy.constants
@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 _fft_workers = -1
+Ranges = Sequence[Tuple[float, float]]
 
 
 def get_num_fft_workers() -> int:
@@ -56,7 +57,7 @@ def _pad_array(wavefront: np.ndarray, shape):
 
 def fft_phased(
     array: np.ndarray,
-    axes: Tuple[int, ...],
+    axes: Sequence[int],
     phasors,
     workers=-1,
 ) -> np.ndarray:
@@ -67,7 +68,7 @@ def fft_phased(
     ----------
     array : np.ndarray
         Input array which can be complex.
-    axes : Tuple[int, ...]
+    axes : sequence of int
         Axis indices to apply the FFT to.
     phasors : np.ndarray
         Apply these per-dimension phasors after performing the FFT.
@@ -83,7 +84,7 @@ def fft_phased(
 
 def ifft_phased(
     array: np.ndarray,
-    axes: Tuple[int, ...],
+    axes: Sequence[int],
     phasors,
     workers=-1,
 ) -> np.ndarray:
@@ -94,7 +95,7 @@ def ifft_phased(
     ----------
     array : np.ndarray
         Input array which can be complex.
-    axes : Tuple[int, ...]
+    axes : Sequence[int]
         Axis indices to apply the FFT to.
     phasors : np.ndarray
         Apply the complex conjugate of these per-dimension phasors after the
@@ -109,7 +110,13 @@ def ifft_phased(
     return scipy.fft.ifftshift(array_fft, axes=axes)
 
 
-def nd_kspace_domains(coeffs, sizes, pads, steps, shifted=True):
+def nd_kspace_domains(
+    coeffs: Sequence[float],
+    sizes: Sequence[int],
+    pads: Sequence[int],
+    steps: Sequence[float],
+    shifted: bool = True,
+):
     """
     Generate reciprocal space domains for given grid sizes and steps.
 
@@ -121,8 +128,8 @@ def nd_kspace_domains(coeffs, sizes, pads, steps, shifted=True):
         Grid sizes
     pads : tuple of ints
         Number of padding points for each axis
-    steps : tuple
-        Grid step sizes
+    steps : tuple of ints
+        Grid step sizes in cartesian space.
     shifted : bool
         Flag if np.fft.fftshift is applied
 
@@ -143,7 +150,13 @@ def nd_kspace_domains(coeffs, sizes, pads, steps, shifted=True):
     ]
 
 
-def nd_kspace_mesh(coeffs=(), sizes=(), pads=(), steps=(), shifted=True):
+def nd_kspace_mesh(
+    coeffs: Sequence[float],
+    sizes: Sequence[int],
+    pads: Sequence[int],
+    steps: Sequence[float],
+    shifted: bool = True,
+):
     """
     Generate reciprocal space for given grid sizes and steps.
 
@@ -156,7 +169,7 @@ def nd_kspace_mesh(coeffs=(), sizes=(), pads=(), steps=(), shifted=True):
     pads : tuple
         Number of padding points for each axis
     steps : tuple
-        Grid step sizes
+        Grid step sizes in cartesian space.
     shifted : bool
         Flag if np.fft.fftshift is applied
 
@@ -165,23 +178,33 @@ def nd_kspace_mesh(coeffs=(), sizes=(), pads=(), steps=(), shifted=True):
     np.ndarray
     """
 
-    domains = nd_kspace_domains(coeffs, sizes, pads, steps, shifted=shifted)
+    domains = nd_kspace_domains(
+        coeffs=coeffs,
+        sizes=sizes,
+        pads=pads,
+        steps=steps,
+        shifted=shifted,
+    )
     meshes = np.meshgrid(*domains, indexing="ij")
     return meshes
 
 
-def nd_space_mesh(mins=(), maxes=(), sizes=()):
+def nd_space_mesh(
+    mins: Sequence[float],
+    maxes: Sequence[float],
+    sizes: Sequence[int],
+):
     """
-    Generate real space for given grid sizes and steps.
+    Generate a cartesian space mesh for given grid sizes and steps.
 
     Parameters
     ----------
-    mins : tuple
-        Minima of grid sizes
-    maxes : tuple
-        Maxima of grid sizes
-    sizes : tuple
-        Number of grid points in each axis
+    mins : list of float
+        Minima of grid sizes.
+    maxes : list of float
+        Maxima of grid sizes.
+    sizes : list of float
+        Number of grid points in each axis.
 
     Returns
     -------
@@ -254,8 +277,8 @@ def _fix_grid_padding(grid: int, pad: int) -> Tuple[int, int]:
 
 
 def fix_padding(
-    grid: Tuple[int, ...],
-    pad: Tuple[int, ...],
+    grid: Sequence[int],
+    pad: Sequence[int],
 ) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
     """
     Fix gridding and padding values for symmetry and FFT efficiency.
@@ -299,13 +322,10 @@ def fix_padding(
     return tuple(result[0]), tuple(result[1])
 
 
-RealSpaceRanges = Tuple[Tuple[float, float], ...]
-
-
 def get_shifts(
-    ranges: RealSpaceRanges,
-    pads: Tuple[int, ...],
-    deltas: Tuple[float, ...],
+    ranges: Ranges,
+    pads: Sequence[int],
+    deltas: Sequence[float],
 ) -> Tuple[float, ...]:
     """
     Effective half sizes with padding in all dimensions.
@@ -319,7 +339,7 @@ def get_shifts(
     pads : tuple of ints
         Number of padding points for each axis
     deltas : tuple of floats
-        Grid delta steps.
+        Grid delta steps in cartesian space.
 
     Returns
     -------
@@ -360,9 +380,9 @@ def conversion_coeffs(wavelength: float, dim: int) -> Tuple[float, ...]:
     return tuple([2.0 * np.pi * hbar] + [2.0 * np.pi / k0] * (dim - 1))
 
 
-def real_space_domain(
-    ranges: RealSpaceRanges,
-    grids: Tuple[int, ...],
+def cartesian_domain(
+    ranges: Ranges,
+    grids: Sequence[int],
 ):
     """Real-space domain of the non-padded field."""
     return tuple(
@@ -372,9 +392,9 @@ def real_space_domain(
 
 def domains_omega_thx_thy(
     wavelength: float,
-    grids: Tuple[int, ...],
-    pads: Tuple[int, ...],
-    deltas: Tuple[float, ...],
+    grids: Sequence[int],
+    pads: Sequence[int],
+    deltas: Sequence[float],
 ):
     """
     Fourier space domain of the padded field.
@@ -393,14 +413,23 @@ def domains_omega_thx_thy(
 
 
 def domains_kxky(
-    grids: Tuple[int, ...],
-    pads: Tuple[int, ...],
-    deltas: Tuple[float, ...],
+    grids: Sequence[int],
+    pads: Sequence[int],
+    deltas: Sequence[float],
 ):
     """
     Transverse Fourier space domain x and y.
 
     In units of the scipy FFT.
+
+    Parameters
+    ----------
+    grids : tuple of ints
+        Data gridding.
+    pads : tuple of ints
+        Number of padding points for each axis
+    deltas : tuple of floats
+        Grid delta steps in cartesian space.
     """
     assert len(grids) == len(pads) == len(deltas)
     return nd_kspace_mesh(
@@ -435,8 +464,8 @@ def drift_propagator(
 
 def thin_lens_kernel(
     wavelength: float,
-    ranges: RealSpaceRanges,
-    grid: Tuple[int, ...],
+    ranges: Ranges,
+    grid: Sequence[int],
     f_lens_x: float,
     f_lens_y: float,
 ):
@@ -472,7 +501,7 @@ def create_gaussian_pulse_3d_with_q(
     nphotons: float,
     zR: float,
     sigma_t: float,
-    ranges: RealSpaceRanges,
+    ranges: Ranges,
     grid: Tuple[int, int, int],
     dtype=np.complex64,
 ):
@@ -546,7 +575,7 @@ class WavefrontPadding:
 
     @property
     def ifft_slices(self):
-        """Slices to extract the real space data from its padded form (i.e., post-ifft)."""
+        """Slices to extract the cartesian space data from its padded form (i.e., post-ifft)."""
         return tuple(slice(pad, -pad) for pad in self.pad)
 
     @property
@@ -558,13 +587,13 @@ class WavefrontPadding:
     def from_array(
         cls,
         data: np.ndarray,
-        pad: Tuple[int, ...],
+        pad: Sequence[int],
         fix: bool = True,
     ) -> WavefrontPadding:
         if data.ndim != len(pad):
             raise ValueError("Dimensions of the grid and the padding must be identical")
 
-        padding = WavefrontPadding(data.shape, pad)
+        padding = WavefrontPadding(data.shape, tuple(pad))
         return padding.fix() if fix else padding
 
     def fix(self) -> WavefrontPadding:
@@ -600,7 +629,7 @@ class Wavefront:
     Parameters
     ----------
     field_rspace : np.ndarray
-        Real-space field data.  3D array with dimensions of (time, x, y).
+        Cartesian space field data.  3D array with dimensions of (time, x, y).
     wavelength : float
         Wavelength (lambda0) [m].
     ranges : tuple of (float, float) pairs
@@ -615,7 +644,7 @@ class Wavefront:
     _field_rspace: Optional[np.ndarray]
     _field_kspace: Optional[np.ndarray]
     _phasors: Optional[Tuple[np.ndarray, ...]]
-    _ranges: RealSpaceRanges
+    _ranges: Ranges
     _wavelength: float
     _pad: WavefrontPadding
 
@@ -623,8 +652,8 @@ class Wavefront:
         self,
         field_rspace: np.ndarray,
         wavelength: float,
-        ranges: RealSpaceRanges,
-        pad: Optional[Tuple[int, ...]] = None,
+        ranges: Ranges,
+        pad: Optional[Sequence[int]] = None,
     ) -> None:
         if not pad:
             pad = (40,) + (100,) * (field_rspace.ndim - 1)
@@ -639,28 +668,37 @@ class Wavefront:
     @property
     def rspace_domain(self):
         """
-        Real-space domain values in all dimensions.
+        Cartesian space domain values in all dimensions.
 
         For each dimension of the wavefront, this is the evenly-spaced set of values over
         its specified range.
         """
-        return real_space_domain(ranges=self._ranges, grids=self._pad.grid)
+        return cartesian_domain(ranges=self._ranges, grids=self._pad.grid)
 
     @property
-    def _real_domain_deltas(self) -> Tuple[float, ...]:
-        """Spacing for each dimension of the real space domain."""
+    def _rspace_deltas(self) -> Tuple[float, ...]:
+        """Spacing for each dimension of the cartesian domain."""
         return tuple(dim[1] - dim[0] for dim in self.rspace_domain)
 
     def _calc_phasors(self) -> Tuple[np.ndarray, ...]:
-        """Calculate phasors for each dimension of the real-space domain."""
+        """Calculate phasors for each dimension of the cartesian domain."""
         coeffs = conversion_coeffs(
             wavelength=self._wavelength, dim=len(self._field_rspace_shape)
         )
 
-        deltas = self._real_domain_deltas
+        rspace_deltas = self._rspace_deltas
 
-        shifts = get_shifts(ranges=self._ranges, pads=self._pad.pad, deltas=deltas)
-        meshes_wkxky = nd_kspace_mesh(coeffs, self._pad.grid, self._pad.pad, deltas)
+        shifts = get_shifts(
+            ranges=self._ranges,
+            pads=self._pad.pad,
+            deltas=rspace_deltas,
+        )
+        meshes_wkxky = nd_kspace_mesh(
+            coeffs=coeffs,
+            sizes=self._pad.grid,
+            pads=self._pad.pad,
+            steps=rspace_deltas,
+        )
 
         return tuple(
             np.exp(1j * 2.0 * np.pi * mesh * shift / coeff)
@@ -754,7 +792,7 @@ class Wavefront:
             domains_kxky=domains_kxky(
                 grids=self._pad.grid,
                 pads=self._pad.pad,
-                deltas=self._real_domain_deltas,
+                deltas=self._rspace_deltas,
             ),
             wavelength=self._wavelength,
             z=z_prop,
@@ -864,8 +902,8 @@ class Wavefront:
         nphotons: float,
         zR: float,
         sigma_t: float,
-        ranges: RealSpaceRanges,
-        pad: Optional[Tuple[int, ...]] = None,
+        ranges: Ranges,
+        pad: Optional[Sequence[int]] = None,
         dtype=np.complex64,
     ):
         """

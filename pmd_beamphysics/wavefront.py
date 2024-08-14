@@ -609,7 +609,7 @@ class Wavefront:
         self._field_kspace = None
         self._wavelength = wavelength
         self._ranges = tuple(ranges)
-        self._pad = WavefrontPadding(grid=field_rspace.shape, pad=pad).fix()
+        self._pad = WavefrontPadding.from_array(field_rspace, pad=pad, fix=True)
 
     @property
     def rspace_domain(self):
@@ -785,9 +785,10 @@ class Wavefront:
         self._field_kspace = None
         return self._field_rspace
 
-    def __deepcopy__(self) -> Wavefront:
+    def __deepcopy__(self, memo) -> Wavefront:
         res = Wavefront.__new__(Wavefront)
         res._phasors = self._phasors
+        res._field_rspace_shape = self._field_rspace_shape
         res._field_rspace = (
             np.copy(self._field_rspace) if self._field_rspace is not None else None
         )
@@ -802,16 +803,27 @@ class Wavefront:
     def __copy__(self) -> Wavefront:
         res = Wavefront.__new__(Wavefront)
         res._phasors = self._phasors
-        res._field_rspace = (
-            self._field_rspace if self._field_rspace is not None else None
-        )
-        res._field_kspace = (
-            self._field_kspace if self._field_kspace is not None else None
-        )
+        res._field_rspace_shape = self._field_rspace_shape
+        res._field_rspace = self._field_rspace
+        res._field_kspace = self._field_kspace
         res._wavelength = self._wavelength
         res._ranges = self._ranges
         res._pad = self._pad
         return res
+
+    def __eq__(self, other: Any) -> bool:
+        if type(self) is not type(other):
+            return False
+        return all(
+            (
+                self._field_rspace_shape == other._field_rspace_shape,
+                np.all(self._field_rspace == other._field_rspace),
+                np.all(self._field_kspace == other._field_kspace),
+                self._wavelength == other._wavelength,
+                self._ranges == other._ranges,
+                self._pad == other._pad,
+            )
+        )
 
     @classmethod
     def gaussian_pulse(

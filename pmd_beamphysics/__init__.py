@@ -2,10 +2,12 @@ from .particles import ParticleGroup, single_particle
 from .status import ParticleStatus
 from .fields.fieldmesh import FieldMesh
 from .readers import particle_paths
+from .wavefront import Wavefront, propagate_z, focusing_element
 from .writers import pmd_init
 
 from . import _version
-__version__ = _version.get_versions()['version']
+
+__version__ = _version.get_versions()["version"]
 
 __all__ = [
     "FieldMesh",
@@ -14,4 +16,7 @@ __all__ = [
     "particle_paths",
     "pmd_init",
     "single_particle",
+    "Wavefront",
+    "propagate_z",
+    "focusing_element",
 ]

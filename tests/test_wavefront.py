@@ -3,7 +3,7 @@ import copy
 import numpy as np
 import pytest
 
-from pmd_beamphysics import Wavefront, focusing_element, propagate_z
+from pmd_beamphysics import Wavefront
 from pmd_beamphysics.wavefront import (
     WavefrontPadding,
     get_num_fft_workers,
@@ -32,22 +32,22 @@ def wavefront() -> Wavefront:
 
 def test_smoke_propagate_z_in_place(wavefront: Wavefront) -> None:
     # Implicitly calculates the FFT:
-    wavefront.propagate_z(0.0)
+    wavefront.propagate_z(0.0, inplace=True)
     # Use the property to calculate the inverse fft:
     wavefront.field_rspace
 
 
 def test_smoke_propagate_z(wavefront: Wavefront) -> None:
-    new = propagate_z(wavefront, 0.0)
+    new = wavefront.propagate_z(0.0, inplace=False)
     assert new is not wavefront
 
 
 def test_smoke_focusing_element_in_place(wavefront: Wavefront) -> None:
-    wavefront.focusing_element(1.0, 1.0)
+    wavefront.focusing_element(1.0, 1.0, inplace=True)
 
 
 def test_smoke_focusing_element(wavefront: Wavefront) -> None:
-    new = focusing_element(wavefront, 1.0, 1.0)
+    new = wavefront.focusing_element(1.0, 1.0, inplace=False)
     assert new is not wavefront
 
 

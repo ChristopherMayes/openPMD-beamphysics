@@ -721,7 +721,7 @@ class Wavefront:
             workers=workers,
         )[*self._pad.ifft_slices]
 
-    def propagate_z(self, z_prop: float):
+    def propagate_z(self, z_prop: float, *, inplace: bool = False) -> Wavefront:
         """
         Propagate this Wavefront in-place along Z in meters.
 
@@ -729,18 +729,18 @@ class Wavefront:
         ----------
         z_prop : float
             Distance in meters.
+        inplace : bool, default=False
+            Perform the operation in-place on this wavefront object.
 
         Returns
         -------
-        np.ndarray
-            Propagated k-space data.
-
-        See Also
-        --------
-        `propagate_z`
-            For a version which returns a propagated copy of the wavefront,
-            instead of performing it in-place.
+        Wavefront
+            This object if `inplace=True` or a new copy if `inplace=False`.
         """
+        if not inplace:
+            wavefront = copy.copy(self)
+            return wavefront.propagate_z(z_prop, inplace=True)
+
         z_prop = float(z_prop)
         self._field_kspace = drift_propagator(
             field_kspace=self.field_kspace,
@@ -754,7 +754,7 @@ class Wavefront:
         )
         # Invalidate the real space data
         self._field_rspace = None
-        return self._field_kspace
+        return self
 
     @property
     def wavelength(self) -> float:
@@ -770,7 +770,13 @@ class Wavefront:
     def ranges(self):
         return self._ranges
 
-    def focusing_element(self, f_lens_x: float, f_lens_y: float):
+    def focusing_element(
+        self,
+        f_lens_x: float,
+        f_lens_y: float,
+        *,
+        inplace: bool = False,
+    ) -> Wavefront:
         """
         Apply thin lens focusing.
 
@@ -780,18 +786,18 @@ class Wavefront:
             Focal length of the lens in x [m].
         f_lens_y : float
             Focal length of the lens in y [m].
+        inplace : bool, default=False
+            Perform the operation in-place on this wavefront object.
 
         Returns
         -------
-        np.ndarray
-            Focused r-space data.
-
-        See Also
-        --------
-        `focusing_element`
-            For a version which returns a focused copy of the wavefront,
-            instead of performing it in-place.
+        Wavefront
+            This object if `inplace=True` or a new copy if `inplace=False`.
         """
+        if not inplace:
+            wavefront = copy.copy(self)
+            return wavefront.focusing_element(f_lens_x, f_lens_y, inplace=True)
+
         self._field_rspace = self.field_rspace * thin_lens_kernel(
             wavelength=self.wavelength,
             ranges=self._ranges,
@@ -801,7 +807,7 @@ class Wavefront:
         )
         # Invalidate the spectral data
         self._field_kspace = None
-        return self._field_rspace
+        return self
 
     def __deepcopy__(self, memo) -> Wavefront:
         res = Wavefront.__new__(Wavefront)
@@ -891,59 +897,3 @@ class Wavefront:
             ranges=ranges,
             pad=pad,
         )
-
-
-def propagate_z(wavefront: Wavefront, z_prop: float) -> Wavefront:
-    """
-    Propagate a Wavefront along Z in meters and get a new `Wavefront` object.
-
-    Parameters
-    ----------
-    wavefront : Wavefront
-        The Wavefront object to propagate.
-    z_prop : float
-        Distance in meters.
-
-    Returns
-    -------
-    Wavefront
-        Propagated Wavefront object.
-
-    See Also
-    --------
-    `Wavefront.propagate_z`
-        For an in-place version.
-    """
-    wavefront = copy.copy(wavefront)
-    wavefront.propagate_z(z_prop)
-    return wavefront
-
-
-def focusing_element(
-    wavefront: Wavefront, f_lens_x: float, f_lens_y: float
-) -> Wavefront:
-    """
-    Apply thin lens focusing to `wavefront` and get a new `Wavefront` object.
-
-    Parameters
-    ----------
-    wavefront : Wavefront
-        The Wavefront object to focus.
-    f_lens_x : float
-        Focal length of the lens in x [m].
-    f_lens_y : float
-        Focal length of the lens in y [m].
-
-    Returns
-    -------
-    Wavefront
-        Focused Wavefront.
-
-    See Also
-    --------
-    `Wavefront.focusing_element`
-        For an in-place version.
-    """
-    wavefront = copy.copy(wavefront)
-    wavefront.focusing_element(f_lens_x, f_lens_y)
-    return wavefront

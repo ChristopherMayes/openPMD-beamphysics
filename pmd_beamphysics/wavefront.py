@@ -592,7 +592,6 @@ class Wavefront:
     _phasors: Optional[Tuple[np.ndarray, ...]]
     _ranges: RealSpaceRanges
     _wavelength: float
-    _operation_log: List[Tuple[str, Any]]
     _pad: WavefrontPadding
 
     def __init__(
@@ -608,7 +607,6 @@ class Wavefront:
         self._field_rspace = field_rspace
         self._field_rspace_shape = field_rspace.shape
         self._field_kspace = None
-        self._operation_log = []
         self._wavelength = wavelength
         self._ranges = tuple(ranges)
         self._pad = WavefrontPadding(grid=field_rspace.shape, pad=pad).fix()
@@ -796,7 +794,6 @@ class Wavefront:
         res._field_kspace = (
             np.copy(self._field_kspace) if self._field_kspace is not None else None
         )
-        res._operation_log = list(self._operation_log)
         res._wavelength = self._wavelength
         res._ranges = self._ranges
         res._pad = self._pad
@@ -811,7 +808,6 @@ class Wavefront:
         res._field_kspace = (
             self._field_kspace if self._field_kspace is not None else None
         )
-        res._operation_log = list(self._operation_log)
         res._wavelength = self._wavelength
         res._ranges = self._ranges
         res._pad = self._pad

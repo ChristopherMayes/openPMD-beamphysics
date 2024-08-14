@@ -66,10 +66,11 @@ def fft_phased(
     Parameters
     ----------
     array : np.ndarray
+        Input array which can be complex.
     axes : Tuple[int, ...]
         Axis indices to apply the FFT to.
     phasors : np.ndarray
-        Phasors
+        Apply these per-dimension phasors after performing the FFT.
     workers : int, default=-1
         Maximum number of workers to use for parallel computation. If negative,
         the value wraps around from ``os.cpu_count()``.
@@ -86,6 +87,22 @@ def ifft_phased(
     phasors,
     workers=-1,
 ) -> np.ndarray:
+    """
+    Compute the N-D inverse discrete Fourier Transform with phasors applied.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        Input array which can be complex.
+    axes : Tuple[int, ...]
+        Axis indices to apply the FFT to.
+    phasors : np.ndarray
+        Apply the complex conjugate of these per-dimension phasors after the
+        inverse FFT.
+    workers : int, default=-1
+        Maximum number of workers to use for parallel computation. If negative,
+        the value wraps around from ``os.cpu_count()``.
+    """
     array_fft = scipy.fft.ifftn(array, axes=axes, workers=workers, norm="ortho")
     for phasor in phasors:
         array_fft *= np.conj(phasor)
@@ -466,6 +483,7 @@ def create_gaussian_pulse_3d_with_q(
     Parameters
     ----------
     wavelength : float
+        Wavelength (lambda0) [m].
     nphotons : float
         Number of photons.
     zR : float
@@ -844,6 +862,7 @@ class Wavefront:
         Parameters
         ----------
         wavelength : float
+            Wavelength (lambda0) [m].
         nphotons : float
             Number of photons.
         zR : float
@@ -855,7 +874,7 @@ class Wavefront:
 
         Returns
         -------
-        np.ndarray
+        Wavefront
         """
         pulse = create_gaussian_pulse_3d_with_q(
             wavelength=wavelength,
@@ -881,6 +900,7 @@ def propagate_z(wavefront: Wavefront, z_prop: float) -> Wavefront:
     Parameters
     ----------
     wavefront : Wavefront
+        The Wavefront object to propagate.
     z_prop : float
         Distance in meters.
 
@@ -908,6 +928,7 @@ def focusing_element(
     Parameters
     ----------
     wavefront : Wavefront
+        The Wavefront object to focus.
     f_lens_x : float
         Focal length of the lens in x [m].
     f_lens_y : float

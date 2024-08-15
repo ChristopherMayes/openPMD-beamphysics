@@ -190,8 +190,7 @@ def nd_kspace_mesh(
 
 
 def nd_space_mesh(
-    mins: Sequence[float],
-    maxes: Sequence[float],
+    ranges: Sequence[Tuple[float, float]],
     sizes: Sequence[int],
 ):
     """
@@ -199,10 +198,8 @@ def nd_space_mesh(
 
     Parameters
     ----------
-    mins : list of float
-        Minima of grid sizes.
-    maxes : list of float
-        Maxima of grid sizes.
+    ranges : tuple of (float, float) pairs
+        Low and high domain range for each dimension of the wavefront.
     sizes : list of float
         Number of grid points in each axis.
 
@@ -210,7 +207,7 @@ def nd_space_mesh(
     -------
     np.ndarray
     """
-    domains = [np.linspace(min_, max_, n) for min_, max_, n in zip(mins, maxes, sizes)]
+    domains = [np.linspace(min_, max_, n) for (min_, max_), n in zip(ranges, sizes)]
     return np.meshgrid(*domains, indexing="ij")
 
 
@@ -334,8 +331,6 @@ def get_shifts(
     ----------
     ranges : tuple of (float, float) pairs
         Low and high domain range for each dimension of the wavefront.
-        First axis must be time [fs].
-        Remaining axes are expected to be spatial (x, y) [m].
     pads : tuple of ints
         Number of padding points for each axis
     deltas : tuple of floats
@@ -468,8 +463,6 @@ def thin_lens_kernel(
         Wavelength (lambda0) [m].
     ranges : tuple of (float, float) pairs
         Low and high domain range for each dimension of the wavefront.
-        First axis must be time [fs].
-        Remaining axes are expected to be spatial (x, y) [m].
     f_lens_x : float
         Focal length of the lens in x [m].
     f_lens_y : float
@@ -480,9 +473,7 @@ def thin_lens_kernel(
     np.ndarray
     """
     k0 = calculate_k0(wavelength)
-    mins = [range_[0] for range_ in ranges]
-    maxes = [range_[1] for range_ in ranges]
-    xx, yy = nd_space_mesh(mins, maxes, grid[1:])
+    xx, yy = nd_space_mesh(ranges[1:], grid[1:])
     return np.exp(-1j * k0 / 2.0 * (xx**2 / f_lens_x + yy**2 / f_lens_y))
 
 
@@ -496,8 +487,7 @@ def create_gaussian_pulse_3d_with_q(
     dtype=np.complex64,
 ):
     """
-    Generate a complex three-dimensional spatio-temporal Gaussian profile
-    in terms of the q parameter.
+    Generate a complex three-dimensional spatio-temporal Gaussian profile in terms of the q parameter.
 
     Parameters
     ----------
@@ -508,7 +498,7 @@ def create_gaussian_pulse_3d_with_q(
     zR : float
         Rayleigh range [m].
     sigma_t : float
-        Time RMS [fs]
+        Time RMS [s]
     ranges : tuple of (float, float) pairs
         Low and high domain range for each dimension of the wavefront.
         First axis must be time [s].
@@ -522,23 +512,16 @@ def create_gaussian_pulse_3d_with_q(
     np.ndarray
     """
     k0 = calculate_k0(wavelength)
-    (min_t, max_t), (min_x, max_x), (min_y, max_y) = ranges
-    tgrid, xgrid, ygrid = grid
+    (min_t, max_t), *_ = ranges
     t_mid = (max_t + min_t) / 2.0
-    t_mesh, x_mesh, y_mesh = nd_space_mesh(
-        mins=(min_t, min_x, min_y),
-        maxes=(max_t, max_x, max_y),
-        sizes=(tgrid, xgrid, ygrid),
-    )
+    t_mesh, x_mesh, y_mesh = nd_space_mesh(ranges=ranges, sizes=grid)
     qx = 1j * zR
     qy = 1j * zR
 
     ux = 1.0 / np.sqrt(qx) * np.exp(-1j * k0 * x_mesh**2 / 2.0 / qx)
     uy = 1.0 / np.sqrt(qy) * np.exp(-1j * k0 * y_mesh**2 / 2.0 / qy)
-    ut = (
-        1.0
-        / (np.sqrt(2.0 * np.pi) * sigma_t)
-        * np.exp(-((t_mesh - t_mid) ** 2) / 2.0 / sigma_t**2)
+    ut = (1.0 / (np.sqrt(2.0 * np.pi) * sigma_t)) * np.exp(
+        -((t_mesh - t_mid) ** 2) / 2.0 / sigma_t**2
     )
 
     eta = 2.0 * k0 * zR * sigma_t / np.sqrt(np.pi)
@@ -624,7 +607,7 @@ class Wavefront:
         Wavelength (lambda0) [m].
     ranges : tuple of (float, float) pairs
         Low and high domain range for each dimension of the wavefront.
-        First axis must be time [fs].
+        First axis must be time [s].
         Remaining axes are expected to be spatial (x, y) [m].
     pad : tuple of int, optional
         Padding for each of the dimensions.  Defaults to 40 for the time
@@ -909,7 +892,7 @@ class Wavefront:
         zR : float
             Rayleigh range [m].
         sigma_t : float
-            Time RMS [fs]
+            Time RMS [s]
 
         Returns
         -------

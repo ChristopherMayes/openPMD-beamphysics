@@ -348,19 +348,9 @@ def get_shifts(
     """
 
     assert len(ranges) == len(pads) == len(deltas) > 1
-
-    # Time domain: (0, tmax) -> centered at tmax / 2
-    mid_t = (ranges[0][1] + ranges[0][0]) / 2
-    tpad = pads[0]
-    dt = deltas[0]
-
-    return (
-        mid_t + tpad * dt,
-        *(
-            # Spatial domains are symmetric around 0: (-value, 0, value)
-            domain[1] + pad * delta
-            for domain, pad, delta in zip(ranges[1:], pads[1:], deltas[1:])
-        ),
+    return tuple(
+        (domain[1] - domain[0]) / 2.0 + pad * delta
+        for domain, pad, delta in zip(ranges, pads, deltas)
     )
 
 

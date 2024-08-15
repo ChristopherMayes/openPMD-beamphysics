@@ -32,22 +32,22 @@ def wavefront() -> Wavefront:
 
 def test_smoke_propagate_z_in_place(wavefront: Wavefront) -> None:
     # Implicitly calculates the FFT:
-    wavefront.propagate_z(0.0, inplace=True)
+    wavefront.propagate(direction="z", distance=0.0, inplace=True)
     # Use the property to calculate the inverse fft:
     wavefront.field_rspace
 
 
 def test_smoke_propagate_z(wavefront: Wavefront) -> None:
-    new = wavefront.propagate_z(0.0, inplace=False)
+    new = wavefront.propagate(direction="z", distance=0.0, inplace=False)
     assert new is not wavefront
 
 
 def test_smoke_focusing_element_in_place(wavefront: Wavefront) -> None:
-    wavefront.focusing_element(1.0, 1.0, inplace=True)
+    wavefront.focus(plane="xy", focus=(1.0, 1.0), inplace=True)
 
 
 def test_smoke_focusing_element(wavefront: Wavefront) -> None:
-    new = wavefront.focusing_element(1.0, 1.0, inplace=False)
+    new = wavefront.focus(plane="xy", focus=(1.0, 1.0), inplace=False)
     assert new is not wavefront
 
 

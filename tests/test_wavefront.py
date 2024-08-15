@@ -1,10 +1,12 @@
 import copy
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
 from pmd_beamphysics import Wavefront
 from pmd_beamphysics.wavefront import (
+    Plane,
     WavefrontPadding,
     get_num_fft_workers,
     set_num_fft_workers,
@@ -28,6 +30,13 @@ def wavefront() -> Wavefront:
         zR=2.0,
         sigma_t=5.0,
     )
+
+
+@pytest.fixture(
+    params=["xy"],
+)
+def projection_plane(request: pytest.FixtureRequest) -> str:
+    return request.param
 
 
 def test_smoke_propagate_z_in_place(wavefront: Wavefront) -> None:
@@ -99,3 +108,10 @@ def test_deepcopy(wavefront: Wavefront) -> None:
     assert copied is not wavefront
     assert copied.field_rspace is not wavefront.field_rspace
     assert copied.field_kspace is not wavefront.field_kspace
+
+
+def test_plot_projection(wavefront: Wavefront, projection_plane: Plane) -> None:
+    wavefront.plot(projection_plane, rspace=True)
+    plt.suptitle(f"rspace - {projection_plane}")
+    wavefront.plot(projection_plane, rspace=False)
+    plt.suptitle(f"kspace - {projection_plane}")

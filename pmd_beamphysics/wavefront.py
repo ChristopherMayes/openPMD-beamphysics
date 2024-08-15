@@ -5,8 +5,12 @@ from __future__ import annotations
 import copy
 import dataclasses
 import logging
+import pathlib
 from typing import Any, List, Optional, Sequence, Tuple, Union
 
+import matplotlib
+import matplotlib.axes
+import matplotlib.pyplot as plt
 import numpy as np
 import scipy.constants
 import scipy.fft
@@ -16,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 _fft_workers = -1
 Ranges = Sequence[Tuple[float, float]]
+AnyPath = Union[str, pathlib.Path]
+Plane = Union[str, Tuple[int, int]]
 
 
 def get_num_fft_workers() -> int:
@@ -842,7 +848,7 @@ class Wavefront:
 
     def focus(
         self,
-        plane: Union[str, Tuple[int, int]],
+        plane: Plane,
         focus: Tuple[float, float],
         *,
         inplace: bool = False,
@@ -927,3 +933,125 @@ class Wavefront:
         # Invalidate the real space data
         self._field_rspace = None
         return self
+
+    def plot(
+        self,
+        plane: Plane,
+        *,
+        rspace: bool = True,
+        show_real: bool = True,
+        show_imaginary: bool = True,
+        show_abs: bool = True,
+        show_phase: bool = True,
+        axs: Optional[List[matplotlib.axes.Axes]] = None,
+        cmap: str = "viridis",
+        figsize: Optional[Tuple[int, int]] = None,
+        nrows: int = 2,
+        ncols: int = 2,
+        xlim: Optional[Tuple[int, int]] = None,
+        ylim: Optional[Tuple[int, int]] = None,
+        tight_layout: bool = True,
+        save: Optional[AnyPath] = None,
+    ):
+        """
+        Plot the projection onto the given plane.
+
+        Parameters
+        ----------
+        plane : str or (int, int)
+            Plane to plot, e.g., "xy" or (1, 2).
+        rspace : bool, default=True
+            Plot the real/cartesian space data.
+        show_real : bool
+            Show the projection of the real portion of the data.
+        show_imaginary : bool
+            Show the projection of the imaginary portion of the data.
+        show_abs : bool
+            Show the projection of the absolute value of the data.
+        show_phase : bool
+            Show the projection of the phase of the data.
+        figsize : (int, int), optional
+            Figure size for the axes.
+            Defaults to Matplotlib's `rcParams["figure.figsize"]``.
+        axs : List[matplotlib.axes.Axes], optional
+            Plot the data in the provided matplotlib Axes.
+            Creates a new figure and Axes if not specified.
+        cmap : str, default="viridis"
+            Color map to use.
+        nrows : int, default=2
+            Number of rows for the plot.
+        ncols : int, default=2
+            Number of columns for the plot.
+        save : pathlib.Path or str, optional
+            Save the plot to the given filename.
+        xlim : (float, float), optional
+            X axis limits.
+        ylim : (float, float), optional
+            Y axis limits.
+        tight_layout : bool, default=True
+            Set a tight layout.
+
+        Returns
+        -------
+        Figure
+        list of Axes
+        """
+        if rspace:
+            data = self.field_rspace
+        else:
+            data = self.field_kspace
+
+        sum_axis = {
+            # TODO: when standardized, this will be xyz instead of txy
+            "xy": 0,
+            (1, 2): 0,
+        }[plane]
+
+        if axs is None:
+            fig, gs = plt.subplots(
+                nrows=nrows,
+                ncols=ncols,
+                sharex=True,
+                sharey=True,
+                squeeze=False,
+                figsize=figsize,
+            )
+            axs = list(gs.flatten())
+            fig.suptitle(f"{plane}")
+        else:
+            fig = axs[0].get_figure()
+            assert fig is not None
+
+        remaining_axes = list(axs)
+
+        def plot(dat, title: str):
+            ax = remaining_axes.pop(0)
+            ax.imshow(np.sum(dat, axis=sum_axis), cmap=cmap)
+            if xlim is not None:
+                ax.set_xlim(xlim)
+            if ylim is not None:
+                ax.set_ylim(ylim)
+            if not ax.get_title():
+                ax.set_title(title)
+
+        if show_real:
+            plot(np.real(data), title="Real")
+
+        if show_imaginary:
+            plot(np.imag(data), title="Imaginary")
+
+        if show_abs:
+            plot(np.abs(data), f"|{plane}|")
+
+        if show_phase:
+            plot(np.angle(data), title="Phase")
+
+        if fig is not None:
+            if tight_layout:
+                fig.tight_layout()
+
+            if save:
+                logger.info(f"Saving plot to {save!r}")
+                fig.savefig(save)
+
+        return fig, axs

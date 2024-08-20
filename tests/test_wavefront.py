@@ -39,15 +39,15 @@ def projection_plane(request: pytest.FixtureRequest) -> str:
     return request.param
 
 
-def test_smoke_propagate_z_in_place(wavefront: Wavefront) -> None:
+def test_smoke_drift_z_in_place(wavefront: Wavefront) -> None:
     # Implicitly calculates the FFT:
-    wavefront.propagate(direction="z", distance=0.0, inplace=True)
+    wavefront.drift(direction="z", distance=0.0, inplace=True)
     # Use the property to calculate the inverse fft:
     wavefront.field_rspace
 
 
-def test_smoke_propagate_z(wavefront: Wavefront) -> None:
-    new = wavefront.propagate(direction="z", distance=0.0, inplace=False)
+def test_smoke_drift_z(wavefront: Wavefront) -> None:
+    new = wavefront.drift(direction="z", distance=0.0, inplace=False)
     assert new is not wavefront
 
 

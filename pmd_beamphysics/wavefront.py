@@ -888,7 +888,7 @@ class Wavefront:
         self._field_kspace = None
         return self
 
-    def propagate(
+    def drift(
         self,
         direction: Union[str, int],
         distance: float,
@@ -896,7 +896,7 @@ class Wavefront:
         inplace: bool = False,
     ) -> Wavefront:
         """
-        Propagate this Wavefront in-place along Z in meters.
+        Drift this Wavefront along `direction` in meters.
 
         Parameters
         ----------
@@ -918,7 +918,7 @@ class Wavefront:
 
         if not inplace:
             wavefront = copy.copy(self)
-            return wavefront.propagate(direction, distance, inplace=True)
+            return wavefront.drift(direction, distance, inplace=True)
 
         self._field_kspace = drift_propagator_z(
             field_kspace=self.field_kspace,

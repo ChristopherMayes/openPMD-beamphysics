@@ -65,12 +65,12 @@ def test_smoke_focusing_element(wavefront: Wavefront) -> None:
     [
         pytest.param(
             WavefrontPadding(grid=(10,), pad=(10,)),
-            WavefrontPadding(grid=(11,), pad=(11,)),
+            WavefrontPadding(grid=(10,), pad=(11,)),
             id="1d",
         ),
         pytest.param(
             WavefrontPadding(grid=(10, 10), pad=(10, 10)),
-            WavefrontPadding(grid=(11, 11), pad=(11, 11)),
+            WavefrontPadding(grid=(10, 10), pad=(11, 11)),
             id="2d",
         ),
     ],
@@ -87,7 +87,7 @@ def test_smoke_properties(wavefront: Wavefront) -> None:
     )
     assert np.isclose(wavefront.wavelength, 1.35e-8)
     assert wavefront.pad.grid == (11, 21, 21)
-    assert wavefront.pad.pad == (44, 102, 102)
+    assert wavefront.pad.pad == (44, 100, 100)
 
 
 def test_copy(wavefront: Wavefront) -> None:

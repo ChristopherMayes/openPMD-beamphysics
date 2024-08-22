@@ -1,8 +1,16 @@
+from typing import Any, Dict
+
+import h5py
 import numpy as np
 
 from .units import unit, pg_units
 from .readers import component_from_alias, load_field_attrs
 from .tools import fstr, encode_attrs
+
+
+def write_attrs(h5: h5py.Group, dct: Dict[str, Any]):
+    for k, v in dct.items():
+        h5.attrs[k] = fstr(v) if isinstance(v, str) else v
 
 
 def pmd_init(h5, basePath='/data/%T/', particlesPath='./' ):
@@ -18,8 +26,7 @@ def pmd_init(h5, basePath='/data/%T/', particlesPath='./' ):
         'openPMDextension':'BeamPhysics;SpeciesType',
         'particlesPath':particlesPath    
     }
-    for k,v in d.items():
-        h5.attrs[k] = fstr(v)
+    write_attrs(h5, d)
         
     
 def pmd_field_init(h5, externalFieldPath='/ExternalFieldPath/%T/'):
@@ -34,11 +41,23 @@ def pmd_field_init(h5, externalFieldPath='/ExternalFieldPath/%T/'):
         'openPMDextension':'BeamPhysics',
         'externalFieldPath': externalFieldPath
     }
-    for k,v in d.items():
-        h5.attrs[k] = fstr(v)    
-        
+    write_attrs(h5, d)
+
+
+def pmd_wavefront_init(h5):
+    """
+    Root attribute initialization for an openPMD-beamphysics Wavefront init.
     
-        
+    h5 should be the root of the file.
+    """
+    d = {
+        'dataType':'openPMD',
+        'openPMD':'2.0.0',
+        'openPMDextension':'Wavefront',
+    }
+    write_attrs(h5, d)
+
+
 def write_pmd_bunch(h5, data, name=None):
     """
     Data is a dict with:

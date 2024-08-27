@@ -24,6 +24,7 @@ def pmd_init(h5, basePath='/data/%T/', particlesPath='./' ):
         'dataType':'openPMD',
         'openPMD':'2.0.0',
         'openPMDextension':'BeamPhysics;SpeciesType',
+        # TODO: only write particlesPath if particles exist in the output file
         'particlesPath':particlesPath    
     }
     write_attrs(h5, d)
@@ -39,6 +40,7 @@ def pmd_field_init(h5, externalFieldPath='/ExternalFieldPath/%T/'):
         'dataType':'openPMD',
         'openPMD':'2.0.0',
         'openPMDextension':'BeamPhysics',
+        # TODO: only write externalFieldPath if external fields exist in the output file
         'externalFieldPath': externalFieldPath
     }
     write_attrs(h5, d)

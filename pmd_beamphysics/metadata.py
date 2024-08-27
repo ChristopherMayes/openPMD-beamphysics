@@ -1,21 +1,35 @@
 from __future__ import annotations
 
-import datetime
-import platform
-import getpass
 import dataclasses
+import datetime
+import getpass
+import platform
+from typing import Dict, Optional, Sequence, Tuple, Union
 
-from typing import Dict, Sequence, Union
 from typing_extensions import Literal
 
 from . import tools
+from .types import Dataclass
+
+
+def get_pmd_metadata_dict(
+    obj: Dataclass,
+    attrs: Sequence[str],
+) -> Dict[str, Union[str, float, None]]:
+    assert dataclasses.is_dataclass(obj)
+    attr_to_field = {
+        fld.name: fld.metadata.get("pmd_key", fld.name)
+        for fld in dataclasses.fields(obj)
+    }
+    return {
+        attr_to_field[attr]: getattr(obj, attr)
+        for attr in attrs
+        if getattr(obj, attr) is not None
+    }
 
 
 @dataclasses.dataclass
 class BaseMetadata:
-    data_index: int = 0
-    object_index: int = 0
-
     # Base pmd wavefront file attrs:
     spec_version: str = "2.0.0"
 
@@ -41,37 +55,10 @@ class BaseMetadata:
         metadata={"pmd_key": "date"},
     )
 
-    # Per iteration
-    iteration_time: float = dataclasses.field(default=0.0, metadata={"pmd_key": "time"})
-    iteration_dt: float = dataclasses.field(default=0.0, metadata={"pmd_key": "dt"})
-    iteration_time_unit_si: float = dataclasses.field(
-        default=1.0, metadata={"pmd_key": "timeUnitSI"}
-    )
-
-    def _get_pmd_dict(self, attrs: Sequence[str]) -> Dict[str, Union[str, float, None]]:
-        attr_to_field = {
-            fld.name: fld.metadata.get("pmd_key", fld.name)
-            for fld in dataclasses.fields(self)
-        }
-        return {
-            attr_to_field[attr]: getattr(self, attr)
-            for attr in attrs
-            if getattr(self, attr) is not None
-        }
-
     @property
-    def iteration_attrs(self):
-        return self._get_pmd_dict(
-            [
-                "iteration_time",
-                "iteration_dt",
-                "iteration_time_unit_si",
-            ]
-        )
-
-    @property
-    def base_attrs(self):
-        res = self._get_pmd_dict(
+    def attrs(self):
+        res = get_pmd_metadata_dict(
+            self,
             [
                 "author",
                 "machine",
@@ -81,9 +68,104 @@ class BaseMetadata:
                 "software_dependencies",
                 "iteration_format",
                 "iteration_encoding",
-            ]
+            ],
         )
         return {
             **res,
             "date": tools.pmd_format_date(self.date),
         }
+
+
+@dataclasses.dataclass
+class IterationMetadata:
+    iteration: int = 0
+
+    time: float = dataclasses.field(default=0.0, metadata={"pmd_key": "time"})
+    dt: float = dataclasses.field(default=0.0, metadata={"pmd_key": "dt"})
+    time_unit_si: float = dataclasses.field(
+        default=1.0, metadata={"pmd_key": "timeUnitSI"}
+    )
+
+    @property
+    def attrs(self):
+        return get_pmd_metadata_dict(
+            self,
+            [
+                "time",
+                "dt",
+                "time_unit_si",
+            ],
+        )
+
+
+@dataclasses.dataclass
+class WavefrontMetadata:
+    base: BaseMetadata = dataclasses.field(default_factory=BaseMetadata)
+    iteration: IterationMetadata = dataclasses.field(default_factory=IterationMetadata)
+    wavefront_index: Optional[int] = None
+
+    beamline: str = dataclasses.field(default="")
+    radius_of_curvature_x: Optional[float] = dataclasses.field(
+        default=None,
+        metadata={"pmd_key": "radiusOfCurvatureX"},
+    )
+    radius_of_curvature_y: Optional[float] = dataclasses.field(
+        default=None,
+        metadata={"pmd_key": "radiusOfCurvatureY"},
+    )
+    delta_radius_of_curvature_x: Optional[float] = dataclasses.field(
+        default=None,
+        metadata={"pmd_key": "deltaRadiusOfCurvatureX"},
+    )
+    delta_radius_of_curvature_y: Optional[float] = dataclasses.field(
+        default=None,
+        metadata={"pmd_key": "deltaRadiusOfCurvatureY"},
+    )
+    z_coordinate: float = dataclasses.field(
+        default=0.0, metadata={"pmd_key": "zCoordinate"}
+    )
+    pads: Tuple[float, ...] = dataclasses.field(
+        default_factory=tuple, metadata={"pmd_key": "pads"}
+    )
+
+    @property
+    def attrs(self) -> Dict[str, Union[str, float, None]]:
+        """electricField attributes."""
+        return get_pmd_metadata_dict(
+            self,
+            [
+                "beamline",
+                "radius_of_curvature_x",
+                "radius_of_curvature_y",
+                "delta_radius_of_curvature_x",
+                "delta_radius_of_curvature_y",
+                "pads",
+            ],
+        )
+
+    @classmethod
+    def from_dict(cls, md: dict) -> WavefrontMetadata:
+        md = dict(md)
+        if "base" in md:
+            base_md = md.pop("base")
+        else:
+            base_md = {
+                key: value
+                for key, value in md.items()
+                if key in BaseMetadata.__dataclass_fields__
+            }
+        if "iteration" in md:
+            iteration_md = md.pop("base")
+        else:
+            iteration_md = {
+                key: value
+                for key, value in md.items()
+                if key in IterationMetadata.__dataclass_fields__
+            }
+        for key in list(base_md) + list(iteration_md):
+            md.pop(key)
+        return WavefrontMetadata(
+            base=BaseMetadata(**base_md),
+            iteration=IterationMetadata(**iteration_md),
+            **md,
+        )

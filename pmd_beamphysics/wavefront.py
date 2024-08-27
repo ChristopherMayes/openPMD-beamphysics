@@ -15,7 +15,7 @@ import scipy.constants
 import scipy.fft
 from typing_extensions import Literal
 
-from .metadata import BaseMetadata
+from .metadata import WavefrontMetadata
 from . import units, writers
 
 logger = logging.getLogger(__name__)
@@ -589,38 +589,6 @@ class WavefrontPadding:
         return tuple(dim + 2 * pad for dim, pad in zip(field_rspace.shape, self.pad))
 
 
-@dataclasses.dataclass
-class Metadata(BaseMetadata):
-    beamline: str = dataclasses.field(default="")
-    radius_of_curvature_x: Optional[float] = dataclasses.field(
-        default=None, metadata={"pmd_key": "radiusOfCurvatureX"}
-    )
-    radius_of_curvature_y: Optional[float] = dataclasses.field(
-        default=None, metadata={"pmd_key": "radiusOfCurvatureY"}
-    )
-    delta_radius_of_curvature_x: Optional[float] = dataclasses.field(
-        default=None, metadata={"pmd_key": "deltaRadiusOfCurvatureX"}
-    )
-    delta_radius_of_curvature_y: Optional[float] = dataclasses.field(
-        default=None, metadata={"pmd_key": "deltaRadiusOfCurvatureY"}
-    )
-    z_coordinate: float = dataclasses.field(
-        default=0.0, metadata={"pmd_key": "zCoordinate"}
-    )
-
-    @property
-    def efield_attrs(self) -> Dict[str, Union[str, float, None]]:
-        return self._get_pmd_dict(
-            [
-                "beamline",
-                "radius_of_curvature_x",
-                "radius_of_curvature_y",
-                "delta_radius_of_curvature_x",
-                "delta_radius_of_curvature_y",
-            ]
-        )
-
-
 class Wavefront:
     """
     Particle field wavefront.
@@ -639,6 +607,8 @@ class Wavefront:
         Direction of polarization.  The default assumes a planar undulator
         with electric field polarization in the X direction.
         Circular or generalized polarization is not currently supported.
+    metadata : Metadata, optional
+        OpenPMD-specific metadata.
     pad : tuple of int, optional
         Padding for each of the dimensions.  Defaults to 40 for the time
         dimension and 100 for the remaining dimensions.
@@ -651,10 +621,14 @@ class Wavefront:
     _field_rspace: Optional[np.ndarray]
     _field_kspace: Optional[np.ndarray]
     _phasors: Optional[Tuple[np.ndarray, ...]]
+    # TODO: range goes away and becomes 'deltas' (or 'grid_spacings' + )
+    # time snapshot in Z
+    # attributes on mesh show where it is in 3D space
     _ranges: Ranges
     _wavelength: float
     _pad: WavefrontPadding
     _polarization: PolarizationDirection
+    _metadata: WavefrontMetadata
 
     def __init__(
         self,
@@ -664,8 +638,10 @@ class Wavefront:
         ranges: Ranges,
         pad: Optional[Sequence[int]] = None,
         polarization: PolarizationDirection = "x",
+        metadata: Optional[Union[WavefrontMetadata, dict]] = None,
     ) -> None:
         if not pad:
+            # TODO: allow for single integer `pad`
             pad = (40,) + (100,) * (field_rspace.ndim - 1)
 
         if len(ranges) != field_rspace.ndim:
@@ -680,6 +656,7 @@ class Wavefront:
         self._wavelength = wavelength
         self._ranges = tuple(ranges)
         self._pad = WavefrontPadding.from_array(field_rspace, pad=pad, fix=True)
+        self.metadata = metadata
         self.polarization = polarization
 
     def __copy__(self) -> Wavefront:
@@ -691,6 +668,7 @@ class Wavefront:
         res._wavelength = self._wavelength
         res._ranges = self._ranges
         res._pad = self._pad
+        res._metadata = copy.deepcopy(self._metadata)
         return res
 
     def __deepcopy__(self, memo) -> Wavefront:
@@ -706,6 +684,7 @@ class Wavefront:
         res._wavelength = self._wavelength
         res._ranges = self._ranges
         res._pad = self._pad
+        res._metadata = copy.deepcopy(self._metadata)
         return res
 
     def __eq__(self, other: Any) -> bool:
@@ -841,6 +820,25 @@ class Wavefront:
         if polarization not in {"x", "y", "z"}:
             raise ValueError(f"Invalid polarization direction: {polarization}")
         self._polarization = polarization
+
+    @property
+    def metadata(self) -> WavefrontMetadata:
+        return self._metadata
+
+    @metadata.setter
+    def metadata(self, metadata: Any) -> None:
+        if metadata is None:
+            metadata = WavefrontMetadata()
+
+        if isinstance(metadata, dict):
+            self._metadata = WavefrontMetadata.from_dict(metadata)
+        elif isinstance(metadata, WavefrontMetadata):
+            self._metadata = metadata
+        else:
+            raise ValueError(
+                f"Unsupported type for metadata: {type(metadata).__name__}. Expected "
+                f"'WavefrontMetadata', 'dict', or None to reset the metadata"
+            )
 
     def _fft(self):
         """
@@ -1143,12 +1141,25 @@ class Wavefront:
 
         field = FieldFile.from_file(h5)
 
+        # Z0 = np.pi*119.9169832 # V^2/W exactly
+        # factorGenesis = gridsize / np.sqrt(2.0 * Z0) #factor to genesis units
+        # unitSI = E_complex['x'].attrs['unitSI'] # factor to convert to V/m
+        # NOTE: https://github.com/slaclab/lume-genesis/blob/master/docs/notes/genesis_fields.pdf
         _nx, _ny, nz = field.dfl.shape
         z_low = field.param.refposition
-        z_high = z_low + field.param.slicespacing * nz  # TODO: off by one?
+        z_high = z_low + field.param.slicespacing * (nz - 1)
         if isinstance(pad, int):
             pad = (pad, pad, pad)
 
+        # TODO: to test:
+        #   1. write gaussian field
+        #   2. have genesis propagate it
+        #   3. read the output from genesis, roughly compare `imported_wf.drift("z", ...)`
+        #
+        # Split:
+        #   1. Run half genesis sim - get output
+        #   2. Run full genesis sim - get output
+        #   3. Drift (1) and compare with (2)
         return cls(
             field_rspace=field.dfl,
             wavelength=field.param.wavelength,
@@ -1169,6 +1180,7 @@ class Wavefront:
     def from_file(
         cls,
         h5: Union[h5py.File, pathlib.Path, str],
+        identifier: int = 0,
     ) -> Wavefront:
         """Load a Wavefront from a file in the OpenPMD format."""
         if isinstance(h5, h5py.File):
@@ -1176,14 +1188,25 @@ class Wavefront:
         with h5py.File(h5) as h5p:
             return cls._from_h5_file(h5p)
 
-    def _write(self, h5: h5py.File, metadata: Metadata):
+    # names = get_wavefront_names_from_file("something.h5")
+    # for name in names:
+    #    wavefront = Wavefront.from_file("something.h5", identifier=name)
+    #    wavefront.field_rspace  # <-- single wavefront
+    #
+    # wavefront = Wavefront.from_file("something.h5", identifier=5)
+
+    def _write(self, h5: h5py.File, metadata: WavefrontMetadata):
         base_path_template = "/data/%T/"
-        wavefront_base_path_template = "/Wavefront/%T/"
+        if metadata.wavefront_index is not None:
+            wavefront_base_path_template = "/wavefront/%T/"
+        else:
+            # For us, at least, second %T doesn't make much sense:
+            wavefront_base_path_template = "/wavefront"
 
         wavefront_base_path = wavefront_base_path_template.replace(
-            "%T", str(metadata.object_index)
+            "%T", str(metadata.wavefront_index)
         )
-        base_path = base_path_template.replace("%T", str(metadata.data_index))
+        base_path = base_path_template.replace("%T", str(metadata.iteration.iteration))
 
         # TODO: yes, this belongs in 'writers' - but I'm not sure what could/should be
         # reused/pulled apart/rewritten/etc just yet.
@@ -1192,7 +1215,7 @@ class Wavefront:
             {
                 "basePath": base_path_template,
                 "dataType": "openPMD",
-                "openPMD": metadata.spec_version,
+                "openPMD": metadata.base.spec_version,
                 # No particles, meshes in the file - per PMD spec:
                 # - note: if this attribute is missing, the file is interpreted as if it
                 #   contains *no particle records*! If the attribute is set, the group behind
@@ -1202,24 +1225,36 @@ class Wavefront:
                 # TODO
                 # "openPMDextension": "BeamPhysics;SpeciesType",
                 "openPMDextension": "Wavefront",
-                "wavefrontPath": wavefront_base_path_template,  # TODO: I made this up
-                **metadata.base_attrs,
+                "wavefrontFieldPath": wavefront_base_path_template,  # TODO: add to standard
+                **metadata.base.attrs,
             },
         )
 
         wavefront_path = base_path + wavefront_base_path
         base_group = h5.create_group(base_path)
-        writers.write_attrs(base_group, metadata.iteration_attrs)
+        writers.write_attrs(base_group, metadata.iteration.attrs)
 
         electric_field_path = wavefront_path + "electricField/"
         efield_group = h5.create_group(electric_field_path)
+
+        # TODO: add attributes from 'mesh based records'
+        # `geometry`
+        # `geometryParameters`
+        # `axisLabels`
+        # `gridSpacing`
+        # `gridGlobalOffset`
+        # `gridUnitSI`
+        # `gridUnitDimension`
+        # `position`
         writers.write_attrs(
             efield_group,
             {
                 "photonEnergy": self.photon_energy,
+                "photonEnergyUnitSI": units.known_unit["eV"].unitSI,
+                "photonEnergyUnitDimension": units.known_unit["eV"].unitDimension,
                 "temporalDomain": "time",
                 "spatialDomain": "r",
-                **metadata.efield_attrs,
+                **metadata.attrs,
             },
         )
 
@@ -1234,14 +1269,14 @@ class Wavefront:
         self,
         h5: Union[h5py.File, pathlib.Path, str],
         *,
-        metadata: Optional[Union[Metadata, dict]] = None,
+        metadata: Optional[Union[WavefrontMetadata, dict]] = None,
     ) -> None:
         """Write the Wavefront in OpenPMD format."""
 
         if metadata is None:
-            metadata = Metadata()
+            metadata = WavefrontMetadata()
         elif isinstance(metadata, dict):
-            metadata = Metadata(**metadata)
+            metadata = WavefrontMetadata(**metadata)
 
         if isinstance(h5, h5py.File):
             return self._write(h5, metadata=metadata)

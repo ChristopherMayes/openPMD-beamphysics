@@ -8,7 +8,9 @@ dependencies:
   - scipy>=1.0.0
   - matplotlib
   - h5py
-# Developer
+  - python-dateutil
+  # Developer
+  - openpmd-validator
   - pytest
   - jupyterlab>=3
   - pygments
@@ -19,4 +21,4 @@ dependencies:
   - mkdocstrings-python
   - pip
   - pip:
-    - mkdocstrings-python
+      - mkdocstrings-python

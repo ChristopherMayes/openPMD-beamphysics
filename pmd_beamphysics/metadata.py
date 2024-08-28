@@ -10,6 +10,9 @@ from typing_extensions import Literal
 
 from . import tools
 from .types import Dataclass
+from .units import pmd_unit, known_unit
+
+PolarizationDirection = Literal["x", "y", "z"]
 
 
 def get_pmd_metadata_dict(
@@ -28,9 +31,14 @@ def get_pmd_metadata_dict(
     }
 
 
+def _key(pmd_key: str):
+    return {"pmd_key": pmd_key}
+
+
 @dataclasses.dataclass
 class BaseMetadata:
-    # Base pmd wavefront file attrs:
+    """Base metadata for OpenPMD spec files."""
+
     spec_version: str = "2.0.0"
 
     author: str = dataclasses.field(default_factory=getpass.getuser)
@@ -39,20 +47,20 @@ class BaseMetadata:
 
     software: str = dataclasses.field(default="pmd_beamphysics")
     software_version: str = dataclasses.field(
-        default_factory=tools.get_version, metadata={"pmd_key": "softwareVersion"}
+        default_factory=tools.get_version, metadata=_key("softwareVersion")
     )
     software_dependencies: str = dataclasses.field(
-        default="", metadata={"pmd_key": "softwareDependencies"}
+        default="", metadata=_key("softwareDependencies")
     )
     iteration_encoding: Literal["fileBased", "groupBased"] = dataclasses.field(
-        default="groupBased", metadata={"pmd_key": "iterationEncoding"}
+        default="groupBased", metadata=_key("iterationEncoding")
     )
     iteration_format: str = dataclasses.field(
-        default="/data/%T/", metadata={"pmd_key": "iterationFormat"}
+        default="/data/%T/", metadata=_key("iterationFormat")
     )
     date: datetime.datetime = dataclasses.field(
         default_factory=tools.current_date_with_tzinfo,
-        metadata={"pmd_key": "date"},
+        metadata=_key("date"),
     )
 
     @property
@@ -78,13 +86,13 @@ class BaseMetadata:
 
 @dataclasses.dataclass
 class IterationMetadata:
+    """Per-iteration metadata for OpenPMD spec files."""
+
     iteration: int = 0
 
-    time: float = dataclasses.field(default=0.0, metadata={"pmd_key": "time"})
-    dt: float = dataclasses.field(default=0.0, metadata={"pmd_key": "dt"})
-    time_unit_si: float = dataclasses.field(
-        default=1.0, metadata={"pmd_key": "timeUnitSI"}
-    )
+    time: float = dataclasses.field(default=0.0, metadata=_key("time"))
+    dt: float = dataclasses.field(default=0.0, metadata=_key("dt"))
+    time_unit_si: float = dataclasses.field(default=1.0, metadata=_key("timeUnitSI"))
 
     @property
     def attrs(self):
@@ -98,34 +106,92 @@ class IterationMetadata:
         )
 
 
+Geometry = Literal["cartesian", "thetaMode", "cylindrical", "spherical", "other"]
+
+
+@dataclasses.dataclass
+class MeshMetadata:
+    """Per-Mesh metadata for OpenPMD spec files."""
+
+    geometry: Geometry = "cartesian"
+    geometry_parameters: Optional[str] = dataclasses.field(
+        default=None, metadata=_key("geometryParameters")
+    )
+    axis_labels: Tuple[str, ...] = dataclasses.field(
+        default=("x", "y", "z"), metadata=_key("axisLabels")
+    )
+    grid_spacing: Tuple[float, ...] = dataclasses.field(
+        default=(), metadata=_key("gridSpacing")
+    )
+    grid_global_offset: Tuple[float, ...] = dataclasses.field(
+        default=(), metadata=_key("gridGlobalOffset")
+    )
+    grid_unit_dimension: Tuple[float, ...] = dataclasses.field(
+        default=(), metadata=_key("gridUnitDimension")
+    )
+    position: Tuple[float, ...] = dataclasses.field(
+        default_factory=tuple,
+    )
+    particle_list: Tuple[str, ...] = dataclasses.field(
+        default_factory=tuple, metadata=_key("particleList")
+    )
+
+    @property
+    def attrs(self):
+        dct = get_pmd_metadata_dict(
+            self,
+            [
+                "geometry",
+                "geometry_parameters",
+                "axis_labels",
+                "grid_spacing",
+                "grid_global_offset",
+                "grid_unit_dimension",
+                "position",
+            ],
+        )
+
+        if self.geometry == "thetaMode":
+            if not self.geometry_parameters:
+                raise ValueError("geometry_parameters is required in thetaMode")
+
+        if self.particle_list:
+            dct["particleList"] = ";".join(self.particle_list)
+        return dct
+
+
 @dataclasses.dataclass
 class WavefrontMetadata:
+    """Per-Wavefront metadata for OpenPMD spec files."""
+
+    index: Optional[int] = None
+    units: pmd_unit = dataclasses.field(default_factory=lambda: known_unit["V/m"])
+
     base: BaseMetadata = dataclasses.field(default_factory=BaseMetadata)
     iteration: IterationMetadata = dataclasses.field(default_factory=IterationMetadata)
-    wavefront_index: Optional[int] = None
+    mesh: MeshMetadata = dataclasses.field(default_factory=MeshMetadata)
 
+    polarization: PolarizationDirection = dataclasses.field(default="x")
     beamline: str = dataclasses.field(default="")
     radius_of_curvature_x: Optional[float] = dataclasses.field(
         default=None,
-        metadata={"pmd_key": "radiusOfCurvatureX"},
+        metadata=_key("radiusOfCurvatureX"),
     )
     radius_of_curvature_y: Optional[float] = dataclasses.field(
         default=None,
-        metadata={"pmd_key": "radiusOfCurvatureY"},
+        metadata=_key("radiusOfCurvatureY"),
     )
     delta_radius_of_curvature_x: Optional[float] = dataclasses.field(
         default=None,
-        metadata={"pmd_key": "deltaRadiusOfCurvatureX"},
+        metadata=_key("deltaRadiusOfCurvatureX"),
     )
     delta_radius_of_curvature_y: Optional[float] = dataclasses.field(
         default=None,
-        metadata={"pmd_key": "deltaRadiusOfCurvatureY"},
+        metadata=_key("deltaRadiusOfCurvatureY"),
     )
-    z_coordinate: float = dataclasses.field(
-        default=0.0, metadata={"pmd_key": "zCoordinate"}
-    )
-    pads: Tuple[float, ...] = dataclasses.field(
-        default_factory=tuple, metadata={"pmd_key": "pads"}
+    z_coordinate: float = dataclasses.field(default=0.0, metadata=_key("zCoordinate"))
+    pads: Tuple[int, ...] = dataclasses.field(
+        default_factory=tuple, metadata=_key("pads")
     )
 
     @property

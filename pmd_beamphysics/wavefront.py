@@ -4,7 +4,7 @@ import copy
 import dataclasses
 import logging
 import pathlib
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, List, Optional, Sequence, Tuple, Union
 
 import h5py
 import matplotlib
@@ -13,10 +13,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.constants
 import scipy.fft
-from typing_extensions import Literal
 
-from .metadata import WavefrontMetadata
-from . import units, writers
+from .metadata import PolarizationDirection, WavefrontMetadata
+from . import writers
+from .units import pmd_unit, known_unit
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +25,6 @@ _fft_workers = -1
 Ranges = Sequence[Tuple[float, float]]
 AnyPath = Union[str, pathlib.Path]
 Plane = Union[str, Tuple[int, int]]
-
-PolarizationDirection = Literal["x", "y", "z"]
 
 
 def get_num_fft_workers() -> int:
@@ -39,6 +37,20 @@ def set_num_fft_workers(workers: int):
     _fft_workers = workers
 
     logger.info(f"Set number of FFT workers to: {workers}")
+
+
+def get_axis_indices(
+    axis_labels: Tuple[str, ...],
+    plane: Union[Sequence[str], Sequence[int]],
+):
+    def get_axis_index(axis: Union[str, int]):
+        if isinstance(axis, int):
+            if axis >= len(axis_labels):
+                raise ValueError(f"Axis out of bounds: {axis} (of {plane})")
+            return axis
+        return axis_labels.index(axis)
+
+    return tuple(get_axis_index(axis) for axis in plane)
 
 
 def _pad_array(wavefront: np.ndarray, shape):
@@ -337,10 +349,10 @@ def get_shifts(
         Effective half sizes with padding in all dimensions.
     """
 
-    assert len(ranges) == len(pads) == len(deltas) > 1
+    assert len(pads) == len(deltas) > 1
+    spans = tuple(domain[1] - domain[0] for domain in ranges)
     return tuple(
-        (domain[1] - domain[0]) / 2.0 + pad * delta
-        for domain, pad, delta in zip(ranges, pads, deltas)
+        span / 2.0 + pad * delta for span, pad, delta in zip(spans, pads, deltas)
     )
 
 
@@ -477,8 +489,8 @@ def create_gaussian_pulse_3d_with_q(
     nphotons: float,
     zR: float,
     sigma_t: float,
-    ranges: Ranges,
-    grid: Tuple[int, int, int],
+    grid_spacing: Sequence[float],
+    grid: Sequence[int],
     dtype=np.complex64,
 ):
     """
@@ -494,10 +506,8 @@ def create_gaussian_pulse_3d_with_q(
         Rayleigh range [m].
     sigma_t : float
         Time RMS [s]
-    ranges : tuple of (float, float) pairs
-        Low and high domain range for each dimension of the wavefront.
-        First axis must be time [s].
-        Remaining axes are expected to be spatial (x, y) [m].
+    grid_spacing : tuple of floats
+        Per-axis grid spacing.
     grid : tuple of ints
         Data gridding.
     dtype : np.dtype, default=np.complex64
@@ -506,8 +516,15 @@ def create_gaussian_pulse_3d_with_q(
     -------
     np.ndarray
     """
+    if len(grid_spacing) != 3:
+        raise ValueError("`grid_spacing` must be of length 3 for a 3D gaussian")
+    if len(grid) != 3:
+        raise ValueError("`grid` must be of length 3 for a 3D gaussian")
+
+    ranges = get_ranges_for_grid_spacing(grid_spacing=grid_spacing, dims=grid)
+    min_t, max_t = ranges[0]
+
     k0 = calculate_k0(wavelength)
-    (min_t, max_t), *_ = ranges
     t_mid = (max_t + min_t) / 2.0
     t_mesh, x_mesh, y_mesh = nd_space_mesh(ranges=ranges, sizes=grid)
     qx = 1j * zR
@@ -589,6 +606,56 @@ class WavefrontPadding:
         return tuple(dim + 2 * pad for dim, pad in zip(field_rspace.shape, self.pad))
 
 
+def get_range_for_grid_spacing(grid_spacing: float, dim: int) -> Tuple[float, float]:
+    """
+    Given a grid spacing and array dimension, get the range the entire array represents.
+
+    Parameters
+    ----------
+    grid_spacing : float
+    dim : int
+
+    Returns
+    -------
+    low : float
+    high : float
+    """
+    # Generally, we expect an odd-dimension array which is centered around 0.
+    # e.g.: 11 -> (-5, 5)
+    half_dim = dim // 2
+    if dim % 2 == 1:
+        return (-grid_spacing * half_dim, grid_spacing * half_dim)
+
+    # However, we may have an even dimension, in which case we choose to clip
+    # the upper bound.
+    # e.g., 10 -> (-5, 4)
+    # TODO: confirm this is desirable
+    clipped_half_dim = (dim - 1) // 2
+    return (-grid_spacing * half_dim, grid_spacing * clipped_half_dim)
+
+
+def get_ranges_for_grid_spacing(
+    grid_spacing: Sequence[float],
+    dims: Sequence[int],
+) -> Sequence[Tuple[float, float]]:
+    """
+    Given a grid spacing and array dimension, get the range the entire array represents.
+
+    Parameters
+    ----------
+    grid_spacing : list of float
+    dim : list of int
+
+    Returns
+    -------
+    tuples of (low, high) pairs
+    """
+    return tuple(
+        get_range_for_grid_spacing(grid_spacing=delta, dim=dim)
+        for delta, dim in zip(grid_spacing, dims)
+    )
+
+
 class Wavefront:
     """
     Particle field wavefront.
@@ -596,22 +663,22 @@ class Wavefront:
     Parameters
     ----------
     field_rspace : np.ndarray
-        Cartesian space field data.  3D array with dimensions of (time, x, y).
+        Cartesian space field data.
     wavelength : float
         Wavelength (lambda0) [m].
-    ranges : tuple of (float, float) pairs
-        Low and high domain range for each dimension of the wavefront.
-        First axis must be time [s].
-        Remaining axes are expected to be spatial (x, y) [m].
+    grid_spacing : sequence of float
+        Grid spacing for the corresponding dimensions.
     polarization : {"x", "y", "z"}, default="x"
         Direction of polarization.  The default assumes a planar undulator
         with electric field polarization in the X direction.
         Circular or generalized polarization is not currently supported.
     metadata : Metadata, optional
         OpenPMD-specific metadata.
-    pad : tuple of int, optional
+    pad : int or tuple of int, optional
         Padding for each of the dimensions.  Defaults to 40 for the time
         dimension and 100 for the remaining dimensions.
+    unit : pmd_unit, default=V/m
+        Units of `field_rspace`.
 
     See Also
     --------
@@ -621,13 +688,11 @@ class Wavefront:
     _field_rspace: Optional[np.ndarray]
     _field_kspace: Optional[np.ndarray]
     _phasors: Optional[Tuple[np.ndarray, ...]]
-    # TODO: range goes away and becomes 'deltas' (or 'grid_spacings' + )
+    # TODO:
     # time snapshot in Z
     # attributes on mesh show where it is in 3D space
-    _ranges: Ranges
     _wavelength: float
     _pad: WavefrontPadding
-    _polarization: PolarizationDirection
     _metadata: WavefrontMetadata
 
     def __init__(
@@ -635,29 +700,80 @@ class Wavefront:
         field_rspace: np.ndarray,
         *,
         wavelength: float,
-        ranges: Ranges,
-        pad: Optional[Sequence[int]] = None,
-        polarization: PolarizationDirection = "x",
+        grid_spacing: Optional[Sequence[float]] = None,
+        pad: Optional[Union[int, Sequence[int]]] = None,
+        polarization: Optional[PolarizationDirection] = None,
+        axis_labels: Optional[Sequence[str]] = None,
         metadata: Optional[Union[WavefrontMetadata, dict]] = None,
+        units: Optional[pmd_unit] = None,
     ) -> None:
-        if not pad:
-            # TODO: allow for single integer `pad`
-            pad = (40,) + (100,) * (field_rspace.ndim - 1)
-
-        if len(ranges) != field_rspace.ndim:
-            raise ValueError(
-                "'ranges' must have the same number of dimensions as `field_rspace`; "
-                "each should describe the cartesian range of the corresponding axis."
-            )
         self._phasors = None
         self._field_rspace = field_rspace
         self._field_rspace_shape = field_rspace.shape
         self._field_kspace = None
         self._wavelength = wavelength
-        self._ranges = tuple(ranges)
-        self._pad = WavefrontPadding.from_array(field_rspace, pad=pad, fix=True)
-        self.metadata = metadata
-        self.polarization = polarization
+
+        self._set_metadata(
+            metadata,
+            pad=pad,
+            polarization=polarization,
+            axis_labels=axis_labels,
+            grid_spacing=grid_spacing,
+            units=units,
+        )
+        self._check_metadata()
+
+    def _set_metadata(
+        self,
+        metadata: Any,
+        grid_spacing: Optional[Sequence[float]] = None,
+        pad: Optional[Union[int, Sequence[int]]] = None,
+        polarization: Optional[PolarizationDirection] = None,
+        axis_labels: Optional[Sequence[str]] = None,
+        units: Optional[pmd_unit] = None,
+    ) -> None:
+        if metadata is None:
+            metadata = WavefrontMetadata()
+
+        if isinstance(metadata, dict):
+            md = WavefrontMetadata.from_dict(metadata)
+        elif isinstance(metadata, WavefrontMetadata):
+            md = metadata
+        else:
+            raise ValueError(
+                f"Unsupported type for metadata: {type(metadata).__name__}. Expected "
+                f"'WavefrontMetadata', 'dict', or None to reset the metadata"
+            )
+
+        ndim = len(self._field_rspace_shape)
+        if isinstance(pad, int):
+            pad = (pad,) * ndim
+        if pad is None:
+            # TODO: investigate padding values
+            if md.pads:
+                pad = md.pads
+            else:
+                pad = (100,) * ndim
+
+        self._pad = WavefrontPadding.from_array(self.field_rspace, pad=pad, fix=True)
+        md.pads = self._pad.pad
+        if polarization is not None:
+            md.polarization = polarization
+        if axis_labels is not None:
+            md.mesh.axis_labels = tuple(axis_labels)
+        if grid_spacing is not None:
+            md.mesh.grid_spacing = tuple(grid_spacing)
+        if units is not None:
+            md.units = units
+
+        self._metadata = md
+
+    def _check_metadata(self) -> None:
+        if len(self.metadata.mesh.grid_spacing) != len(self._field_rspace_shape):
+            raise ValueError(
+                "'grid_spacing' must have the same number of dimensions as `field_rspace`; "
+                "each should describe the cartesian range of the corresponding axis."
+            )
 
     def __copy__(self) -> Wavefront:
         res = Wavefront.__new__(Wavefront)
@@ -666,50 +782,44 @@ class Wavefront:
         res._field_rspace = self._field_rspace
         res._field_kspace = self._field_kspace
         res._wavelength = self._wavelength
-        res._ranges = self._ranges
         res._pad = self._pad
         res._metadata = copy.deepcopy(self._metadata)
         return res
 
     def __deepcopy__(self, memo) -> Wavefront:
-        res = Wavefront.__new__(Wavefront)
-        res._phasors = self._phasors
-        res._field_rspace_shape = self._field_rspace_shape
+        res = self.__copy__()
         res._field_rspace = (
             np.copy(self._field_rspace) if self._field_rspace is not None else None
         )
         res._field_kspace = (
             np.copy(self._field_kspace) if self._field_kspace is not None else None
         )
-        res._wavelength = self._wavelength
-        res._ranges = self._ranges
-        res._pad = self._pad
-        res._metadata = copy.deepcopy(self._metadata)
         return res
 
     def __eq__(self, other: Any) -> bool:
         if type(self) is not type(other):
             return False
+
         return all(
             (
                 self._field_rspace_shape == other._field_rspace_shape,
                 np.all(self._field_rspace == other._field_rspace),
                 np.all(self._field_kspace == other._field_kspace),
                 self._wavelength == other._wavelength,
-                self._ranges == other._ranges,
                 self._pad == other._pad,
+                self.metadata == other.metadata,
             )
         )
 
     @classmethod
     def gaussian_pulse(
         cls,
-        dims: Tuple[int, int, int],
+        dims: Sequence[int],
         wavelength: float,
         nphotons: float,
         zR: float,
         sigma_t: float,
-        ranges: Ranges,
+        grid_spacing: Sequence[float],
         pad: Optional[Sequence[int]] = None,
         dtype=np.complex64,
     ):
@@ -719,6 +829,8 @@ class Wavefront:
 
         Parameters
         ----------
+        dims :
+            TODO update params
         wavelength : float
             Wavelength (lambda0) [m].
         nphotons : float
@@ -737,14 +849,14 @@ class Wavefront:
             nphotons=nphotons,
             zR=zR,
             sigma_t=sigma_t,
-            ranges=ranges,
+            grid_spacing=grid_spacing,
             grid=dims,
             dtype=dtype,
         )
         return cls(
             field_rspace=pulse,
             wavelength=wavelength,
-            ranges=ranges,
+            grid_spacing=grid_spacing,
             pad=pad,
         )
 
@@ -756,31 +868,24 @@ class Wavefront:
         For each dimension of the wavefront, this is the evenly-spaced set of values over
         its specified range.
         """
-        return cartesian_domain(ranges=self._ranges, grids=self._pad.grid)
-
-    @property
-    def _rspace_deltas(self) -> Tuple[float, ...]:
-        """Spacing for each dimension of the cartesian domain."""
-        return tuple(dim[1] - dim[0] for dim in self.rspace_domain)
+        return cartesian_domain(ranges=self.ranges, grids=self._pad.grid)
 
     def _calc_phasors(self) -> Tuple[np.ndarray, ...]:
         """Calculate phasors for each dimension of the cartesian domain."""
         coeffs = conversion_coeffs(
-            wavelength=self._wavelength, dim=len(self._field_rspace_shape)
+            wavelength=self._wavelength,
+            dim=len(self._field_rspace_shape),
         )
-
-        rspace_deltas = self._rspace_deltas
-
         shifts = get_shifts(
-            ranges=self._ranges,
+            ranges=self.ranges,
             pads=self._pad.pad,
-            deltas=rspace_deltas,
+            deltas=self.grid_spacing,
         )
         meshes_wkxky = nd_kspace_mesh(
             coeffs=coeffs,
             sizes=self._pad.grid,
             pads=self._pad.pad,
-            steps=rspace_deltas,
+            steps=self.grid_spacing,
         )
 
         return tuple(
@@ -813,32 +918,17 @@ class Wavefront:
     @property
     def polarization(self) -> PolarizationDirection:
         """Polarization direction."""
-        return self._polarization
+        return self.metadata.polarization
 
     @polarization.setter
     def polarization(self, polarization: PolarizationDirection) -> None:
         if polarization not in {"x", "y", "z"}:
-            raise ValueError(f"Invalid polarization direction: {polarization}")
-        self._polarization = polarization
+            raise ValueError(f"Unsupported polarization direction: {polarization}")
+        self.metadata.polarization = polarization
 
     @property
     def metadata(self) -> WavefrontMetadata:
         return self._metadata
-
-    @metadata.setter
-    def metadata(self, metadata: Any) -> None:
-        if metadata is None:
-            metadata = WavefrontMetadata()
-
-        if isinstance(metadata, dict):
-            self._metadata = WavefrontMetadata.from_dict(metadata)
-        elif isinstance(metadata, WavefrontMetadata):
-            self._metadata = metadata
-        else:
-            raise ValueError(
-                f"Unsupported type for metadata: {type(metadata).__name__}. Expected "
-                f"'WavefrontMetadata', 'dict', or None to reset the metadata"
-            )
 
     def _fft(self):
         """
@@ -898,8 +988,15 @@ class Wavefront:
         return self._pad
 
     @property
+    def grid_spacing(self) -> Tuple[float, ...]:
+        return self.metadata.mesh.grid_spacing
+
+    @property
     def ranges(self):
-        return self._ranges
+        return get_ranges_for_grid_spacing(
+            grid_spacing=self.metadata.mesh.grid_spacing,
+            dims=self.field_rspace.shape,
+        )
 
     def focus(
         self,
@@ -934,7 +1031,7 @@ class Wavefront:
 
         self._field_rspace = self.field_rspace * thin_lens_kernel_xy(
             wavelength=self.wavelength,
-            ranges=self._ranges,
+            ranges=self.ranges,
             grid=self._pad.grid,
             f_lens_x=focus[0],
             f_lens_y=focus[1],
@@ -980,7 +1077,7 @@ class Wavefront:
             domains_kxky=domains_kxky(
                 grids=self._pad.grid,
                 pads=self._pad.pad,
-                deltas=self._rspace_deltas,
+                deltas=self.grid_spacing,
             ),
             wavelength=self._wavelength,
             z=float(distance),
@@ -1007,14 +1104,18 @@ class Wavefront:
         ylim: Optional[Tuple[int, int]] = None,
         tight_layout: bool = True,
         save: Optional[AnyPath] = None,
+        transpose: bool = False,
     ):
         """
         Plot the projection onto the given plane.
 
         Parameters
         ----------
-        plane : str or (int, int)
-            Plane to plot, e.g., "xy" or (1, 2).
+        plane : str, (int, int), or sequence of str
+            Plane to plot. With axis_labels of "xyz", the following would be equivalent:
+            * ``"xy"``
+            * (1, 2)
+            * ("x", "y")
         rspace : bool, default=True
             Plot the real/cartesian space data.
         show_real : bool
@@ -1045,6 +1146,8 @@ class Wavefront:
             Y axis limits.
         tight_layout : bool, default=True
             Set a tight layout.
+        transpose : bool, default=False
+            Transpose the data for plotting.
 
         Returns
         -------
@@ -1056,17 +1159,11 @@ class Wavefront:
         else:
             data = self.field_kspace
 
-        sum_axis = {
-            # TODO: when standardized, this will be xyz instead of txy
-            # "xy": 0,
-            # (1, 2): 0,
-            "xy": 2,
-            (0, 1): 2,
-            "xz": 1,
-            (0, 2): 1,
-            "yz": 0,
-            (1, 2): 0,
-        }[plane]
+        if transpose:
+            data = data.T
+
+        axis_indices = get_axis_indices(self.metadata.mesh.axis_labels, plane)
+        sum_axis = tuple(axis for axis in range(data.ndim) if axis not in axis_indices)
 
         if axs is None:
             fig, gs = plt.subplots(
@@ -1141,15 +1238,10 @@ class Wavefront:
 
         field = FieldFile.from_file(h5)
 
-        # Z0 = np.pi*119.9169832 # V^2/W exactly
-        # factorGenesis = gridsize / np.sqrt(2.0 * Z0) #factor to genesis units
-        # unitSI = E_complex['x'].attrs['unitSI'] # factor to convert to V/m
-        # NOTE: https://github.com/slaclab/lume-genesis/blob/master/docs/notes/genesis_fields.pdf
-        _nx, _ny, nz = field.dfl.shape
-        z_low = field.param.refposition
-        z_high = z_low + field.param.slicespacing * (nz - 1)
-        if isinstance(pad, int):
-            pad = (pad, pad, pad)
+        # NOTE: refer to here for more information:
+        # https://github.com/slaclab/lume-genesis/blob/master/docs/notes/genesis_fields.pdf
+        Z0 = np.pi * 119.9169832  # V^2/W exactly
+        genesis_to_v_over_m = np.sqrt(2.0 * Z0) / field.param.gridsize
 
         # TODO: to test:
         #   1. write gaussian field
@@ -1160,17 +1252,23 @@ class Wavefront:
         #   1. Run half genesis sim - get output
         #   2. Run full genesis sim - get output
         #   3. Drift (1) and compare with (2)
-        return cls(
-            field_rspace=field.dfl,
+
+        # field.param.gridsize = 2 * field.dgrid / (ngrid - 1)
+        wf = cls(
+            field_rspace=field.dfl * genesis_to_v_over_m,
             wavelength=field.param.wavelength,
-            ranges=[
-                (-field.param.gridsize, field.param.gridsize),
-                (-field.param.gridsize, field.param.gridsize),
-                (z_low, z_high),
-            ],
+            grid_spacing=(
+                field.param.gridsize,
+                field.param.gridsize,
+                field.param.slicespacing,
+            ),
             pad=pad,
             polarization="x",
+            axis_labels="xyz",
+            units=known_unit["V/m"],
         )
+        wf.metadata.mesh.grid_global_offset = (0.0, 0.0, field.param.refposition)
+        return wf
 
     @classmethod
     def _from_h5_file(cls, h5: h5py.File) -> Wavefront:
@@ -1195,18 +1293,16 @@ class Wavefront:
     #
     # wavefront = Wavefront.from_file("something.h5", identifier=5)
 
-    def _write(self, h5: h5py.File, metadata: WavefrontMetadata):
+    def _write_file(self, h5: h5py.File):
+        md = self.metadata
         base_path_template = "/data/%T/"
-        if metadata.wavefront_index is not None:
+        if md.index is not None:
             wavefront_base_path_template = "/wavefront/%T/"
         else:
             # For us, at least, second %T doesn't make much sense:
             wavefront_base_path_template = "/wavefront"
-
-        wavefront_base_path = wavefront_base_path_template.replace(
-            "%T", str(metadata.wavefront_index)
-        )
-        base_path = base_path_template.replace("%T", str(metadata.iteration.iteration))
+        wavefront_base_path = wavefront_base_path_template.replace("%T", str(md.index))
+        base_path = base_path_template.replace("%T", str(md.iteration.iteration))
 
         # TODO: yes, this belongs in 'writers' - but I'm not sure what could/should be
         # reused/pulled apart/rewritten/etc just yet.
@@ -1215,7 +1311,7 @@ class Wavefront:
             {
                 "basePath": base_path_template,
                 "dataType": "openPMD",
-                "openPMD": metadata.base.spec_version,
+                "openPMD": md.base.spec_version,
                 # No particles, meshes in the file - per PMD spec:
                 # - note: if this attribute is missing, the file is interpreted as if it
                 #   contains *no particle records*! If the attribute is set, the group behind
@@ -1226,60 +1322,45 @@ class Wavefront:
                 # "openPMDextension": "BeamPhysics;SpeciesType",
                 "openPMDextension": "Wavefront",
                 "wavefrontFieldPath": wavefront_base_path_template,  # TODO: add to standard
-                **metadata.base.attrs,
+                **md.base.attrs,
             },
         )
 
         wavefront_path = base_path + wavefront_base_path
         base_group = h5.create_group(base_path)
-        writers.write_attrs(base_group, metadata.iteration.attrs)
+        writers.write_attrs(base_group, md.iteration.attrs)
 
         electric_field_path = wavefront_path + "electricField/"
         efield_group = h5.create_group(electric_field_path)
+        self.write_group(efield_group)
 
-        # TODO: add attributes from 'mesh based records'
-        # `geometry`
-        # `geometryParameters`
-        # `axisLabels`
-        # `gridSpacing`
-        # `gridGlobalOffset`
-        # `gridUnitSI`
-        # `gridUnitDimension`
-        # `position`
+    def write(self, h5: Union[h5py.File, pathlib.Path, str]) -> None:
+        """Write the Wavefront in OpenPMD format."""
+        if isinstance(h5, h5py.File):
+            return self._write_file(h5)
+
+        with h5py.File(h5, "w") as h5p:
+            return self._write_file(h5p)
+
+    def write_group(self, group: h5py.Group) -> None:
+        """Write the Wavefront in OpenPMD format to a specific HDF group."""
+
         writers.write_attrs(
-            efield_group,
+            group,
             {
                 "photonEnergy": self.photon_energy,
-                "photonEnergyUnitSI": units.known_unit["eV"].unitSI,
-                "photonEnergyUnitDimension": units.known_unit["eV"].unitDimension,
+                "photonEnergyUnitSI": known_unit["eV"].unitSI,
+                "photonEnergyUnitDimension": known_unit["eV"].unitDimension,
                 "temporalDomain": "time",
                 "spatialDomain": "r",
-                **metadata.attrs,
+                **self.metadata.attrs,
             },
         )
 
         writers.write_component_data(
-            efield_group,
+            group,
             name=self.polarization,
             data=self.field_rspace,
-            unit=units.known_unit["V/m"],
+            unit=self.metadata.units,
+            attrs=self.metadata.mesh.attrs,
         )
-
-    def write(
-        self,
-        h5: Union[h5py.File, pathlib.Path, str],
-        *,
-        metadata: Optional[Union[WavefrontMetadata, dict]] = None,
-    ) -> None:
-        """Write the Wavefront in OpenPMD format."""
-
-        if metadata is None:
-            metadata = WavefrontMetadata()
-        elif isinstance(metadata, dict):
-            metadata = WavefrontMetadata(**metadata)
-
-        if isinstance(h5, h5py.File):
-            return self._write(h5, metadata=metadata)
-
-        with h5py.File(h5, "w") as h5p:
-            return self._write(h5p, metadata=metadata)

@@ -1,4 +1,5 @@
 import copy
+import pathlib
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,6 +10,7 @@ from pmd_beamphysics.wavefront import (
     Plane,
     WavefrontPadding,
     get_num_fft_workers,
+    get_range_for_grid_spacing,
     set_num_fft_workers,
 )
 
@@ -24,7 +26,7 @@ def wavefront() -> Wavefront:
     return Wavefront.gaussian_pulse(
         dims=(11, 21, 21),
         wavelength=1.35e-8,
-        ranges=((0.0, 50.0), (-3e-4, 3e-4), (-3e-4, 3e-4)),
+        grid_spacing=(4.54, 2.9e-5, 2.9e-5),
         pad=(40, 100, 100),
         nphotons=1e12,
         zR=2.0,
@@ -37,6 +39,32 @@ def wavefront() -> Wavefront:
 )
 def projection_plane(request: pytest.FixtureRequest) -> str:
     return request.param
+
+
+@pytest.mark.parametrize(
+    ("grid_spacing", "dim", "expected_low", "expected_high"),
+    [
+        pytest.param(
+            range_[1] - range_[0],
+            len(range_),
+            range_[0],
+            range_[-1],
+            id=f"-{range_[0]}_to_{range_[-1]}_{len(range_)}_steps",
+        )
+        for range_ in [
+            np.linspace(-50, 50, 101),
+            np.linspace(-50, 49, 100),
+        ]
+    ],
+)
+def test_get_range_for_grid_spacing(
+    grid_spacing: float,
+    dim: int,
+    expected_low: float,
+    expected_high: float,
+) -> None:
+    low, high = get_range_for_grid_spacing(grid_spacing=grid_spacing, dim=dim)
+    assert (low, high) == (expected_low, expected_high)
 
 
 def test_smoke_drift_z_in_place(wavefront: Wavefront) -> None:
@@ -115,3 +143,18 @@ def test_plot_projection(wavefront: Wavefront, projection_plane: Plane) -> None:
     plt.suptitle(f"rspace - {projection_plane}")
     wavefront.plot(projection_plane, rspace=False)
     plt.suptitle(f"kspace - {projection_plane}")
+
+
+def test_write_and_validate(
+    wavefront: Wavefront,
+    tmp_path: pathlib.Path,
+    request: pytest.FixtureRequest,
+):
+    from openpmd_validator.check_h5 import check_file as pmd_validator
+
+    fn = tmp_path / f"{request.node.name}.h5"
+    wavefront.write(fn)
+
+    errors, warnings, *_ = pmd_validator(fn, verbose=True)
+    assert errors == 0
+    assert warnings == 0

@@ -10,7 +10,6 @@ dependencies:
   - h5py
   - python-dateutil
   # Developer
-  - openpmd-validator
   - pytest
   - jupyterlab>=3
   - pygments
@@ -22,3 +21,4 @@ dependencies:
   - pip
   - pip:
       - mkdocstrings-python
+      - openpmd-validator>=2

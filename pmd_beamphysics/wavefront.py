@@ -542,6 +542,32 @@ def create_gaussian_pulse_3d_with_q(
     return pulse.astype(dtype)
 
 
+def max_divergence_padding_factor(
+    theta_max: float,
+    drift_distance: float,
+    beam_size: float,
+) -> float:
+    """
+    Calculate the padding factor for the maximum divergence scenario.
+
+    Parameters
+    ----------
+    theta_max : float
+        Maximum divergence [rad]
+    drift_distance : float
+        Drift propagation distance [m]
+    beam_size : float
+        Size of the beam at z=0 [m]
+
+    Returns
+    -------
+    float
+        Factor to increase the initial number of grid points, per dimension.
+    """
+    # TODO: balticfish
+    return (theta_max * drift_distance) / beam_size
+
+
 @dataclasses.dataclass(frozen=True)
 class WavefrontPadding:
     """
@@ -773,6 +799,11 @@ class Wavefront:
             raise ValueError(
                 "'grid_spacing' must have the same number of dimensions as `field_rspace`; "
                 "each should describe the cartesian range of the corresponding axis."
+            )
+
+        if len(self.metadata.mesh.axis_labels) != len(self._field_rspace_shape):
+            raise ValueError(
+                "'axis_labels' must have the same number of dimensions as `field_rspace`"
             )
 
     def __copy__(self) -> Wavefront:
@@ -1184,14 +1215,17 @@ class Wavefront:
 
         def plot(dat, title: str):
             ax = remaining_axes.pop(0)
-            ax.imshow(np.sum(dat, axis=sum_axis), cmap=cmap)
+            img = ax.imshow(np.sum(dat, axis=sum_axis), cmap=cmap)
             if xlim is not None:
                 ax.set_xlim(xlim)
             if ylim is not None:
                 ax.set_ylim(ylim)
             if not ax.get_title():
                 ax.set_title(title)
+            images.append(img)
+            return img
 
+        images = []
         if show_real:
             plot(np.real(data), title="Real")
 
@@ -1212,7 +1246,7 @@ class Wavefront:
                 logger.info(f"Saving plot to {save!r}")
                 fig.savefig(save)
 
-        return fig, axs
+        return fig, axs, images
 
     @classmethod
     def from_genesis4(

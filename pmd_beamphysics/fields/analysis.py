@@ -7,6 +7,13 @@ from scipy.optimize import brent, brentq
 import numpy as np
 
 
+# Numpy migration per https://numpy.org/doc/stable/numpy_2_0_migration_guide.html
+if np.lib.NumpyVersion(np.__version__) >= '2.0.0':
+    from numpy import trapezoid
+else:
+    # Support 'trapz' from numpy 1.0
+    from numpy import trapz as trapezoid
+
 
 #----------------------
 # Analysis
@@ -36,7 +43,7 @@ def accelerating_voltage_and_phase(z, Ez, frequency):
     fz =Ez*np.exp(-1j*k*z)
     
     # Integrate
-    Z = np.trapezoid(fz, z)
+    Z = trapezoid(fz, z)
     
     # Max voltage at phase
     voltage = np.abs(Z)

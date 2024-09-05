@@ -71,7 +71,7 @@ def test_smoke_drift_z_in_place(wavefront: Wavefront) -> None:
     # Implicitly calculates the FFT:
     wavefront.drift(direction="z", distance=0.0, inplace=True)
     # Use the property to calculate the inverse fft:
-    wavefront.field_rspace
+    wavefront.rmesh
 
 
 def test_smoke_drift_z(wavefront: Wavefront) -> None:
@@ -109,33 +109,31 @@ def test_padding_fix(padding: WavefrontPadding, expected: WavefrontPadding) -> N
 
 def test_smoke_properties(wavefront: Wavefront) -> None:
     assert len(wavefront.phasors) == 3
-    assert wavefront.field_rspace.shape == (11, 21, 21)
-    assert wavefront.field_kspace.shape == wavefront.pad.get_padded_shape(
-        wavefront.field_rspace
-    )
+    assert wavefront.rmesh.shape == (11, 21, 21)
+    assert wavefront.kmesh.shape == wavefront.pad.get_padded_shape(wavefront.rmesh)
     assert np.isclose(wavefront.wavelength, 1.35e-8)
     assert wavefront.pad.grid == (11, 21, 21)
     assert wavefront.pad.pad == (44, 100, 100)
 
 
 def test_copy(wavefront: Wavefront) -> None:
-    wavefront.field_rspace
-    wavefront.field_kspace
+    wavefront.rmesh
+    wavefront.kmesh
     copied = copy.copy(wavefront)
     assert copied == wavefront
     assert copied is not wavefront
-    assert copied.field_rspace is wavefront.field_rspace
-    assert copied.field_kspace is wavefront.field_kspace
+    assert copied.rmesh is wavefront.rmesh
+    assert copied.kmesh is wavefront.kmesh
 
 
 def test_deepcopy(wavefront: Wavefront) -> None:
-    wavefront.field_rspace
-    wavefront.field_kspace
+    wavefront.rmesh
+    wavefront.kmesh
     copied = copy.deepcopy(wavefront)
     assert copied == wavefront
     assert copied is not wavefront
-    assert copied.field_rspace is not wavefront.field_rspace
-    assert copied.field_kspace is not wavefront.field_kspace
+    assert copied.rmesh is not wavefront.rmesh
+    assert copied.kmesh is not wavefront.kmesh
 
 
 def test_plot_projection(wavefront: Wavefront, projection_plane: Plane) -> None:

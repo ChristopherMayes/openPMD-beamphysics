@@ -21,4 +21,4 @@ dependencies:
   - pip
   - pip:
       - mkdocstrings-python
-      - openpmd-validator>=2
+      - git+https://github.com/openPMD/openPMD-validator@2.0.X

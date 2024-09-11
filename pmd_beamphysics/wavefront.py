@@ -497,11 +497,11 @@ def create_gaussian_pulse_3d_with_q(
         raise ValueError("`grid` must be of length 3 for a 3D gaussian")
 
     ranges = get_ranges_for_grid_spacing(grid_spacing=grid_spacing, dims=grid)
-    min_t, max_t = ranges[0]
+    min_t, max_t = ranges[-1]
 
     k0 = calculate_k0(wavelength)
     t_mid = (max_t + min_t) / 2.0
-    t_mesh, x_mesh, y_mesh = nd_space_mesh(ranges=ranges, sizes=grid)
+    x_mesh, y_mesh, t_mesh = nd_space_mesh(ranges=ranges, sizes=grid)
     qx = 1j * zR
     qy = 1j * zR
 
@@ -514,9 +514,7 @@ def create_gaussian_pulse_3d_with_q(
     eta = 2.0 * k0 * zR * sigma_t / np.sqrt(np.pi)
 
     pulse = np.sqrt(eta) * np.sqrt(nphotons) * ux * uy * ut
-
-    # TODO a bit of swapping without changing the gaussian pulse
-    return np.moveaxis(pulse.astype(dtype), 0, -1)
+    return pulse.astype(dtype)
 
 
 def transverse_divergence_padding_factor(
@@ -863,16 +861,13 @@ class Wavefront:
         -------
         Wavefront
         """
-        # TODO a bit of swapping without changing the gaussian pulse
-        nx, ny, nz = dims
-        gx, gy, gz = grid_spacing
         pulse = create_gaussian_pulse_3d_with_q(
             wavelength=wavelength,
             nphotons=nphotons,
             zR=zR,
             sigma_t=sigma_t,
-            grid_spacing=(gz, gx, gy),
-            grid=(nz, nx, ny),
+            grid_spacing=grid_spacing,
+            grid=dims,
             dtype=dtype,
         )
         return cls(

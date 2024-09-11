@@ -24,9 +24,9 @@ def _set_fft_jobs() -> None:
 @pytest.fixture
 def wavefront() -> Wavefront:
     return Wavefront.gaussian_pulse(
-        dims=(11, 21, 21),
+        dims=(21, 21, 11),
         wavelength=1.35e-8,
-        grid_spacing=(4.54, 2.9e-5, 2.9e-5),
+        grid_spacing=(2.9e-5, 2.9e-5, 4.54),
         pad=(40, 100, 100),
         nphotons=1e12,
         zR=2.0,
@@ -69,13 +69,13 @@ def test_get_range_for_grid_spacing(
 
 def test_smoke_drift_z_in_place(wavefront: Wavefront) -> None:
     # Implicitly calculates the FFT:
-    wavefront.drift(direction="z", distance=0.0, inplace=True)
+    wavefront.drift(distance=0.0, inplace=True)
     # Use the property to calculate the inverse fft:
     wavefront.rmesh
 
 
 def test_smoke_drift_z(wavefront: Wavefront) -> None:
-    new = wavefront.drift(direction="z", distance=0.0, inplace=False)
+    new = wavefront.drift(distance=0.0, inplace=False)
     assert new is not wavefront
 
 
@@ -109,11 +109,14 @@ def test_padding_fix(padding: WavefrontPadding, expected: WavefrontPadding) -> N
 
 def test_smoke_properties(wavefront: Wavefront) -> None:
     assert len(wavefront.phasors) == 3
-    assert wavefront.rmesh.shape == (11, 21, 21)
+    assert wavefront.rmesh.shape == (21, 21, 11)
     assert wavefront.kmesh.shape == wavefront.pad.get_padded_shape(wavefront.rmesh)
     assert np.isclose(wavefront.wavelength, 1.35e-8)
-    assert wavefront.pad.grid == (11, 21, 21)
-    assert wavefront.pad.pad == (44, 100, 100)
+    assert wavefront.pad.grid == (21, 21, 11)
+    assert wavefront.pad.pad == (42, 100, 110)
+
+    for dim, pad in zip(wavefront.pad.grid, wavefront.pad.pad):
+        assert (dim + pad) % 2 == 1
 
 
 def test_copy(wavefront: Wavefront) -> None:

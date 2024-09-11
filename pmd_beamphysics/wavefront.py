@@ -1051,12 +1051,15 @@ class Wavefront:
             wavefront = copy.copy(self)
             return wavefront.focus(plane, focus, inplace=True)
 
-        self._rmesh = self.rmesh * thin_lens_kernel_xy(
-            wavelength=self.wavelength,
-            ranges=self.ranges,
-            grid=self._pad.grid,
-            f_lens_x=focus[0],
-            f_lens_y=focus[1],
+        self._rmesh = (
+            self.rmesh
+            * thin_lens_kernel_xy(
+                wavelength=self.wavelength,
+                ranges=self.ranges,
+                grid=self._pad.grid,
+                f_lens_x=focus[0],
+                f_lens_y=focus[1],
+            )[:, :, np.newaxis]
         )
         # Invalidate the spectral data
         self._kmesh = None

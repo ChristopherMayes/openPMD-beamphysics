@@ -369,7 +369,7 @@ def conversion_coeffs(wavelength: float, dim: int) -> Tuple[float, ...]:
     """
     k0 = calculate_k0(wavelength)
     hbar = scipy.constants.hbar / scipy.constants.e * 1.0e15  # fs-eV
-    return tuple([2.0 * np.pi * hbar] + [2.0 * np.pi / k0] * (dim - 1))
+    return tuple([2.0 * np.pi / k0] * (dim - 1) + [2.0 * np.pi * hbar])
 
 
 def cartesian_domain(
@@ -421,11 +421,12 @@ def drift_propagator_paraxial(
     wavelength: float,
 ):
     """Fresnel propagator in paraxial approximation to distance z [m]."""
-    return kmesh * drift_kernel_paraxial(
+    kernel = drift_kernel_paraxial(
         transverse_kspace_grid=transverse_kspace_grid,
         z=z,
         wavelength=wavelength,
     )
+    return kmesh * kernel[:, :, np.newaxis]
 
 
 def thin_lens_kernel_xy(
@@ -454,7 +455,7 @@ def thin_lens_kernel_xy(
     np.ndarray
     """
     k0 = calculate_k0(wavelength)
-    xx, yy = nd_space_mesh(ranges[1:], grid[1:])
+    xx, yy = nd_space_mesh(ranges[:2], grid[:2])
     return np.exp(-1j * k0 / 2.0 * (xx**2 / f_lens_x + yy**2 / f_lens_y))
 
 
@@ -513,7 +514,9 @@ def create_gaussian_pulse_3d_with_q(
     eta = 2.0 * k0 * zR * sigma_t / np.sqrt(np.pi)
 
     pulse = np.sqrt(eta) * np.sqrt(nphotons) * ux * uy * ut
-    return pulse.astype(dtype)
+
+    # TODO a bit of swapping without changing the gaussian pulse
+    return np.moveaxis(pulse.astype(dtype), 0, -1)
 
 
 def transverse_divergence_padding_factor(
@@ -860,13 +863,16 @@ class Wavefront:
         -------
         Wavefront
         """
+        # TODO a bit of swapping without changing the gaussian pulse
+        nx, ny, nz = dims
+        gx, gy, gz = grid_spacing
         pulse = create_gaussian_pulse_3d_with_q(
             wavelength=wavelength,
             nphotons=nphotons,
             zR=zR,
             sigma_t=sigma_t,
-            grid_spacing=grid_spacing,
-            grid=dims,
+            grid_spacing=(gz, gx, gy),
+            grid=(nz, nx, ny),
             dtype=dtype,
         )
         return cls(
@@ -874,7 +880,7 @@ class Wavefront:
             wavelength=wavelength,
             grid_spacing=grid_spacing,
             pad=pad,
-            axis_labels="zxy",
+            axis_labels="xyz",
             longitudinal_axis="z",
         )
 

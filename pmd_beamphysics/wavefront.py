@@ -16,7 +16,7 @@ import scipy.fft
 
 from .metadata import PolarizationDirection, WavefrontMetadata
 from . import writers
-from .units import pmd_unit, known_unit
+from .units import known_unit
 
 logger = logging.getLogger(__name__)
 
@@ -404,52 +404,28 @@ def domains_omega_thx_thy(
     )
 
 
-def domains_kxky(
-    grids: Sequence[int],
-    pads: Sequence[int],
-    deltas: Sequence[float],
-):
-    """
-    Transverse Fourier space domain x and y.
-
-    In units of the scipy FFT.
-
-    Parameters
-    ----------
-    grids : tuple of ints
-        Data gridding.
-    pads : tuple of ints
-        Number of padding points for each axis
-    deltas : tuple of floats
-        Grid delta steps in cartesian space.
-    """
-    assert len(grids) == len(pads) == len(deltas)
-    return nd_kspace_mesh(
-        coeffs=(1.0,) * (len(grids) - 1),
-        sizes=grids[1:],
-        pads=pads[1:],
-        steps=deltas[1:],
-    )
-
-
-def drift_kernel_z(
-    domains_kxky: List[np.ndarray],
+def drift_kernel_paraxial(
+    transverse_kspace_grid: List[np.ndarray],
     z: float,
     wavelength: float,
 ):
     """Drift transfer function in Z [m] paraxial approximation."""
-    kx, ky = domains_kxky
+    kx, ky = transverse_kspace_grid
     return np.exp(-1j * z * np.pi * wavelength * (kx**2 + ky**2))
 
 
-def drift_propagator_z(
+def drift_propagator_paraxial(
     kmesh: np.ndarray,
-    domains_kxky: List[np.ndarray],
+    transverse_kspace_grid: List[np.ndarray],
     z: float,
     wavelength: float,
 ):
     """Fresnel propagator in paraxial approximation to distance z [m]."""
-    return kmesh * drift_kernel_z(domains_kxky=domains_kxky, z=z, wavelength=wavelength)
+    return kmesh * drift_kernel_paraxial(
+        transverse_kspace_grid=transverse_kspace_grid,
+        z=z,
+        wavelength=wavelength,
+    )
 
 
 def thin_lens_kernel_xy(
@@ -540,7 +516,7 @@ def create_gaussian_pulse_3d_with_q(
     return pulse.astype(dtype)
 
 
-def max_divergence_padding_factor(
+def transverse_divergence_padding_factor(
     theta_max: float,
     drift_distance: float,
     beam_size: float,
@@ -551,7 +527,7 @@ def max_divergence_padding_factor(
     Parameters
     ----------
     theta_max : float
-        Maximum divergence [rad]
+        Maximum transverse divergence [rad]
     drift_distance : float
         Drift propagation distance [m]
     beam_size : float
@@ -562,8 +538,7 @@ def max_divergence_padding_factor(
     float
         Factor to increase the initial number of grid points, per dimension.
     """
-    # TODO: balticfish
-    return (theta_max * drift_distance) / beam_size
+    return 2.0 * (theta_max * drift_distance) / beam_size
 
 
 @dataclasses.dataclass(frozen=True)
@@ -687,11 +662,11 @@ class Wavefront:
     Parameters
     ----------
     rmesh : np.ndarray
-        Cartesian space field data.
+        Cartesian space field data. [V/m]
     wavelength : float
-        Wavelength (lambda0) [m].
+        Wavelength. [m]
     grid_spacing : sequence of float
-        Grid spacing for the corresponding dimensions.
+        Grid spacing for the corresponding dimensions. [m]
     polarization : {"x", "y", "z"}, default="x"
         Direction of polarization.  The default assumes a planar undulator
         with electric field polarization in the X direction.
@@ -699,10 +674,9 @@ class Wavefront:
     metadata : Metadata, optional
         OpenPMD-specific metadata.
     pad : int or tuple of int, optional
-        Padding for each of the dimensions.  Defaults to 40 for the time
-        dimension and 100 for the remaining dimensions.
-    unit : pmd_unit, default=V/m
-        Units of `rmesh`.
+    pad_theta_max : float, default=5e-5
+    pad_drift_distance : float, default=1.0
+    pad_beam_size : float, default=1e-4
 
     See Also
     --------
@@ -729,7 +703,10 @@ class Wavefront:
         polarization: Optional[PolarizationDirection] = None,
         axis_labels: Optional[Sequence[str]] = None,
         metadata: Optional[Union[WavefrontMetadata, dict]] = None,
-        units: Optional[pmd_unit] = None,
+        pad_theta_max: float = 5e-5,
+        pad_drift_distance: float = 1.0,
+        pad_beam_size: float = 1e-4,
+        longitudinal_axis: Optional[str] = None,
     ) -> None:
         self._phasors = None
         self._rmesh = rmesh
@@ -737,15 +714,28 @@ class Wavefront:
         self._kmesh = None
         self._wavelength = wavelength
 
+        if pad is None:
+            pad_factor = transverse_divergence_padding_factor(
+                theta_max=pad_theta_max,
+                drift_distance=pad_drift_distance,
+                beam_size=pad_beam_size,
+            )
+            # TODO: current factor is just for transverse, we need to calculate
+            # for longitudinal as well
+            if pad_factor < 1:
+                pad = (0, 0, 0)
+            else:
+                pad = tuple((dim * pad_factor) - dim for dim in rmesh.shape)
+
         self._set_metadata(
             metadata,
             pad=pad,
             polarization=polarization,
             axis_labels=axis_labels,
             grid_spacing=grid_spacing,
-            units=units,
         )
         self._check_metadata()
+        self._longitudinal_axis = longitudinal_axis or self.axis_labels[-1]
 
     def _set_metadata(
         self,
@@ -754,7 +744,7 @@ class Wavefront:
         pad: Optional[Union[int, Sequence[int]]] = None,
         polarization: Optional[PolarizationDirection] = None,
         axis_labels: Optional[Sequence[str]] = None,
-        units: Optional[pmd_unit] = None,
+        # units: Optional[pmd_unit] = None,
     ) -> None:
         if metadata is None:
             metadata = WavefrontMetadata()
@@ -773,7 +763,6 @@ class Wavefront:
         if isinstance(pad, int):
             pad = (pad,) * ndim
         if pad is None:
-            # TODO: investigate padding values
             if md.pads:
                 pad = md.pads
             else:
@@ -787,8 +776,8 @@ class Wavefront:
             md.mesh.axis_labels = tuple(axis_labels)
         if grid_spacing is not None:
             md.mesh.grid_spacing = tuple(grid_spacing)
-        if units is not None:
-            md.units = units
+        # if units is not None:
+        md.units = known_unit["V/m"]
 
         self._metadata = md
 
@@ -813,6 +802,8 @@ class Wavefront:
         res._wavelength = self._wavelength
         res._pad = self._pad
         res._metadata = copy.deepcopy(self._metadata)
+        # TODO there are more fields now
+        res._longitudinal_axis = self._longitudinal_axis
         return res
 
     def __deepcopy__(self, memo) -> Wavefront:
@@ -883,6 +874,8 @@ class Wavefront:
             wavelength=wavelength,
             grid_spacing=grid_spacing,
             pad=pad,
+            axis_labels="zxy",
+            longitudinal_axis="z",
         )
 
     @property
@@ -1002,8 +995,7 @@ class Wavefront:
     @property
     def photon_energy(self) -> float:
         """Photon energy [eV]."""
-        # TODO check
-        h = scipy.constants.value("Planck constant in eV/Hz")
+        h = scipy.constants.value("Planck constant in eV/Hz") / (2 * np.pi)
         freq = scipy.constants.speed_of_light / self.wavelength
         return h * freq
 
@@ -1022,6 +1014,10 @@ class Wavefront:
             grid_spacing=self.metadata.mesh.grid_spacing,
             dims=self.rmesh.shape,
         )
+
+    @property
+    def axis_labels(self):
+        return self.metadata.mesh.axis_labels
 
     def focus(
         self,
@@ -1067,19 +1063,16 @@ class Wavefront:
 
     def drift(
         self,
-        direction: Union[str, int],
         distance: float,
         *,
         inplace: bool = False,
     ) -> Wavefront:
         """
-        Drift this Wavefront along `direction` in meters.
+        Drift this Wavefront along the longitudinal direction in meters.
 
         Parameters
         ----------
-        direction : str or (int, int)
-            Propagation direction dimension name (e.g., "z") or dimension index (e.g., `2`)
-        z_prop : float
+        distance : float
             Distance in meters.
         inplace : bool, default=False
             Perform the operation in-place on this wavefront object.
@@ -1090,20 +1083,25 @@ class Wavefront:
             This object if `inplace=True` or a new copy if `inplace=False`.
         """
 
-        if direction not in {"z", 2}:
-            raise NotImplementedError(f"Unsupported propagation direction: {direction}")
-
         if not inplace:
             wavefront = copy.copy(self)
-            return wavefront.drift(direction, distance, inplace=True)
+            return wavefront.drift(distance, inplace=True)
 
-        self._kmesh = drift_propagator_z(
+        indices = [
+            idx
+            for idx, label in enumerate(self.axis_labels)
+            if label != self._longitudinal_axis
+        ]
+        transverse_kspace_grid = nd_kspace_mesh(
+            coeffs=(1.0,) * len(self._rmesh_shape),
+            sizes=[self._pad.grid[idx] for idx in indices],
+            pads=[self._pad.pad[idx] for idx in indices],
+            steps=[self.grid_spacing[idx] for idx in indices],
+        )
+
+        self._kmesh = drift_propagator_paraxial(
             kmesh=self.kmesh,
-            domains_kxky=domains_kxky(
-                grids=self._pad.grid,
-                pads=self._pad.pad,
-                deltas=self.grid_spacing,
-            ),
+            transverse_kspace_grid=transverse_kspace_grid,
             wavelength=self._wavelength,
             z=float(distance),
         )
@@ -1293,7 +1291,7 @@ class Wavefront:
             pad=pad,
             polarization="x",
             axis_labels="xyz",
-            units=known_unit["V/m"],
+            longitudinal_axis="z",
         )
         wf.metadata.mesh.grid_global_offset = (0.0, 0.0, field.param.refposition)
         return wf

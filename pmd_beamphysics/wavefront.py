@@ -327,6 +327,7 @@ def fix_padding(
 
 
 def get_shifts(
+    dims: Sequence[int],
     ranges: Ranges,
     pads: Sequence[int],
     deltas: Sequence[float],
@@ -336,6 +337,8 @@ def get_shifts(
 
     Parameters
     ----------
+    dims :
+        Grid dimensions
     ranges : tuple of (float, float) pairs
         Low and high domain range for each dimension of the wavefront.
     pads : tuple of ints
@@ -351,8 +354,17 @@ def get_shifts(
 
     assert len(pads) == len(deltas) > 1
     spans = tuple(domain[1] - domain[0] for domain in ranges)
+
+    def fix_even(dim: int, delta: float) -> float:
+        # For odd number of grid points, no fix is required
+        if dim % 2 == 1:
+            return 0.0
+        # For an even number of grid points, we add half a grid step
+        return delta / 2.0
+
     return tuple(
-        span / 2.0 + pad * delta for span, pad, delta in zip(spans, pads, deltas)
+        span / 2.0 + pad * delta + fix_even(dim, delta)
+        for dim, span, pad, delta in zip(dims, spans, pads, deltas)
     )
 
 
@@ -365,10 +377,10 @@ def conversion_coeffs(wavelength: float, dim: int) -> Tuple[float, ...]:
     """
     Conversion coefficients to (eV, radians, radians, ...).
 
-    Omega, theta-x, theta-y.
+    Theta-x, theta-y, omega.
     """
     k0 = calculate_k0(wavelength)
-    hbar = scipy.constants.hbar / scipy.constants.e * 1.0e15  # fs-eV
+    hbar = scipy.constants.hbar / scipy.constants.e * scipy.constants.c  # eV-m
     return tuple([2.0 * np.pi / k0] * (dim - 1) + [2.0 * np.pi * hbar])
 
 
@@ -463,7 +475,7 @@ def create_gaussian_pulse_3d_with_q(
     wavelength: float,
     nphotons: float,
     zR: float,
-    sigma_t: float,
+    sigma_z: float,
     grid_spacing: Sequence[float],
     grid: Sequence[int],
     dtype=np.complex64,
@@ -474,13 +486,13 @@ def create_gaussian_pulse_3d_with_q(
     Parameters
     ----------
     wavelength : float
-        Wavelength (lambda0) [m].
+        Wavelength (lambda0). [m]
     nphotons : float
         Number of photons.
     zR : float
-        Rayleigh range [m].
-    sigma_t : float
-        Time RMS [s]
+        Rayleigh range. [m]
+    sigma_z : float
+        Pulse length RMS. [m]
     grid_spacing : tuple of floats
         Per-axis grid spacing.
     grid : tuple of ints
@@ -497,23 +509,23 @@ def create_gaussian_pulse_3d_with_q(
         raise ValueError("`grid` must be of length 3 for a 3D gaussian")
 
     ranges = get_ranges_for_grid_spacing(grid_spacing=grid_spacing, dims=grid)
-    min_t, max_t = ranges[-1]
+    min_z, max_z = ranges[-1]
 
     k0 = calculate_k0(wavelength)
-    t_mid = (max_t + min_t) / 2.0
-    x_mesh, y_mesh, t_mesh = nd_space_mesh(ranges=ranges, sizes=grid)
+    z_mid = (max_z + min_z) / 2.0
+    x_mesh, y_mesh, z_mesh = nd_space_mesh(ranges=ranges, sizes=grid)
     qx = 1j * zR
     qy = 1j * zR
 
     ux = 1.0 / np.sqrt(qx) * np.exp(-1j * k0 * x_mesh**2 / 2.0 / qx)
     uy = 1.0 / np.sqrt(qy) * np.exp(-1j * k0 * y_mesh**2 / 2.0 / qy)
-    ut = (1.0 / (np.sqrt(2.0 * np.pi) * sigma_t)) * np.exp(
-        -((t_mesh - t_mid) ** 2) / 2.0 / sigma_t**2
+    uz = (1.0 / (np.sqrt(2.0 * np.pi) * sigma_z)) * np.exp(
+        -((z_mesh - z_mid) ** 2) / 2.0 / sigma_z**2
     )
 
-    eta = 2.0 * k0 * zR * sigma_t / np.sqrt(np.pi)
+    eta = 2.0 * k0 * zR * sigma_z / np.sqrt(np.pi)
 
-    pulse = np.sqrt(eta) * np.sqrt(nphotons) * ux * uy * ut
+    pulse = np.sqrt(eta) * np.sqrt(nphotons) * ux * uy * uz
     return pulse.astype(dtype)
 
 
@@ -835,7 +847,7 @@ class Wavefront:
         wavelength: float,
         nphotons: float,
         zR: float,
-        sigma_t: float,
+        sigma_z: float,
         grid_spacing: Sequence[float],
         pad: Optional[Sequence[int]] = None,
         dtype=np.complex64,
@@ -854,8 +866,8 @@ class Wavefront:
             Number of photons.
         zR : float
             Rayleigh range [m].
-        sigma_t : float
-            Time RMS [s]
+        sigma_z : float
+            Pulse length RMS. [m]
 
         Returns
         -------
@@ -865,7 +877,7 @@ class Wavefront:
             wavelength=wavelength,
             nphotons=nphotons,
             zR=zR,
-            sigma_t=sigma_t,
+            sigma_z=sigma_z,
             grid_spacing=grid_spacing,
             grid=dims,
             dtype=dtype,
@@ -889,6 +901,27 @@ class Wavefront:
         """
         return cartesian_domain(ranges=self.ranges, grids=self._pad.grid)
 
+    @property
+    def kspace_domain(self):
+        """
+        Reciprocal space domain values in all dimensions.
+
+        For each dimension of the wavefront, this is the evenly-spaced set of values over
+        its specified range.
+        """
+
+        coeffs = conversion_coeffs(
+            wavelength=self.wavelength,
+            dim=len(self._rmesh_shape),
+        )
+        return nd_kspace_domains(
+            coeffs=coeffs,
+            sizes=self._rmesh_shape,
+            pads=self.pad.pad,
+            steps=self.grid_spacing,
+            shifted=True,
+        )
+
     def _calc_phasors(self) -> Tuple[np.ndarray, ...]:
         """Calculate phasors for each dimension of the cartesian domain."""
         coeffs = conversion_coeffs(
@@ -896,6 +929,7 @@ class Wavefront:
             dim=len(self._rmesh_shape),
         )
         shifts = get_shifts(
+            dims=self._pad.grid,
             ranges=self.ranges,
             pads=self._pad.pad,
             deltas=self.grid_spacing,
@@ -1185,6 +1219,7 @@ class Wavefront:
             data = self.rmesh
         else:
             data = self.kmesh
+            # TODO change labels with prefix of 'theta'
 
         if transpose:
             data = data.T
@@ -1211,7 +1246,7 @@ class Wavefront:
 
         def plot(dat, title: str):
             ax = remaining_axes.pop(0)
-            img = ax.imshow(np.sum(dat, axis=sum_axis), cmap=cmap)
+            img = ax.imshow(np.mean(dat, axis=sum_axis), cmap=cmap)
             if xlim is not None:
                 ax.set_xlim(xlim)
             if ylim is not None:
@@ -1229,7 +1264,7 @@ class Wavefront:
             plot(np.imag(data), title="Imaginary")
 
         if show_abs:
-            plot(np.abs(data), f"|{plane}|")
+            plot(np.abs(data) ** 2, f"|{plane}|**2")
 
         if show_phase:
             plot(np.angle(data), title="Phase")

@@ -26,6 +26,12 @@ Ranges = Sequence[Tuple[float, float]]
 AnyPath = Union[str, pathlib.Path]
 Plane = Union[str, Tuple[int, int]]
 
+kspace_labels = {
+    "x": r"\theta_x",
+    "y": r"\theta_y",
+    "z": r"\omega",
+}
+
 
 def get_num_fft_workers() -> int:
     return _fft_workers
@@ -39,18 +45,48 @@ def set_num_fft_workers(workers: int):
     logger.info(f"Set number of FFT workers to: {workers}")
 
 
+def get_axis_index(axis_labels: Sequence[str], axis: Union[str, int]):
+    if isinstance(axis, int):
+        if axis >= len(axis_labels):
+            raise ValueError(f"Axis out of bounds: {axis} ({len(axis_labels)}D array)")
+        return axis
+    return axis_labels.index(axis)
+
+
 def get_axis_indices(
     axis_labels: Tuple[str, ...],
-    plane: Union[Sequence[str], Sequence[int]],
+    axes: Union[Sequence[str], Sequence[int]],
 ):
-    def get_axis_index(axis: Union[str, int]):
-        if isinstance(axis, int):
-            if axis >= len(axis_labels):
-                raise ValueError(f"Axis out of bounds: {axis} (of {plane})")
-            return axis
-        return axis_labels.index(axis)
+    return tuple(get_axis_index(axis_labels, axis) for axis in axes)
 
-    return tuple(get_axis_index(axis) for axis in plane)
+
+def get_rspace_label(
+    axis_labels: Tuple[str, ...],
+    axis: Union[int, str],
+):
+    return axis_labels[get_axis_index(axis_labels, axis)]
+
+
+def get_rspace_labels(
+    axis_labels: Tuple[str, ...],
+    axes: Union[Sequence[str], Sequence[int]],
+):
+    return tuple(get_rspace_label(axis_labels, axis) for axis in axes)
+
+
+def get_kspace_label(
+    axis_labels: Tuple[str, ...],
+    axis: Union[int, str],
+):
+    rspace_label = get_rspace_label(axis_labels, axis)
+    return kspace_labels.get(rspace_label, rspace_label)
+
+
+def get_kspace_labels(
+    axis_labels: Tuple[str, ...],
+    axes: Union[Sequence[str], Sequence[int]],
+):
+    return tuple(get_kspace_label(axis_labels, axis) for axis in axes)
 
 
 def _pad_array(wavefront: np.ndarray, shape):
@@ -337,8 +373,8 @@ def get_shifts(
 
     Parameters
     ----------
-    dims :
-        Grid dimensions
+    dims : sequence of int
+        Grid dimensions.
     ranges : tuple of (float, float) pairs
         Low and high domain range for each dimension of the wavefront.
     pads : tuple of ints
@@ -1215,17 +1251,21 @@ class Wavefront:
         Figure
         list of Axes
         """
+        axis_indices = get_axis_indices(self.metadata.mesh.axis_labels, plane)
+
         if rspace:
             data = self.rmesh
+            labels = get_rspace_labels(self.axis_labels, axis_indices)
         else:
             data = self.kmesh
-            # TODO change labels with prefix of 'theta'
+            labels = get_kspace_labels(self.axis_labels, axis_indices)
 
         if transpose:
             data = data.T
+            labels = tuple(reversed(labels))
 
-        axis_indices = get_axis_indices(self.metadata.mesh.axis_labels, plane)
         sum_axis = tuple(axis for axis in range(data.ndim) if axis not in axis_indices)
+        plane_label = " ".join(labels)
 
         if axs is None:
             fig, gs = plt.subplots(
@@ -1237,7 +1277,7 @@ class Wavefront:
                 figsize=figsize,
             )
             axs = list(gs.flatten())
-            fig.suptitle(f"{plane}")
+            fig.suptitle(f"${plane_label}$")
         else:
             fig = axs[0].get_figure()
             assert fig is not None
@@ -1253,6 +1293,8 @@ class Wavefront:
                 ax.set_ylim(ylim)
             if not ax.get_title():
                 ax.set_title(title)
+            ax.set_xlabel(f"${labels[0]}$")
+            ax.set_ylabel(f"${labels[1]}$")
             images.append(img)
             return img
 
@@ -1264,7 +1306,7 @@ class Wavefront:
             plot(np.imag(data), title="Imaginary")
 
         if show_abs:
-            plot(np.abs(data) ** 2, f"|{plane}|**2")
+            plot(np.abs(data) ** 2, f"$|{plane_label}|^2$")
 
         if show_phase:
             plot(np.angle(data), title="Phase")

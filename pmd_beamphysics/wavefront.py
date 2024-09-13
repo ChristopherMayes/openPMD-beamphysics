@@ -4,7 +4,7 @@ import copy
 import dataclasses
 import logging
 import pathlib
-from typing import Any, List, Optional, Sequence, Tuple, Union
+from typing import Any, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 import h5py
 import matplotlib
@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.constants
 import scipy.fft
+
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from .metadata import PolarizationDirection, WavefrontMetadata
 from . import writers
@@ -114,6 +116,24 @@ def _pad_array(wavefront: np.ndarray, shape):
     )
 
 
+class _NiceXYZ(NamedTuple):
+    """
+    `nice_array`-modified values.
+
+    Axes X and Y are always of the same units (rspace and kspace), but Z may be
+    of different units (kspace) so they are separated here.
+    """
+
+    x: np.ndarray
+    y: np.ndarray
+    xy_scale: float
+    xy_unit_prefix: str
+
+    z: np.ndarray
+    z_scale: float
+    z_unit_prefix: str
+
+
 def fft_phased(
     array: np.ndarray,
     axes: Sequence[int],
@@ -175,7 +195,7 @@ def nd_kspace_domains(
     pads: Sequence[int],
     steps: Sequence[float],
     shifted: bool = True,
-):
+) -> List[np.ndarray]:
     """
     Generate reciprocal space domains for given grid sizes and steps.
 
@@ -704,6 +724,11 @@ def get_ranges_for_grid_spacing(
     )
 
 
+def _get_projection(img, axis: int) -> np.ndarray:
+    sum_ = np.sum(img, axis=axis)
+    return sum_ / np.max(sum_)
+
+
 class Wavefront:
     """
     Particle field wavefront.
@@ -958,6 +983,36 @@ class Wavefront:
             shifted=True,
         )
 
+    @property
+    def _nice_kspace_domain(self) -> _NiceXYZ:
+        """
+        `nice_array`-modified kspace domain.
+
+        X and Y share units (m) and Z (eV) remains separate.
+        """
+        (domain_x, domain_y), xy_scale, xy_unit_prefix = nice_array(
+            np.vstack(self.kspace_domain[:2])
+        )
+        domain_z, z_scale, z_unit_prefix = nice_array(self.kspace_domain[2])
+        assert isinstance(domain_x, np.ndarray)
+        assert isinstance(domain_y, np.ndarray)
+        assert isinstance(domain_z, np.ndarray)
+        return _NiceXYZ(
+            x=domain_x,
+            y=domain_y,
+            xy_scale=xy_scale,
+            xy_unit_prefix=xy_unit_prefix,
+            z=domain_z,
+            z_scale=z_scale,
+            z_unit_prefix=z_unit_prefix,
+        )
+
+    @property
+    def _k_center_indices(self) -> Tuple[int, ...]:
+        return tuple(
+            grid // 2 + pad for grid, pad in zip(self.rmesh.shape, self.pad.pad)
+        )
+
     def _calc_phasors(self) -> Tuple[np.ndarray, ...]:
         """Calculate phasors for each dimension of the cartesian domain."""
         coeffs = conversion_coeffs(
@@ -1194,11 +1249,11 @@ class Wavefront:
         show_phase: bool = True,
         axs: Optional[List[matplotlib.axes.Axes]] = None,
         cmap: str = "viridis",
-        figsize: Optional[Tuple[int, int]] = None,
+        figsize: Optional[Tuple[float, float]] = None,
         nrows: int = 2,
         ncols: int = 2,
-        xlim: Optional[Tuple[int, int]] = None,
-        ylim: Optional[Tuple[int, int]] = None,
+        xlim: Optional[Tuple[float, float]] = None,
+        ylim: Optional[Tuple[float, float]] = None,
         tight_layout: bool = True,
         save: Optional[AnyPath] = None,
         transpose: bool = False,
@@ -1223,7 +1278,7 @@ class Wavefront:
             Show the projection of the absolute value of the data.
         show_phase : bool
             Show the projection of the phase of the data.
-        figsize : (int, int), optional
+        figsize : (float, float), optional
             Figure size for the axes.
             Defaults to Matplotlib's `rcParams["figure.figsize"]``.
         axs : List[matplotlib.axes.Axes], optional
@@ -1329,6 +1384,200 @@ class Wavefront:
                 fig.savefig(save)
 
         return fig, axs, images
+
+    def _plot_reciprocal_thy_vs_thx(
+        self,
+        ax: matplotlib.axes.Axes,
+        w_offset: float = 0,
+        cmap: str = "viridis",
+        xlim: Optional[Tuple[float, float]] = None,
+        ylim: Optional[Tuple[float, float]] = None,
+    ):
+        kdomain = self._nice_kspace_domain
+        kx_center, ky_center, _ = self._k_center_indices
+
+        w_center = np.abs(self.kmesh[kx_center, ky_center, :])
+        w_peak_idx = np.argmax(w_center)
+
+        extent = (
+            np.min(kdomain.y),
+            np.max(kdomain.y),
+            np.min(kdomain.x),
+            np.max(kdomain.x),
+        )
+
+        if not xlim:
+            xlim = extent[0:2]
+        if not ylim:
+            ylim = extent[2:4]
+        (xmin, xmax), (ymin, ymax) = xlim, ylim
+
+        z_idx = int(w_peak_idx - w_offset)
+        img = np.abs(self.kmesh[:, :, z_idx]) ** 2
+
+        proj_x = _get_projection(img, axis=0)
+        proj_y = _get_projection(img, axis=1)
+
+        im = ax.imshow(img, cmap=cmap, extent=extent, aspect="auto")
+        ax.plot(
+            kdomain.y,
+            0.3 * xmax * proj_x + 0.9 * xmin,
+            color="#17baca",
+            linewidth=2.0,
+        )
+        ax.plot(
+            0.3 * ymax * proj_y + 0.9 * ymin,
+            kdomain.x,
+            color="#17baca",
+            linewidth=2.0,
+        )
+
+        ax.set_xlabel(rf"$\theta_x$ (${kdomain.xy_unit_prefix} rad$)")
+        ax.set_ylabel(rf"$\theta_y$ (${kdomain.xy_unit_prefix} rad$)")
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
+        return im
+
+    def _plot_reciprocal_energy_vs_thetax(
+        self,
+        ax: matplotlib.axes.Axes,
+        cmap: str = "viridis",
+        xlim: Optional[Tuple[float, float]] = None,
+        ylim: Optional[Tuple[float, float]] = None,
+    ):
+        kdomain = self._nice_kspace_domain
+        kx_center, ky_center, _ = self._k_center_indices
+        w_center = np.abs(self.kmesh[kx_center, ky_center, :])
+        w_roll = int(self.kmesh.shape[2] / 2 - np.argmax(w_center))
+        extent = (
+            np.min(kdomain.y),
+            np.max(kdomain.y),
+            np.min(kdomain.z),
+            np.max(kdomain.z),
+        )
+
+        if not xlim:
+            xlim = extent[0:2]
+        if not ylim:
+            ylim = extent[2:4]
+        (xmin, xmax), (ymin, ymax) = xlim, ylim
+
+        img = np.abs(self.kmesh[:, ky_center, :]) ** 2
+        proj_x = _get_projection(img, axis=0)
+        proj_z = _get_projection(img, axis=1)
+        im = ax.imshow(img, cmap=cmap, extent=extent, aspect="auto")
+        step_kz = kdomain.z[1] - kdomain.z[0]
+        ax.plot(
+            kdomain.x,
+            2 * xmax * proj_z + 8 * xmin + w_roll * step_kz * 0.8,
+            color="#17baca",
+            linewidth=2.0,
+        )
+        ax.plot(
+            np.flip(0.02 * ymax * proj_x + 0.9 * xmin),
+            kdomain.z,
+            color="#17baca",
+            linewidth=2.0,
+        )
+
+        ax.set_ylabel(
+            rf"Photon Energy, $(\Delta\omega = \omega-\omega_0)$ (${kdomain.z_unit_prefix} eV$)"
+        )
+        ax.set_xlabel(rf"$\theta_x$ (${kdomain.xy_unit_prefix} rad$)")
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
+        return im
+
+    def plot_reciprocal(
+        self,
+        *,
+        w_offset: float = 0.0,
+        axs: Optional[List[matplotlib.axes.Axes]] = None,
+        cmap: str = "viridis",
+        figsize: Optional[Tuple[float, float]] = None,
+        xlim_theta: Optional[Tuple[float, float]] = None,
+        ylim_theta: Optional[Tuple[float, float]] = None,
+        xlim_theta_w: Optional[Tuple[float, float]] = None,
+        ylim_theta_w: Optional[Tuple[float, float]] = None,
+        tight_layout: bool = True,
+        save: Optional[AnyPath] = None,
+        colorbar: bool = True,
+    ):
+        """
+        Plot reciprocal space projections.
+
+        Parameters
+        ----------
+        w_offset : float, optional
+            Omega offset for theta-y vs theta-x plot.  This offset is relative
+            to the peak. [eV]
+        axs : List[matplotlib.axes.Axes], optional
+            Plot the data in the provided matplotlib Axes.
+            Creates a new figure and Axes if not specified.
+        cmap : str, default="viridis"
+            Color map to use.
+        figsize : (float, float), optional
+            Figure size for the axes.
+            Defaults to Matplotlib's `rcParams["figure.figsize"]``.
+        xlim_theta : (float, float), optional
+            X axis limits for the thetay vs thetax plot.
+        ylim_theta : (float, float), optional
+            Y axis limits for the thetay vs thetax plot.
+        xlim_theta_w : (float, float), optional
+            X axis limits for the omega vs thetax plot.
+        ylim_theta_w : (float, float), optional
+            Y axis limits for the omega vs thetax plot.
+        tight_layout : bool
+            Use a tight layout.
+        save : pathlib.Path or str, optional
+            Save the resulting image to a file.
+        colorbar : bool
+            Add a colorbar to each image.
+
+        Returns
+        -------
+        ax1 : matplotlib.axes.Axes
+        ax2 : matplotlib.axes.Axes
+        """
+        if axs:
+            ax1, ax2 = axs
+        else:
+            _, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+
+        _, _, kz_domain = self.kspace_domain
+        kz_step = kz_domain[1] - kz_domain[0]
+
+        im1 = self._plot_reciprocal_thy_vs_thx(
+            ax=ax1,
+            w_offset=w_offset // kz_step,
+            cmap=cmap,
+            xlim=xlim_theta,
+            ylim=ylim_theta,
+        )
+        im2 = self._plot_reciprocal_energy_vs_thetax(
+            ax=ax2,
+            cmap=cmap,
+            xlim=xlim_theta_w,
+            ylim=ylim_theta_w,
+        )
+
+        for ax, im in [(ax1, im1), (ax2, im2)]:
+            fig = ax.get_figure()
+            if fig is not None:
+                if colorbar:
+                    divider = make_axes_locatable(ax)
+                    cax = divider.append_axes("right", size="10%")
+                    fig.colorbar(im, cax=cax, orientation="vertical")
+                if tight_layout:
+                    fig.tight_layout()
+
+        if save:
+            logger.info(f"Saving plot to {save!r}")
+            fig = ax1.get_figure()
+            assert fig is not None
+            fig.savefig(save)
+
+        return ax1, ax2
 
     @classmethod
     def from_genesis4(

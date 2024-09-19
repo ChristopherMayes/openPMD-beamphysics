@@ -1238,6 +1238,18 @@ class Wavefront:
         self._rmesh = None
         return self
 
+    def _get_wigner_zphasor(self):
+        coeff = conversion_coeffs(self.wavelength, dim=1)
+        zlow, zhigh = self.ranges[2]
+        shift = (zlow + zhigh) / 2.0
+        (mesh,) = nd_kspace_mesh(
+            coeffs=coeff,
+            sizes=[self.pad.grid[2]],
+            pads=[self.pad.pad[2]],
+            steps=[self.grid_spacing[2]],
+        )
+        return np.exp(1j * 2.0 * np.pi * mesh * shift / coeff)
+
     def plot(
         self,
         plane: Plane,
@@ -1257,6 +1269,8 @@ class Wavefront:
         tight_layout: bool = True,
         save: Optional[AnyPath] = None,
         transpose: bool = False,
+        colorbar: bool = True,
+        # contour: bool = True,
     ):
         """
         Plot the projection onto the given plane.
@@ -1341,7 +1355,6 @@ class Wavefront:
                 figsize=figsize,
             )
             axs = list(gs.flatten())
-            fig.suptitle(f"${plane_label}$")
         else:
             fig = axs[0].get_figure()
             assert fig is not None
@@ -1351,14 +1364,23 @@ class Wavefront:
         def plot(dat, title: str):
             ax = remaining_axes.pop(0)
             img = ax.imshow(np.mean(dat, axis=sum_axis), cmap=cmap, extent=extent)
+
+            ax.set_xlabel(f"${labels[0]}$ ({unit_prefix}{units[0]})")
+            ax.set_ylabel(f"${labels[1]}$ ({unit_prefix}{units[1]})")
+            if colorbar:
+                divider = make_axes_locatable(ax)
+                fig = ax.get_figure()
+                assert fig is not None
+                cax = divider.append_axes("right", size="10%")
+                fig.colorbar(img, cax=cax, orientation="vertical")
+                cax.set_ylabel(title)
+            else:
+                ax.set_title(title)
             if xlim is not None:
                 ax.set_xlim(xlim)
             if ylim is not None:
                 ax.set_ylim(ylim)
-            if not ax.get_title():
-                ax.set_title(title)
-            ax.set_xlabel(f"${labels[0]}$ [{unit_prefix}{units[0]}]")
-            ax.set_ylabel(f"${labels[1]}$ [{unit_prefix}{units[1]}]")
+
             images.append(img)
             return img
 
@@ -1385,15 +1407,62 @@ class Wavefront:
 
         return fig, axs, images
 
+    def plot_1d_kmesh_projections(
+        self,
+        *,
+        axs: Optional[List[matplotlib.axes.Axes]] = None,
+        figsize: Optional[Tuple[float, float]] = None,
+        xlim: Optional[Tuple[float, float]] = None,
+        ylim: Optional[Tuple[float, float]] = None,
+        tight_layout: bool = True,
+        save: Optional[AnyPath] = None,
+    ):
+        if axs:
+            (ax1, ax2) = axs
+            fig = ax1.get_figure()
+        else:
+            fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=figsize)
+
+        img_xy = np.sum(np.abs(self.kmesh) ** 2, axis=2)
+        # TODO fix naming in other function
+        proj_y = _get_projection(img_xy, axis=0)
+        proj_x = _get_projection(img_xy, axis=1)
+
+        kdomain = self._nice_kspace_domain
+        ax1.plot(kdomain.y, proj_y, label="Vertical")
+        ax1.plot(kdomain.x, proj_x, label="Horizontal")
+        ax1.set_xlabel(rf"$\theta$ (${kdomain.xy_unit_prefix} rad$)")
+        ax1.set_ylabel("Angular Divergence [arb units]")
+        ax1.legend(loc="best")
+
+        ax2.set_xlabel(rf"$\omega - \omega_0$ (${kdomain.z_unit_prefix} eV$)")
+        ax2.set_ylabel("Spectrum [arb units]")
+        img_xz = np.sum(np.abs(self.kmesh) ** 2, axis=1)
+        proj_z = _get_projection(img_xz, axis=0)
+        ax2.plot(kdomain.z, proj_z)
+
+        if xlim is not None:
+            ax1.set_xlim(xlim)
+            ax2.set_ylim(xlim)
+        if ylim is not None:
+            ax2.set_xlim(ylim)
+            ax1.set_ylim(ylim)
+        if fig is not None:
+            if tight_layout:
+                fig.tight_layout()
+            # TODO Bounding box options? Higher DPI than default?
+            if save:
+                logger.info(f"Saving plot to {save!r}")
+                fig.savefig(save)
+        return fig, (ax1, ax2)
+
     def _plot_reciprocal_thy_vs_thx(
         self,
         ax: matplotlib.axes.Axes,
-        w_offset: float = 0,
         cmap: str = "viridis",
         xlim: Optional[Tuple[float, float]] = None,
         ylim: Optional[Tuple[float, float]] = None,
     ):
-        # TODO switch this up to plot the average instead of a single slice
         kdomain = self._nice_kspace_domain
 
         extent = (
@@ -1442,7 +1511,6 @@ class Wavefront:
         xlim: Optional[Tuple[float, float]] = None,
         ylim: Optional[Tuple[float, float]] = None,
     ):
-        # TODO switch this up to plot the average instead of a single slice
         kdomain = self._nice_kspace_domain
         extent = (
             np.min(kdomain.y),
@@ -1461,7 +1529,7 @@ class Wavefront:
         proj_x = _get_projection(img, axis=0)
         proj_z = _get_projection(img, axis=1)
 
-        im = ax.imshow(img, cmap=cmap, extent=extent, aspect="auto")
+        im = ax.imshow(img.T, cmap=cmap, extent=extent, aspect="auto")
         step_kz = kdomain.z[1] - kdomain.z[0]
         ax.plot(
             kdomain.x,
@@ -1488,7 +1556,6 @@ class Wavefront:
     def plot_reciprocal(
         self,
         *,
-        w_offset: float = 0.0,
         axs: Optional[List[matplotlib.axes.Axes]] = None,
         cmap: str = "viridis",
         figsize: Optional[Tuple[float, float]] = None,
@@ -1505,9 +1572,6 @@ class Wavefront:
 
         Parameters
         ----------
-        w_offset : float, optional
-            Omega offset for theta-y vs theta-x plot.  This offset is relative
-            to the peak. [eV]
         axs : List[matplotlib.axes.Axes], optional
             Plot the data in the provided matplotlib Axes.
             Creates a new figure and Axes if not specified.
@@ -1541,12 +1605,8 @@ class Wavefront:
         else:
             _, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
 
-        _, _, kz_domain = self.kspace_domain
-        kz_step = kz_domain[1] - kz_domain[0]
-
         im1 = self._plot_reciprocal_thy_vs_thx(
             ax=ax1,
-            w_offset=w_offset // kz_step,
             cmap=cmap,
             xlim=xlim_theta,
             ylim=ylim_theta,

@@ -1243,14 +1243,14 @@ class Wavefront:
         plane: Plane,
         *,
         rspace: bool = True,
-        show_real: bool = True,
-        show_imaginary: bool = True,
+        show_real: bool = False,
+        show_imaginary: bool = False,
         show_abs: bool = True,
         show_phase: bool = True,
         axs: Optional[List[matplotlib.axes.Axes]] = None,
         cmap: str = "viridis",
         figsize: Optional[Tuple[float, float]] = None,
-        nrows: int = 2,
+        nrows: int = 1,
         ncols: int = 2,
         xlim: Optional[Tuple[float, float]] = None,
         ylim: Optional[Tuple[float, float]] = None,
@@ -1393,11 +1393,8 @@ class Wavefront:
         xlim: Optional[Tuple[float, float]] = None,
         ylim: Optional[Tuple[float, float]] = None,
     ):
+        # TODO switch this up to plot the average instead of a single slice
         kdomain = self._nice_kspace_domain
-        kx_center, ky_center, _ = self._k_center_indices
-
-        w_center = np.abs(self.kmesh[kx_center, ky_center, :])
-        w_peak_idx = np.argmax(w_center)
 
         extent = (
             np.min(kdomain.y),
@@ -1412,12 +1409,11 @@ class Wavefront:
             ylim = extent[2:4]
         (xmin, xmax), (ymin, ymax) = xlim, ylim
 
-        z_idx = int(w_peak_idx - w_offset)
-        img = np.abs(self.kmesh[:, :, z_idx]) ** 2
-
+        img = np.sum(np.abs(self.kmesh) ** 2, axis=2)
         proj_x = _get_projection(img, axis=0)
         proj_y = _get_projection(img, axis=1)
 
+        # TODO: change these to subplots one th side
         im = ax.imshow(img, cmap=cmap, extent=extent, aspect="auto")
         ax.plot(
             kdomain.y,
@@ -1432,8 +1428,9 @@ class Wavefront:
             linewidth=2.0,
         )
 
-        ax.set_xlabel(rf"$\theta_x$ (${kdomain.xy_unit_prefix} rad$)")
-        ax.set_ylabel(rf"$\theta_y$ (${kdomain.xy_unit_prefix} rad$)")
+        xlabel, ylabel = get_kspace_labels(axis_labels=self.axis_labels, axes=(0, 1))
+        ax.set_xlabel(rf"${xlabel}$ (${kdomain.xy_unit_prefix} rad$)")
+        ax.set_ylabel(rf"${ylabel}$ (${kdomain.xy_unit_prefix} rad$)")
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         return im
@@ -1445,10 +1442,8 @@ class Wavefront:
         xlim: Optional[Tuple[float, float]] = None,
         ylim: Optional[Tuple[float, float]] = None,
     ):
+        # TODO switch this up to plot the average instead of a single slice
         kdomain = self._nice_kspace_domain
-        kx_center, ky_center, _ = self._k_center_indices
-        w_center = np.abs(self.kmesh[kx_center, ky_center, :])
-        w_roll = int(self.kmesh.shape[2] / 2 - np.argmax(w_center))
         extent = (
             np.min(kdomain.y),
             np.max(kdomain.y),
@@ -1462,14 +1457,15 @@ class Wavefront:
             ylim = extent[2:4]
         (xmin, xmax), (ymin, ymax) = xlim, ylim
 
-        img = np.abs(self.kmesh[:, ky_center, :]) ** 2
+        img = np.sum(np.abs(self.kmesh) ** 2, axis=1)
         proj_x = _get_projection(img, axis=0)
         proj_z = _get_projection(img, axis=1)
+
         im = ax.imshow(img, cmap=cmap, extent=extent, aspect="auto")
         step_kz = kdomain.z[1] - kdomain.z[0]
         ax.plot(
             kdomain.x,
-            2 * xmax * proj_z + 8 * xmin + w_roll * step_kz * 0.8,
+            2 * xmax * proj_z + 8 * xmin + step_kz * 0.8,
             color="#17baca",
             linewidth=2.0,
         )
@@ -1480,10 +1476,11 @@ class Wavefront:
             linewidth=2.0,
         )
 
+        xlabel, ylabel = get_kspace_labels(axis_labels=self.axis_labels, axes=(0, 2))
         ax.set_ylabel(
-            rf"Photon Energy, $(\Delta\omega = \omega-\omega_0)$ (${kdomain.z_unit_prefix} eV$)"
+            rf"Photon Energy, $(\Delta{ylabel} = {ylabel}-{ylabel}_0)$ (${kdomain.z_unit_prefix} eV$)"
         )
-        ax.set_xlabel(rf"$\theta_x$ (${kdomain.xy_unit_prefix} rad$)")
+        ax.set_xlabel(rf"${xlabel}$ (${kdomain.xy_unit_prefix} rad$)")
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         return im

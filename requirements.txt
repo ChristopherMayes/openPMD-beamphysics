@@ -2,3 +2,4 @@ numpy
 scipy>=1.0.0
 matplotlib
 h5py
+python-dateutil

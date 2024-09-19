@@ -1240,15 +1240,52 @@ class Wavefront:
 
     def _get_wigner_zphasor(self):
         coeff = conversion_coeffs(self.wavelength, dim=1)
-        zlow, zhigh = self.ranges[2]
-        shift = (zlow + zhigh) / 2.0
+        zpad = self.pad.pad[2]
+        zgrid = self._rmesh_shape[2]
+        dz = self.grid_spacing[2]
+        shift = (zgrid + zpad) * dz
         (mesh,) = nd_kspace_mesh(
             coeffs=coeff,
-            sizes=[self.pad.grid[2]],
-            pads=[self.pad.pad[2]],
-            steps=[self.grid_spacing[2]],
+            sizes=[zgrid],
+            pads=[0],  # self.pad.pad[2]],
+            steps=[dz],
         )
         return np.exp(1j * 2.0 * np.pi * mesh * shift / coeff)
+
+    def wigner_distribution(self):
+        xgrid, ygrid, zgrid = self._rmesh_shape
+        xpad, ypad, zpad = self.pad.pad
+
+        sig_z_corr = np.zeros((zgrid + 2 * zpad, zgrid), dtype=complex)
+
+        sig_z = self.rmesh[xgrid // 2 + 1, ygrid // 2 + 1, :]
+
+        sig_z_pad = _pad_array(sig_z, (zpad, zpad))
+        sig_zconj_pad = np.conj(sig_z_pad)
+
+        plt.plot(np.abs(sig_z_pad) ** 2)
+        plt.show()
+
+        for i in range(0, zgrid):
+            j = zpad - i
+            sig_z_corr[:, i] = np.roll(sig_z_pad, j) * np.roll(sig_zconj_pad, -j)
+
+        zphasor = self._get_wigner_zphasor()
+        WT = np.fft.fftshift(zphasor * np.fft.fft(sig_z_corr, axis=1), axes=1)
+        return np.real(WT[zpad : zgrid + zpad, :])
+
+    def plot_wigner_distribution(self):
+        # xgrid, ygrid, zgrid = self._rmesh_shape
+        # xpad, ypad, zpad = self.pad.pad
+        #
+        # extent = [
+        #     np.min(domain_w[0][0 : 2 * X.tgrid]),
+        #     np.max(domain_w[0][0 : 2 * X.tgrid]),
+        #     0,
+        #     X.tmax,
+        # ]
+        WT = self.wigner_distribution()
+        plt.imshow(WT, cmap="bwr")
 
     def plot(
         self,

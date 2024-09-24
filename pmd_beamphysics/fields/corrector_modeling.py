@@ -75,7 +75,7 @@ def plot_3d_vector(v,
     return ax
 
 
-def Bfield_from_thin_straight_wire(x, y, z, p1, p2, I, plot_wire=False, elev=45, azim=-45, ax=None):
+def bfield_from_thin_straight_wire(x, y, z, p1, p2, I, plot_wire=False, elev=45, azim=-45, ax=None):
     """
     Vectorized calculation of magnetic field from a thin straight wire
     over a grid of points specified by x, y, z arrays.
@@ -148,7 +148,7 @@ def Bfield_from_thin_straight_wire(x, y, z, p1, p2, I, plot_wire=False, elev=45,
     return B[:,:,:,0], B[:,:,:,1], B[:,:,:,2]
 
 
-def Bfield_from_thin_rectangular_coil(X, Y, Z, a, b, y0, I, plot_wire=False, elev=45, azim=-45, ax=None):
+def bfield_from_thin_rectangular_coil(X, Y, Z, a, b, y0, I, plot_wire=False, elev=45, azim=-45, ax=None):
 
     """
     Compute the fields from a thin rectangular coil of size a (in x) and b (in z).
@@ -181,19 +181,19 @@ def Bfield_from_thin_rectangular_coil(X, Y, Z, a, b, y0, I, plot_wire=False, ele
     p3 = np.array([+a/2, y0, +b/2])
     p4 = np.array([-a/2, y0, +b/2])
     
-    Bx1, By1, Bz1 = Bfield_from_thin_straight_wire(X, Y, Z, p1, p2, I, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
+    Bx1, By1, Bz1 = bfield_from_thin_straight_wire(X, Y, Z, p1, p2, I, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
 
     if plot_wire:
         ax = plt.gca()
     
-    Bx2, By2, Bz2 = Bfield_from_thin_straight_wire(X, Y, Z, p2, p3, I, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
-    Bx3, By3, Bz3 = Bfield_from_thin_straight_wire(X, Y, Z, p3, p4, I, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
-    Bx4, By4, Bz4 = Bfield_from_thin_straight_wire(X, Y, Z, p4, p1, I, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
+    Bx2, By2, Bz2 = bfield_from_thin_straight_wire(X, Y, Z, p2, p3, I, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
+    Bx3, By3, Bz3 = bfield_from_thin_straight_wire(X, Y, Z, p3, p4, I, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
+    Bx4, By4, Bz4 = bfield_from_thin_straight_wire(X, Y, Z, p4, p1, I, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
 
     return (Bx1+Bx2+Bx3+Bx4, By1+By2+By3+By4, Bz1+Bz2+Bz3+Bz4)
 
 
-def Bfield_from_thin_rectangular_corrector(X, Y, Z, a, b, h, I, plot_wire=False, elev=45, azim=-45, ax=None):
+def bfield_from_thin_rectangular_corrector(X, Y, Z, a, b, h, I, plot_wire=False, elev=45, azim=-45, ax=None):
 
     """
     Compute the fields from a thin rectangular corrector.  
@@ -222,12 +222,12 @@ def Bfield_from_thin_rectangular_corrector(X, Y, Z, a, b, h, I, plot_wire=False,
         Magnetic field vector at each point (x, y, z) with shape (Nx, Ny, Nz, 3).
     """
 
-    Bx1, By1, Bz1 = Bfield_from_thin_rectangular_coil(X, Y, Z, a, b, -h/2, I, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
+    Bx1, By1, Bz1 = bfield_from_thin_rectangular_coil(X, Y, Z, a, b, -h/2, I, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
 
     if plot_wire:
         ax = plt.gca()
     
-    Bx2, By2, Bz2 = Bfield_from_thin_rectangular_coil(X, Y, Z, a, b, +h/2, I, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
+    Bx2, By2, Bz2 = bfield_from_thin_rectangular_coil(X, Y, Z, a, b, +h/2, I, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
     
     return (Bx1+Bx2, By1+By2, Bz1+Bz2)
 
@@ -313,7 +313,7 @@ def plot_arc_vectors(ps, color='k', elev=45, azim=-45, ax=None):
     return ax
     
 
-def Bfield_from_thin_wire_arc(X, Y, Z, h, R, theta, npts=100, I=1, plot_wire=False, elev=45, azim=-45, ax=None):
+def bfield_from_thin_wire_arc(X, Y, Z, h, R, theta, npts=100, I=1, plot_wire=False, elev=45, azim=-45, ax=None):
 
     ps = get_arc_vectors(h, R, theta, npts=npts)
 
@@ -329,7 +329,7 @@ def Bfield_from_thin_wire_arc(X, Y, Z, h, R, theta, npts=100, I=1, plot_wire=Fal
         if ii == 1 and plot_wire:
             ax = plt.gca()
 
-        Bxii, Byii, Bzii = Bfield_from_thin_straight_wire(X, Y, Z, p1, p2, I, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
+        Bxii, Byii, Bzii = bfield_from_thin_straight_wire(X, Y, Z, p1, p2, I, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
 
         Bx = Bx + Bxii
         By = By + Byii
@@ -338,7 +338,7 @@ def Bfield_from_thin_wire_arc(X, Y, Z, h, R, theta, npts=100, I=1, plot_wire=Fal
     return Bx, By, Bz
 
 
-def Bfield_from_thin_saddle_coil(X, Y, Z, L, R, theta, I, npts=10, plot_wire=False, elev=45, azim=-45, ax=None):
+def bfield_from_thin_saddle_coil(X, Y, Z, L, R, theta, I, npts=10, plot_wire=False, elev=45, azim=-45, ax=None):
 
     phi = (np.pi - theta)/2
 
@@ -346,12 +346,12 @@ def Bfield_from_thin_saddle_coil(X, Y, Z, L, R, theta, I, npts=10, plot_wire=Fal
     By = np.zeros(Y.shape)
     Bz = np.zeros(Z.shape)
 
-    BxA1, ByA1, BzA1 = Bfield_from_thin_wire_arc(X, Y, Z, -L/2, R, +theta, npts=npts, I=I, plot_wire=plot_wire, ax=ax, elev=elev, azim=azim)
+    BxA1, ByA1, BzA1 = bfield_from_thin_wire_arc(X, Y, Z, -L/2, R, +theta, npts=npts, I=I, plot_wire=plot_wire, ax=ax, elev=elev, azim=azim)
 
     if plot_wire:
         ax = plt.gca()
         
-    BxA2, ByA2, BzA2 = Bfield_from_thin_wire_arc(X, Y, Z, +L/2, R, -theta, npts=npts, I=I, plot_wire=plot_wire, ax=ax, elev=elev, azim=azim)
+    BxA2, ByA2, BzA2 = bfield_from_thin_wire_arc(X, Y, Z, +L/2, R, -theta, npts=npts, I=I, plot_wire=plot_wire, ax=ax, elev=elev, azim=azim)
 
     Bx += BxA1 + BxA2
     By += ByA1 + ByA2
@@ -361,13 +361,13 @@ def Bfield_from_thin_saddle_coil(X, Y, Z, L, R, theta, I, npts=10, plot_wire=Fal
     p11 = np.array([R*np.cos(phi), R*np.sin(phi), +L/2])
     p21 = np.array([R*np.cos(phi), R*np.sin(phi), -L/2])
 
-    BxS1, ByS1, BzS1 = Bfield_from_thin_straight_wire(X, Y, Z, p11, p21, I=I, plot_wire=plot_wire, ax=ax, elev=elev, azim=azim)
+    BxS1, ByS1, BzS1 = bfield_from_thin_straight_wire(X, Y, Z, p11, p21, I=I, plot_wire=plot_wire, ax=ax, elev=elev, azim=azim)
 
     # Straight section 2
     p12 = np.array([-R*np.cos(phi), R*np.sin(phi), -L/2])
     p22 = np.array([-R*np.cos(phi), R*np.sin(phi), +L/2])
 
-    BxS2, ByS2, BzS2 = Bfield_from_thin_straight_wire(X, Y, Z, p12, p22, I=I, plot_wire=plot_wire, ax=ax, elev=elev, azim=azim)
+    BxS2, ByS2, BzS2 = bfield_from_thin_straight_wire(X, Y, Z, p12, p22, I=I, plot_wire=plot_wire, ax=ax, elev=elev, azim=azim)
 
     Bx += BxS1 + BxS2
     By += ByS1 + ByS2
@@ -376,21 +376,21 @@ def Bfield_from_thin_saddle_coil(X, Y, Z, L, R, theta, I, npts=10, plot_wire=Fal
     return (Bx, By, Bz)
 
 
-def Bfield_from_thin_saddle_corrector(X, Y, Z, L, R, theta, I, npts=10, plot_wire=False, elev=45, azim=-45, ax=None):
+def bfield_from_thin_saddle_corrector(X, Y, Z, L, R, theta, I, npts=10, plot_wire=False, elev=45, azim=-45, ax=None):
 
-    Bx1, By1, Bz1 = Bfield_from_thin_saddle_coil(X, Y, Z, +L, +R, theta, I, npts=npts, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
+    Bx1, By1, Bz1 = bfield_from_thin_saddle_coil(X, Y, Z, +L, +R, theta, I, npts=npts, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
 
     if plot_wire:
         ax = plt.gca()
-    Bx2, By2, Bz2 = Bfield_from_thin_saddle_coil(X, Y, Z, -L, -R, theta, I, npts=npts, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
+    Bx2, By2, Bz2 = bfield_from_thin_saddle_coil(X, Y, Z, -L, -R, theta, I, npts=npts, plot_wire=plot_wire, elev=elev, azim=azim, ax=ax)
     
     return Bx1+Bx2, By1+By2, Bz1+Bz2
 
 
-def rectangular_corrector_field_mesh(a, b, h, I, xs, ys, zs, plot_wire=False):
+def make_rectangular_dipole_corrector_fieldmesh(a, b, h, I, xs, ys, zs, plot_wire=False):
 
     """
-    Generate a FieldMesh object representing a rectangular airccore corrector magnet.
+    Generate a FieldMesh object representing a rectangular aircore corrector magnet.
 
     Parameters:
     a, b : float, [m]
@@ -415,7 +415,7 @@ def rectangular_corrector_field_mesh(a, b, h, I, xs, ys, zs, plot_wire=False):
 
     X, Y, Z = np.meshgrid(xs, ys, zs, indexing='ij')
 
-    Bx, By, Bz = Bfield_from_thin_rectangular_corrector(X, Y, Z, a, b, h, I, plot_wire=True)
+    Bx, By, Bz = bfield_from_thin_rectangular_corrector(X, Y, Z, a, b, h, I, plot_wire=True)
     
     dx = np.diff(xs)[0]
     dy = np.diff(ys)[0]
@@ -442,7 +442,7 @@ def rectangular_corrector_field_mesh(a, b, h, I, xs, ys, zs, plot_wire=False):
     return FieldMesh(data=data)
 
 
-def saddle_corrector_field_mesh(R, L, theta, I, xs, ys, zs, npts=20, plot_wire=False):
+def make_saddle_dipole_corrector_fieldmesh(R, L, theta, I, xs, ys, zs, npts=20, plot_wire=False):
 
     """
     Generate a FieldMesh object representing a rectangular airccore corrector magnet.
@@ -472,7 +472,7 @@ def saddle_corrector_field_mesh(R, L, theta, I, xs, ys, zs, npts=20, plot_wire=F
 
     X, Y, Z = np.meshgrid(xs, ys, zs, indexing='ij')
     
-    Bx, By, Bz = Bfield_from_thin_saddle_corrector(X, Y, Z, L, R, theta, npts=npts, I=I, plot_wire=plot_wire)
+    Bx, By, Bz = bfield_from_thin_saddle_corrector(X, Y, Z, L, R, theta, npts=npts, I=I, plot_wire=plot_wire)
     
     dx = np.diff(xs)[0]
     dy = np.diff(ys)[0]
@@ -497,5 +497,60 @@ def saddle_corrector_field_mesh(R, L, theta, I, xs, ys, zs, npts=20, plot_wire=F
     data = dict(attrs=attrs, components=components)
 
     return FieldMesh(data=data)
+
+
+def make_dipole_corrector_fieldmesh(xs, ys, zs, I,
+                                    mode='rectangular',
+                                    a=None, b=None, h=None,                   # Parameters for rectangular dipole corrector
+                                    R=None, L=None, theta=None, npts=None,    # Parameters for saddle dipole corrector
+                                    plot_wire=False):
+
+    """
+    Generates a field mesh for either a saddle or rectangular dipole corrector.
+
+    Parameters:
+    xs, ys, zs : array-like
+        Grid points in space where the field is evaluated.
+    I : float
+        Current through the corrector.
+    mode : str, optional
+        Type of dipole corrector ('rectangular' or 'saddle'). Default is 'rectangular'.
+    a, b, h : float, optional
+        Parameters for the rectangular dipole corrector.
+        a - width of the rectangular coil.
+        b - height of the rectangular coil.
+        h - distance between the coils.
+    R, L, theta : float, optional
+        Parameters for the saddle dipole corrector.
+        R - radius of the saddle coil.
+        L - length of the saddle coil.
+        theta - tilt angle of the coil.
+    npts : int, optional
+        Number of points for the saddle dipole discretization. Default is 20.
+    plot_wire : bool, optional
+        If True, plots the wire configuration. Default is False.
+
+    Returns:
+    fieldmesh : ndarray
+        Magnetic field mesh corresponding to the selected dipole corrector type.
+    """
+    #print(mode)
+
+    if mode == 'rectangular':
+        if a is None or b is None or h is None:
+            raise ValueError("Parameters 'a', 'b', and 'h' must be provided for rectangular mode.")
+        # Call the rectangular dipole corrector function
+        return make_rectangular_dipole_corrector_fieldmesh(a, b, h, I, xs, ys, zs, plot_wire=plot_wire)
+
+    elif mode == 'saddle':
+        # Check that necessary parameters are provided
+        if R is None or L is None or theta is None:
+            raise ValueError("Parameters 'R', 'L', and 'theta' must be provided for saddle mode.")
+        # Call the saddle dipole corrector function
+        return make_saddle_dipole_corrector_fieldmesh(R, L, theta, I, xs, ys, zs, npts=npts, plot_wire=plot_wire)
+    
+    else:
+        raise ValueError("Invalid mode. Choose either 'rectangular' or 'saddle'.")
+    
     
 

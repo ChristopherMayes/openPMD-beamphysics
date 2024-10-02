@@ -965,6 +965,10 @@ class ParticleGroup:
             
         nice: bool, default = True
             Scale to nice units
+
+        ellipse: bool, default = True
+            If True, plot an ellipse representing the 
+            2x2 sigma matrix            
             
         return_figure: bool, default = False
             If true, return a matplotlib.figure.Figure object

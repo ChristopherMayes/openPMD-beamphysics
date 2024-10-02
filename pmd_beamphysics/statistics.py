@@ -56,6 +56,27 @@ def twiss_calc(sigma_mat2):
     return twiss
 
 
+def twiss_ellipse_points(sigma_mat2, n_points=36):
+    """
+    Returns points that will trace a the rms ellipse 
+    from a 2x2 covariance matrix `sigma_mat2`.
+
+    Returns
+    -------
+    vec: np.ndarray with shape (2, n_points)
+        x, p representing the ellipse points.
+    
+    """
+    twiss = twiss_calc(sigma_mat2)
+    A = A_mat_calc(twiss['beta'], twiss['alpha'])
+    
+    theta = np.linspace(0, np.pi*2, n_points)
+    zvec0 = np.array([np.cos(theta), np.sin(theta)]) * np.sqrt(2*twiss['emit'])
+    
+    zvec1 = np.matmul(A, zvec0)
+    return zvec1
+
+
 
 def twiss_match(x, p, beta0=1, alpha0=0, beta1=1, alpha1=0):
     """

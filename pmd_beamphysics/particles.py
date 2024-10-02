@@ -678,7 +678,7 @@ class ParticleGroup:
         return self.charge / dt
     
     def bunching(self, wavelength):
-        """
+        r"""
         Calculate the normalized bunching parameter, which is the magnitude of the 
         complex sum of weighted exponentials at a given point.
     

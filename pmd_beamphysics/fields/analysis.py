@@ -19,7 +19,7 @@ else:
 # Analysis
 
 def accelerating_voltage_and_phase(z, Ez, frequency):
-    """
+    r"""
     Computes the accelerating voltage and phase for a v=c positively charged particle in an accelerating cavity field.
     
         Z = \int Ez * e^{-i k z} dz 
@@ -64,7 +64,7 @@ def track_field_1d(z,
                    debug=False,
                    max_step=None,
                   ):
-    """
+    r"""
     Tracks a particle in a 1d complex electric field Ez, oscillating as Ez * exp(-i omega t)
     
     Uses scipy.integrate.solve_ivp to track the particle. 
@@ -188,7 +188,7 @@ def track_field_1df(Ez_f,
                    max_step=None,
                     method='RK23'
                   ):
-    """
+    r"""
     Similar to track_field_1d, execpt uses a function Ez_f
     
     Tracks a particle in a 1d electric field Ez(z, t)

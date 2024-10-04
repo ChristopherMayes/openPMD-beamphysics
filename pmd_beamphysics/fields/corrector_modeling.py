@@ -387,7 +387,12 @@ def bfield_from_thin_saddle_corrector(X, Y, Z, L, R, theta, I, npts=10, plot_wir
     return Bx1+Bx2, By1+By2, Bz1+Bz2
 
 
-def make_rectangular_dipole_corrector_fieldmesh(a, b, h, I, xs, ys, zs, plot_wire=False):
+def make_rectangular_dipole_corrector_fieldmesh(a, b, h, I, 
+                                                xmin, xmax, nx,
+                                                ymin, ymax, ny,
+                                                zmin, zmax, nz,
+                                                *,
+                                                plot_wire=False):
 
     """
     Generate a FieldMesh object representing a rectangular aircore corrector magnet.
@@ -413,6 +418,10 @@ def make_rectangular_dipole_corrector_fieldmesh(a, b, h, I, xs, ys, zs, plot_wir
         Magnetic field vector at each point (x, y, z) with shape (Nx, Ny, Nz, 3).
     """
 
+    xs = np.linspace(xmin, xmax, nx)
+    ys = np.linspace(ymin, ymax, ny)
+    zs = np.linspace(zmin, zmax, nz)
+    
     X, Y, Z = np.meshgrid(xs, ys, zs, indexing='ij')
 
     Bx, By, Bz = bfield_from_thin_rectangular_corrector(X, Y, Z, a, b, h, I, plot_wire=True)
@@ -442,7 +451,12 @@ def make_rectangular_dipole_corrector_fieldmesh(a, b, h, I, xs, ys, zs, plot_wir
     return FieldMesh(data=data)
 
 
-def make_saddle_dipole_corrector_fieldmesh(R, L, theta, I, xs, ys, zs, npts=20, plot_wire=False):
+def make_saddle_dipole_corrector_fieldmesh(R, L, theta, I, 
+                                           xmin, xmax, nx,
+                                           ymin, ymax, ny,
+                                           zmin, zmax, nz,
+                                           *, 
+                                           npts=20, plot_wire=False):
 
     """
     Generate a FieldMesh object representing a rectangular airccore corrector magnet.
@@ -456,12 +470,12 @@ def make_saddle_dipole_corrector_fieldmesh(R, L, theta, I, xs, ys, zs, npts=20, 
         Opening angle of the saddles.
     I: float, [A]
         Current through the wire (in Amperes).
-    xs: ndarray, [m]
-        Grid coordinates in x
-    ys: ndarray, [m]
-        Grid coordinates in y
-    zs: ndarray, [m]
-        Grid coordinates in z
+    xmin, xmax, nxs : float, float, int
+        Defines a unifomly spaced array of x points for evaluating corrector fields on.
+    ymin, ymax, nys : float, float, int
+        Defines a unifomly spaced array of y points for evaluating corrector fields on.
+    zmin, zmax, nzs : float, float, int
+        Defines a unifomly spaced array of z points for evaluating corrector fields on.
     plot_wire: boolean
         Plot the wire in 3D space.
 
@@ -469,6 +483,10 @@ def make_saddle_dipole_corrector_fieldmesh(R, L, theta, I, xs, ys, zs, npts=20, 
     B : ndarray, [T]
         Magnetic field vector at each point (x, y, z) with shape (Nx, Ny, Nz, 3).
     """
+
+    xs = np.linspace(xmin, xmax, nx)
+    ys = np.linspace(ymin, ymax, ny)
+    zs = np.linspace(zmin, zmax, nz)
 
     X, Y, Z = np.meshgrid(xs, ys, zs, indexing='ij')
     
@@ -499,7 +517,11 @@ def make_saddle_dipole_corrector_fieldmesh(R, L, theta, I, xs, ys, zs, npts=20, 
     return FieldMesh(data=data)
 
 
-def make_dipole_corrector_fieldmesh(xs, ys, zs, I,
+def make_dipole_corrector_fieldmesh(I,
+                                    xmin, xmax, nx,
+                                    ymin, ymax, ny,
+                                    zmin, zmax, nz, 
+                                    *, 
                                     mode='rectangular',
                                     a=None, b=None, h=None,                   # Parameters for rectangular dipole corrector
                                     R=None, L=None, theta=None, npts=None,    # Parameters for saddle dipole corrector
@@ -509,8 +531,12 @@ def make_dipole_corrector_fieldmesh(xs, ys, zs, I,
     Generates a field mesh for either a saddle or rectangular dipole corrector.
 
     Parameters:
-    xs, ys, zs : array-like
-        Grid points in space where the field is evaluated.
+    xmin, xmax, nxs : float, float, int
+        Defines a unifomly spaced array of x points for evaluating corrector fields on.
+    ymin, ymax, nys : float, float, int
+        Defines a unifomly spaced array of y points for evaluating corrector fields on.
+    zmin, zmax, nzs : float, float, int
+        Defines a unifomly spaced array of z points for evaluating corrector fields on.
     I : float
         Current through the corrector.
     mode : str, optional
@@ -540,14 +566,22 @@ def make_dipole_corrector_fieldmesh(xs, ys, zs, I,
         if a is None or b is None or h is None:
             raise ValueError("Parameters 'a', 'b', and 'h' must be provided for rectangular mode.")
         # Call the rectangular dipole corrector function
-        return make_rectangular_dipole_corrector_fieldmesh(a, b, h, I, xs, ys, zs, plot_wire=plot_wire)
+        return make_rectangular_dipole_corrector_fieldmesh(a, b, h, I, 
+                                                           xmin, xmax, nx,
+                                                           ymin, ymax, ny,
+                                                           zmin, zmax, nz,
+                                                           plot_wire=plot_wire)
 
     elif mode == 'saddle':
         # Check that necessary parameters are provided
         if R is None or L is None or theta is None:
             raise ValueError("Parameters 'R', 'L', and 'theta' must be provided for saddle mode.")
         # Call the saddle dipole corrector function
-        return make_saddle_dipole_corrector_fieldmesh(R, L, theta, I, xs, ys, zs, npts=npts, plot_wire=plot_wire)
+        return make_saddle_dipole_corrector_fieldmesh(R, L, theta, I, 
+                                                      xmin, xmax, nx,
+                                                      ymin, ymax, ny,
+                                                      zmin, zmax, nz,
+                                                      npts=npts, plot_wire=plot_wire)
     
     else:
         raise ValueError("Invalid mode. Choose either 'rectangular' or 'saddle'.")

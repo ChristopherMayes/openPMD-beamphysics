@@ -438,7 +438,7 @@ def make_rectangular_dipole_corrector_fieldmesh(a, b, h, I,
     attrs['gridGeometry'] = 'rectangular'
     attrs['axisLabels'] = ('x', 'y', 'z')
     attrs['gridLowerBound'] = (0, 0, 0)
-    attrs['harmonic'] = 1
+    attrs['harmonic'] = 0
     attrs['fundamentalFrequency'] = 0
 
     components = {}
@@ -504,7 +504,7 @@ def make_saddle_dipole_corrector_fieldmesh(R, L, theta, I,
     attrs['gridGeometry'] = 'rectangular'
     attrs['axisLabels'] = ('x', 'y', 'z')
     attrs['gridLowerBound'] = (0, 0, 0)
-    attrs['harmonic'] = 1
+    attrs['harmonic'] = 0
     attrs['fundamentalFrequency'] = 0
 
     components = {}

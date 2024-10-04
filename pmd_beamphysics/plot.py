@@ -692,7 +692,7 @@ def plot_fieldmesh_rectangular_2d(fm,
     
     """
 
-    assert self.is_static, '2D Plotting currently only supports static fields.'
+    assert fm.is_static, '2D Plotting currently only supports static fields.'
 
     if not axes:
         fig, axes = plt.subplots(**kwargs)

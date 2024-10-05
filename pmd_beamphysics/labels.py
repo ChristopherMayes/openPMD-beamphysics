@@ -122,7 +122,7 @@ def texlabel(key: str):
     if key.startswith('bunching'):
         wavelength = parse_bunching_str(key)
         x, _, prefix = nice_array(wavelength)
-        return f'\mathrm{{bunching~at}}~{x:.1f}~\mathrm{{ {prefix}m }}'
+        return fr'\mathrm{{bunching~at}}~{x:.1f}~\mathrm{{ {prefix}m }}'
     
     return None
     

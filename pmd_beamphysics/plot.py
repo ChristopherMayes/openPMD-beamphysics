@@ -18,7 +18,7 @@ from pmd_beamphysics.labels import mathlabel
 from pmd_beamphysics.units import (nice_array, nice_scale_prefix,
                                    plottable_array)
 
-from .statistics import slice_statistics
+from .statistics import slice_statistics, twiss_ellipse_points
 
 CMAP0 = copy(plt.get_cmap('viridis'))
 CMAP0.set_under('white')
@@ -236,6 +236,7 @@ def marginal_plot(particle_group, key1='t', key2='p',
                   ylim=None,
                   tex=True,
                   nice=True,
+                  ellipse=False,
                   **kwargs):
     """
     Density plot and projections
@@ -269,7 +270,10 @@ def marginal_plot(particle_group, key1='t', key2='p',
         Use TEX for labels
         
     nice: bool, default = True
-        
+
+    ellipse: bool, default = True
+        If True, plot an ellipse representing the 
+        2x2 sigma matrix
     
     Returns
     -------
@@ -309,9 +313,19 @@ def marginal_plot(particle_group, key1='t', key2='p',
     ax_marg_y = fig.add_subplot(gs[1:4,3])
     #ax_info = fig.add_subplot(gs[0, 3:4])
     #ax_info.table(cellText=['a'])
-    
+
+    # Main plot
     # Proper weighting
     ax_joint.hexbin(x, y, C=w, reduce_C_function=np.sum, gridsize=bins, cmap=CMAP0, vmin=1e-20)
+
+
+    if ellipse:
+        sigma_mat2 = particle_group.cov(key1, key2)
+        x_ellipse, y_ellipse = twiss_ellipse_points(sigma_mat2)
+        x_ellipse += particle_group.avg(key1)
+        y_ellipse += particle_group.avg(key2)
+        ax_joint.plot(x_ellipse/f1, y_ellipse/f2, color='red')
+        
     
     # Manual histogramming version
     #H, xedges, yedges = np.histogram2d(x, y, weights=w, bins=bins)

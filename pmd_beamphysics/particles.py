@@ -678,7 +678,7 @@ class ParticleGroup:
         return self.charge / dt
     
     def bunching(self, wavelength):
-        """
+        r"""
         Calculate the normalized bunching parameter, which is the magnitude of the 
         complex sum of weighted exponentials at a given point.
     
@@ -926,6 +926,7 @@ class ParticleGroup:
              ylim=None,
              return_figure=False, 
              tex=True, nice=True,
+             ellipse=False,
              **kwargs):
         """
         1d or 2d density plot. 
@@ -964,6 +965,10 @@ class ParticleGroup:
             
         nice: bool, default = True
             Scale to nice units
+
+        ellipse: bool, default = True
+            If True, plot an ellipse representing the 
+            2x2 sigma matrix            
             
         return_figure: bool, default = False
             If true, return a matplotlib.figure.Figure object
@@ -993,6 +998,7 @@ class ParticleGroup:
                                 ylim=ylim,
                                 tex=tex,
                                 nice=nice,
+                                ellipse=ellipse,
                                 **kwargs)
         
         if return_figure:

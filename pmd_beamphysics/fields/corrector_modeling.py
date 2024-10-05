@@ -256,15 +256,41 @@ def bfield_from_thin_rectangular_corrector(X, Y, Z, a, b, h, I, plot_wire=False,
 def rotate_around_e3(theta):
 
     """
-    Rotation matrix around z-axis
+    Generate a 3D rotation matrix for a rotation around the z-axis (e3) by an angle theta.
 
-    Parameters:
+    Parameters
+    ----------
+    theta : float
+        Rotation angle in radians.
 
-    theta: float, [rad]
-        Rotation angle.
+    Returns
+    -------
+    rotation_matrix : ndarray
+        A 3x3 rotation matrix representing a counterclockwise rotation by `theta` radians around the z-axis.
 
-    Returns:
-    3D Rotation Matrix for rotation by theta [rad] around z-axis
+    Notes
+    -----
+    - This function returns the standard 3D rotation matrix for a rotation around the z-axis (also known as the e3 axis).
+    - The rotation matrix is given by:
+    
+      .. math::
+         R = \\begin{bmatrix} 
+         \cos(\theta) & -\sin(\theta) & 0 \\
+         \sin(\theta) &  \cos(\theta) & 0 \\
+         0            &  0            & 1 
+         \end{bmatrix}
+
+    Examples
+    --------
+    Generate a rotation matrix for a 90-degree (π/2 radians) rotation around the z-axis:
+
+    >>> theta = np.pi / 2
+    >>> R = rotate_around_e3(theta)
+    >>> print(R)
+    [[ 0.  -1.   0. ]
+     [ 1.   0.   0. ]
+     [ 0.   0.   1. ]]
+
     """
     
     C, S = np.cos(theta),np.sin(theta)
@@ -277,19 +303,48 @@ def get_arc_vectors(h, R, theta,
                     arc_e3=np.array([0,0,1]) ):
 
     """
-    Function to generate points of an arc with radius R in the plane y=h.
-    The points subtend an angle of theta [rad] in the xz plane.
+    Calculate the position vectors along a circular arc in 3D space.
 
-    Parameters:
-    h: float, [m]
-        height offset of the arc, defines the plane the arc lives in: y=h.
-    R: float, [m]
-        Radius of the arc.
-    npts, int 
-        Number of points to sample on the arc, arc is made of npts-1 line segments
+    Parameters
+    ----------
+    h : float
+        The height or vertical offset of the arc in the direction of the arc's normal vector [m].
+        
+    R : float
+        The radius of the arc [m].
+        
+    theta : float
+        The opening angle of the arc in radians. Defines the span of the arc.
+        
+    npts : int, optional
+        The number of points to use for discretizing the arc. Default is 100.
+        
+    arc_e3 : array_like, optional
+        The 3D unit vector representing the direction of the normal to the arc's plane. Default is [0, 0, 1] (z-axis).
 
-    Returns:
-        ndarray of size = (npts, 3) storing the points on the arc
+    Returns
+    -------
+    arc_points : ndarray
+        A 2D array of shape `(npts, 3)` representing the coordinates of the arc in 3D space.
+        
+    arc_tangents : ndarray
+        A 2D array of shape `(npts, 3)` representing the tangent vectors along the arc.
+
+    Notes
+    -----
+    - The arc is assumed to lie in a plane perpendicular to the `arc_e3` normal vector.
+    - The center of the arc is located at a distance `h` along the direction of `arc_e3`, and the arc spans an angle `theta` with radius `R`.
+    - The function returns both the points along the arc and the corresponding tangent vectors at those points.
+
+    Examples
+    --------
+    Generate position vectors and tangents for an arc with radius 1, angle π/2, and height 0.5:
+
+    >>> arc_points, arc_tangents = get_arc_vectors(h=0.5, R=1, theta=np.pi/2, npts=50)
+
+    Generate an arc with a custom normal vector:
+
+    >>> arc_points, arc_tangents = get_arc_vectors(h=0.5, R=1, theta=np.pi/2, npts=50, arc_e3=np.array([0, 1, 0]))
     """
 
     phi = (np.pi - theta)/2

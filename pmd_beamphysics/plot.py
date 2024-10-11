@@ -742,7 +742,9 @@ def plot_fieldmesh_rectangular_2d(fm,
 
         points = np.array([[coordinate_value, y_val, z_val] for y_val in y for z_val in z])
         interpolated_values = interpolator(points)
-        interpolated_values_2d = interpolated_values.reshape(len(z), len(y))
+        #interpolated_values_2d = interpolated_values.reshape(len(z), len(y))
+        interpolated_values_2d = interpolated_values.reshape(len(y), len(z))
+        
         
     elif coordinate == 'y':
         extent = [zmin, zmax, xmin, xmax]
@@ -751,7 +753,8 @@ def plot_fieldmesh_rectangular_2d(fm,
         
         points = np.array([[x_val, coordinate_value, z_val] for x_val in x for z_val in z])
         interpolated_values = interpolator(points)
-        interpolated_values_2d = interpolated_values.reshape(len(z), len(x))
+        #interpolated_values_2d = interpolated_values.reshape(len(z), len(x))
+        interpolated_values_2d = interpolated_values.reshape(len(x), len(z))
         
     elif coordinate == 'z':
         extent = [xmin, xmax, ymin, ymax]

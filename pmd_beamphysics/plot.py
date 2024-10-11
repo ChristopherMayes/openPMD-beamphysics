@@ -641,14 +641,14 @@ def plot_fieldmesh_rectangular_1d(fm,
         color = kwargs['color']
         del kwargs['color']
     else:
-        color='black'
+        color=None
 
     assert field_component in ['Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz'], f'Unknown field component: {field_component}'
 
-    fieldmesh_component = field_component.replace('B', 'magneticField/').replace('E', 'magneticField/')
+    fieldmesh_component = field_component.replace('B', 'magneticField/').replace('E', 'electricField/')
 
     assert fieldmesh_component in fm.components, f'FieldMesh was missing field component: {field_component}'
-
+    
     if fieldmesh_component.startswith('magnetic'):
         field_unit = 'T'
     elif fieldmesh_component.startswith('electric'):
@@ -666,10 +666,28 @@ def plot_fieldmesh_rectangular_1d(fm,
     points = np.array([[0, 0, z0] for z0 in z])
     field0 = interpolator(points)
 
-    axes.plot(z, field0, label=label)
+    if np.all(np.isclose(field0.imag, 0)): # Close to real
+
+        if not fm.is_static:
+            label = r'$\Re$['+label+']'
+
+        axes.plot(z, np.real(field0), label=label, color=color)
+
+    elif np.all(np.isclose(field0.real, 0)): # Close to imag
+
+        if not fm.is_static:
+            label = r'$\Im$['+label+']'
+
+        axes.plot(z, np.imag(field0), label=label, color=color)
+
+    else: # Complex
+
+        axes.plot(z, np.real(field0), label='Re['+label+']', color=color)
+        axes.plot(z, np.imag(field0), label='Im['+label+']')
+    
     axes.set_xlabel('z (m)')
     axes.set_ylabel(ylabel)
-    axes.legend()    
+    axes.legend()      
         
     if return_figure:
         return fig   
@@ -706,7 +724,7 @@ def plot_fieldmesh_rectangular_2d(fm,
     
     """
 
-    assert fm.is_static, '2D Plotting currently only supports static fields.'
+    #assert fm.is_static, '2D Plotting currently only supports static fields.'
 
     if not axes:
         fig, axes = plt.subplots(**kwargs)
@@ -719,7 +737,7 @@ def plot_fieldmesh_rectangular_2d(fm,
 
     assert component in ['Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz'], f'Unknown field component: {component}'
 
-    fieldmesh_component = component.replace('B', 'magneticField/').replace('E', 'magneticField/')
+    fieldmesh_component = component.replace('B', 'magneticField/').replace('E', 'electricField/')
 
     assert fieldmesh_component in fm.components, f'FieldMesh was missing field component: {component}'
 
@@ -742,9 +760,8 @@ def plot_fieldmesh_rectangular_2d(fm,
 
         points = np.array([[coordinate_value, y_val, z_val] for y_val in y for z_val in z])
         interpolated_values = interpolator(points)
-        #interpolated_values_2d = interpolated_values.reshape(len(z), len(y))
-        interpolated_values_2d = interpolated_values.reshape(len(y), len(z))
-        
+        #field_2d = interpolated_values.reshape(len(z), len(y))
+        field_2d = interpolated_values.reshape(len(y), len(z))
         
     elif coordinate == 'y':
         extent = [zmin, zmax, xmin, xmax]
@@ -753,8 +770,7 @@ def plot_fieldmesh_rectangular_2d(fm,
         
         points = np.array([[x_val, coordinate_value, z_val] for x_val in x for z_val in z])
         interpolated_values = interpolator(points)
-        #interpolated_values_2d = interpolated_values.reshape(len(z), len(x))
-        interpolated_values_2d = interpolated_values.reshape(len(x), len(z))
+        field_2d = interpolated_values.reshape(len(x), len(z))
         
     elif coordinate == 'z':
         extent = [xmin, xmax, ymin, ymax]
@@ -763,16 +779,14 @@ def plot_fieldmesh_rectangular_2d(fm,
 
         points = np.array([[x_val, y_val, coordinate_value] for x_val in x for y_val in y])
         interpolated_values = interpolator(points)
-        interpolated_values_2d = interpolated_values.reshape(len(x), len(y))
+        field_2d = interpolated_values.reshape(len(x), len(y))
 
-    dmin = interpolated_values_2d.min()
-    dmax = interpolated_values_2d.max()
+    dmin = field_2d.min()
+    dmax = field_2d.max()
     
     axes.set_aspect(aspect)
     
     plane = f'{coordinate} = {coordinate_value:0.3f}'
-    # Need to flip for image
-    #ax.imshow(np.flipud(dat), extent=extent, cmap=cmap, aspect=aspect)
     
     axes.set_xlabel(xlabel)
     axes.set_ylabel(ylabel)
@@ -780,11 +794,28 @@ def plot_fieldmesh_rectangular_2d(fm,
     # Add legend
     llabel = r'$' + f'{component[0]}_{component[1]}({plane})' + rf'$ ({unit.unitSymbol})'
     
+    if np.all(np.isclose(np.imag(field_2d), 0)): # Close to real
+        
+        axes.imshow(np.real(field_2d), extent=extent, origin='lower', aspect='auto', cmap=cmap)
+        dmin = np.real(field_2d.min())
+        dmax = np.real(field_2d.max())
+
+        if not fm.is_static:
+            llabel='Re' + llabel + ']'
+
+    elif np.all(np.isclose(np.real(field_2d), 0)): # Close to imag
+
+        axes.imshow(np.imag(field_2d), extent=extent, origin='lower', aspect='auto', cmap=cmap)
+        dmin = np.imag(field_2d.min())
+        dmax = np.imag(field_2d.max())
+
+        if not fm.is_static:
+            llabel='Im' + llabel
+        
+    else:
+
+        raise ValueError('Complex components not supported')
+
     norm = matplotlib.colors.Normalize(vmin=dmin, vmax=dmax)
     fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap),
              cax=cax, orientation='vertical', label=llabel)    
-
-    axes.imshow(interpolated_values_2d, extent=extent, origin='lower', aspect='auto', cmap=cmap)
-
-    
-    

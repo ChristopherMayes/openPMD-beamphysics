@@ -266,8 +266,7 @@ def bfield_from_thin_rectangular_corrector(X, Y, Z, a, b, h, current, plot_wire=
 
 
 def rotate_around_e3(theta):
-
-    """
+    r"""
     Generate a 3D rotation matrix for a rotation around the z-axis (e3) by an angle theta.
 
     Parameters

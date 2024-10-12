@@ -1377,7 +1377,7 @@
     <div class="doc doc-contents first">
 
 
-      <p>Class for openPMD External Field Mesh data.</p>
+        <p>Class for openPMD External Field Mesh data.</p>
 <p>Initialized on on openPMD beamphysics particle group:</p>
 <ul>
 <li><strong>h5</strong>: open h5 handle, or str that is a file</li>
@@ -2183,7 +2183,29 @@
 <span class="normal">757</span>
 <span class="normal">758</span>
 <span class="normal">759</span>
-<span class="normal">760</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span> <span class="nc">FieldMesh</span><span class="p">:</span>
+<span class="normal">760</span>
+<span class="normal">761</span>
+<span class="normal">762</span>
+<span class="normal">763</span>
+<span class="normal">764</span>
+<span class="normal">765</span>
+<span class="normal">766</span>
+<span class="normal">767</span>
+<span class="normal">768</span>
+<span class="normal">769</span>
+<span class="normal">770</span>
+<span class="normal">771</span>
+<span class="normal">772</span>
+<span class="normal">773</span>
+<span class="normal">774</span>
+<span class="normal">775</span>
+<span class="normal">776</span>
+<span class="normal">777</span>
+<span class="normal">778</span>
+<span class="normal">779</span>
+<span class="normal">780</span>
+<span class="normal">781</span>
+<span class="normal">782</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span> <span class="nc">FieldMesh</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Class for openPMD External Field Mesh data.</span>
 
@@ -2446,22 +2468,44 @@
 
     <span class="c1"># Plotting</span>
     <span class="c1"># TODO: more general plotting</span>
-    <span class="k">def</span> <span class="nf">plot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">component</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_figure</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">plot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> 
+             <span class="n">component</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+             <span class="n">time</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+             <span class="n">axes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+             <span class="n">cmap</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+             <span class="n">return_figure</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
+             <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">geometry</span> <span class="o">!=</span> <span class="s1">&#39;cylindrical&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">geometry</span> <span class="o">==</span> <span class="s1">&#39;cylindrical&#39;</span><span class="p">:</span>
+
+            <span class="k">return</span> <span class="n">plot_fieldmesh_cylindrical_2d</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                                                 <span class="n">component</span><span class="o">=</span><span class="n">component</span><span class="p">,</span>
+                                                 <span class="n">time</span><span class="o">=</span><span class="n">time</span><span class="p">,</span>
+                                                 <span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">,</span>
+                                                 <span class="n">return_figure</span><span class="o">=</span><span class="n">return_figure</span><span class="p">,</span>
+                                                 <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">geometry</span> <span class="o">==</span> <span class="s1">&#39;rectangular&#39;</span><span class="p">:</span>
+
+            <span class="n">plot_fieldmesh_rectangular_2d</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                                          <span class="n">component</span><span class="o">=</span><span class="n">component</span><span class="p">,</span>                                        
+                                          <span class="n">time</span><span class="o">=</span><span class="n">time</span><span class="p">,</span>
+                                          <span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">,</span>
+                                          <span class="n">return_figure</span><span class="o">=</span><span class="n">return_figure</span><span class="p">,</span>
+                                          <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Geometry </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">geometry</span><span class="si">}</span><span class="s1"> not implemented&#39;</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="n">plot_fieldmesh_cylindrical_2d</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
-                                             <span class="n">component</span><span class="o">=</span><span class="n">component</span><span class="p">,</span>
-                                             <span class="n">time</span><span class="o">=</span><span class="n">time</span><span class="p">,</span>
-                                             <span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">,</span>
-                                             <span class="n">return_figure</span><span class="o">=</span><span class="n">return_figure</span><span class="p">,</span>
-                                             <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-
-    <span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="n">plot_fieldmesh_cylindrical_1d</span><span class="p">)</span> 
+    <span class="c1">#@functools.wraps(plot_fieldmesh_cylindrical_1d) </span>
     <span class="k">def</span> <span class="nf">plot_onaxis</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">geometry</span> <span class="o">==</span> <span class="s1">&#39;cylindrical&#39;</span>
-        <span class="k">return</span> <span class="n">plot_fieldmesh_cylindrical_1d</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">geometry</span> <span class="o">==</span> <span class="s1">&#39;cylindrical&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">plot_fieldmesh_cylindrical_1d</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">geometry</span> <span class="o">==</span> <span class="s1">&#39;rectangular&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">plot_fieldmesh_rectangular_1d</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Unsupported geometry for plot_onaxis: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">geometry</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+
 
 
     <span class="k">def</span> <span class="nf">units</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
@@ -2932,7 +2976,7 @@
 
     <div class="doc doc-contents ">
 
-      
+        
     </div>
 
 </div>
@@ -2953,7 +2997,7 @@
 
     <div class="doc doc-contents ">
 
-      <p>Uses gridSpacing, gridSize, and gridOriginOffset to return coordinate vectors.</p>
+        <p>Uses gridSpacing, gridSize, and gridOriginOffset to return coordinate vectors.</p>
     </div>
 
 </div>
@@ -2974,7 +3018,7 @@
 
     <div class="doc doc-contents ">
 
-      <p>factor to multiply fields by, possibly complex.</p>
+        <p>factor to multiply fields by, possibly complex.</p>
 <p><code>factor = scale * exp(i*phase)</code></p>
     </div>
 
@@ -2996,7 +3040,7 @@
 
     <div class="doc doc-contents ">
 
-      <p>Returns True if there are no non-zero mageneticField components</p>
+        <p>Returns True if there are no non-zero mageneticField components</p>
     </div>
 
 </div>
@@ -3017,7 +3061,7 @@
 
     <div class="doc doc-contents ">
 
-      <p>Returns True if there are no non-zero electricField components</p>
+        <p>Returns True if there are no non-zero electricField components</p>
     </div>
 
 </div>
@@ -3038,7 +3082,7 @@
 
     <div class="doc doc-contents ">
 
-      <p>Usses coordinate vectors to produce a standard numpy meshgrids.</p>
+        <p>Usses coordinate vectors to produce a standard numpy meshgrids.</p>
     </div>
 
 </div>
@@ -3060,7 +3104,7 @@
 
     <div class="doc doc-contents ">
 
-      <p>Returns the complex argument <code>phi = -2*pi*RFphase</code>
+        <p>Returns the complex argument <code>phi = -2*pi*RFphase</code>
 to multiply the oscillating field by. </p>
 <p>Can be set.</p>
     </div>
@@ -3080,19 +3124,19 @@ to multiply the oscillating field by. </p>
 
     <div class="doc doc-contents ">
 
-      <p>Checks that all attributes and component internal data are the same</p>
+        <p>Checks that all attributes and component internal data are the same</p>
 
             <details class="quote">
               <summary>Source code in <code>pmd_beamphysics/fields/fieldmesh.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">564</span>
-<span class="normal">565</span>
-<span class="normal">566</span>
-<span class="normal">567</span>
-<span class="normal">568</span>
-<span class="normal">569</span>
-<span class="normal">570</span>
-<span class="normal">571</span>
-<span class="normal">572</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">586</span>
+<span class="normal">587</span>
+<span class="normal">588</span>
+<span class="normal">589</span>
+<span class="normal">590</span>
+<span class="normal">591</span>
+<span class="normal">592</span>
+<span class="normal">593</span>
+<span class="normal">594</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Checks that all attributes and component internal data are the same</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -3118,7 +3162,7 @@ to multiply the oscillating field by. </p>
 
     <div class="doc doc-contents ">
 
-      <p>Returns component data from a key</p>
+        <p>Returns component data from a key</p>
 <p>If the key starts with:</p>
 <ul>
 <li><code>re_</code></li>
@@ -3129,29 +3173,7 @@ to multiply the oscillating field by. </p>
 
             <details class="quote">
               <summary>Source code in <code>pmd_beamphysics/fields/fieldmesh.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">712</span>
-<span class="normal">713</span>
-<span class="normal">714</span>
-<span class="normal">715</span>
-<span class="normal">716</span>
-<span class="normal">717</span>
-<span class="normal">718</span>
-<span class="normal">719</span>
-<span class="normal">720</span>
-<span class="normal">721</span>
-<span class="normal">722</span>
-<span class="normal">723</span>
-<span class="normal">724</span>
-<span class="normal">725</span>
-<span class="normal">726</span>
-<span class="normal">727</span>
-<span class="normal">728</span>
-<span class="normal">729</span>
-<span class="normal">730</span>
-<span class="normal">731</span>
-<span class="normal">732</span>
-<span class="normal">733</span>
-<span class="normal">734</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">734</span>
 <span class="normal">735</span>
 <span class="normal">736</span>
 <span class="normal">737</span>
@@ -3168,7 +3190,29 @@ to multiply the oscillating field by. </p>
 <span class="normal">748</span>
 <span class="normal">749</span>
 <span class="normal">750</span>
-<span class="normal">751</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+<span class="normal">751</span>
+<span class="normal">752</span>
+<span class="normal">753</span>
+<span class="normal">754</span>
+<span class="normal">755</span>
+<span class="normal">756</span>
+<span class="normal">757</span>
+<span class="normal">758</span>
+<span class="normal">759</span>
+<span class="normal">760</span>
+<span class="normal">761</span>
+<span class="normal">762</span>
+<span class="normal">763</span>
+<span class="normal">764</span>
+<span class="normal">765</span>
+<span class="normal">766</span>
+<span class="normal">767</span>
+<span class="normal">768</span>
+<span class="normal">769</span>
+<span class="normal">770</span>
+<span class="normal">771</span>
+<span class="normal">772</span>
+<span class="normal">773</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Returns component data from a key</span>
 
@@ -3225,7 +3269,7 @@ to multiply the oscillating field by. </p>
 
     <div class="doc doc-contents ">
 
-      <p>Returns axis index for a named axis label key.</p>
+        <p>Returns axis index for a named axis label key.</p>
 <p>Examples:</p>
 <ul>
 <li><code>.axis_labels == ('x', 'y', 'z')</code></li>
@@ -3276,7 +3320,7 @@ to multiply the oscillating field by. </p>
 
     <div class="doc doc-contents ">
 
-      <p>Returns True if all elements in a component are zero.</p>
+        <p>Returns True if all elements in a component are zero.</p>
 
             <details class="quote">
               <summary>Source code in <code>pmd_beamphysics/fields/fieldmesh.py</code></summary>
@@ -3308,7 +3352,7 @@ to multiply the oscillating field by. </p>
 
     <div class="doc doc-contents ">
 
-      <p>Gets the coordinate vector from a named axis key.</p>
+        <p>Gets the coordinate vector from a named axis key.</p>
 
             <details class="quote">
               <summary>Source code in <code>pmd_beamphysics/fields/fieldmesh.py</code></summary>
@@ -3340,13 +3384,13 @@ to multiply the oscillating field by. </p>
 
     <div class="doc doc-contents ">
 
-      <p>Returns a deep copy</p>
+        <p>Returns a deep copy</p>
 
             <details class="quote">
               <summary>Source code in <code>pmd_beamphysics/fields/fieldmesh.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">754</span>
-<span class="normal">755</span>
-<span class="normal">756</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">776</span>
+<span class="normal">777</span>
+<span class="normal">778</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns a deep copy&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>          
 </code></pre></div></td></tr></table></div>
@@ -3370,7 +3414,7 @@ to multiply the oscillating field by. </p>
 
     <div class="doc doc-contents ">
 
-      <p>Class method to return a FieldMesh from ANSYS ASCII files.</p>
+        <p>Class method to return a FieldMesh from ANSYS ASCII files.</p>
 <p>The format of each file is:
 header1 (ignored)
 header2 (ignored)
@@ -3390,34 +3434,12 @@ in C order, with oscillations as exp(i<em>omega</em>t)</p>
 <details class="frequency" open>
   <summary>float</summary>
   <p>Frequency in Hz</p>
-</details>      <h4 id="pmd_beamphysics.FieldMesh.from_ansys_ascii_3d--returns">Returns</h4>
+</details>        <h4 id="pmd_beamphysics.FieldMesh.from_ansys_ascii_3d--returns">Returns</h4>
 <p>FieldMesh</p>
 
             <details class="quote">
               <summary>Source code in <code>pmd_beamphysics/fields/fieldmesh.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">415</span>
-<span class="normal">416</span>
-<span class="normal">417</span>
-<span class="normal">418</span>
-<span class="normal">419</span>
-<span class="normal">420</span>
-<span class="normal">421</span>
-<span class="normal">422</span>
-<span class="normal">423</span>
-<span class="normal">424</span>
-<span class="normal">425</span>
-<span class="normal">426</span>
-<span class="normal">427</span>
-<span class="normal">428</span>
-<span class="normal">429</span>
-<span class="normal">430</span>
-<span class="normal">431</span>
-<span class="normal">432</span>
-<span class="normal">433</span>
-<span class="normal">434</span>
-<span class="normal">435</span>
-<span class="normal">436</span>
-<span class="normal">437</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">437</span>
 <span class="normal">438</span>
 <span class="normal">439</span>
 <span class="normal">440</span>
@@ -3431,7 +3453,29 @@ in C order, with oscillations as exp(i<em>omega</em>t)</p>
 <span class="normal">448</span>
 <span class="normal">449</span>
 <span class="normal">450</span>
-<span class="normal">451</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+<span class="normal">451</span>
+<span class="normal">452</span>
+<span class="normal">453</span>
+<span class="normal">454</span>
+<span class="normal">455</span>
+<span class="normal">456</span>
+<span class="normal">457</span>
+<span class="normal">458</span>
+<span class="normal">459</span>
+<span class="normal">460</span>
+<span class="normal">461</span>
+<span class="normal">462</span>
+<span class="normal">463</span>
+<span class="normal">464</span>
+<span class="normal">465</span>
+<span class="normal">466</span>
+<span class="normal">467</span>
+<span class="normal">468</span>
+<span class="normal">469</span>
+<span class="normal">470</span>
+<span class="normal">471</span>
+<span class="normal">472</span>
+<span class="normal">473</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
 <span class="k">def</span> <span class="nf">from_ansys_ascii_3d</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> 
                <span class="n">efile</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">hfile</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -3489,20 +3533,20 @@ in C order, with oscillations as exp(i<em>omega</em>t)</p>
 
     <div class="doc doc-contents ">
 
-      <p>Class method to parse multiple 3D astra fieldmap files,
+        <p>Class method to parse multiple 3D astra fieldmap files,
 based on the common filename.</p>
 
             <details class="quote">
               <summary>Source code in <code>pmd_beamphysics/fields/fieldmesh.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">455</span>
-<span class="normal">456</span>
-<span class="normal">457</span>
-<span class="normal">458</span>
-<span class="normal">459</span>
-<span class="normal">460</span>
-<span class="normal">461</span>
-<span class="normal">462</span>
-<span class="normal">463</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">477</span>
+<span class="normal">478</span>
+<span class="normal">479</span>
+<span class="normal">480</span>
+<span class="normal">481</span>
+<span class="normal">482</span>
+<span class="normal">483</span>
+<span class="normal">484</span>
+<span class="normal">485</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
 <span class="k">def</span> <span class="nf">from_astra_3d</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">common_filename</span><span class="p">,</span> <span class="n">frequency</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Class method to parse multiple 3D astra fieldmap files,</span>
@@ -3532,7 +3576,7 @@ based on the common filename.</p>
 
     <div class="doc doc-contents ">
 
-      <h4 id="pmd_beamphysics.FieldMesh.from_onaxis--parameters">Parameters</h4>
+        <h4 id="pmd_beamphysics.FieldMesh.from_onaxis--parameters">Parameters</h4>
 <p>z: array
     z-coordinates. Must be regularly spaced.       </p>
 
@@ -3566,35 +3610,13 @@ Default: 1 if frequency !=0, otherwise 0. </p>
   <p>Element anchor point.
 Should be one of 'beginning', 'center', 'end'
 Default: 'beginning'</p>
-</details>      <h4 id="pmd_beamphysics.FieldMesh.from_onaxis--returns">Returns</h4>
+</details>        <h4 id="pmd_beamphysics.FieldMesh.from_onaxis--returns">Returns</h4>
 <p>field: FieldMesh
     Instantiated fieldmesh</p>
 
             <details class="quote">
               <summary>Source code in <code>pmd_beamphysics/fields/fieldmesh.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">465</span>
-<span class="normal">466</span>
-<span class="normal">467</span>
-<span class="normal">468</span>
-<span class="normal">469</span>
-<span class="normal">470</span>
-<span class="normal">471</span>
-<span class="normal">472</span>
-<span class="normal">473</span>
-<span class="normal">474</span>
-<span class="normal">475</span>
-<span class="normal">476</span>
-<span class="normal">477</span>
-<span class="normal">478</span>
-<span class="normal">479</span>
-<span class="normal">480</span>
-<span class="normal">481</span>
-<span class="normal">482</span>
-<span class="normal">483</span>
-<span class="normal">484</span>
-<span class="normal">485</span>
-<span class="normal">486</span>
-<span class="normal">487</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">487</span>
 <span class="normal">488</span>
 <span class="normal">489</span>
 <span class="normal">490</span>
@@ -3660,7 +3682,29 @@ Default: 'beginning'</p>
 <span class="normal">550</span>
 <span class="normal">551</span>
 <span class="normal">552</span>
-<span class="normal">553</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+<span class="normal">553</span>
+<span class="normal">554</span>
+<span class="normal">555</span>
+<span class="normal">556</span>
+<span class="normal">557</span>
+<span class="normal">558</span>
+<span class="normal">559</span>
+<span class="normal">560</span>
+<span class="normal">561</span>
+<span class="normal">562</span>
+<span class="normal">563</span>
+<span class="normal">564</span>
+<span class="normal">565</span>
+<span class="normal">566</span>
+<span class="normal">567</span>
+<span class="normal">568</span>
+<span class="normal">569</span>
+<span class="normal">570</span>
+<span class="normal">571</span>
+<span class="normal">572</span>
+<span class="normal">573</span>
+<span class="normal">574</span>
+<span class="normal">575</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
 <span class="k">def</span> <span class="nf">from_onaxis</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span>
                 <span class="n">z</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                 <span class="n">Bz</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -3770,19 +3814,19 @@ Default: 'beginning'</p>
 
     <div class="doc doc-contents ">
 
-      <p>Class method to parse a superfish T7 style file.</p>
+        <p>Class method to parse a superfish T7 style file.</p>
 
             <details class="quote">
               <summary>Source code in <code>pmd_beamphysics/fields/fieldmesh.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">404</span>
-<span class="normal">405</span>
-<span class="normal">406</span>
-<span class="normal">407</span>
-<span class="normal">408</span>
-<span class="normal">409</span>
-<span class="normal">410</span>
-<span class="normal">411</span>
-<span class="normal">412</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">426</span>
+<span class="normal">427</span>
+<span class="normal">428</span>
+<span class="normal">429</span>
+<span class="normal">430</span>
+<span class="normal">431</span>
+<span class="normal">432</span>
+<span class="normal">433</span>
+<span class="normal">434</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
 <span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="n">read_superfish_t7</span><span class="p">)</span>
 <span class="k">def</span> <span class="nf">from_superfish</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">geometry</span><span class="o">=</span><span class="s1">&#39;cylindrical&#39;</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -3808,40 +3852,40 @@ Default: 'beginning'</p>
 
     <div class="doc doc-contents ">
 
-      <p>Retruns a component scaled by the complex factor
+        <p>Retruns a component scaled by the complex factor
     factor = scale<em>exp(i</em>phase)</p>
 
             <details class="quote">
               <summary>Source code in <code>pmd_beamphysics/fields/fieldmesh.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">595</span>
-<span class="normal">596</span>
-<span class="normal">597</span>
-<span class="normal">598</span>
-<span class="normal">599</span>
-<span class="normal">600</span>
-<span class="normal">601</span>
-<span class="normal">602</span>
-<span class="normal">603</span>
-<span class="normal">604</span>
-<span class="normal">605</span>
-<span class="normal">606</span>
-<span class="normal">607</span>
-<span class="normal">608</span>
-<span class="normal">609</span>
-<span class="normal">610</span>
-<span class="normal">611</span>
-<span class="normal">612</span>
-<span class="normal">613</span>
-<span class="normal">614</span>
-<span class="normal">615</span>
-<span class="normal">616</span>
-<span class="normal">617</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">617</span>
 <span class="normal">618</span>
 <span class="normal">619</span>
 <span class="normal">620</span>
 <span class="normal">621</span>
 <span class="normal">622</span>
-<span class="normal">623</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">scaled_component</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+<span class="normal">623</span>
+<span class="normal">624</span>
+<span class="normal">625</span>
+<span class="normal">626</span>
+<span class="normal">627</span>
+<span class="normal">628</span>
+<span class="normal">629</span>
+<span class="normal">630</span>
+<span class="normal">631</span>
+<span class="normal">632</span>
+<span class="normal">633</span>
+<span class="normal">634</span>
+<span class="normal">635</span>
+<span class="normal">636</span>
+<span class="normal">637</span>
+<span class="normal">638</span>
+<span class="normal">639</span>
+<span class="normal">640</span>
+<span class="normal">641</span>
+<span class="normal">642</span>
+<span class="normal">643</span>
+<span class="normal">644</span>
+<span class="normal">645</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">scaled_component</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 
 <span class="sd">    Retruns a component scaled by the complex factor</span>
@@ -3887,26 +3931,26 @@ Default: 'beginning'</p>
 
     <div class="doc doc-contents ">
 
-      <p>Returns a new FieldMesh in cylindrical geometry.</p>
+        <p>Returns a new FieldMesh in cylindrical geometry.</p>
 <p>If the current geometry is rectangular, this
 will use the y=0 slice.</p>
 
             <details class="quote">
               <summary>Source code in <code>pmd_beamphysics/fields/fieldmesh.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">367</span>
-<span class="normal">368</span>
-<span class="normal">369</span>
-<span class="normal">370</span>
-<span class="normal">371</span>
-<span class="normal">372</span>
-<span class="normal">373</span>
-<span class="normal">374</span>
-<span class="normal">375</span>
-<span class="normal">376</span>
-<span class="normal">377</span>
-<span class="normal">378</span>
-<span class="normal">379</span>
-<span class="normal">380</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">to_cylindrical</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">389</span>
+<span class="normal">390</span>
+<span class="normal">391</span>
+<span class="normal">392</span>
+<span class="normal">393</span>
+<span class="normal">394</span>
+<span class="normal">395</span>
+<span class="normal">396</span>
+<span class="normal">397</span>
+<span class="normal">398</span>
+<span class="normal">399</span>
+<span class="normal">400</span>
+<span class="normal">401</span>
+<span class="normal">402</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">to_cylindrical</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Returns a new FieldMesh in cylindrical geometry.</span>
 
@@ -3937,21 +3981,21 @@ will use the y=0 slice.</p>
 
     <div class="doc doc-contents ">
 
-      <p>Returns the units of any key</p>
+        <p>Returns the units of any key</p>
 
             <details class="quote">
               <summary>Source code in <code>pmd_beamphysics/fields/fieldmesh.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">322</span>
-<span class="normal">323</span>
-<span class="normal">324</span>
-<span class="normal">325</span>
-<span class="normal">326</span>
-<span class="normal">327</span>
-<span class="normal">328</span>
-<span class="normal">329</span>
-<span class="normal">330</span>
-<span class="normal">331</span>
-<span class="normal">332</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">units</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span>
+<span class="normal">349</span>
+<span class="normal">350</span>
+<span class="normal">351</span>
+<span class="normal">352</span>
+<span class="normal">353</span>
+<span class="normal">354</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">units</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the units of any key&quot;&quot;&quot;</span>
 
     <span class="c1"># Strip any operators</span>
@@ -3979,24 +4023,24 @@ will use the y=0 slice.</p>
 
     <div class="doc doc-contents ">
 
-      <p>Writes openPMD-beamphysics format to an open h5 handle, or new file if h5 is a str.</p>
+        <p>Writes openPMD-beamphysics format to an open h5 handle, or new file if h5 is a str.</p>
 
             <details class="quote">
               <summary>Source code in <code>pmd_beamphysics/fields/fieldmesh.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">335</span>
-<span class="normal">336</span>
-<span class="normal">337</span>
-<span class="normal">338</span>
-<span class="normal">339</span>
-<span class="normal">340</span>
-<span class="normal">341</span>
-<span class="normal">342</span>
-<span class="normal">343</span>
-<span class="normal">344</span>
-<span class="normal">345</span>
-<span class="normal">346</span>
-<span class="normal">347</span>
-<span class="normal">348</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">h5</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">357</span>
+<span class="normal">358</span>
+<span class="normal">359</span>
+<span class="normal">360</span>
+<span class="normal">361</span>
+<span class="normal">362</span>
+<span class="normal">363</span>
+<span class="normal">364</span>
+<span class="normal">365</span>
+<span class="normal">366</span>
+<span class="normal">367</span>
+<span class="normal">368</span>
+<span class="normal">369</span>
+<span class="normal">370</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">h5</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Writes openPMD-beamphysics format to an open h5 handle, or new file if h5 is a str.</span>
 
@@ -4027,16 +4071,16 @@ will use the y=0 slice.</p>
 
     <div class="doc doc-contents ">
 
-      <p>Writes a GPT field file.</p>
+        <p>Writes a GPT field file.</p>
 
             <details class="quote">
               <summary>Source code in <code>pmd_beamphysics/fields/fieldmesh.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">383</span>
-<span class="normal">384</span>
-<span class="normal">385</span>
-<span class="normal">386</span>
-<span class="normal">387</span>
-<span class="normal">388</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">write_gpt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filePath</span><span class="p">,</span> <span class="n">asci2gdf_bin</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">405</span>
+<span class="normal">406</span>
+<span class="normal">407</span>
+<span class="normal">408</span>
+<span class="normal">409</span>
+<span class="normal">410</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">write_gpt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filePath</span><span class="p">,</span> <span class="n">asci2gdf_bin</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Writes a GPT field file. </span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -4059,22 +4103,22 @@ will use the y=0 slice.</p>
 
     <div class="doc doc-contents ">
 
-      <p>Write a Superfish T7 file. </p>
+        <p>Write a Superfish T7 file. </p>
 <p>For static fields, a Poisson T7 file is written.</p>
 <p>For dynamic (<code>harmonic /= 0</code>) fields, a Fish T7 file is written</p>
 
             <details class="quote">
               <summary>Source code in <code>pmd_beamphysics/fields/fieldmesh.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">391</span>
-<span class="normal">392</span>
-<span class="normal">393</span>
-<span class="normal">394</span>
-<span class="normal">395</span>
-<span class="normal">396</span>
-<span class="normal">397</span>
-<span class="normal">398</span>
-<span class="normal">399</span>
-<span class="normal">400</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="n">write_superfish_t7</span><span class="p">)</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">413</span>
+<span class="normal">414</span>
+<span class="normal">415</span>
+<span class="normal">416</span>
+<span class="normal">417</span>
+<span class="normal">418</span>
+<span class="normal">419</span>
+<span class="normal">420</span>
+<span class="normal">421</span>
+<span class="normal">422</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="n">write_superfish_t7</span><span class="p">)</span>
 <span class="k">def</span> <span class="nf">write_superfish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filePath</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Write a Superfish T7 file. </span>

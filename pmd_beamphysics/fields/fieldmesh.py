@@ -1,6 +1,6 @@
-from pmd_beamphysics.units import dimension, dimension_name, SI_symbol, pg_units
+from pmd_beamphysics.units import pg_units
 
-from pmd_beamphysics.readers import component_data, expected_record_unit_dimension, field_record_components, decode_attrs, field_paths, component_from_alias, load_field_attrs, component_alias
+from pmd_beamphysics.readers import component_data, expected_record_unit_dimension, field_record_components, field_paths, component_from_alias, load_field_attrs, component_alias
 
 from pmd_beamphysics.writers import write_pmd_field, pmd_field_init
 
@@ -11,7 +11,7 @@ from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d, plot_fieldmesh_c
 from pmd_beamphysics.interfaces.ansys import read_ansys_ascii_3d_fields
 from pmd_beamphysics.interfaces.astra import write_astra_1d_fieldmap, read_astra_3d_fieldmaps, write_astra_3d_fieldmaps, astra_1d_fieldmap_data
 from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
-from pmd_beamphysics.interfaces.impact import create_impact_solrf_fieldmap_fourier, create_impact_solrf_ele
+from pmd_beamphysics.interfaces.impact import create_impact_solrf_ele, parse_impact_emfield_cartesian, write_impact_emfield_cartesian
 from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
 
 from pmd_beamphysics.fields.expansion import expand_fieldmesh_from_onaxis
@@ -384,7 +384,8 @@ class FieldMesh:
         
     @functools.wraps(create_impact_solrf_ele)      
     def to_impact_solrf(self, *args, **kwargs):
-        return create_impact_solrf_ele(self, *args, **kwargs)
+        return create_impact_solrf_ele(self, *args, **kwargs)    
+    
       
     def to_cylindrical(self):
         """
@@ -399,8 +400,7 @@ class FieldMesh:
         elif self.geometry == 'cylindrical':
             return self
         else:
-            raise NotImplementedError(f"geometry not implemented: {self.geometry}")
-            
+            raise NotImplementedError(f"geometry not implemented: {self.geometry}")  
     
     def write_gpt(self, filePath, asci2gdf_bin=None, verbose=True):
         """
@@ -408,6 +408,20 @@ class FieldMesh:
         """
     
         return write_gpt_fieldmesh(self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose)
+
+    @functools.wraps(write_impact_emfield_cartesian)
+    def write_impact_emfield_cartesian(self, filename):
+        """
+        Writes Impact-T style 1Tv3.T7 file corresponding to 
+        the `111: EMfldCart` element.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the file where the field data will be written.
+        
+        """
+        return write_impact_emfield_cartesian(self, filename)   
     
     # Superfish
     @functools.wraps(write_superfish_t7)
@@ -421,18 +435,6 @@ class FieldMesh:
         """
         return write_superfish_t7(self, filePath, verbose=verbose)
             
-            
-            
-    @classmethod
-    @functools.wraps(read_superfish_t7)
-    def from_superfish(cls, filename, type=None, geometry='cylindrical'):
-        """
-        Class method to parse a superfish T7 style file.
-        """        
-        data = read_superfish_t7(filename, type=type, geometry=geometry)
-        c = cls(data=data)
-        return c               
-        
 
     @classmethod
     def from_ansys_ascii_3d(cls, *, 
@@ -483,6 +485,47 @@ class FieldMesh:
         
         data = read_astra_3d_fieldmaps(common_filename, frequency=frequency)
         return cls(data=data)
+
+    @classmethod
+    def from_impact_emfield_cartesian(cls, filename, frequency=0,
+                                     eleAnchorPt='beginning'):
+        """
+        Class method to read an Impact-T style 1Tv3.T7 file corresponding to 
+        the `111: EMfldCart` element.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the file where the field data will be written.
+
+
+        frequency : float, optional
+            Fundamental frequency in Hz
+            This simply adds 'fundamentalFrequency' to attrs
+            default=0
+
+        Returns
+        -------
+            FieldMesh            
+        """
+        
+        attrs, components = parse_impact_emfield_cartesian(filename)
+
+        # These aren't in the file, they must be added
+        attrs['fundamentalFrequency'] = frequency
+        attrs['eleAnchorPt'] = eleAnchorPt
+        return cls(data = dict(attrs=attrs, components=components))
+
+    
+    @classmethod
+    @functools.wraps(read_superfish_t7)
+    def from_superfish(cls, filename, type=None, geometry='cylindrical'):
+        """
+        Class method to parse a superfish T7 style file.
+        """        
+        data = read_superfish_t7(filename, type=type, geometry=geometry)
+        c = cls(data=data)
+        return c      
         
     @classmethod
     def from_onaxis(cls, *,
@@ -587,7 +630,6 @@ class FieldMesh:
         """
         Checks that all attributes and component internal data are the same
         """
-        
         if not tools.data_are_equal(self.attrs, other.attrs):
             return False
         

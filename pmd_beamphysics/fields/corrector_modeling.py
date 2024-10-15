@@ -702,16 +702,18 @@ def make_saddle_dipole_corrector_fieldmesh(*,
     dx = np.diff(xs)[0]
     dy = np.diff(ys)[0]
     dz = np.diff(zs)[0]
+
+    shape = Bx.shape
     
     attrs = {}
     attrs['gridOriginOffset'] = (xs[0], ys[0], zs[0])
     attrs['gridSpacing'] = (dx, dy, dz)
-    attrs['gridSize'] = Bx.shape
+    attrs['gridSize'] = shape
     attrs['eleAnchorPt'] = 'center'
     attrs['gridGeometry'] = 'rectangular'
     attrs['axisLabels'] = ('x', 'y', 'z')
     attrs['gridLowerBound'] = (0, 0, 0)
-    attrs['harmonic'] = 0
+    attrs['harmonic'] = 1
     attrs['fundamentalFrequency'] = 0
 
     components = {}

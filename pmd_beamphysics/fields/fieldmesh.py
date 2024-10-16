@@ -513,6 +513,11 @@ class FieldMesh:
 
         # These aren't in the file, they must be added
         attrs['fundamentalFrequency'] = frequency
+        if frequency == 0:
+            attrs['harmonic'] = 0
+        else:
+            attrs['harmonic'] = 1
+        
         attrs['eleAnchorPt'] = eleAnchorPt
         return cls(data = dict(attrs=attrs, components=components))
 

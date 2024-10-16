@@ -10,7 +10,7 @@ from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d, plot_fieldmesh_c
 
 from pmd_beamphysics.interfaces.ansys import read_ansys_ascii_3d_fields
 from pmd_beamphysics.interfaces.astra import write_astra_1d_fieldmap, read_astra_3d_fieldmaps, write_astra_3d_fieldmaps, astra_1d_fieldmap_data
-from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
+from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmap
 from pmd_beamphysics.interfaces.impact import create_impact_solrf_fieldmap_fourier, create_impact_solrf_ele
 from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
 
@@ -407,7 +407,7 @@ class FieldMesh:
         Writes a GPT field file. 
         """
     
-        return write_gpt_fieldmesh(self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose)
+        return write_gpt_fieldmap(self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose)
     
     # Superfish
     @functools.wraps(write_superfish_t7)

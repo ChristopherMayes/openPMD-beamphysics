@@ -3,23 +3,27 @@
 
 """
 
-from pmd_beamphysics.units import nice_array, plottable_array, nice_scale_prefix
-from pmd_beamphysics.labels import mathlabel
-
-
-from .statistics import slice_statistics
-import matplotlib.pyplot as plt
-import matplotlib
-from matplotlib.gridspec import GridSpec
-import numpy as np
 from copy import copy
+
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.gridspec import GridSpec
+# For field legends
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+from scipy.interpolate import RegularGridInterpolator
+
+from pmd_beamphysics.labels import mathlabel
+from pmd_beamphysics.units import (nice_array, nice_scale_prefix,
+                                   plottable_array)
+
+from .statistics import slice_statistics, twiss_ellipse_points
+
 CMAP0 = copy(plt.get_cmap('viridis'))
 CMAP0.set_under('white')
 
 CMAP1 = copy(plt.get_cmap('plasma'))
-
-# For field legends
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 def plt_histogram(a, weights=None, bins=40):
@@ -232,6 +236,7 @@ def marginal_plot(particle_group, key1='t', key2='p',
                   ylim=None,
                   tex=True,
                   nice=True,
+                  ellipse=False,
                   **kwargs):
     """
     Density plot and projections
@@ -265,7 +270,10 @@ def marginal_plot(particle_group, key1='t', key2='p',
         Use TEX for labels
         
     nice: bool, default = True
-        
+
+    ellipse: bool, default = True
+        If True, plot an ellipse representing the 
+        2x2 sigma matrix
     
     Returns
     -------
@@ -305,9 +313,19 @@ def marginal_plot(particle_group, key1='t', key2='p',
     ax_marg_y = fig.add_subplot(gs[1:4,3])
     #ax_info = fig.add_subplot(gs[0, 3:4])
     #ax_info.table(cellText=['a'])
-    
+
+    # Main plot
     # Proper weighting
     ax_joint.hexbin(x, y, C=w, reduce_C_function=np.sum, gridsize=bins, cmap=CMAP0, vmin=1e-20)
+
+
+    if ellipse:
+        sigma_mat2 = particle_group.cov(key1, key2)
+        x_ellipse, y_ellipse = twiss_ellipse_points(sigma_mat2)
+        x_ellipse += particle_group.avg(key1)
+        y_ellipse += particle_group.avg(key2)
+        ax_joint.plot(x_ellipse/f1, y_ellipse/f2, color='red')
+        
     
     # Manual histogramming version
     #H, xedges, yedges = np.histogram2d(x, y, weights=w, bins=bins)
@@ -572,6 +590,232 @@ def plot_fieldmesh_cylindrical_1d(fm,
     ax.set_ylabel(ylabel)    
         
     if return_figure:
-        return fig        
+        return fig   
+
+
+def plot_fieldmesh_rectangular_1d(fm,
+                                  field_component,
+                                  axes = None,
+                                  return_figure=False,
+                                **kwargs):
+
+    """
     
+    Plots the on-axis field components from a FieldMesh
+    with rectangular geometry.
     
+    Parameters
+    ----------
+    axes: matplotlib axes object, default None
+        
+    return_figure: bool, default False
+
+    Returns
+    -------
+    fig, optional
+        if return_figure, returns matplotlib Figure instance
+        for further modifications.
+    
+    """
+
+    if not axes:
+        fig, axes = plt.subplots(**kwargs)
+
+    # Use recursion to plot multiple field components
+    if isinstance(field_component, list):
+
+        for ii, fc in enumerate(field_component):
+            plot_fieldmesh_rectangular_1d(fm,
+                                          fc,
+                                          axes = axes,
+                                        **kwargs)
+
+        if return_figure:
+            return fig 
+        else: 
+            return
+        
+
+    # Here only to plot a single field component
+    if 'color' in kwargs:
+        color = kwargs['color']
+        del kwargs['color']
+    else:
+        color=None
+
+    assert field_component in ['Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz'], f'Unknown field component: {field_component}'
+
+    fieldmesh_component = field_component.replace('B', 'magneticField/').replace('E', 'electricField/')
+
+    assert fieldmesh_component in fm.components, f'FieldMesh was missing field component: {field_component}'
+    
+    if fieldmesh_component.startswith('magnetic'):
+        field_unit = 'T'
+    elif fieldmesh_component.startswith('electric'):
+        field_unit = 'V/m'
+
+    ylabel = r'$' + field_component[0] + '_' + field_component[1] + rf'$ ({field_unit})'
+    label = r'$' + field_component[0] + '_' + field_component[1]+'(x=y=0, z)$'
+
+    field = fm.components[fieldmesh_component]
+    
+    x, y, z = fm.coord_vec('x'), fm.coord_vec('y'), fm.coord_vec('z')
+    
+    interpolator = RegularGridInterpolator((x, y, z), field)
+
+    points = np.array([[0, 0, z0] for z0 in z])
+    field0 = interpolator(points)
+
+    if np.all(np.isclose(field0.imag, 0)): # Close to real
+
+        if not fm.is_static:
+            label = r'$\Re$['+label+']'
+
+        axes.plot(z, np.real(field0), label=label, color=color)
+
+    elif np.all(np.isclose(field0.real, 0)): # Close to imag
+
+        if not fm.is_static:
+            label = r'$\Im$['+label+']'
+
+        axes.plot(z, np.imag(field0), label=label, color=color)
+
+    else: # Complex
+
+        axes.plot(z, np.real(field0), label='Re['+label+']', color=color)
+        axes.plot(z, np.imag(field0), label='Im['+label+']')
+    
+    axes.set_xlabel('z (m)')
+    axes.set_ylabel(ylabel)
+    axes.legend()      
+        
+    if return_figure:
+        return fig   
+        
+
+def plot_fieldmesh_rectangular_2d(fm,
+                                  component=None,
+                                  coordinate=None, 
+                                  coordinate_value=None, # Defines the plane coordinate = value
+                                  time=None,
+                                  axes=None,
+                                  aspect='auto',
+                                  cmap=None,
+                                  return_figure=False,
+                                  **kwargs):
+
+
+    """
+    
+    Plots a field component evaluated on a plane defined by coordinate [x, y, or z] = coordinate_value 
+    from a FieldMesh with rectangular geometry.
+    
+    Parameters
+    ----------
+    axes: matplotlib axes object, default None
+        
+    return_figure: bool, default False
+
+    Returns
+    -------
+    fig, optional
+        if return_figure, returns matplotlib Figure instance
+        for further modifications.
+    
+    """
+
+    #assert fm.is_static, '2D Plotting currently only supports static fields.'
+
+    if not axes:
+        fig, axes = plt.subplots(**kwargs)
+
+    if not cmap:
+        cmap = CMAP1       
+
+    divider = make_axes_locatable(axes)
+    cax = divider.append_axes('right', size='5%', pad=0.05)   
+
+    assert component in ['Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz'], f'Unknown field component: {component}'
+
+    fieldmesh_component = component.replace('B', 'magneticField/').replace('E', 'electricField/')
+
+    assert fieldmesh_component in fm.components, f'FieldMesh was missing field component: {component}'
+
+    field = fm.components[fieldmesh_component]
+    
+    x, y, z = fm.coord_vec('x'), fm.coord_vec('y'), fm.coord_vec('z')
+    
+    interpolator = RegularGridInterpolator((x, y, z), field)
+
+    unit = fm.units(fieldmesh_component)
+    
+    xmin, ymin, zmin = fm.mins
+    xmax, ymax, zmax = fm.maxs
+
+    # Prefer z to be on x-axis for accelerators
+    if coordinate == 'x':
+        extent = [zmin, zmax, ymin, ymax]
+        xlabel = 'z (m)'
+        ylabel = 'y (m)'
+
+        points = np.array([[coordinate_value, y_val, z_val] for y_val in y for z_val in z])
+        interpolated_values = interpolator(points)
+        #field_2d = interpolated_values.reshape(len(z), len(y))
+        field_2d = interpolated_values.reshape(len(y), len(z))
+        
+    elif coordinate == 'y':
+        extent = [zmin, zmax, xmin, xmax]
+        xlabel = 'z (m)'
+        ylabel = 'x (m)'
+        
+        points = np.array([[x_val, coordinate_value, z_val] for x_val in x for z_val in z])
+        interpolated_values = interpolator(points)
+        field_2d = interpolated_values.reshape(len(x), len(z))
+        
+    elif coordinate == 'z':
+        extent = [xmin, xmax, ymin, ymax]
+        xlabel = 'x (m)'
+        ylabel = 'y (m)'
+
+        points = np.array([[x_val, y_val, coordinate_value] for x_val in x for y_val in y])
+        interpolated_values = interpolator(points)
+        field_2d = interpolated_values.reshape(len(x), len(y))
+
+    dmin = field_2d.min()
+    dmax = field_2d.max()
+    
+    axes.set_aspect(aspect)
+    
+    plane = f'{coordinate} = {coordinate_value:0.3f}'
+    
+    axes.set_xlabel(xlabel)
+    axes.set_ylabel(ylabel)
+    
+    # Add legend
+    llabel = r'$' + f'{component[0]}_{component[1]}({plane})' + rf'$ ({unit.unitSymbol})'
+    
+    if np.all(np.isclose(np.imag(field_2d), 0)): # Close to real
+        
+        axes.imshow(np.real(field_2d), extent=extent, origin='lower', aspect='auto', cmap=cmap)
+        dmin = np.real(field_2d.min())
+        dmax = np.real(field_2d.max())
+
+        if not fm.is_static:
+            llabel='Re' + llabel + ']'
+
+    elif np.all(np.isclose(np.real(field_2d), 0)): # Close to imag
+
+        axes.imshow(np.imag(field_2d), extent=extent, origin='lower', aspect='auto', cmap=cmap)
+        dmin = np.imag(field_2d.min())
+        dmax = np.imag(field_2d.max())
+
+        if not fm.is_static:
+            llabel='Im' + llabel
+        
+    else:
+
+        raise ValueError('Complex components not supported')
+
+    norm = matplotlib.colors.Normalize(vmin=dmin, vmax=dmax)
+    fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap),
+             cax=cax, orientation='vertical', label=llabel)    

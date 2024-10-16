@@ -1,5 +1,117 @@
 import numpy as np
-   
+from pmd_beamphysics.units import c_light
+from pmd_beamphysics.species import mass_of
+ 
+# Remove from below, because this docstring is used directly in ParticleGroup
+#     pg : ParticleGroup
+#        The ParticleGroup instance to convert.
+def particlegroup_to_bmad(pg, p0c=None, tref=None):
+    """
+    Convert a ParticleGroup instance to Bmad phase space coordinates.
+    
+    This function maps the properties of a ParticleGroup to their corresponding
+    Bmad phase space coordinates as per the following mapping:
+    
+    Bmad      openPMD-beamphysics
+    ----      -------------------
+    Bmad x  = x
+    Bmad px = px/p0c
+    Bmad y  = y
+    Bmad py = py/p0c   
+    Bmad z = -beta * c * (t - tref)
+    Bmad pz = p/p0c - 1
+    Bmad t  = t
+    
+    Parameters
+    ----------
+    p0c : float, optional
+        Reference momentum times the speed of light (in eV).
+        Default is None, which uses pg['mean_p'].
+    tref : float, optional
+        Reference time (in seconds).
+        Default is None, which uses pg['mean_t'].
+    
+    Returns
+    -------
+    dict
+        A dictionary containing Bmad phase space coordinates.
+    """
+    
+    if p0c is None:
+        p0c = pg['mean_p']
+    if tref is None:
+        tref = pg['mean_t']
+    
+    # Conversion to Bmad units
+    bmad_data = {
+        'x': pg.x,
+        'y': pg.y,
+        'px': pg.px / p0c,
+        'py': pg.py / p0c,
+        'z': -pg.beta * c_light * (pg.t - tref),
+        'pz': pg.p / p0c - 1,
+        'charge': pg.weight,
+        'species': pg.species,
+        'p0c': p0c,
+        'tref': tref,
+        'state': pg.status,
+    }
+    
+    return bmad_data
+
+
+def bmad_to_particlegroup_data(bmad_data):
+    """
+    Convert Bmad particle data to a ParticleGroup data dictionary.
+    
+    This function reverses the conversion done by particlegroup_to_bmad, mapping
+    Bmad phase space coordinates back to a ParticleGroup data format.
+    
+    Parameters
+    ----------
+    bmad_data : dict
+        A dictionary containing Bmad phase space coordinates.
+    
+    Returns
+    -------
+    dict
+        A dictionary of data suitable for instantiating a ParticleGroup.
+    """
+    
+    # Conversion to ParticleGroup units
+    species = bmad_data['species']
+    mc2 = mass_of(species)
+    
+    p0c = bmad_data['p0c']
+    tref = bmad_data.get('tref', 0)
+    
+    p = (1 + bmad_data['pz']) * p0c
+    px = bmad_data['px'] * p0c
+    py = bmad_data['py'] * p0c
+    pz = np.sqrt(p**2 - px**2 - py**2)
+    gamma2 = (p / mc2)**2 + 1
+    beta = np.sqrt(1 - 1 / gamma2)
+    
+    pg_data = {
+        'x': bmad_data['x'],
+        'px': px,
+        'y': bmad_data['y'],
+        'py': py,
+        'z': np.zeros(len(p)),  # Zero by definition in z-coordinates
+        'pz': pz,
+        't': tref - bmad_data['z'] / (beta * c_light),
+        'species': species,
+        'weight': bmad_data['charge'],
+        'status': bmad_data['state'],
+    }
+    
+    return pg_data
+
+    
+    
+    
+    
+    
 def write_bmad(particle_group,           
                outfile,
                p0c = None,
@@ -37,8 +149,6 @@ def write_bmad(particle_group,
     
     status  = particle_group.status 
     weight  = particle_group.weight
-    
-    zeros = np.full(n, 0)
     
     if p0c:
         # s-based coordinates

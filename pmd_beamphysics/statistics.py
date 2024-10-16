@@ -56,6 +56,27 @@ def twiss_calc(sigma_mat2):
     return twiss
 
 
+def twiss_ellipse_points(sigma_mat2, n_points=36):
+    """
+    Returns points that will trace a the rms ellipse 
+    from a 2x2 covariance matrix `sigma_mat2`.
+
+    Returns
+    -------
+    vec: np.ndarray with shape (2, n_points)
+        x, p representing the ellipse points.
+    
+    """
+    twiss = twiss_calc(sigma_mat2)
+    A = A_mat_calc(twiss['beta'], twiss['alpha'])
+    
+    theta = np.linspace(0, np.pi*2, n_points)
+    zvec0 = np.array([np.cos(theta), np.sin(theta)]) * np.sqrt(2*twiss['emit'])
+    
+    zvec1 = np.matmul(A, zvec0)
+    return zvec1
+
+
 
 def twiss_match(x, p, beta0=1, alpha0=0, beta1=1, alpha1=0):
     """
@@ -460,7 +481,7 @@ def slice_statistics(particle_group,  keys=['mean_z'], n_slice=40, slice_key=Non
 
 
 
-def resample_particles(particle_group, n=0):
+def resample_particles(particle_group, n=0, equal_weights=False):
     """
     Resamples a ParticleGroup randomly.
 
@@ -478,6 +499,9 @@ def resample_particles(particle_group, n=0):
     n: int, default = 0
         Number to resample. 
         If n = 0, this will use all particles.
+
+    equal_weights: bool, default = False
+        If True, will ensure that all particles have equal weights. 
 
     Returns
     -------
@@ -498,19 +522,21 @@ def resample_particles(particle_group, n=0):
         ixlist = np.random.choice(n_old, n, replace=False)
         weight = np.full(n, particle_group.charge/n)
         
-    # variable weights        
+    # variable weights found      
+    elif equal_weights or n != n_old:
+        # From SciPy example:
+        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_discrete.html#scipy.stats.rv_discrete
+        pk = weight / np.sum(weight) # Probabilities
+        xk = np.arange(len(pk)) # index
+        ixsampler = scipy_stats.rv_discrete(name='ixsampler', values=(xk, pk))        
+        ixlist = ixsampler.rvs(size=n)
+        weight = np.full(n, particle_group.charge/n)       
+        
     else:
-        if n == n_old:
-            ixlist = np.random.choice(n_old, n, replace=False)
-            weight = weight[ixlist] #just scramble
-        else:
-            # From SciPy example:
-            # https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_discrete.html#scipy.stats.rv_discrete
-            pk = weight / np.sum(weight) # Probabilities
-            xk = np.arange(len(pk)) # index
-            ixsampler = scipy_stats.rv_discrete(name='ixsampler', values=(xk, pk))        
-            ixlist = ixsampler.rvs(size=n)
-            weight = np.full(n, particle_group.charge/n)
+        assert n == n_old
+        ixlist = np.random.choice(n_old, n, replace=False)
+        weight = weight[ixlist] #just scramble
+
     
     data = {}
     for key in particle_group._settable_array_keys:
@@ -521,22 +547,22 @@ def resample_particles(particle_group, n=0):
     return data
 
 
-def bunching(z: np.ndarray, wavelength: float, weight: np.ndarray = None) -> float:
-    """
-    Calculate the normalized bunching parameter, which is the magnitude of the 
-    complex sum of weighted exponentials at a given point.
+def bunching(z: np.ndarray, wavelength: float, weight: np.ndarray = None) -> complex:
+    r"""
+    Calculate the normalized bunching parameter, which is the
+    complex sum of weighted exponentials.
 
     The formula for bunching is given by:
 
     $$
-    B(z, \lambda) = \frac{\left|\sum w_i e^{i k z_i}\right|}{\sum w_i}
+    B(z, \lambda) = \frac{\sum w_i e^{i k z_i}}{\sum w_i}
     $$
 
     where:
-    - \( z \) is the position array,
-    - \( \lambda \) is the wavelength,
-    - \( k = \frac{2\pi}{\lambda} \) is the wave number,
-    - \( w_i \) are the weights.
+    - $z$ is the position array,
+    - $\lambda$ is the wavelength,
+    - $k = \frac{2\pi}{\lambda}$  is the wave number,
+    - $w_i$ are the weights.
 
     Parameters
     ----------
@@ -549,8 +575,8 @@ def bunching(z: np.ndarray, wavelength: float, weight: np.ndarray = None) -> flo
 
     Returns
     -------
-    float
-        The normalized bunching parameter.
+    complex
+        The bunching parameter
 
     Raises
     ------
@@ -567,7 +593,7 @@ def bunching(z: np.ndarray, wavelength: float, weight: np.ndarray = None) -> flo
     
     k = 2 * np.pi / wavelength
     f = np.exp(1j * k * z)
-    return np.abs(np.sum(weight * f)) / np.sum(weight)
+    return np.sum(weight * f) / np.sum(weight)
 
 
 

@@ -7,6 +7,7 @@ For more advanced units, use a package like Pint:
 
 
 """
+import numpy as np
 import scipy.constants
 
 mec2 = scipy.constants.value('electron mass energy equivalent in MeV')*1e6
@@ -14,8 +15,6 @@ mpc2 = scipy.constants.value('proton mass energy equivalent in MeV')*1e6
 c_light = scipy.constants.c
 e_charge = scipy.constants.e
 mu_0 = scipy.constants.mu_0 # Note that this is no longer 4pi*10^-7 !
- 
-import numpy as np
 
 
 class pmd_unit:
@@ -377,7 +376,7 @@ def nice_array(a):
         x = a[0]
     else:
         a = np.array(a)
-        x = max(a.ptp(), abs(np.mean(a))) # Account for tiny spread
+        x = max(np.ptp(a), abs(np.mean(a))) # Account for tiny spread
         
     fac, prefix = nice_scale_prefix( x )
     
@@ -444,7 +443,7 @@ for k in ['x', 'y', 'z', 'r', 'Jx', 'Jy']:
     PARTICLEGROUP_UNITS[k] = unit('m')
 for k in ['beta', 'beta_x', 'beta_y', 'beta_z', 'gamma', 'bunching']:    
     PARTICLEGROUP_UNITS[k] = unit('1')
-for k in ['theta']:    
+for k in ['theta', 'bunching_phase']:    
     PARTICLEGROUP_UNITS[k] = unit('rad')
 for k in ['charge', 'species_charge', 'weight']:
     PARTICLEGROUP_UNITS[k] = unit('C')
@@ -504,7 +503,9 @@ def pg_units(key):
         return unit('V/m')  
     if key.startswith('magneticField'):
         return unit('T')
-    if key.startswith('bunching_'):
+    if key.startswith('bunching_phase'):
+        return unit('rad')    
+    if key.startswith('bunching'):
         return unit('1')
   
     
@@ -519,6 +520,7 @@ def parse_bunching_str(s):
     Parse a string of the on of the forms to extract the wavelength:
         'bunching_1.23e-4' 
         'bunching_1.23e-4_nm' 
+        'bunching_phase_1.23e-4' 
         
     Returns
     -------
@@ -527,14 +529,18 @@ def parse_bunching_str(s):
     """
     assert s.startswith('bunching_')
     
+    # Remove bunching and phase prefixes
+    s = s.replace('bunching_', '')
+    s = s.replace('phase_', '')
+    
     x = s.split('_')
     
-    wavelength = float(x[1])
+    wavelength = float(x[0])
     
-    if len(x) == 2:
+    if len(x) == 1:
         factor = 1
-    elif len(x) == 3:
-        unit = x[2]
+    elif len(x) == 2:
+        unit = x[1]
         if unit == 'm':
             factor = 1
         elif unit == 'mm':

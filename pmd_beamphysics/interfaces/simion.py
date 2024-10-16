@@ -73,15 +73,20 @@ def write_simion(particle_group, outfile, verbose=0, color=0, flip_z_to_x=True):
     header=';0'
     
     simion_params= ['TOB', 'MASS', 'CHARGE', 'X', 'Y', 'Z', 'AZ', 'EL', 'KE', 'CWF', 'COLOR']
-    
-    simion_units = {'TOB':'usec', 
-                    'MASS':'amu', 
-                    'CHARGE':'e', 
-                    'X':'mm', 'Y':'mm', 'Z':'mm', 
-                    'AZ':'deg', 'EL':'deg', 
-                    'CWF':'', 
-                    'COLOR':''}
-    
+
+    # simion_units = {
+    #     "TOB": "usec",
+    #     "MASS": "amu",
+    #     "CHARGE": "e",
+    #     "X": "mm",
+    #     "Y": "mm",
+    #     "Z": "mm",
+    #     "AZ": "deg",
+    #     "EL": "deg",
+    #     "CWF": "",
+    #     "COLOR": "",
+    # }
+
     N = len(particle_group)
     
     data = np.zeros( (N, len(simion_params)) )

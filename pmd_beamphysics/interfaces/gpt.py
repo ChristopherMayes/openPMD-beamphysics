@@ -1,4 +1,4 @@
-from pmd_beamphysics.units import e_charge
+from pmd_beamphysics.units import e_charge, c_light
 from pmd_beamphysics.interfaces.superfish import fish_complex_to_real_fields
 
 import numpy as np
@@ -16,19 +16,16 @@ def write_gpt(particle_group,
     asci2gdf -o particles.gdf particles.txt
     
     This routine makes ASCII particles, with column labels:
-        'x', 'y', 'z', 'GBx', 'GBy', 'GBz', 't', 'q', 'nmacro'
+        'x', 'y', 'z', 'GBx', 'GBy', 'GBz', 't', 'q', 'm', 'nmacro'
     in SI units. 
-    
-    For now, only electrons are supported.
 
     """
-
-    assert particle_group.species == 'electron' # TODO: add more species
     
     assert np.all(particle_group.weight >= 0), 'ParticleGroup.weight must be >= 0'
     
-    q = -e_charge
-    
+    q = particle_group.species_charge
+    mc2 = particle_group.mass               # returns pmd_beamphysics.species.mass_of(particle_group.species) [eV]
+    m = mc2 * (e_charge / c_light**2)
     n = particle_group.n_particle
     gamma = particle_group.gamma
     
@@ -41,13 +38,13 @@ def write_gpt(particle_group,
         'GBz': gamma*particle_group.beta_z,
         't': particle_group.t,
         'q': np.full(n, q),
-        'nmacro': particle_group.weight/e_charge}
+        'm': np.full(n, m),
+        'nmacro': np.abs(particle_group.weight/q)}
     
     if hasattr(particle_group, 'id'):
         dat['ID'] = particle_group.id
     else:
         dat['ID'] = np.arange(1, particle_group['n_particle']+1)       
-    
     
     header = ' '.join(list(dat))
 
@@ -78,7 +75,7 @@ def run_asci2gdf(outfile, asci2gdf_bin, verbose=False):
     cmd = [asci2gdf_bin, '-o', outfile, tempfile]
     if verbose:
         print(' '.join(cmd))
-    result = subprocess.run(cmd)
+    subprocess.run(cmd)
     
     # Cleanup
     os.remove(tempfile)    

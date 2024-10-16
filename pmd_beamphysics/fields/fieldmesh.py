@@ -6,7 +6,7 @@ from pmd_beamphysics.writers import write_pmd_field, pmd_field_init
 
 from pmd_beamphysics import tools
 
-from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d, plot_fieldmesh_cylindrical_1d
+from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d, plot_fieldmesh_cylindrical_1d, plot_fieldmesh_rectangular_1d, plot_fieldmesh_rectangular_2d
 
 from pmd_beamphysics.interfaces.ansys import read_ansys_ascii_3d_fields
 from pmd_beamphysics.interfaces.astra import write_astra_1d_fieldmap, read_astra_3d_fieldmaps, write_astra_3d_fieldmaps, astra_1d_fieldmap_data
@@ -24,7 +24,6 @@ from h5py import File
 import numpy as np
 from copy import deepcopy
 import os
-import functools
 
 
 c_light = 299792458.
@@ -303,22 +302,44 @@ class FieldMesh:
 
     # Plotting
     # TODO: more general plotting
-    def plot(self, component=None, time=None, axes=None, cmap=None, return_figure=False, **kwargs):
+    def plot(self, 
+             component=None, 
+             time=None, 
+             axes=None, 
+             cmap=None, 
+             return_figure=False, 
+             **kwargs):
         
-        if self.geometry != 'cylindrical':
-            raise NotImplementedError(f'Geometry {self.geometry} not implemented')
+        if self.geometry == 'cylindrical':
             
-        return plot_fieldmesh_cylindrical_2d(self,
-                                             component=component,
-                                             time=time,
-                                             axes=axes,
-                                             return_figure=return_figure,
-                                             cmap=cmap, **kwargs)
+            return plot_fieldmesh_cylindrical_2d(self,
+                                                 component=component,
+                                                 time=time,
+                                                 axes=axes,
+                                                 return_figure=return_figure,
+                                                 cmap=cmap, **kwargs)
+        elif self.geometry == 'rectangular':
+
+            plot_fieldmesh_rectangular_2d(self,
+                                          component=component,                                        
+                                          time=time,
+                                          axes=axes,
+                                          return_figure=return_figure,
+                                          cmap=cmap, **kwargs)
+            
+        else:
+            raise NotImplementedError(f'Geometry {self.geometry} not implemented')
     
-    @functools.wraps(plot_fieldmesh_cylindrical_1d) 
+    #@functools.wraps(plot_fieldmesh_cylindrical_1d) 
     def plot_onaxis(self, *args, **kwargs):
-        assert self.geometry == 'cylindrical'
-        return plot_fieldmesh_cylindrical_1d(self, *args, **kwargs)
+        if self.geometry == 'cylindrical':
+            return plot_fieldmesh_cylindrical_1d(self, *args, **kwargs)
+        elif self.geometry == 'rectangular':
+            return plot_fieldmesh_rectangular_1d(self, *args, **kwargs)
+        else:
+            raise ValueError(f'Unsupported geometry for plot_onaxis: {self.geometry}')
+    
+
     
     
     def units(self, key):
@@ -447,7 +468,7 @@ class FieldMesh:
         """
         
         if frequency is None:
-            raise ValueError(f"Please provide a frequency")
+            raise ValueError("Please provide a frequency")
         
         data = read_ansys_ascii_3d_fields(efile, hfile, frequency=frequency)
         return cls(data=data)

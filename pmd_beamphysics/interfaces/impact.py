@@ -1,10 +1,11 @@
+import os
 import numpy as np
 from numpy import pi
 from scipy import fft
 
-c_light = 299792458.
-
 from pmd_beamphysics.fields.expansion import spline_derivative_array
+
+c_light = 299792458.
 
 
 
@@ -165,7 +166,7 @@ def write_impact(particle_group,
         z = -betac*particle_group['t']  
 
         # Get z span
-        z_ptp = z.ptp()
+        z_ptp = np.ptp(z)
         # Add tiny padding
         z_pad = 1e-20 # Tiny pad 
         
@@ -545,7 +546,7 @@ def create_impact_solrf_fieldmap_fourier(field_mesh,
             zmax = z.max()
         else:
             zmin = 0
-            zmax = z.ptp()
+            zmax = np.ptp(z)
             
         fcoefs = dat['fcoefs']
         
@@ -627,7 +628,7 @@ def create_impact_solrf_fieldmap_derivatives(field_mesh,
     rfdata = []
     
     z = field_mesh.coord_vec('z')
-    zmin, zmax, L = z.min(), z.max(), z.ptp()
+    L = np.ptp(z)
     
     info = {'format':'solrf'}
     field = {}    

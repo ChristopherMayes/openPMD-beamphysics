@@ -4,7 +4,7 @@ def fstr(s):
     """
     Makes a fixed string for h5 files
     """
-    return np.string_(s)
+    return np.bytes_(s)
 
 
 
@@ -43,7 +43,7 @@ def decode_attr(a):
         return a.decode('utf-8')
     
     if isinstance(a, np.ndarray):
-        if a.dtype.type is np.string_:
+        if a.dtype.type is np.bytes_:
             a = a.astype(str)
         if len(a) == 1:
             return a[0]
@@ -71,7 +71,7 @@ def encode_attr(a):
     
     if isinstance(a, np.ndarray):
         if a.dtype.type is np.str_:
-            a = a.astype(np.string_)
+            a = a.astype(np.bytes_)
             
     return a
 

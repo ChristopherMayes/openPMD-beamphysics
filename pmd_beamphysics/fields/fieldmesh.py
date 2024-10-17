@@ -10,6 +10,7 @@ from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d, plot_fieldmesh_c
 
 from pmd_beamphysics.interfaces.ansys import read_ansys_ascii_3d_fields
 from pmd_beamphysics.interfaces.astra import write_astra_1d_fieldmap, read_astra_3d_fieldmaps, write_astra_3d_fieldmaps, astra_1d_fieldmap_data
+from pmd_beamphysics.interfaces.cst import read_cst_ascii_3d_complex_fields, read_cst_ascii_3d_static_field
 from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmap
 from pmd_beamphysics.interfaces.impact import create_impact_solrf_fieldmap_fourier, create_impact_solrf_ele
 from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
@@ -471,8 +472,18 @@ class FieldMesh:
         
         data = read_ansys_ascii_3d_fields(efile, hfile, frequency=frequency)
         return cls(data=data)
-        
-        
+
+    @classmethod
+    def from_cst_3d(cls, field_file1, field_file2=None, frequency=0):
+
+        if field_file2 is not None:
+            # field_file1 -> efile, field_file2 -> hfile
+            data = read_cst_ascii_3d_complex_fields(field_file1, field_file2, frequency=frequency, harmonic=1)
+        else:
+            data = read_cst_ascii_3d_static_field(field_file1)
+
+        return cls(data=data)
+                   
         
     @classmethod
     def from_astra_3d(cls, common_filename, frequency=0):

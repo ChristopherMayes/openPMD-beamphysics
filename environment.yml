@@ -5,18 +5,17 @@ channels:
 dependencies:
   - python>=3.9
   - numpy
-  - scipy>=1.0.0
+  - scipy
   - matplotlib
   - h5py
 # Developer
-  - pytest
   - jupyterlab>=3
+  - ipywidgets
   - pygments
   - mkdocs==1.5.2
   - mkdocstrings
   - mkdocs-material
   - mkdocs-jupyter==0.24.6
   - mkdocstrings-python
-  - pip
-  - pip:
-    - mkdocstrings-python
+  - pytest-cov
+  - pytest

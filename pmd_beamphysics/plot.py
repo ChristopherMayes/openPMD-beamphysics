@@ -428,7 +428,7 @@ def density_and_slice_plot(particle_group, key1='t', key2='p', stat_keys=['norm_
     x2 = slice_dat['mean_'+key1] / f1
     ulist = [particle_group.units(k).unitSymbol for k in stat_keys]
     
-    max2 = max([slice_dat[k].ptp() for k in stat_keys])
+    max2 = max([np.ptp(slice_dat[k]) for k in stat_keys])
     
     f3, p3 = nice_scale_prefix(max2)
     

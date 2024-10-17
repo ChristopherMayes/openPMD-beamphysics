@@ -226,6 +226,26 @@ class FieldMesh:
                 return i
         raise ValueError(f'Axis not found: {key}')
 
+
+    def axis_points(self, axis_label):
+        """
+        Returns 3D points for the specified axis to be used by the interpolator.
+
+        Parameters
+        ----------
+        axis_label : str
+            The label of the coordinate axis. Example: 'r' for cylindrical geometries.
+
+        Returns
+        -------
+        numpy.ndarray of shape (n, 3)
+            An array of 3D points, where the specified axis is populated, and other axes are zero.
+        """
+        x = self.coord_vec(axis_label)
+        points = np.zeros((len(x), 3))
+        points[:, self.axis_index(axis_label)] = x
+        return points    
+
     def axis_values(self, axis_label, field_key, **kwargs):
         """
         Returns the values of the specified field along the given axis, allowing for partial replacement of points.
@@ -318,9 +338,7 @@ class FieldMesh:
         """
         klist = [key for key in self.components if not self.component_is_zero(key)]
         return all([key.startswith('magnetic') for key in klist])
-            
-
-        
+           
     @property
     def is_static(self):
         return  self.attrs['harmonic'] == 0
@@ -333,24 +351,7 @@ class FieldMesh:
         return not np.any(a)
 
 
-    def axis_points(self, axis_label):
-        """
-        Returns 3D points for the specified axis to be used by the interpolator.
 
-        Parameters
-        ----------
-        axis_label : str
-            The label of the coordinate axis. Example: 'r' for cylindrical geometries.
-
-        Returns
-        -------
-        numpy.ndarray of shape (n, 3)
-            An array of 3D points, where the specified axis is populated, and other axes are zero.
-        """
-        x = self.coord_vec(axis_label)
-        points = np.zeros((len(x), 3))
-        points[:, self.axis_index(axis_label)] = x
-        return points
 
     def interpolator(self, key):
         """
@@ -369,8 +370,7 @@ class FieldMesh:
             An interpolator object that can be used to interpolate points. The points
             to interpolate should be ordered according to `.axis_labels`.
         """
-        field = self[key]
-        labels = self.axis_labels    
+        field = self[key]   
         return RegularGridInterpolator(tuple(map(self.coord_vec, self.axis_labels)), field)
 
     def interpolate(self, key, points):
@@ -391,6 +391,8 @@ class FieldMesh:
             The interpolated field values at the specified points.
         """
         points = np.array(points)
+
+        # Convenience for a single point
         if len(points.shape) == 1:
             points = [points]
         

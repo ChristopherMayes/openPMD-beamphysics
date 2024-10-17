@@ -996,6 +996,7 @@ def write_impact_emfield_cartesian(fieldmesh, filename):
         f.write(f"{z_min} {z_max} {nz_points - 1}\n")
 
         # Flatten the arrays and write field values in Fortran-order
+        # Note that these are scaled by fieldmesh.scale and fieldmesh.phase
         Ex, Ey, Ez = fieldmesh.Ex, fieldmesh.Ey, fieldmesh.Ez
         Bx, By, Bz = fieldmesh.Bx, fieldmesh.By, fieldmesh.Bz
         for k in range(nz_points):
@@ -1009,6 +1010,101 @@ def write_impact_emfield_cartesian(fieldmesh, filename):
                     f.write(f"({Bz[i, j, k].real},{Bz[i, j, k].imag})\n")
 
 
+
+def create_impact_emfield_cartesian_ele(field_mesh,
+                            *, 
+                            zedge=0,
+                            name=None,
+                            scale=1,
+                            phase=0,
+                            radius = 0.15,
+                            x_offset = 0,
+                            y_offset = 0,
+                            file_id = 666,
+                            output_path=None):
+    """
+    Creat Impact-T solrf element from a FieldMesh
+    
+    Parameters
+    ----------
+    name: str, default: None
+    
+    zedge: float
+    
+    scale: float, default: 1
+    
+    phase: float, default: 0
+        phase in radians
+
+    radius: float, default: 0
+    
+    x_offset: float, default: 0
+    
+    y_offset: float, default: 0
+    
+    file_id: int, default: 666
+    
+    output_path: str, default: None
+        If given, the '1T{file_id}.T7' file will be written to this path
+    
+    Returns
+    -------
+
+    
+    """
+    if not field_mesh.geometry == 'rectangular':
+        raise NotImplementedError(f"FieldMesh geometry '{FM.geometry}' must be 'rectangular' ")
+             
+    freq = field_mesh.frequency
+    L = field_mesh.dz * (field_mesh.shape[2]-1)
+         
+    # Round    
+    s = np.round(zedge + L, 12)
+    zedge = np.round(zedge, 12)      
+    L = np.round(L, 12)
+    scale = np.round(scale, 12)
+    theta0_deg = phase * 180/np.pi
+
+    if name is None:
+        name = f"emfield_cartesian_{file_id}"
+    
+    fieldmap_filename = f'1T{file_id}.T7'
+    
+    if output_path is not None:
+        if not os.path.exists(output_path):
+            raise ValueError(f'output_path does not exist: {output_path}')
+        output_file = os.path.join(output_path, fieldmap_filename)
+        field_mesh.write_impact_emfield_cartesian(output_file)
+
+    if x_offset !=0:
+        raise NotImplementedError('x_offset is not yet implemented in Impact-T')
+    if y_offset !=0:
+        raise NotImplementedError('y_offset is not yet implemented in Impact-T')        
+    
+    ele = {
+     'L': L,
+     'type': 'solrf',
+     'zedge': zedge,
+     'rf_field_scale': scale,
+     'rf_frequency': freq,
+     'theta0_deg': theta0_deg,
+     'filename': fieldmap_filename,
+     'radius': radius,
+     'x_offset': x_offset,
+     'y_offset': y_offset,
+     'x_rotation': 0.0,
+     'y_rotation': 0.0,
+     'z_rotation': 0.0, # This is tilt, but shouldn't affect anything because of the cylindrical symmetry.
+     'name': name,
+     's': s, 
+          }
+    
+    line = f"{L} 0 0 111 {zedge} {scale} {freq} {theta0_deg} {file_id} {radius} {x_offset} {y_offset} 0 0 0 /name:{name}"
+    
+    
+    return {'line': line,
+             'ele': ele,
+            }
 
 
 

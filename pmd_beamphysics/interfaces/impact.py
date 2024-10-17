@@ -1065,6 +1065,8 @@ def create_impact_emfield_cartesian_ele(field_mesh,
     scale = np.round(scale, 12)
     theta0_deg = phase * 180/np.pi
 
+
+    
     if name is None:
         name = f"emfield_cartesian_{file_id}"
     
@@ -1083,7 +1085,7 @@ def create_impact_emfield_cartesian_ele(field_mesh,
     
     ele = {
      'L': L,
-     'type': 'solrf',
+     'type': 'emfield_cartesian',
      'zedge': zedge,
      'rf_field_scale': scale,
      'rf_frequency': freq,
@@ -1101,9 +1103,15 @@ def create_impact_emfield_cartesian_ele(field_mesh,
     
     line = f"{L} 0 0 111 {zedge} {scale} {freq} {theta0_deg} {file_id} {radius} {x_offset} {y_offset} 0 0 0 /name:{name}"
     
+
+    fmap = {
+        'info': {'format': 'emfield_cartesian_fieldmesh'},
+        'field':field_mesh,
+           }
     
     return {'line': line,
              'ele': ele,
+             'fmap': fmap,
             }
 
 

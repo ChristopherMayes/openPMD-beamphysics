@@ -394,8 +394,8 @@ class FieldMesh:
 
         # Convenience for a single point
         if len(points.shape) == 1:
-            points = [points]
-        
+            return self.interpolator(key)([points])[0]
+            
         return self.interpolator(key)(points)
 
     
@@ -490,7 +490,7 @@ class FieldMesh:
         return create_impact_solrf_ele(self, *args, **kwargs)    
 
     @functools.wraps(create_impact_emfield_cartesian_ele)      
-    def to_impact_impact_emfield_cartesian(self, *args, **kwargs):
+    def to_impact_emfield_cartesian(self, *args, **kwargs):
         return create_impact_emfield_cartesian_ele(self, *args, **kwargs)    
 
 

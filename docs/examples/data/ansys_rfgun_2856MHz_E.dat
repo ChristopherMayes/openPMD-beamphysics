@@ -1,4 +1,4 @@
-Grid Output Min: [-1mm -1mm 0mm] Max: [1mm 1mm 114mm] Grid Size: [1mm 1mm 0.25mm] 
+Grid Output Min: [-1mm -1mm 0mm] Max: [1mm 1mm 114mm] Grid Size: [1mm 1mm 0.25mm]
 X, Y, Z, Complex Vector data "<Ex,Ey,Ez>"
 -0.001 -0.001 0 142.6 -142.26 142.98 -142.64 -2.4976e+08 -2.9342e+05
 -0.001 -0.001 0.00025 44133 -85.995 44832 -86.731 -2.4967e+08 -2.9339e+05

@@ -8,8 +8,10 @@ dependencies:
   - scipy>=1.0.0
   - matplotlib
   - h5py
-# Developer
+  - python-dateutil
+  # Developer
   - pytest
+  - pytest-cov
   - jupyterlab>=3
   - pygments
   - mkdocs==1.5.2
@@ -19,4 +21,5 @@ dependencies:
   - mkdocstrings-python
   - pip
   - pip:
-    - mkdocstrings-python
+      - mkdocstrings-python
+      - git+https://github.com/openPMD/openPMD-validator@2.0.X

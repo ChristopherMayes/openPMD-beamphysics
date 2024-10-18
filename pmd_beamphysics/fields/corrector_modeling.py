@@ -152,7 +152,7 @@ def bfield_from_thin_straight_wire(x, y, z, p1, p2, current, plot_wire=False, el
         return B[:,:,:,0], B[:,:,:,1], B[:,:,:,2]
 
 
-def Rpy(angle):
+def Ry(angle):
 
     """Defines a roation in around +y direction"""
 
@@ -164,18 +164,18 @@ def Rpy(angle):
                      [ 0, 1, 0],
                      [-S, 0, C]])
 
-def Rmx(angle):
+def Rx(angle):
 
-    """Defines a roation around -x direction"""
+    """Defines a roation around +x direction"""
 
     C = np.cos(angle)
     S = np.sin(angle)
 
     return np.array([[1,  0,  0],
-                     [0,  C,  S],
-                     [0, -S,  C]])
+                     [0,  C, -S],
+                     [0, +S,  C]])
 
-def Rpz(angle):
+def Rz(angle):
 
     """Defines a roation arounx +z direction"""
 
@@ -197,11 +197,11 @@ def get_rotation_matrix(pitch, yaw, tilt):
     if tilt is None:
         tilt=0
 
-    rpy = Rpy(pitch)
-    rmx = Rmx(-yaw)
-    rpz = Rpz(tilt)
+    ry = Ry(pitch)
+    rx = Rx(yaw)
+    rz = Rz(tilt)
 
-    return np.matmul(rpy, np.matmul(rmx, rpz))
+    return np.matmul(ry, np.matmul(rx, rz))
 
     
 

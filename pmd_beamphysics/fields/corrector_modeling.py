@@ -819,7 +819,7 @@ def make_rectangular_dipole_corrector_fieldmesh(*,
                                                         tilt=tilt)
     
     dx = (xmax - xmin) / (nx -1)
-    dy = (ymay - ymin) / (ny -1)
+    dy = (ymax - ymin) / (ny -1)
     dz = (zmax - zmin) / (nz -1)
     
     attrs = {}
@@ -974,7 +974,7 @@ def make_saddle_dipole_corrector_fieldmesh(*,
         set_axes_equal(ax)
     
     dx = (xmax - xmin) / (nx -1)
-    dy = (ymay - ymin) / (ny -1)
+    dy = (ymax - ymin) / (ny -1)
     dz = (zmax - zmin) / (nz -1)
 
     shape = Bx.shape
@@ -1311,7 +1311,7 @@ def make_thin_straight_wire_fieldmesh(p1, p2, *,
     Bx, By, Bz = bfield_from_thin_straight_wire(X, Y, Z, p1, p2, current, plot_wire=plot_wire)
 
     dx = (xmax - xmin) / (nx -1)
-    dy = (ymay - ymin) / (ny -1)
+    dy = (ymax - ymin) / (ny -1)
     dz = (zmax - zmin) / (nz -1)
     
     attrs = {}

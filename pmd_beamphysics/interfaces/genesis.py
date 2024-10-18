@@ -1,10 +1,10 @@
 import os
+
 import numpy as np
 from h5py import File
 
 from pmd_beamphysics.statistics import twiss_calc
-from pmd_beamphysics.units import mec2, c_light, write_unit_h5, unit
-
+from pmd_beamphysics.units import c_light, mec2, unit, write_unit_h5
 
 # Genesis 1.3
 # -------------

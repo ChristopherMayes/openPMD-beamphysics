@@ -1,6 +1,7 @@
-from scipy.interpolate import UnivariateSpline
-from scipy import fft
 import numpy as np
+from scipy import fft
+from scipy.interpolate import UnivariateSpline
+
 from pmd_beamphysics.units import c_light
 
 

@@ -1,8 +1,7 @@
+import numpy as np
+from matplotlib import pyplot as plt
 from scipy.constants import mu_0 as u0
 from scipy.constants import pi
-
-from matplotlib import pyplot as plt
-import numpy as np
 
 from pmd_beamphysics import FieldMesh
 

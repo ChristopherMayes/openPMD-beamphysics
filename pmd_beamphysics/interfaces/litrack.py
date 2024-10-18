@@ -1,5 +1,6 @@
-from pmd_beamphysics.units import c_light
 import numpy as np
+
+from pmd_beamphysics.units import c_light
 
 
 def write_litrack(particle_group, outfile="litrack.zd", p0c=None, verbose=False):

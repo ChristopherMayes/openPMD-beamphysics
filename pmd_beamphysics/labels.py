@@ -1,5 +1,4 @@
-from pmd_beamphysics.units import parse_bunching_str, nice_array
-
+from pmd_beamphysics.units import nice_array, parse_bunching_str
 
 TEXLABEL = {
     # 'status'

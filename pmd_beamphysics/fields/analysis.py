@@ -1,11 +1,10 @@
-from pmd_beamphysics.units import mec2, c_light
-from pmd_beamphysics.species import charge_state, mass_of
-
+import numpy as np
 from scipy import interpolate
 from scipy.integrate import solve_ivp
 from scipy.optimize import brent, brentq
-import numpy as np
 
+from pmd_beamphysics.species import charge_state, mass_of
+from pmd_beamphysics.units import c_light, mec2
 
 # Numpy migration per https://numpy.org/doc/stable/numpy_2_0_migration_guide.html
 if np.lib.NumpyVersion(np.__version__) >= "2.0.0":

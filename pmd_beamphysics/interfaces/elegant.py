@@ -1,10 +1,10 @@
-from pmd_beamphysics.units import mec2
+import os
+import subprocess
 
 import numpy as np
-import subprocess
-import os
-
 from h5py import File
+
+from pmd_beamphysics.units import mec2
 
 
 def write_elegant(particle_group, outfile, verbose=False):

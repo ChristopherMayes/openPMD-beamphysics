@@ -1,12 +1,19 @@
-from pmd_beamphysics.units import pg_units, c_light, parse_bunching_str
+import functools
+import os
+from copy import deepcopy
 
-from pmd_beamphysics.interfaces.astra import write_astra
+import numpy as np
+from h5py import File
+
 import pmd_beamphysics.interfaces.bmad as bmad
+import pmd_beamphysics.statistics as statistics
+from pmd_beamphysics.interfaces.astra import write_astra
+from pmd_beamphysics.interfaces.elegant import write_elegant
 from pmd_beamphysics.interfaces.genesis import (
-    write_genesis4_distribution,
     genesis2_beam_data,
     write_genesis2_beam_file,
     write_genesis4_beam,
+    write_genesis4_distribution,
 )
 from pmd_beamphysics.interfaces.gpt import write_gpt
 from pmd_beamphysics.interfaces.impact import write_impact
@@ -14,32 +21,20 @@ from pmd_beamphysics.interfaces.litrack import write_litrack
 from pmd_beamphysics.interfaces.lucretia import write_lucretia
 from pmd_beamphysics.interfaces.opal import write_opal
 from pmd_beamphysics.interfaces.simion import write_simion
-from pmd_beamphysics.interfaces.elegant import write_elegant
-
 from pmd_beamphysics.plot import density_plot, marginal_plot, slice_plot
-
 from pmd_beamphysics.readers import particle_array, particle_paths
 from pmd_beamphysics.species import charge_of, mass_of
-
 from pmd_beamphysics.statistics import (
+    matched_particles,
     norm_emit_calc,
     normalized_particle_coordinate,
     particle_amplitude,
     particle_twiss_dispersion,
-    matched_particles,
     resample_particles,
     slice_statistics,
 )
-import pmd_beamphysics.statistics as statistics
-
-from pmd_beamphysics.writers import write_pmd_bunch, pmd_init
-
-from h5py import File
-import numpy as np
-from copy import deepcopy
-import functools
-import os
-
+from pmd_beamphysics.units import c_light, parse_bunching_str, pg_units
+from pmd_beamphysics.writers import pmd_init, write_pmd_bunch
 
 # -----------------------------------------
 # Classes

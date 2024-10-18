@@ -1,5 +1,5 @@
-import scipy.io as sio
 import numpy as np
+import scipy.io as sio
 
 
 def lucretia_to_data(

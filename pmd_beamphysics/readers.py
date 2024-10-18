@@ -1,8 +1,7 @@
-from .units import dimension, dimension_name, SI_symbol, c_light, e_charge
-from .tools import decode_attrs, decode_attr
-
-
 import numpy as np
+
+from .tools import decode_attr, decode_attrs
+from .units import SI_symbol, c_light, dimension, dimension_name, e_charge
 
 # -----------------------------------------
 # General Utilities

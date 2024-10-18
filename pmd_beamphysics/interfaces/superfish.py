@@ -1,5 +1,5 @@
-import scipy.constants
 import numpy as np
+import scipy.constants
 
 mu_0 = scipy.constants.mu_0
 

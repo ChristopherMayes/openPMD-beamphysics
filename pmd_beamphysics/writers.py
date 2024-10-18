@@ -1,8 +1,8 @@
 import numpy as np
 
-from .units import pg_units
 from .readers import component_from_alias, load_field_attrs
-from .tools import fstr, encode_attrs
+from .tools import encode_attrs, fstr
+from .units import pg_units
 
 
 def pmd_init(h5, basePath="/data/%T/", particlesPath="./"):

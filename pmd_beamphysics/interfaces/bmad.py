@@ -1,6 +1,7 @@
 import numpy as np
-from pmd_beamphysics.units import c_light
+
 from pmd_beamphysics.species import mass_of
+from pmd_beamphysics.units import c_light
 
 
 # Remove from below, because this docstring is used directly in ParticleGroup

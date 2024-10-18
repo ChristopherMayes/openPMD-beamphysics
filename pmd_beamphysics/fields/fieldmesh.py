@@ -1,56 +1,48 @@
-from pmd_beamphysics.units import pg_units
+import functools
+import os
+from copy import deepcopy
 
-from pmd_beamphysics.readers import (
-    component_data,
-    expected_record_unit_dimension,
-    field_record_components,
-    field_paths,
-    component_from_alias,
-    load_field_attrs,
-    component_alias,
-)
-
-from pmd_beamphysics.writers import write_pmd_field, pmd_field_init
+import numpy as np
+from h5py import File
+from scipy.interpolate import RegularGridInterpolator
 
 from pmd_beamphysics import tools
-
-from pmd_beamphysics.plot import (
-    plot_fieldmesh_cylindrical_2d,
-    plot_fieldmesh_cylindrical_1d,
-    plot_fieldmesh_rectangular_1d,
-    plot_fieldmesh_rectangular_2d,
-)
-
-from pmd_beamphysics.interfaces.ansys import read_ansys_ascii_3d_fields
-from pmd_beamphysics.interfaces.astra import (
-    write_astra_1d_fieldmap,
-    read_astra_3d_fieldmaps,
-    write_astra_3d_fieldmaps,
-    astra_1d_fieldmap_data,
-)
-from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
-from pmd_beamphysics.interfaces.impact import (
-    create_impact_solrf_ele,
-    parse_impact_emfield_cartesian,
-    write_impact_emfield_cartesian,
-    create_impact_emfield_cartesian_ele,
-)
-from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
-
-from pmd_beamphysics.fields.expansion import expand_fieldmesh_from_onaxis
 from pmd_beamphysics.fields.conversion import (
     fieldmesh_rectangular_to_cylindrically_symmetric_data,
 )
-
-import functools
-
-from scipy.interpolate import RegularGridInterpolator
-
-from h5py import File
-import numpy as np
-from copy import deepcopy
-import os
-
+from pmd_beamphysics.fields.expansion import expand_fieldmesh_from_onaxis
+from pmd_beamphysics.interfaces.ansys import read_ansys_ascii_3d_fields
+from pmd_beamphysics.interfaces.astra import (
+    astra_1d_fieldmap_data,
+    read_astra_3d_fieldmaps,
+    write_astra_1d_fieldmap,
+    write_astra_3d_fieldmaps,
+)
+from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
+from pmd_beamphysics.interfaces.impact import (
+    create_impact_emfield_cartesian_ele,
+    create_impact_solrf_ele,
+    parse_impact_emfield_cartesian,
+    write_impact_emfield_cartesian,
+)
+from pmd_beamphysics.interfaces.superfish import read_superfish_t7, write_superfish_t7
+from pmd_beamphysics.plot import (
+    plot_fieldmesh_cylindrical_1d,
+    plot_fieldmesh_cylindrical_2d,
+    plot_fieldmesh_rectangular_1d,
+    plot_fieldmesh_rectangular_2d,
+)
+from pmd_beamphysics.readers import (
+    component_alias,
+    component_data,
+    component_from_alias,
+    expected_record_unit_dimension,
+    field_paths,
+    field_record_components,
+    load_field_attrs,
+)
+from pmd_beamphysics.units import pg_units
+from pmd_beamphysics.writers import pmd_field_init, write_pmd_field
 
 # -----------------------------------------
 # Classes

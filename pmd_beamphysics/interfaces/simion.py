@@ -1,8 +1,7 @@
 import numpy as np
-
-from pmd_beamphysics.species import mec2, e_charge
-
 from scipy.constants import physical_constants
+
+from pmd_beamphysics.species import e_charge, mec2
 
 amu_to_rest_mass_energy = (
     physical_constants["atomic mass constant energy equivalent in MeV"][0] * 1e6

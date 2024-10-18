@@ -1,8 +1,9 @@
-import numpy as np
-from pmd_beamphysics.status import ParticleStatus
-from pmd_beamphysics.readers import component_alias
 import os
 
+import numpy as np
+
+from pmd_beamphysics.readers import component_alias
+from pmd_beamphysics.status import ParticleStatus
 
 astra_species_name = {1: "electron", 2: "positron", 3: "proton", 4: "hydrogen"}
 astra_species_index = {v: k for k, v in astra_species_name.items()}  # Inverse mapping

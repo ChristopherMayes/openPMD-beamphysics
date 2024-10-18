@@ -428,7 +428,7 @@ def density_and_slice_plot(particle_group, key1='t', key2='p', stat_keys=['norm_
     x2 = slice_dat['mean_'+key1] / f1
     ulist = [particle_group.units(k).unitSymbol for k in stat_keys]
     
-    max2 = max([slice_dat[k].ptp() for k in stat_keys])
+    max2 = max([np.ptp(slice_dat[k]) for k in stat_keys])
     
     f3, p3 = nice_scale_prefix(max2)
     
@@ -618,6 +618,13 @@ def plot_fieldmesh_rectangular_1d(fm,
     
     """
 
+    # Here only to plot a single field component
+    if 'color' in kwargs:
+        color = kwargs['color']
+        del kwargs['color']
+    else:
+        color=None    
+
     if not axes:
         fig, axes = plt.subplots(**kwargs)
 
@@ -635,36 +642,18 @@ def plot_fieldmesh_rectangular_1d(fm,
         else: 
             return
         
-
-    # Here only to plot a single field component
-    if 'color' in kwargs:
-        color = kwargs['color']
-        del kwargs['color']
-    else:
-        color=None
-
     assert field_component in ['Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz'], f'Unknown field component: {field_component}'
 
     fieldmesh_component = field_component.replace('B', 'magneticField/').replace('E', 'electricField/')
 
     assert fieldmesh_component in fm.components, f'FieldMesh was missing field component: {field_component}'
-    
-    if fieldmesh_component.startswith('magnetic'):
-        field_unit = 'T'
-    elif fieldmesh_component.startswith('electric'):
-        field_unit = 'V/m'
+
+    field_unit = fm.units(fieldmesh_component)
 
     ylabel = r'$' + field_component[0] + '_' + field_component[1] + rf'$ ({field_unit})'
     label = r'$' + field_component[0] + '_' + field_component[1]+'(x=y=0, z)$'
 
-    field = fm.components[fieldmesh_component]
-    
-    x, y, z = fm.coord_vec('x'), fm.coord_vec('y'), fm.coord_vec('z')
-    
-    interpolator = RegularGridInterpolator((x, y, z), field)
-
-    points = np.array([[0, 0, z0] for z0 in z])
-    field0 = interpolator(points)
+    z, field0 = fm.axis_values('z', field_component)
 
     if np.all(np.isclose(field0.imag, 0)): # Close to real
 
@@ -695,13 +684,12 @@ def plot_fieldmesh_rectangular_1d(fm,
 
 def plot_fieldmesh_rectangular_2d(fm,
                                   component=None,
-                                  coordinate=None, 
-                                  coordinate_value=None, # Defines the plane coordinate = value
                                   time=None,
                                   axes=None,
                                   aspect='auto',
                                   cmap=None,
                                   return_figure=False,
+                                  nice=True,
                                   **kwargs):
 
 
@@ -724,8 +712,23 @@ def plot_fieldmesh_rectangular_2d(fm,
     
     """
 
-    #assert fm.is_static, '2D Plotting currently only supports static fields.'
+    assert fm.geometry == 'rectangular'
 
+    valid_coordinates = set(fm.axis_labels)
+    coordinate_value = None
+
+    # Identify which coordinate is provided in kwargs
+    for key in valid_coordinates:
+        if key in kwargs:
+            coordinate = key
+            coordinate_value = kwargs.pop(key)
+            break
+    else:
+        # just use y=0 plane
+        coordinate = 'y'
+        coordinate_value = 0
+
+    
     if not axes:
         fig, axes = plt.subplots(**kwargs)
 
@@ -735,19 +738,13 @@ def plot_fieldmesh_rectangular_2d(fm,
     divider = make_axes_locatable(axes)
     cax = divider.append_axes('right', size='5%', pad=0.05)   
 
-    assert component in ['Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz'], f'Unknown field component: {component}'
+    assert component in ('Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz'), f'Unknown field component: {component}'
 
-    fieldmesh_component = component.replace('B', 'magneticField/').replace('E', 'electricField/')
-
-    assert fieldmesh_component in fm.components, f'FieldMesh was missing field component: {component}'
-
-    field = fm.components[fieldmesh_component]
-    
     x, y, z = fm.coord_vec('x'), fm.coord_vec('y'), fm.coord_vec('z')
     
-    interpolator = RegularGridInterpolator((x, y, z), field)
+    interpolator = fm.interpolator(component)
 
-    unit = fm.units(fieldmesh_component)
+    unit = fm.units(component)
     
     xmin, ymin, zmin = fm.mins
     xmax, ymax, zmax = fm.maxs
@@ -755,44 +752,58 @@ def plot_fieldmesh_rectangular_2d(fm,
     # Prefer z to be on x-axis for accelerators
     if coordinate == 'x':
         extent = [zmin, zmax, ymin, ymax]
-        xlabel = 'z (m)'
-        ylabel = 'y (m)'
+        xlabel = r'$z$ (m)'
+        ylabel = r'$y$ (m)'
 
-        points = np.array([[coordinate_value, y_val, z_val] for y_val in y for z_val in z])
+        #points0 = np.array([[coordinate_value, y_val, z_val] for y_val in y for z_val in z])
+        a, b = np.meshgrid(y, z, indexing='ij')
+        points = np.column_stack([np.full(a.size, coordinate_value), a.ravel(),  b.ravel()])        
+        #assert np.allclose(points0, points)
         interpolated_values = interpolator(points)
-        #field_2d = interpolated_values.reshape(len(z), len(y))
         field_2d = interpolated_values.reshape(len(y), len(z))
         
     elif coordinate == 'y':
         extent = [zmin, zmax, xmin, xmax]
-        xlabel = 'z (m)'
-        ylabel = 'x (m)'
+        xlabel = r'$z$ (m)'
+        ylabel = r'$x$ (m)'
         
-        points = np.array([[x_val, coordinate_value, z_val] for x_val in x for z_val in z])
+        #points0 = np.array([[x_val, coordinate_value, z_val] for x_val in x for z_val in z])
+        a, b = np.meshgrid(x, z, indexing='ij')
+        points = np.column_stack([a.ravel(), np.full(a.size, coordinate_value), b.ravel()])
+        #assert np.allclose(points0, points)
         interpolated_values = interpolator(points)
         field_2d = interpolated_values.reshape(len(x), len(z))
         
     elif coordinate == 'z':
         extent = [xmin, xmax, ymin, ymax]
-        xlabel = 'x (m)'
-        ylabel = 'y (m)'
+        xlabel = r'$x$ (m)'
+        ylabel = r'$y$ (m)'
 
-        points = np.array([[x_val, y_val, coordinate_value] for x_val in x for y_val in y])
+        # Leave here to check
+        #points0 = np.array([[x_val, y_val, coordinate_value] for x_val in x for y_val in y])
+        a, b = np.meshgrid(x, y, indexing='ij')
+        points = np.column_stack([a.ravel(),  b.ravel(), np.full(a.size, coordinate_value)])        
+        #assert np.allclose(points0, points)        
         interpolated_values = interpolator(points)
         field_2d = interpolated_values.reshape(len(x), len(y))
 
+    if nice:
+        field_2d, _, prefix = nice_array(field_2d)
+    else:
+        prefix = ''
+    
     dmin = field_2d.min()
     dmax = field_2d.max()
     
     axes.set_aspect(aspect)
     
-    plane = f'{coordinate} = {coordinate_value:0.3f}'
+    plane = f'{coordinate} = {coordinate_value}'
     
     axes.set_xlabel(xlabel)
     axes.set_ylabel(ylabel)
     
     # Add legend
-    llabel = r'$' + f'{component[0]}_{component[1]}({plane})' + rf'$ ({unit.unitSymbol})'
+    llabel = r'$' + f'{component[0]}_{component[1]}({plane})' + rf'$ ({prefix}{unit.unitSymbol})'
     
     if np.all(np.isclose(np.imag(field_2d), 0)): # Close to real
         

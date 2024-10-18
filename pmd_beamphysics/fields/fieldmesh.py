@@ -1,6 +1,6 @@
-from pmd_beamphysics.units import dimension, dimension_name, SI_symbol, pg_units
+from pmd_beamphysics.units import pg_units
 
-from pmd_beamphysics.readers import component_data, expected_record_unit_dimension, field_record_components, decode_attrs, field_paths, component_from_alias, load_field_attrs, component_alias
+from pmd_beamphysics.readers import component_data, expected_record_unit_dimension, field_record_components, field_paths, component_from_alias, load_field_attrs, component_alias
 
 from pmd_beamphysics.writers import write_pmd_field, pmd_field_init
 
@@ -11,7 +11,7 @@ from pmd_beamphysics.plot import plot_fieldmesh_cylindrical_2d, plot_fieldmesh_c
 from pmd_beamphysics.interfaces.ansys import read_ansys_ascii_3d_fields
 from pmd_beamphysics.interfaces.astra import write_astra_1d_fieldmap, read_astra_3d_fieldmaps, write_astra_3d_fieldmaps, astra_1d_fieldmap_data
 from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
-from pmd_beamphysics.interfaces.impact import create_impact_solrf_fieldmap_fourier, create_impact_solrf_ele
+from pmd_beamphysics.interfaces.impact import create_impact_solrf_ele, parse_impact_emfield_cartesian, write_impact_emfield_cartesian, create_impact_emfield_cartesian_ele
 from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
 
 from pmd_beamphysics.fields.expansion import expand_fieldmesh_from_onaxis
@@ -19,13 +19,12 @@ from pmd_beamphysics.fields.conversion import fieldmesh_rectangular_to_cylindric
 
 import functools
 
+from scipy.interpolate import RegularGridInterpolator
+
 from h5py import File
 import numpy as np
 from copy import deepcopy
 import os
-
-
-c_light = 299792458.
 
 
 #-----------------------------------------
@@ -103,9 +102,12 @@ class FieldMesh:
     - `.write`
     - `.write_astra_1d`
     - `.write_astra_3d`
+    - `.write_gpt`
+    - `.write_impact_emfield_cartesian`
     - `.to_cylindrical`
     - `.to_astra_1d`
     - `.to_impact_solrf`
+    - `.to_impact_impact_emfield_cartesian`
     - `.write_gpt`
     - `.write_superfish`
         
@@ -223,6 +225,60 @@ class FieldMesh:
             if name == key:
                 return i
         raise ValueError(f'Axis not found: {key}')
+
+
+    def axis_points(self, axis_label):
+        """
+        Returns 3D points for the specified axis to be used by the interpolator.
+
+        Parameters
+        ----------
+        axis_label : str
+            The label of the coordinate axis. Example: 'r' for cylindrical geometries.
+
+        Returns
+        -------
+        numpy.ndarray of shape (n, 3)
+            An array of 3D points, where the specified axis is populated, and other axes are zero.
+        """
+        x = self.coord_vec(axis_label)
+        points = np.zeros((len(x), 3))
+        points[:, self.axis_index(axis_label)] = x
+        return points    
+
+    def axis_values(self, axis_label, field_key, **kwargs):
+        """
+        Returns the values of the specified field along the given axis, allowing for partial replacement of points.
+
+        Parameters
+        ----------
+        axis_label : str
+            The label of the coordinate axis.
+        field_key : str
+            The key representing the field data to interpolate.
+        **kwargs : dict
+            Key-value pairs to replace parts of the internal points array. 
+            The keys should be axis labels, and the values should be the corresponding values to set.
+            Example: `x=0, y=1` will set points along 'x' and 'y' axes.
+
+        Returns
+        -------
+        tuple (numpy.ndarray, numpy.ndarray)
+            A tuple containing:
+            - An array of coordinate values along the specified axis.
+            - An array of interpolated field values at the corresponding points.
+        """
+        points3d = self.axis_points(axis_label)
+
+        # Replace parts of points3d with the values from kwargs
+        for axis, value in kwargs.items():
+            points3d[:, self.axis_index(axis)] = value
+
+        vec = points3d[:, self.axis_index(axis_label)]
+        values = self.interpolate(field_key, points3d)
+        return vec, values
+
+    
     
     @property
     def coord_vecs(self):
@@ -237,7 +293,7 @@ class FieldMesh:
         """
         i = self.axis_index(key)
         return np.linspace(self.mins[i], self.maxs[i], self.shape[i])
-        
+    
     @property 
     def meshgrid(self):
         """
@@ -282,14 +338,10 @@ class FieldMesh:
         """
         klist = [key for key in self.components if not self.component_is_zero(key)]
         return all([key.startswith('magnetic') for key in klist])
-            
-
-        
+           
     @property
     def is_static(self):
         return  self.attrs['harmonic'] == 0
-    
-
     
     def component_is_zero(self, key):
         """
@@ -297,7 +349,56 @@ class FieldMesh:
         """
         a = self[key]
         return not np.any(a)
-                
+
+
+
+
+    def interpolator(self, key):
+        """
+        Returns an interpolator for a given field key.
+
+        Parameters
+        ----------
+        key : str
+            The key representing the field data to interpolate. Examples include:
+            - 'Ez' for scaled/phased data
+            - 'magneticField/y' for raw component data
+
+        Returns
+        -------
+        RegularGridInterpolator
+            An interpolator object that can be used to interpolate points. The points
+            to interpolate should be ordered according to `.axis_labels`.
+        """
+        field = self[key]   
+        return RegularGridInterpolator(tuple(map(self.coord_vec, self.axis_labels)), field)
+
+    def interpolate(self, key, points):
+        """
+        Interpolates the field data for the given key at specified points.
+
+        Parameters
+        ----------
+        key : str
+            The key representing the field data to interpolate.
+        points : numpy.ndarray of shape (3,) or (n, 3)
+            An array of n 3d points at which to interpolate the field data. The points should
+            be ordered according to `.axis_labels`.
+
+        Returns
+        -------
+        numpy.ndarray
+            The interpolated field values at the specified points.
+        """
+        points = np.array(points)
+
+        # Convenience for a single point
+        if len(points.shape) == 1:
+            return self.interpolator(key)([points])[0]
+            
+        return self.interpolator(key)(points)
+
+    
 
     # Plotting
     # TODO: more general plotting
@@ -307,6 +408,7 @@ class FieldMesh:
              axes=None, 
              cmap=None, 
              return_figure=False, 
+             nice=True,
              **kwargs):
         
         if self.geometry == 'cylindrical':
@@ -324,6 +426,7 @@ class FieldMesh:
                                           time=time,
                                           axes=axes,
                                           return_figure=return_figure,
+                                          nice=nice,
                                           cmap=cmap, **kwargs)
             
         else:
@@ -384,8 +487,15 @@ class FieldMesh:
         
     @functools.wraps(create_impact_solrf_ele)      
     def to_impact_solrf(self, *args, **kwargs):
-        return create_impact_solrf_ele(self, *args, **kwargs)
-      
+        return create_impact_solrf_ele(self, *args, **kwargs)    
+
+    @functools.wraps(create_impact_emfield_cartesian_ele)      
+    def to_impact_emfield_cartesian(self, *args, **kwargs):
+        return create_impact_emfield_cartesian_ele(self, *args, **kwargs)    
+
+
+    
+    
     def to_cylindrical(self):
         """
         Returns a new FieldMesh in cylindrical geometry.
@@ -399,8 +509,7 @@ class FieldMesh:
         elif self.geometry == 'cylindrical':
             return self
         else:
-            raise NotImplementedError(f"geometry not implemented: {self.geometry}")
-            
+            raise NotImplementedError(f"geometry not implemented: {self.geometry}")  
     
     def write_gpt(self, filePath, asci2gdf_bin=None, verbose=True):
         """
@@ -408,6 +517,20 @@ class FieldMesh:
         """
     
         return write_gpt_fieldmesh(self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose)
+
+    @functools.wraps(write_impact_emfield_cartesian)
+    def write_impact_emfield_cartesian(self, filename):
+        """
+        Writes Impact-T style 1Tv3.T7 file corresponding to 
+        the `111: EMfldCart` element.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the file where the field data will be written.
+        
+        """
+        return write_impact_emfield_cartesian(self, filename)   
     
     # Superfish
     @functools.wraps(write_superfish_t7)
@@ -421,18 +544,6 @@ class FieldMesh:
         """
         return write_superfish_t7(self, filePath, verbose=verbose)
             
-            
-            
-    @classmethod
-    @functools.wraps(read_superfish_t7)
-    def from_superfish(cls, filename, type=None, geometry='cylindrical'):
-        """
-        Class method to parse a superfish T7 style file.
-        """        
-        data = read_superfish_t7(filename, type=type, geometry=geometry)
-        c = cls(data=data)
-        return c               
-        
 
     @classmethod
     def from_ansys_ascii_3d(cls, *, 
@@ -483,6 +594,50 @@ class FieldMesh:
         
         data = read_astra_3d_fieldmaps(common_filename, frequency=frequency)
         return cls(data=data)
+
+    @classmethod
+    def from_impact_emfield_cartesian(cls, filename, frequency=0,
+                                     eleAnchorPt='beginning'):
+        """
+        Class method to read an Impact-T style 1Tv3.T7 file corresponding to 
+        the `111: EMfldCart` element.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the file where the field data will be written.
+
+
+        frequency : float, optional
+            Fundamental frequency in Hz
+            This simply adds 'fundamentalFrequency' to attrs
+            default=0
+
+        Returns
+        -------
+            FieldMesh            
+        """
+        
+        attrs, components = parse_impact_emfield_cartesian(filename)
+
+        # These aren't in the file, they must be added
+        attrs['fundamentalFrequency'] = frequency
+        if frequency == 0:
+            attrs['harmonic'] = 0
+        
+        attrs['eleAnchorPt'] = eleAnchorPt
+        return cls(data = dict(attrs=attrs, components=components))
+
+    
+    @classmethod
+    @functools.wraps(read_superfish_t7)
+    def from_superfish(cls, filename, type=None, geometry='cylindrical'):
+        """
+        Class method to parse a superfish T7 style file.
+        """        
+        data = read_superfish_t7(filename, type=type, geometry=geometry)
+        c = cls(data=data)
+        return c      
         
     @classmethod
     def from_onaxis(cls, *,
@@ -587,7 +742,6 @@ class FieldMesh:
         """
         Checks that all attributes and component internal data are the same
         """
-        
         if not tools.data_are_equal(self.attrs, other.attrs):
             return False
         

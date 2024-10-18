@@ -1,4 +1,5 @@
 import os
+import re
 import numpy as np
 from numpy import pi
 from scipy import fft
@@ -861,4 +862,258 @@ def create_impact_solrf_ele(field_mesh,
             'rfdata': fmap['data'],
              'ele': ele,
              'fmap': fmap}
+
+
+
+
+
+def parse_impact_emfield_cartesian(filename):
+    """
+    Parse a file containing complex electromagnetic field data on a 3D grid.
+
+    The file contains grid information for X, Y, and Z dimensions followed by field values.
+    The field values are stored as complex numbers in the format (real, imaginary).
+
+    Parameters
+    ----------
+    filename : str
+        Path to the file containing the field data.
+
+    Returns
+    -------
+    attrs : dict
+        Dictionary containing summary information about the grid, including:
+        - gridGeometry : str
+            Geometry type of the grid ('rectangular').
+        - axisLabels : tuple of str
+            Labels for the axes ('x', 'y', 'z').
+        - gridLowerBound : tuple of int
+            Lower bound of the grid (0, 0, 0).
+        - gridOriginOffset : tuple of float
+            Origin offset for the grid (x_min, y_min, z_min).
+        - gridSpacing : tuple of float
+            Spacing between grid points in each dimension (dx, dy, dz).
+        - gridSize : tuple of int
+            Number of grid points in each dimension (nx_points, ny_points, nz_points).
+        - harmonic : int
+            Harmonic number (1).
+    components : dict
+        Dictionary containing the field components, including:
+        - Ex, Ey, Ez : ndarray
+            3D arrays of complex numbers representing the components of the electric field.
+        - Bx, By, Bz : ndarray
+            3D arrays of complex numbers representing the components of the magnetic field.
+    """
+    with open(filename, 'r') as f:
+        # Read grid info for X, Y, Z
+        x_min, x_max, nx_intervals = map(float, f.readline().split())
+        y_min, y_max, ny_intervals = map(float, f.readline().split())
+        z_min, z_max, nz_intervals = map(float, f.readline().split())
+
+    # Convert intervals to integers
+    nx_intervals, ny_intervals, nz_intervals = map(int, [nx_intervals, ny_intervals, nz_intervals])
+
+    # Determine the number of grid points in each direction
+    nx_points, ny_points, nz_points = nx_intervals + 1, ny_intervals + 1, nz_intervals + 1
+    dx, dy, dz = (x_max - x_min) / nx_intervals, (y_max - y_min) / ny_intervals, (z_max - z_min) / nz_intervals
+
+    # Read field values using regex to extract complex numbers
+    field_data = []
+    with open(filename, 'r') as f:
+        for _ in range(3):
+            next(f)  # Skip the grid info lines
+        for line in f:
+            matches = re.findall(r'\(([^,]+),([^)]+)\)', line)
+            if matches:
+                field_data.append([complex(float(real), float(imag)) for real, imag in matches])
+
+    # Convert field data to a NumPy array and reshape into 3D grids with Fortran order
+    field_data = np.array(field_data)
+    components = {
+        'Ex': field_data[:, 0].reshape((nx_points, ny_points, nz_points), order='F'),
+        'Ey': field_data[:, 1].reshape((nx_points, ny_points, nz_points), order='F'),
+        'Ez': field_data[:, 2].reshape((nx_points, ny_points, nz_points), order='F'),
+        'Bx': field_data[:, 3].reshape((nx_points, ny_points, nz_points), order='F'),
+        'By': field_data[:, 4].reshape((nx_points, ny_points, nz_points), order='F'),
+        'Bz': field_data[:, 5].reshape((nx_points, ny_points, nz_points), order='F'),
+    }
+
+    # Remove zero arrays
+    for key in list(components):
+        if np.allclose(components[key], 0):
+            components.pop(key)
+
+    attrs = {
+        'gridGeometry': 'rectangular',
+        'axisLabels': ('x', 'y', 'z'),
+        'gridLowerBound': (0, 0, 0),
+        'gridOriginOffset': (x_min, y_min, z_min),
+        'gridSpacing': (dx, dy, dz),
+        'gridSize': (nx_points, ny_points, nz_points),
+        'harmonic': 1,
+    }
+
+    return attrs, components
+
+def write_impact_emfield_cartesian(fieldmesh, filename):
+    """
+    Write complex electromagnetic field data to a file in a format suitable for parsing.
+
+    The file will contain grid information for X, Y, and Z dimensions followed by field values.
+    The field values are stored as complex numbers in the format (real, imaginary).
+
+    Parameters
+    ----------
+    filename : str
+        Path to the file where the field data will be written.
+    attrs : dict
+        Dictionary containing summary information about the grid, including:
+        - gridOriginOffset : tuple of float
+            Origin offset for the grid (x_min, y_min, z_min).
+        - gridSize : tuple of int
+            Number of grid points in each dimension (nx_points, ny_points, nz_points).
+        - gridSpacing : tuple of float
+            Spacing between grid points in each dimension (dx, dy, dz).
+    components : dict
+        Dictionary containing the field components, including:
+        - Ex, Ey, Ez : ndarray
+            3D arrays of complex numbers representing the components of the electric field.
+        - Bx, By, Bz : ndarray
+            3D arrays of complex numbers representing the components of the magnetic field.
+    """
+    attrs = fieldmesh.attrs
+    x_min, y_min, z_min = attrs['gridOriginOffset']
+    nx_points, ny_points, nz_points = attrs['gridSize']
+    dx, dy, dz = attrs['gridSpacing']
+    x_max = x_min + dx * (nx_points - 1)
+    y_max = y_min + dy * (ny_points - 1)
+    z_max = z_min + dz * (nz_points - 1)
+
+    with open(filename, 'w') as f:
+        # Write grid info for X, Y, Z
+        f.write(f"{x_min} {x_max} {nx_points - 1}\n")
+        f.write(f"{y_min} {y_max} {ny_points - 1}\n")
+        f.write(f"{z_min} {z_max} {nz_points - 1}\n")
+
+        # Flatten the arrays and write field values in Fortran-order
+        # Note that these are scaled by fieldmesh.scale and fieldmesh.phase
+        Ex, Ey, Ez = fieldmesh.Ex, fieldmesh.Ey, fieldmesh.Ez
+        Bx, By, Bz = fieldmesh.Bx, fieldmesh.By, fieldmesh.Bz
+        for k in range(nz_points):
+            for j in range(ny_points):
+                for i in range(nx_points):
+                    f.write(f"({Ex[i, j, k].real},{Ex[i, j, k].imag}) ")
+                    f.write(f"({Ey[i, j, k].real},{Ey[i, j, k].imag}) ")
+                    f.write(f"({Ez[i, j, k].real},{Ez[i, j, k].imag}) ")
+                    f.write(f"({Bx[i, j, k].real},{Bx[i, j, k].imag}) ")
+                    f.write(f"({By[i, j, k].real},{By[i, j, k].imag}) ")
+                    f.write(f"({Bz[i, j, k].real},{Bz[i, j, k].imag})\n")
+
+
+
+def create_impact_emfield_cartesian_ele(field_mesh,
+                            *, 
+                            zedge=0,
+                            name=None,
+                            scale=1,
+                            phase=0,
+                            radius = 0.15,
+                            x_offset = 0,
+                            y_offset = 0,
+                            file_id = 666,
+                            output_path=None):
+    """
+    Creat Impact-T solrf element from a FieldMesh
+    
+    Parameters
+    ----------
+    name: str, default: None
+    
+    zedge: float
+    
+    scale: float, default: 1
+    
+    phase: float, default: 0
+        phase in radians
+
+    radius: float, default: 0
+    
+    x_offset: float, default: 0
+    
+    y_offset: float, default: 0
+    
+    file_id: int, default: 666
+    
+    output_path: str, default: None
+        If given, the '1T{file_id}.T7' file will be written to this path
+    
+    Returns
+    -------
+
+    
+    """
+    if not field_mesh.geometry == 'rectangular':
+        raise NotImplementedError(f"FieldMesh geometry '{FM.geometry}' must be 'rectangular' ")
+             
+    freq = field_mesh.frequency
+    L = field_mesh.dz * (field_mesh.shape[2]-1)
+         
+    # Round    
+    s = np.round(zedge + L, 12)
+    zedge = np.round(zedge, 12)      
+    L = np.round(L, 12)
+    scale = np.round(scale, 12)
+    theta0_deg = phase * 180/np.pi
+
+
+    
+    if name is None:
+        name = f"emfield_cartesian_{file_id}"
+    
+    fieldmap_filename = f'1T{file_id}.T7'
+    
+    if output_path is not None:
+        if not os.path.exists(output_path):
+            raise ValueError(f'output_path does not exist: {output_path}')
+        output_file = os.path.join(output_path, fieldmap_filename)
+        field_mesh.write_impact_emfield_cartesian(output_file)
+
+    if x_offset !=0:
+        raise NotImplementedError('x_offset is not yet implemented in Impact-T')
+    if y_offset !=0:
+        raise NotImplementedError('y_offset is not yet implemented in Impact-T')        
+    
+    ele = {
+     'L': L,
+     'type': 'emfield_cartesian',
+     'zedge': zedge,
+     'rf_field_scale': scale,
+     'rf_frequency': freq,
+     'theta0_deg': theta0_deg,
+     'filename': fieldmap_filename,
+     'radius': radius,
+     'x_offset': x_offset,
+     'y_offset': y_offset,
+     'x_rotation': 0.0,
+     'y_rotation': 0.0,
+     'z_rotation': 0.0, # This is tilt, but shouldn't affect anything because of the cylindrical symmetry.
+     'name': name,
+     's': s, 
+          }
+    
+    line = f"{L} 0 0 111 {zedge} {scale} {freq} {theta0_deg} {file_id} {radius} {x_offset} {y_offset} 0 0 0 /name:{name}"
+    
+
+    fmap = {
+        'info': {'format': 'emfield_cartesian_fieldmesh'},
+        'field':field_mesh,
+           }
+    
+    return {'line': line,
+             'ele': ele,
+             'fmap': fmap,
+            }
+
+
+
     

@@ -1,4 +1,3 @@
-
 import functools
 import os
 from copy import deepcopy
@@ -13,7 +12,10 @@ from pmd_beamphysics.fields.conversion import (
 )
 from pmd_beamphysics.fields.expansion import expand_fieldmesh_from_onaxis
 from pmd_beamphysics.interfaces.ansys import read_ansys_ascii_3d_fields
-from pmd_beamphysics.interfaces.cst import read_cst_ascii_3d_complex_fields, read_cst_ascii_3d_static_field
+from pmd_beamphysics.interfaces.cst import (
+    read_cst_ascii_3d_complex_fields,
+    read_cst_ascii_3d_static_field,
+)
 
 from pmd_beamphysics.interfaces.astra import (
     astra_1d_fieldmap_data,
@@ -532,8 +534,9 @@ class FieldMesh:
         Writes a GPT field file.
         """
 
-        return write_gpt_fieldmap(self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose)
-
+        return write_gpt_fieldmap(
+            self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose
+        )
 
     @functools.wraps(write_impact_emfield_cartesian)
     def write_impact_emfield_cartesian(self, filename):
@@ -549,7 +552,6 @@ class FieldMesh:
         """
 
         return write_impact_emfield_cartesian(self, filename)
-
 
     # Superfish
     @functools.wraps(write_superfish_t7)
@@ -600,17 +602,15 @@ class FieldMesh:
 
     @classmethod
     def from_cst_3d(cls, field_file1, field_file2=None, frequency=0):
-
         if field_file2 is not None:
             # field_file1 -> efile, field_file2 -> hfile
-            data = read_cst_ascii_3d_complex_fields(field_file1, field_file2, frequency=frequency, harmonic=1)
+            data = read_cst_ascii_3d_complex_fields(
+                field_file1, field_file2, frequency=frequency, harmonic=1
+            )
         else:
             data = read_cst_ascii_3d_static_field(field_file1)
 
         return cls(data=data)
-                   
-
-        
 
     @classmethod
     def from_astra_3d(cls, common_filename, frequency=0):

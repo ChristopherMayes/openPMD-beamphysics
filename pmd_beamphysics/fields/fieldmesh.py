@@ -12,13 +12,18 @@ from pmd_beamphysics.fields.conversion import (
 )
 from pmd_beamphysics.fields.expansion import expand_fieldmesh_from_onaxis
 from pmd_beamphysics.interfaces.ansys import read_ansys_ascii_3d_fields
+from pmd_beamphysics.interfaces.cst import (
+    read_cst_ascii_3d_complex_fields,
+    read_cst_ascii_3d_static_field,
+)
+
 from pmd_beamphysics.interfaces.astra import (
     astra_1d_fieldmap_data,
     read_astra_3d_fieldmaps,
     write_astra_1d_fieldmap,
     write_astra_3d_fieldmaps,
 )
-from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
+from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmap
 from pmd_beamphysics.interfaces.impact import (
     create_impact_emfield_cartesian_ele,
     create_impact_solrf_ele,
@@ -43,6 +48,7 @@ from pmd_beamphysics.readers import (
 )
 from pmd_beamphysics.units import pg_units
 from pmd_beamphysics.writers import pmd_field_init, write_pmd_field
+
 
 # -----------------------------------------
 # Classes
@@ -528,7 +534,7 @@ class FieldMesh:
         Writes a GPT field file.
         """
 
-        return write_gpt_fieldmesh(
+        return write_gpt_fieldmap(
             self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose
         )
 
@@ -544,6 +550,7 @@ class FieldMesh:
             Path to the file where the field data will be written.
 
         """
+
         return write_impact_emfield_cartesian(self, filename)
 
     # Superfish
@@ -591,6 +598,18 @@ class FieldMesh:
             raise ValueError("Please provide a frequency")
 
         data = read_ansys_ascii_3d_fields(efile, hfile, frequency=frequency)
+        return cls(data=data)
+
+    @classmethod
+    def from_cst_3d(cls, field_file1, field_file2=None, frequency=0):
+        if field_file2 is not None:
+            # field_file1 -> efile, field_file2 -> hfile
+            data = read_cst_ascii_3d_complex_fields(
+                field_file1, field_file2, frequency=frequency, harmonic=1
+            )
+        else:
+            data = read_cst_ascii_3d_static_field(field_file1)
+
         return cls(data=data)
 
     @classmethod

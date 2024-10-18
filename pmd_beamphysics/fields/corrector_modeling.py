@@ -171,13 +171,6 @@ def Rmx(angle):
     C = np.cos(angle)
     S = np.sin(angle)
 
-    M = np.identity(3)
-
-    M[1,1] = +C
-    M[1,2] = +S
-    M[2,1] = -S
-    M[2,2] = +C
-
     return np.array([[1,  0,  0],
                      [0,  C,  S],
                      [0, -S,  C]])
@@ -189,18 +182,9 @@ def Rpz(angle):
     C = np.cos(angle)
     S = np.sin(angle)
 
-    M = np.identity(3)
-
-    M[0,0] = +C
-    M[0,1] = -S
-    M[1,0] = +S
-    M[1,1] = +C
-
     return np.array([[C, -S,  0],
                      [S,  C,  0],
                      [0,  0,  1]])
-
-    return M
 
 def get_rotation_matrix(pitch, yaw, tilt):
 

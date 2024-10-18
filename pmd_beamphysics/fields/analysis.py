@@ -348,7 +348,7 @@ def autophase_field(field_mesh, pz0=0, scale=1, species='electron', tol=1e-9, ve
     
     # Function for use in brent
     def phase_f(phase_deg):
-        zf, pf = track_field_1d(z,
+        zf, pf, _ = track_field_1d(z,
                    Ez,
                    frequency=frequency,
                    z0=zmin,

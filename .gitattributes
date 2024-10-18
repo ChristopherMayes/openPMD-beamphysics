@@ -1,11 +1,1 @@
-# exclude .gitignore and similar from the generated tarball
-.git*           export-ignore
-docs            export-ignore
-examples        export-ignore
-mkdocs.yml      export-ignore
-opmd_beamphysics export-ignore
-
-# exclude CI configurations (useless outside the repo)
-.travis-ci.yml  export-ignore
-.appveyor.yml   export-ignore
-pmd_beamphysics/_version.py export-subst
+.git_archival.txt  export-subst

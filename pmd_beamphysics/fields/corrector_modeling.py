@@ -152,12 +152,9 @@ def bfield_from_thin_straight_wire(x, y, z, p1, p2, current, plot_wire=False, el
         return B[:,:,:,0], B[:,:,:,1], B[:,:,:,2]
 
 
-def Rpy(angle=0, units='rad'):
+def Rpy(angle):
 
     """Defines a roation in around +y direction"""
-
-    if(units=='deg'):
-        angle = angle*pi/180
 
     C = np.cos(angle)
     S = np.sin(angle)
@@ -171,12 +168,9 @@ def Rpy(angle=0, units='rad'):
 
     return M
 
-def Rmx(angle=0, units='rad'):
+def Rmx(angle):
 
     """Defines a roation around -x direction"""
-
-    if(units=='deg'):
-        angle = angle*pi/180
 
     C = np.cos(angle)
     S = np.sin(angle)
@@ -190,12 +184,9 @@ def Rmx(angle=0, units='rad'):
 
     return M
 
-def Rpz(angle=0, units='rad'):
+def Rpz(angle):
 
     """Defines a roation arounx +z direction"""
-
-    if(units=='deg'):
-        angle = angle*pi/180
 
     C = np.cos(angle)
     S = np.sin(angle)
@@ -209,7 +200,7 @@ def Rpz(angle=0, units='rad'):
 
     return M
 
-def get_rotation_matrix(pitch=0, yaw=0, tilt=0, units='deg'):
+def get_rotation_matrix(pitch, yaw, tilt):
 
     """Defines a general 3d rotation in terms of the orientation angles theta, phi, psi"""
 
@@ -220,9 +211,9 @@ def get_rotation_matrix(pitch=0, yaw=0, tilt=0, units='deg'):
     if tilt is None:
         tilt=0
 
-    rpy = Rpy(pitch, units)
-    rmx = Rmx(-yaw,   units)
-    rpz = Rpz(tilt,   units)
+    rpy = Rpy(pitch)
+    rmx = Rmx(-yaw)
+    rpz = Rpz(tilt)
 
     return np.matmul(rpy, np.matmul(rmx, rpz))
 
@@ -372,13 +363,13 @@ def bfield_from_thin_rectangular_corrector(X, Y, Z,
         rotation_matrix.shape = (3, 3)
 
     pitch: float, optional
-        Defines the rotation of the corrector around the x-axis [deg]. Used instead of rotation_matrix.
+        Defines the rotation of the corrector around the x-axis [rad]. Used instead of rotation_matrix.
 
     yaw: float, optional
-        Defines the rotation of the corrector around the y-axis [deg]. Used instead of rotation_matrix.
+        Defines the rotation of the corrector around the y-axis [rad]. Used instead of rotation_matrix.
 
     tilt: float, optional
-        Defines the rotation of the corrector around the z-axis [deg]. Used instead of rotation_matrix.
+        Defines the rotation of the corrector around the z-axis [rad]. Used instead of rotation_matrix.
 
 
     
@@ -507,7 +498,7 @@ def get_arc_vectors(h, R, theta,
     >>> arc_points, arc_tangents = get_arc_vectors(h=0.5, R=1, theta=np.pi/2, npts=50, arc_e3=np.array([0, 1, 0]))
     """
 
-    phi = (np.pi - theta)/2
+    phi = (pi - theta)/2
 
     #print(phi * 180/np.pi)
 
@@ -610,7 +601,7 @@ def bfield_from_thin_saddle_coil(X, Y, Z, L, R, theta, current,
                                  yaw=None,
                                  tilt=None):
 
-    phi = (np.pi - theta)/2
+    phi = (pi - theta)/2
 
     Bx = np.zeros(X.shape)
     By = np.zeros(Y.shape)
@@ -784,13 +775,13 @@ def make_rectangular_dipole_corrector_fieldmesh(*,
         rotation_matrix.shape = (3, 3)
 
     pitch: float, optional
-        Defines the rotation of the corrector around the x-axis [deg]. Used instead of rotation_matrix.
+        Defines the rotation of the corrector around the x-axis [rad]. Used instead of rotation_matrix.
 
     yaw: float, optional
-        Defines the rotation of the corrector around the y-axis [deg]. Used instead of rotation_matrix.
+        Defines the rotation of the corrector around the y-axis [rad]. Used instead of rotation_matrix.
 
     tilt: float, optional
-        Defines the rotation of the corrector around the z-axis [deg]. Used instead of rotation_matrix.
+        Defines the rotation of the corrector around the z-axis [rad]. Used instead of rotation_matrix.
 
     Returns
     -------
@@ -824,6 +815,8 @@ def make_rectangular_dipole_corrector_fieldmesh(*,
     ...                                                  zmin=-1, zmax=1, nz=101,
     ...                                                  plot_wire=True)
     """
+
+    #print(pitch, yaw, tilt)
 
     xs = np.linspace(xmin, xmax, nx)
     ys = np.linspace(ymin, ymax, ny)
@@ -936,13 +929,13 @@ def make_saddle_dipole_corrector_fieldmesh(*,
         rotation_matrix.shape = (3, 3)
 
     pitch: float, optional
-        Defines the rotation of the corrector around the x-axis [deg]. Used instead of rotation_matrix.
+        Defines the rotation of the corrector around the x-axis [rad]. Used instead of rotation_matrix.
 
     yaw: float, optional
-        Defines the rotation of the corrector around the y-axis [deg]. Used instead of rotation_matrix.
+        Defines the rotation of the corrector around the y-axis [rad]. Used instead of rotation_matrix.
 
     tilt: float, optional
-        Defines the rotation of the corrector around the z-axis [deg]. Used instead of rotation_matrix.
+        Defines the rotation of the corrector around the z-axis [rad]. Used instead of rotation_matrix.
 
     Returns
     -------
@@ -1107,13 +1100,13 @@ def make_dipole_corrector_fieldmesh(*,
         rotation_matrix.shape = (3, 3)
 
     pitch: float, optional
-        Defines the rotation of the corrector around the x-axis [deg]. Used instead of rotation_matrix.
+        Defines the rotation of the corrector around the x-axis [rad]. Used instead of rotation_matrix.
 
     yaw: float, optional
-        Defines the rotation of the corrector around the y-axis [deg]. Used instead of rotation_matrix.
+        Defines the rotation of the corrector around the y-axis [rad]. Used instead of rotation_matrix.
 
     tilt: float, optional
-        Defines the rotation of the corrector around the z-axis [deg]. Used instead of rotation_matrix.
+        Defines the rotation of the corrector around the z-axis [rad]. Used instead of rotation_matrix.
 
 
     Returns

@@ -8,11 +8,11 @@ inputs:
   python-version:
     description: "Conda environment Python version"
     required: false
-    default: "3.12"
+    default: "3.9"
   env_name:
     description: "Conda environment name to create"
     required: false
-    default: "pmd_beamphysics-dev"
+    default: "beamphysics-dev"
   extras:
     description: "Package extras to install"
     required: true
@@ -20,11 +20,11 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Setup Mambaforge
+    - name: Setup Miniforge
       uses: conda-incubator/setup-miniconda@v3
       with:
-        miniforge-variant: Mambaforge
         activate-environment: ${{ inputs.env_name }}
+        miniforge-version: latest
         use-mamba: true
         channels: conda-forge
     - name: Update Python version in environment.yml

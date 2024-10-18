@@ -1,3 +1,4 @@
+import datetime
 import numpy as np
 
 
@@ -76,3 +77,20 @@ def encode_attr(a):
 
 def encode_attrs(attrs):
     return {k: encode_attr(v) for k, v in attrs.items()}
+
+
+def get_version() -> str:
+    """Get the installed pmd-beamphysics version."""
+    from . import __version__
+
+    return __version__
+
+
+def current_date_with_tzinfo() -> datetime.datetime:
+    from dateutil.tz import tzlocal
+
+    return datetime.datetime.now(tzlocal())
+
+
+def pmd_format_date(dt: datetime.datetime) -> str:
+    return dt.strftime("%Y-%m-%d %H:%M:%S %z")

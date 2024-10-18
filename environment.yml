@@ -5,17 +5,20 @@ channels:
 dependencies:
   - python>=3.9
   - numpy
-  - scipy
+  - scipy>=1.0.0
   - matplotlib
   - h5py
-# Developer
+  - python-dateutil
+  # Developer
+  - pytest
   - jupyterlab>=3
-  - ipywidgets
   - pygments
   - mkdocs==1.5.2
   - mkdocstrings
   - mkdocs-material
   - mkdocs-jupyter==0.24.6
   - mkdocstrings-python
-  - pytest-cov
-  - pytest
+  - pip
+  - pip:
+      - mkdocstrings-python
+      - git+https://github.com/openPMD/openPMD-validator@2.0.X

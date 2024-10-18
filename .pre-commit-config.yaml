@@ -17,7 +17,7 @@ repos:
         exclude: "^(python/versioneer.py|python/src/_version.py)$"
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.5.0
+    rev: v0.6.2
     hooks:
       - id: ruff
         args: [--fix]
@@ -30,7 +30,7 @@ repos:
       - id: jupyter-notebook-clear-output
         name: jupyter-notebook-jupyter-clear
         files: \.ipynb$
-        stages: [pre-commit]
+        stages: [commit]
         language: system
         entry: jupyter nbconvert --ClearOutputPreprocessor.enabled=True --inplace
-        exclude: "^.*(Example3-TimeDependent|perlmutter_benchmark|fodo_scan|fodo_scan_model).ipynb$"
+        # exclude: "^.*().ipynb$"

@@ -1016,6 +1016,9 @@ def create_impact_emfield_cartesian_ele(
     radius=0.15,
     x_offset=0,
     y_offset=0,
+    x_rotation=0,
+    y_rotation=0,
+    z_rotation=0,
     file_id=666,
     output_path=None,
 ):
@@ -1075,11 +1078,6 @@ def create_impact_emfield_cartesian_ele(
         output_file = os.path.join(output_path, fieldmap_filename)
         field_mesh.write_impact_emfield_cartesian(output_file)
 
-    if x_offset != 0:
-        raise NotImplementedError("x_offset is not yet implemented in Impact-T")
-    if y_offset != 0:
-        raise NotImplementedError("y_offset is not yet implemented in Impact-T")
-
     ele = {
         "L": L,
         "type": "emfield_cartesian",
@@ -1091,14 +1089,14 @@ def create_impact_emfield_cartesian_ele(
         "radius": radius,
         "x_offset": x_offset,
         "y_offset": y_offset,
-        "x_rotation": 0.0,
-        "y_rotation": 0.0,
-        "z_rotation": 0.0,  # This is tilt, but shouldn't affect anything because of the cylindrical symmetry.
+        "x_rotation": x_rotation,
+        "y_rotation": y_rotation,
+        "z_rotation": z_rotation,
         "name": name,
         "s": s,
     }
 
-    line = f"{L} 0 0 111 {zedge} {scale} {freq} {theta0_deg} {file_id} {radius} {x_offset} {y_offset} 0 0 0 /name:{name}"
+    line = f"{L} 0 0 111 {zedge} {scale} {freq} {theta0_deg} {file_id} {radius} {x_offset} {y_offset} {x_rotation} {y_rotation} {z_rotation} /name:{name}"
 
     fmap = {
         "info": {"format": "emfield_cartesian_fieldmesh"},

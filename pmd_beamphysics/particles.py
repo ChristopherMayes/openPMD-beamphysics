@@ -1,5 +1,6 @@
 import functools
 import os
+import pathlib
 from copy import deepcopy
 
 import numpy as np
@@ -178,7 +179,7 @@ class ParticleGroup:
 
         if h5:
             # Allow filename
-            if isinstance(h5, str):
+            if isinstance(h5, (str, pathlib.Path)):
                 fname = os.path.expandvars(h5)
                 assert os.path.exists(fname), f"File does not exist: {fname}"
 
@@ -974,7 +975,7 @@ class ParticleGroup:
         Writes to an open h5 handle, or new file if h5 is a str.
 
         """
-        if isinstance(h5, str):
+        if isinstance(h5, (str, pathlib.Path)):
             fname = os.path.expandvars(h5)
             g = File(fname, "w")
             pmd_init(g, basePath="/", particlesPath=".")

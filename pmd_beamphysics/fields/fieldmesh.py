@@ -60,6 +60,50 @@ axis_labels_from_geometry = {
 }
 
 
+def _create_delta_property(name):
+    def getter(self):
+        return self.deltas[self.axis_index(name)]
+
+    return property(getter, doc=f"Mesh spacing in {name}")
+
+
+def _create_max_property(name):
+    def getter(self):
+        return self.maxs[self.axis_index(name)]
+
+    def setter(self, value):
+        # Setting the max => shift the min
+        i = self.axis_index(name)
+        mins = list(self.attrs["gridOriginOffset"])
+        mins[i] = mins[i] + float(value) - self.maxs[i]
+        self.attrs["gridOriginOffset"] = tuple(mins)
+
+    return property(
+        getter, setter, doc=f"Mesh maximum in {name}. This can also be set."
+    )
+
+
+def _create_min_property(name):
+    def getter(self):
+        return self.mins[self.axis_index(name)]
+
+    def setter(self, value):
+        mins = list(self.attrs["gridOriginOffset"])
+        mins[self.axis_index(name)] = float(value)
+        self.attrs["gridOriginOffset"] = tuple(mins)
+
+    return property(
+        getter, setter, doc=f"Mesh minimim in {name}. This can also be set."
+    )
+
+
+def _create_scaled_component_property(name):
+    def getter(self):
+        return self.scaled_component(name)
+
+    return property(getter, doc=f"Scaled 3D mesh for {name} in {pg_units(name)}")
+
+
 class FieldMesh:
     """
     Class for openPMD External Field Mesh data.
@@ -833,12 +877,6 @@ class FieldMesh:
         return self.coord_vec("z")
 
     # Deltas
-    def _create_delta_property(name):
-        def getter(self):
-            return self.deltas[self.axis_index(name)]
-
-        return property(getter)
-
     dx = _create_delta_property("x")
     dy = _create_delta_property("y")
     dz = _create_delta_property("z")
@@ -846,19 +884,6 @@ class FieldMesh:
     dtheta = _create_delta_property("theta")
 
     # Maxs
-    def _create_max_property(name):
-        def getter(self):
-            return self.maxs[self.axis_index(name)]
-
-        def setter(self, value):
-            # Setting the max => shift the min
-            i = self.axis_index(name)
-            mins = list(self.attrs["gridOriginOffset"])
-            mins[i] = mins[i] + float(value) - self.maxs[i]
-            self.attrs["gridOriginOffset"] = tuple(mins)
-
-        return property(getter, setter)
-
     # Create max properties dynamically
     xmax = _create_max_property("x")
     ymax = _create_max_property("y")
@@ -867,17 +892,6 @@ class FieldMesh:
     thetamax = _create_max_property("theta")
 
     # Mins
-    def _create_min_property(name):
-        def getter(self):
-            return self.mins[self.axis_index(name)]
-
-        def setter(self, value):
-            mins = list(self.attrs["gridOriginOffset"])
-            mins[self.axis_index(name)] = float(value)
-            self.attrs["gridOriginOffset"] = tuple(mins)
-
-        return property(getter, setter)
-
     # Create min properties dynamically
     xmin = _create_min_property("x")
     ymin = _create_min_property("y")
@@ -886,13 +900,6 @@ class FieldMesh:
     thetamin = _create_min_property("theta")
 
     # Scaled components
-    # TODO: Check geometry
-    def _create_scaled_component_property(name):
-        def getter(self):
-            return self.scaled_component(name)
-
-        return property(getter)
-
     # Dynamically create scaled properties
     Bx = _create_scaled_component_property("Bx")
     By = _create_scaled_component_property("By")

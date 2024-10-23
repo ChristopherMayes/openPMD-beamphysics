@@ -833,7 +833,6 @@ class FieldMesh:
         return self.coord_vec("z")
 
     # Deltas
-    @staticmethod
     def _create_delta_property(name):
         def getter(self):
             return self.deltas[self.axis_index(name)]
@@ -847,7 +846,6 @@ class FieldMesh:
     dtheta = _create_delta_property("theta")
 
     # Maxs
-    @staticmethod
     def _create_max_property(name):
         def getter(self):
             return self.maxs[self.axis_index(name)]
@@ -869,7 +867,6 @@ class FieldMesh:
     thetamax = _create_max_property("theta")
 
     # Mins
-    @staticmethod
     def _create_min_property(name):
         def getter(self):
             return self.mins[self.axis_index(name)]

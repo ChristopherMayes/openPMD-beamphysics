@@ -820,7 +820,6 @@ class FieldMesh:
             return dat
 
     # Convenient properties
-    # TODO: Automate this?
     @property
     def r(self):
         return self.coord_vec("r")
@@ -834,86 +833,96 @@ class FieldMesh:
         return self.coord_vec("z")
 
     # Deltas
-    ## cartesian
-    @property
-    def dx(self):
-        return self.deltas[self.axis_index("x")]
+    @staticmethod
+    def _create_delta_property(name):
+        def getter(self):
+            return self.deltas[self.axis_index(name)]
 
-    @property
-    def dy(self):
-        return self.deltas[self.axis_index("y")]
+        return property(getter)
 
-    ## cylindrical
-    @property
-    def dr(self):
-        return self.deltas[self.axis_index("r")]
+    dx = _create_delta_property("x")
+    dy = _create_delta_property("y")
+    dz = _create_delta_property("z")
+    dr = _create_delta_property("r")
+    dtheta = _create_delta_property("theta")
 
-    @property
-    def dtheta(self):
-        return self.deltas[self.axis_index("theta")]
+    # Maxs
+    @staticmethod
+    def _create_max_property(name):
+        def getter(self):
+            return self.maxs[self.axis_index(name)]
 
-    @property
-    def dz(self):
-        return self.deltas[self.axis_index("z")]
+        def setter(self, value):
+            # Setting the max => shift the min
+            i = self.axis_index(name)
+            mins = list(self.attrs["gridOriginOffset"])
+            mins[i] = mins[i] + float(value) - self.maxs[i]
+            self.attrs["gridOriginOffset"] = tuple(mins)
+
+        return property(getter, setter)
+
+    # Create max properties dynamically
+    xmax = _create_max_property("x")
+    ymax = _create_max_property("y")
+    zmax = _create_max_property("z")
+    rmax = _create_max_property("r")
+    thetamax = _create_max_property("theta")
+
+    # Mins
+    @staticmethod
+    def _create_min_property(name):
+        def getter(self):
+            return self.mins[self.axis_index(name)]
+
+        def setter(self, value):
+            mins = list(self.attrs["gridOriginOffset"])
+            mins[self.axis_index(name)] = float(value)
+            self.attrs["gridOriginOffset"] = tuple(mins)
+
+        return property(getter, setter)
+
+    # Create min properties dynamically
+    xmin = _create_min_property("x")
+    ymin = _create_min_property("y")
+    zmin = _create_min_property("z")
+    rmin = _create_min_property("r")
+    thetamin = _create_min_property("theta")
 
     # Scaled components
     # TODO: Check geometry
-    ## cartesian
-    @property
-    def Bx(self):
-        return self.scaled_component("Bx")
+    @staticmethod
+    def _create_scaled_component_property(name):
+        def getter(self):
+            return self.scaled_component(name)
 
-    @property
-    def By(self):
-        return self.scaled_component("By")
+        return property(getter)
 
-    @property
-    def Ex(self):
-        return self.scaled_component("Ex")
-
-    @property
-    def Ey(self):
-        return self.scaled_component("Ey")
-
-    ## cylindrical
-    @property
-    def Br(self):
-        return self.scaled_component("Br")
-
-    @property
-    def Btheta(self):
-        return self.scaled_component("Btheta")
-
-    @property
-    def Bz(self):
-        return self.scaled_component("Bz")
-
-    @property
-    def Er(self):
-        return self.scaled_component("Er")
-
-    @property
-    def Etheta(self):
-        return self.scaled_component("Etheta")
-
-    @property
-    def Ez(self):
-        return self.scaled_component("Ez")
+    # Dynamically create scaled properties
+    Bx = _create_scaled_component_property("Bx")
+    By = _create_scaled_component_property("By")
+    Bz = _create_scaled_component_property("Bz")
+    Br = _create_scaled_component_property("Br")
+    Btheta = _create_scaled_component_property("Btheta")
+    Ex = _create_scaled_component_property("Ex")
+    Ey = _create_scaled_component_property("Ey")
+    Ez = _create_scaled_component_property("Ez")
+    Er = _create_scaled_component_property("Er")
+    Etheta = _create_scaled_component_property("Etheta")
 
     @property
     def B(self):
         if self.geometry == "cylindrical":
             if self.is_static:
-                return np.hypot(self["Br"], self["Bz"])
+                return np.hypot(self.Br, self.Bz)
             else:
-                return np.abs(self["Btheta"])
+                return np.abs(self.Btheta)
         else:
             raise ValueError(f"Unknown geometry: {self.geometry}")
 
     @property
     def E(self):
         if self.geometry == "cylindrical":
-            return np.hypot(np.abs(self["Er"]), np.abs(self["Ez"]))
+            return np.hypot(np.abs(self.Er), np.abs(self.Ez))
         else:
             raise ValueError(f"Unknown geometry: {self.geometry}")
 

@@ -3,9 +3,11 @@ from typing import Any, Dict, Optional, Union
 import h5py
 import numpy as np
 
-from .units import pmd_unit, pg_units
 from .readers import component_from_alias, load_field_attrs
-from .tools import fstr, encode_attrs
+from .tools import encode_attrs, fstr
+from .units import pg_units, pmd_unit
+
+savefig_dpi = 450
 
 
 def write_attrs(h5: Union[h5py.Group, h5py.Dataset], dct: Dict[str, Any]) -> None:

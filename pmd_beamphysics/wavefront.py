@@ -13,11 +13,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.constants
 import scipy.fft
-
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from .metadata import PolarizationDirection, WavefrontMetadata
 from . import writers
+from .metadata import PolarizationDirection, WavefrontMetadata
 from .units import known_unit, nice_array
 
 logger = logging.getLogger(__name__)
@@ -1440,7 +1439,7 @@ class Wavefront:
 
             if save:
                 logger.info(f"Saving plot to {save!r}")
-                fig.savefig(save)
+                fig.savefig(save, dpi=writers.savefig_dpi, bbox_inches="tight")
 
         return fig, axs, images
 
@@ -1490,7 +1489,7 @@ class Wavefront:
             # TODO Bounding box options? Higher DPI than default?
             if save:
                 logger.info(f"Saving plot to {save!r}")
-                fig.savefig(save)
+                fig.savefig(save, dpi=writers.savefig_dpi, bbox_inches="tight")
         return fig, (ax1, ax2)
 
     def _plot_reciprocal_thy_vs_thx(
@@ -1669,7 +1668,7 @@ class Wavefront:
             logger.info(f"Saving plot to {save!r}")
             fig = ax1.get_figure()
             assert fig is not None
-            fig.savefig(save)
+            fig.savefig(save, dpi=writers.savefig_dpi, bbox_inches="tight")
 
         return ax1, ax2
 

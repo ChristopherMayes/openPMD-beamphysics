@@ -97,7 +97,7 @@ def _create_min_property(name):
     return property(
         getter,
         setter,
-        doc=f"Mesh minimim in {name} in units of {pg_units(name)}. This can also be set.",
+        doc=f"Mesh minimum in {name} in units of {pg_units(name)}. This can also be set.",
     )
 
 

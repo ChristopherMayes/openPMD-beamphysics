@@ -64,7 +64,7 @@ def _create_delta_property(name):
     def getter(self):
         return self.deltas[self.axis_index(name)]
 
-    return property(getter, doc=f"Mesh spacing in {name}")
+    return property(getter, doc=f"Mesh spacing in {name}  in units of {pg_units(name)}")
 
 
 def _create_max_property(name):
@@ -79,7 +79,9 @@ def _create_max_property(name):
         self.attrs["gridOriginOffset"] = tuple(mins)
 
     return property(
-        getter, setter, doc=f"Mesh maximum in {name}. This can also be set."
+        getter,
+        setter,
+        doc=f"Mesh maximum in {name} in units of {pg_units(name)}. This can also be set.",
     )
 
 
@@ -93,7 +95,9 @@ def _create_min_property(name):
         self.attrs["gridOriginOffset"] = tuple(mins)
 
     return property(
-        getter, setter, doc=f"Mesh minimim in {name}. This can also be set."
+        getter,
+        setter,
+        doc=f"Mesh minimim in {name} in units of {pg_units(name)}. This can also be set.",
     )
 
 
@@ -101,7 +105,9 @@ def _create_scaled_component_property(name):
     def getter(self):
         return self.scaled_component(name)
 
-    return property(getter, doc=f"Scaled 3D mesh for {name} in {pg_units(name)}")
+    return property(
+        getter, doc=f"Scaled 3D mesh for {name} in units of {pg_units(name)}"
+    )
 
 
 class FieldMesh:

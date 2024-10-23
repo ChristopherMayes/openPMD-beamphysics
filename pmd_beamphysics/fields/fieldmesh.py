@@ -887,7 +887,6 @@ class FieldMesh:
 
     # Scaled components
     # TODO: Check geometry
-    @staticmethod
     def _create_scaled_component_property(name):
         def getter(self):
             return self.scaled_component(name)

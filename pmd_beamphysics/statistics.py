@@ -379,7 +379,7 @@ def normalized_6D_coordinates(particle_group, mass_normalize=True):
 
     # transform particle coordinates into normalized coordinates using inverse of
     # Cholesky decomp
-    t_data = (np.linalg.inv(np.linalg.cholesky(cov)) @ data.T).T
+    t_data = np.linalg.solve(np.linalg.cholesky(cov), data.T).T
 
     return t_data
     

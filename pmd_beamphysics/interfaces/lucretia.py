@@ -186,7 +186,9 @@ def write_lucretia(
     z_luc = (P.t - t_ref) * 299792458
     ptot = P.p / 1e9  # total momentum in GeV/c
 
-    if all(x is None for x in stop_ix):
+    if stop_ix is None:
+        stop_ix = np.zeros(Np)
+    elif all(x is None for x in stop_ix):
         stop_ix = np.zeros(Np)
     else:
         if len(stop_ix) != Np:

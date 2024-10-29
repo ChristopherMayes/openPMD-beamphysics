@@ -13,6 +13,8 @@ else:
     # Support 'trapz' from numpy 1.0
     from numpy import trapz as trapezoid
 
+from matplotlib import pyplot as plt
+
 
 # ----------------------
 # Analysis
@@ -533,3 +535,322 @@ def autophase_and_scale_field(
         )
 
     return phase2, scale2
+
+
+# Checking Maxwell Equations:
+def check_static_div_equation(FM, plot=False, rtol=1e-4, **kwargs):
+    assert FM.is_static, "Must provide a static FieldMesh"
+
+    if FM.geometry == "cylindrical":
+        return check_static_div_equation_cylindrical(FM, plot=plot, rtol=rtol, *kwargs)
+    elif FM.geometry == "rectangular":
+        return check_static_div_equation_cartesian(FM, plot=plot, rtol=rtol, *kwargs)
+
+    else:
+        raise ValueError("Unknown FieldMesh geometry")
+
+
+def check_static_div_equation_cartesian(FM, ix=None, iy=None, plot=False, rtol=1e-4):
+    assert FM.is_static, "Must provide static FieldMesh"
+    assert (
+        FM.geometry == "rectangular"
+    ), "Must provide FieldMesh with geometry = rectangular"
+
+    dx = FM.dx
+    dy = FM.dy
+    dz = FM.dz
+
+    if FM.is_pure_electric:
+        Fx, Fy, Fz = FM["Ex"], FM["Ey"], FM["Ez"]
+        units = r"$V/m^2$"
+        div_xy = r"$\frac{\partial E_x}{\partial x} + \frac{\partial E_y}{\partial y}$"
+        div_z = r"$-\frac{\partial E_z}{\partial z}$"
+
+    elif FM.is_pure_magnetic:
+        Fx, Fy, Fz = FM["Bx"], FM["By"], FM["Bz"]
+        units = r"$T/m$"
+        div_xy = r"$\frac{\partial B_x}{\partial x} + \frac{\partial B_y}{\partial y}$"
+        div_z = r"$-\frac{\partial B_z}{\partial z}$"
+
+    else:
+        raise ValueError("Invalid field type: mixed for test")
+
+    x, y, z = FM.coord_vec("x"), FM.coord_vec("y"), FM.coord_vec("z")
+
+    # Get the point closest to the axis
+    if ix is None:
+        ix = np.argmin(np.abs(x))
+
+    if iy is None:
+        iy = np.argmin(np.abs(y))
+
+    dFxdx = np.gradient(Fx, dx, axis=0, edge_order=2)
+    dFydy = np.gradient(Fy, dy, axis=1, edge_order=2)
+    dFzdz = np.gradient(Fz, dz, axis=2, edge_order=2)
+
+    if plot:
+        plt.plot(z, dFxdx[ix, iy, :] + dFydy[ix, iy, :], label=div_xy)
+        plt.plot(z, -dFzdz[ix, iy, :], label=div_z)
+        plt.xlabel("z (m)")
+        plt.ylabel(units)
+        plt.title(rf"Fields evaluated at $x$={x[ix]:0.6f}, $y$={y[iy]:0.6f} meters.")
+        plt.legend()
+
+    non_zero = np.abs(dFzdz) > 0.1 * np.max(np.abs(dFzdz[ix, iy, :]))
+
+    err = (dFxdx + dFydy + dFzdz)[non_zero] / dFzdz[non_zero]
+
+    return np.abs(np.mean(err)) < rtol
+
+
+def check_static_div_equation_cylindrical(FM, ir=None, plot=False, rtol=1e-4, **kwargs):
+    assert FM.is_static, "Must provide static FieldMesh"
+    assert FM.geometry == "cylindrical", "Must provide cylindrical FieldMesh"
+
+    dr, dz = FM.dr, FM.dz
+
+    if FM.is_pure_electric:
+        Fr, Fz = np.squeeze(FM["Er"]), np.squeeze(FM["Ez"])
+        units = r"$V/m^2$"
+        div_r = r"$\frac{1}{r}\frac{\partial}{\partial r}\left(rE_r\right)$"
+        div_z = r"$-\frac{\partial E_z}{\partial z}$"
+
+    elif FM.is_pure_magnetic:
+        Fr, Fz = np.squeeze(FM["Br"]), np.squeeze(FM["Bz"])
+        units = r"$T/m$"
+        div_r = r"$\frac{1}{r}\frac{\partial}{\partial r}\left(rB_r\right)$"
+        div_z = r"$-\frac{\partial B_z}{\partial z}$"
+
+    else:
+        raise ValueError("Invalid field type: mixed for test")
+
+    r, z = FM.coord_vec("r"), FM.coord_vec("z")
+    R, _ = np.meshgrid(r, z, indexing="ij")
+
+    # Handle r = 0 part of cylindrical divergence
+    drFrdr = np.gradient(R * Fr, dr, axis=0)
+    drFrdr_r = np.zeros(drFrdr.shape)
+
+    non_zero = R > 0
+    drFrdr_r[non_zero] = drFrdr[non_zero] / R[non_zero]
+    drFrdr_r[~non_zero] = 2 * np.gradient(Fr, dr, axis=0, edge_order=2)[~non_zero]
+
+    dFzdz = np.gradient(Fz, dz, axis=1, edge_order=2)
+
+    # Get the point closest to the axis
+    if ir is None:
+        ir = np.argmin(np.abs(r))
+
+    if plot:
+        plt.plot(z, +drFrdr_r[ir, :], label=div_r)
+        plt.plot(z, -dFzdz[ir, :], label=div_z)
+        plt.xlabel("z (m)")
+        plt.ylabel(units)
+        plt.title(rf"Fields evaluated at $r$={r[ir]:0.6f} meters.")
+        plt.legend()
+
+    non_zero = np.abs(dFzdz) > 0.1 * np.max(np.abs(dFzdz))
+
+    err = (drFrdr_r + dFzdz)[non_zero] / dFzdz[non_zero]
+
+    return np.abs(np.mean(err)) < rtol
+
+
+def plot_curl_equations(FM, **kwargs):
+    assert not FM.is_static, "Must provide a static FieldMesh"
+
+    if FM.geometry == "cylindrical":
+        return plot_curl_equations_cylindrical(FM, **kwargs)
+    elif FM.geometry == "rectangular":
+        return plot_curl_equations_cartesian(FM, **kwargs)
+
+    else:
+        raise ValueError("Unknown FieldMesh geometry")
+
+
+def plot_curl_equations_cylindrical(FM, ir=None):
+    c = 299792458
+
+    assert not FM.is_static, "Test requires oscillating fields"
+
+    fig, axs = plt.subplots(3, 1, constrained_layout=True)
+
+    dr = FM.dr
+    dz = FM.dz
+
+    r, z = FM.coord_vec("r"), FM.coord_vec("z")
+    R, _ = np.meshgrid(r, z, indexing="ij")
+
+    # Get the point closest to the axis
+    if ir is None:
+        ir = np.argmin(np.abs(r))
+
+    w = FM.frequency * 2 * np.pi
+
+    Er, Ez, Bth = np.squeeze(FM["Er"]), np.squeeze(FM["Ez"]), np.squeeze(FM["Btheta"])
+
+    dErdz = np.gradient(Er, dz, axis=1, edge_order=2)
+    dEzdr = np.gradient(Ez, dr, axis=0, edge_order=2)
+
+    axs[0].plot(
+        z,
+        np.real(dErdz - dEzdr)[ir, :],
+        label=r"$\Re\left[\frac{\partial E_r}{\partial z}-\frac{\partial E_z}{\partial r}\right]$",
+    )
+    axs[0].plot(z, np.real(1j * w * Bth)[ir, :], label=r"$\Re[i\omega B_{\theta}]$")
+    axs[0].set_xlabel("z (m)")
+    axs[0].set_ylabel("($V/m^2$)")
+    axs[0].set_title(rf"Fields evaluated at $r=${r[ir]:0.6f} meters.")
+    axs[0].legend()
+
+    dBthdz = np.gradient(Bth, dz, axis=1, edge_order=2)
+
+    axs[1].plot(
+        z,
+        -np.imag(dBthdz)[ir, :],
+        label=r"$-\Im\left[\frac{\partial B_{\theta}}{\partial z}\right]$",
+    )
+    axs[1].plot(
+        z, -np.imag(1j * w / c**2 * Er)[ir, :], label=r"$-\Im[i(\omega/c^2) E_r]$"
+    )
+    axs[1].set_xlabel("z (m)")
+    axs[1].set_ylabel("($V/m^3$)")
+    axs[1].legend()
+
+    R, _ = np.meshgrid(r, z, indexing="ij")
+
+    # Handle r = 0 part of cylindrical divergence
+    drBthdr = np.gradient(R * np.imag(Bth), dr, axis=0)
+    drBthdr_r = np.zeros(drBthdr.shape)
+
+    non_zero = R > 0
+    drBthdr_r[non_zero] = drBthdr[non_zero] / R[non_zero]
+    drBthdr_r[~non_zero] = (
+        2 * np.gradient(np.imag(Bth), dr, axis=0, edge_order=2)[~non_zero]
+    )
+
+    axs[2].plot(
+        z,
+        drBthdr_r[ir, :],
+        label=r"$-\Im\left[\frac{1}{r}\frac{\partial (rB_{\theta})}{\partial r}\right]$",
+    )
+    axs[2].plot(
+        z, -np.imag(1j * w / c**2 * Ez)[ir, :], label=r"$-\Im[i(\omega/c^2) E_z]$"
+    )
+    axs[2].set_xlabel("z (m)")
+    axs[2].set_ylabel("($V/m^3$)")
+    axs[2].legend()
+
+
+def plot_curl_equations_cartesian(FM, ix=None, iy=None):
+    c = 299792458
+
+    assert not FM.is_static, "Test requires oscillating fields"
+
+    fig, axs = plt.subplots(3, 2, constrained_layout=True, figsize=(8, 6))
+
+    dx = FM.dx
+    dy = FM.dy
+    dz = FM.dz
+
+    w = FM.frequency * 2 * np.pi
+
+    x, y, z = FM.coord_vec("x"), FM.coord_vec("y"), FM.coord_vec("z")
+
+    # Get the point closest to the axis
+    if ix is None:
+        ix = np.argmin(np.abs(x))
+
+    if iy is None:
+        iy = np.argmin(np.abs(y))
+
+    Ex, Ey, Ez = FM["Ex"], FM["Ey"], FM["Ez"]
+    Bx, By, Bz = FM["Bx"], FM["By"], FM["Bz"]
+
+    # Curl(Evec) = iw Bvec
+    DyEz = np.gradient(Ez, dy, axis=1, edge_order=2)
+    DzEy = np.gradient(Ey, dz, axis=2, edge_order=2)
+
+    DzEx = np.gradient(Ex, dz, axis=2, edge_order=2)
+    DxEz = np.gradient(Ez, dx, axis=0, edge_order=2)
+
+    DxEy = np.gradient(Ey, dx, axis=0, edge_order=2)
+    DyEx = np.gradient(Ex, dy, axis=1, edge_order=2)
+
+    axs[0, 0].plot(
+        z,
+        +np.real(DyEz - DzEy)[ix, iy, :],
+        label=r"$\Re\left[\frac{\partial E_z}{\partial y} - \frac{\partial E_y}{\partial z}\right]$",
+    )
+    axs[0, 0].plot(z, +np.real(1j * w * Bx[ix, iy, :]), label=r"$-\Re[i\omega B_x]$")
+    axs[0, 0].set_xlabel("z (m)")
+    axs[0, 0].set_ylabel("$(V/m^2)$")
+    axs[0, 0].legend()
+
+    axs[1, 0].plot(
+        z,
+        +np.real(DzEx - DxEz)[ix, iy, :],
+        label=r"$\Re\left[\frac{\partial E_x}{\partial z} - \frac{\partial E_z}{\partial x}\right]$",
+    )
+    axs[1, 0].plot(z, +np.real(1j * w * By[ix, iy, :]), label=r"$-\Re[i\omega B_y]$")
+    axs[1, 0].set_xlabel("z (m)")
+    axs[1, 0].set_ylabel("$(V/m^2)$")
+    axs[1, 0].legend()
+
+    axs[2, 0].plot(
+        z,
+        +np.real(DxEy - DyEx)[ix, iy, :],
+        label=r"$\Re\left[\frac{\partial E_y}{\partial x} - \frac{\partial E_x}{\partial y}\right]$",
+    )
+    axs[2, 0].plot(z, +np.real(1j * w * Bz[ix, iy, :]), label=r"$-\Re[i\omega B_z]$")
+    axs[2, 0].set_xlabel("z (m)")
+    axs[2, 0].set_ylabel("$(V/m^2)$")
+    axs[2, 0].legend()
+
+    # Curl(Bvec) = iw/c2 Evec
+    DyBz = np.gradient(Bz, dy, axis=1, edge_order=2)
+    DzBy = np.gradient(By, dz, axis=2, edge_order=2)
+
+    DzBx = np.gradient(Bx, dz, axis=2, edge_order=2)
+    DxBz = np.gradient(Bz, dx, axis=0, edge_order=2)
+
+    DxBy = np.gradient(By, dx, axis=0, edge_order=2)
+    DyBx = np.gradient(Bx, dy, axis=1, edge_order=2)
+
+    axs[0, 1].plot(
+        z,
+        -np.imag(DyBz - DzBy)[ix, iy, :],
+        label=r"$-\Im\left[\frac{\partial B_z}{\partial y} - \frac{\partial B_y}{\partial z}\right]$",
+    )
+    axs[0, 1].plot(
+        z, +np.imag(1j * w * Ex[ix, iy, :]) / c**2, label=r"$\Im[i(\omega/c^2) E_x]$"
+    )
+    axs[0, 1].set_xlabel("z (m)")
+    axs[0, 1].set_ylabel("$(V/m^3)$")
+    axs[0, 1].legend()
+
+    axs[1, 1].plot(
+        z,
+        -np.imag(DzBx - DxBz)[ix, iy, :],
+        label=r"$-\Im\left[\frac{\partial B_x}{\partial z} - \frac{\partial B_z}{\partial x}\right]$",
+    )
+    axs[1, 1].plot(
+        z, +np.imag(1j * w * Ey[ix, iy, :]) / c**2, label=r"$\Im[i(\omega/c^2) E_y]$"
+    )
+    axs[1, 1].set_xlabel("z (m)")
+    axs[1, 1].set_ylabel("$(V/m^3)$")
+    axs[1, 1].legend()
+
+    axs[2, 1].plot(
+        z,
+        -np.imag(DxBy - DyBx)[ix, iy, :],
+        label=r"$-\Im\left[\frac{\partial B_y}{\partial x} - \frac{\partial B_x}{\partial y}\right]$",
+    )
+    axs[2, 1].plot(
+        z, +np.imag(1j * w * Ez[ix, iy, :]) / c**2, label=r"$\Im[i(\omega/c^2) E_z]$"
+    )
+    axs[2, 1].set_xlabel("z (m)")
+    axs[2, 1].set_ylabel("$(V/m^3)$")
+    axs[2, 1].legend()
+
+    plt.tight_layout()

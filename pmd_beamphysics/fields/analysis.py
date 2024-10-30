@@ -539,6 +539,58 @@ def autophase_and_scale_field(
 
 # Checking Maxwell Equations:
 def check_static_div_equation(FM, plot=False, rtol=1e-4, **kwargs):
+    """
+    Checks the static divergence equation based on the geometry of the field mesh.
+
+    This function verifies the static divergence condition, `∇·E = 0` for electric fields or `∇·B = 0`
+    for magnetic fields, in the specified geometry of the field mesh. It automatically selects the appropriate
+    divergence check function for either cylindrical or rectangular geometries.
+
+    Parameters
+    ----------
+    FM : FieldMesh
+        Object containing the static electric or magnetic field data as well as spatial coordinates and
+        geometry information. Must specify a geometry via the `geometry` attribute, which can be either
+        "cylindrical" or "rectangular". Must also contain an `is_static` attribute.
+    plot : bool, default=False
+        If True, plots the components of the divergence equation and the divergence error (if `plot_diff`
+        is also True in `kwargs`).
+    rtol : float, default=1e-4
+        The relative tolerance for verifying that the divergence is zero. If the mean error is below
+        this threshold, the function returns True, indicating that the static divergence condition holds.
+    **kwargs : dict, optional
+        Additional keyword arguments to be passed to the respective geometry-based function
+        (`check_static_div_equation_cylindrical` or `check_static_div_equation_cartesian`). This may include
+        specific index positions (e.g., `ir`, `ix`, `iy`) or options to plot the difference between
+        divergence components.
+
+    Returns
+    -------
+    bool
+        True if the mean relative error of the computed divergence is below the specified `rtol` threshold,
+        indicating that the static divergence condition is satisfied; False otherwise.
+
+    Raises
+    ------
+    AssertionError
+        If `FM.is_static` is False, indicating that non-static fields were provided.
+    ValueError
+        If the `geometry` attribute of `FM` is not "cylindrical" or "rectangular".
+
+    Notes
+    -----
+    This function serves as a wrapper that checks the geometry type of the `FieldMesh` (FM) and then
+    calls the appropriate divergence check function based on that geometry.
+
+    Examples
+    --------
+    >>> check_static_div_equation(FM, plot=True, rtol=1e-5, ix=10, iy=5)
+
+    This call checks the static divergence condition in FM's specified geometry, with a stricter tolerance
+    of 1e-5, and plots the divergence components and difference if available for that geometry.
+
+    """
+
     assert FM.is_static, "Must provide a static FieldMesh"
 
     if FM.geometry == "cylindrical":
@@ -553,6 +605,68 @@ def check_static_div_equation(FM, plot=False, rtol=1e-4, **kwargs):
 def check_static_div_equation_cartesian(
     FM, ix=None, iy=None, plot=False, rtol=1e-4, plot_diff=True
 ):
+    """
+    Checks the static divergence equation in Cartesian coordinates for either electric or magnetic fields.
+
+    This function verifies the static divergence condition, `∇·E = 0` for electric fields or `∇·B = 0`
+    for magnetic fields, in a Cartesian coordinate system. It calculates the divergence components based
+    on the spatial derivatives of the field components along each axis and evaluates them at specified
+    x and y indices. Optionally, it plots the divergence components and the difference between them.
+
+    Parameters
+    ----------
+    FM : FieldMesh
+        Object containing the static electric or magnetic field data in Cartesian coordinates.
+        Must have `is_static`, `geometry`, `is_pure_electric`, and `is_pure_magnetic` attributes
+        to determine the field type and properties.
+    ix : int, optional
+        Index for the x-coordinate at which to evaluate the fields. If None, the function selects
+        the index closest to the origin (x=0).
+    iy : int, optional
+        Index for the y-coordinate at which to evaluate the fields. If None, the function selects
+        the index closest to the origin (y=0).
+    plot : bool, default=False
+        If True, plots the components of the divergence equation and the divergence error (if `plot_diff`
+        is also True).
+    rtol : float, default=1e-4
+        The relative tolerance for verifying that the divergence is zero. If the mean error is below
+        this threshold, the function returns True, indicating that the static divergence condition holds.
+    plot_diff : bool, default=True
+        If True and `plot` is also True, plots the difference between the x-y and z divergence
+        components on a secondary y-axis.
+
+    Returns
+    -------
+    bool
+        True if the mean relative error of the computed divergence is below the specified `rtol` threshold,
+        indicating that the static divergence condition is satisfied; False otherwise.
+
+    Raises
+    ------
+    AssertionError
+        If `FM.is_static` is False, indicating that non-static fields were provided.
+        If `FM.geometry` is not "rectangular", indicating that a non-rectangular geometry was provided.
+    ValueError
+        If the field type in `FM` is mixed (contains both electric and magnetic components), which is
+        invalid for this test.
+
+    Notes
+    -----
+    The function computes divergence components as:
+    - x-y component: `∂F_x / ∂x + ∂F_y / ∂y`
+    - z component: `∂F_z / ∂z`
+    where `F_x`, `F_y`, and `F_z` represent either the x, y, and z components of the electric or magnetic
+    field, based on the type of field present in `FM`.
+
+    Examples
+    --------
+    >>> check_static_div_equation_cartesian(FM, ix=10, iy=5, plot=True, rtol=1e-5)
+
+    This call checks the static divergence condition at the specified x and y indices, with a stricter
+    tolerance of 1e-5, and plots the divergence components and difference.
+
+    """
+
     assert FM.is_static, "Must provide static FieldMesh"
     assert (
         FM.geometry == "rectangular"
@@ -621,6 +735,65 @@ def check_static_div_equation_cartesian(
 def check_static_div_equation_cylindrical(
     FM, ir=None, plot=False, rtol=1e-4, plot_diff=True, **kwargs
 ):
+    """
+    Checks the static divergence equation in cylindrical coordinates for either electric or magnetic fields.
+
+    This function verifies the static divergence condition, `∇·E = 0` for electric fields or `∇·B = 0`
+    for magnetic fields, in a cylindrical coordinate system. The divergence is calculated based on the
+    spatial derivatives of the radial and axial field components, evaluated at a specific radial position.
+    Optionally, the function plots the individual divergence components and the difference between them.
+
+    Parameters
+    ----------
+    FM : FieldMesh
+        Object containing the static electric or magnetic field data in cylindrical coordinates.
+        Must have `is_static`, `geometry`, `is_pure_electric`, and `is_pure_magnetic` attributes to
+        determine the field type and properties.
+    ir : int, optional
+        Index for the radial position at which to evaluate the fields. If None, the function selects
+        the index closest to the origin (r=0).
+    plot : bool, default=False
+        If True, plots the components of the divergence equation and the divergence error (if `plot_diff`
+        is also True).
+    rtol : float, default=1e-4
+        The relative tolerance for verifying that the divergence is zero. If the mean error is below
+        this threshold, the function returns True, indicating that the static divergence condition holds.
+    plot_diff : bool, default=True
+        If True and `plot` is also True, plots the difference between the radial and axial divergence
+        components on a secondary y-axis.
+
+    Returns
+    -------
+    bool
+        True if the mean relative error of the computed divergence is below the specified `rtol` threshold,
+        indicating that the static divergence condition is satisfied; False otherwise.
+
+    Raises
+    ------
+    AssertionError
+        If `FM.is_static` is False, indicating that non-static fields were provided.
+        If `FM.geometry` is not "cylindrical", indicating that a non-cylindrical geometry was provided.
+    ValueError
+        If the field type in `FM` is mixed (contains both electric and magnetic components), which is
+        invalid for this test.
+
+    Notes
+    -----
+    The function computes divergence components as:
+    - Radial component: `(1/r) ∂(r * F_r) / ∂r`
+    - Axial component: `∂F_z / ∂z`
+    Where `F_r` and `F_z` represent either the radial and axial electric or magnetic field components
+    based on the type of field present in `FM`.
+
+    Examples
+    --------
+    >>> check_static_div_equation_cylindrical(FM, ir=5, plot=True, rtol=1e-5)
+
+    This call checks the static divergence condition at the radial index 5, with a stricter tolerance
+    of 1e-5, and plots the divergence components and difference.
+
+    """
+
     assert FM.is_static, "Must provide static FieldMesh"
     assert FM.geometry == "cylindrical", "Must provide cylindrical FieldMesh"
 
@@ -690,7 +863,47 @@ def check_static_div_equation_cylindrical(
 
 
 def plot_curl_equations(FM, **kwargs):
-    assert not FM.is_static, "Must provide a static FieldMesh"
+    """
+    Plots the curl equations for electric and magnetic fields based on the geometry of the field mesh.
+
+    This function selects and calls the appropriate plotting function (`plot_curl_equations_cylindrical`
+    or `plot_curl_equations_cartesian`) to visualize the curl of the electric (E) and magnetic (B) fields
+    based on Maxwell's equations, depending on whether the `FieldMesh` geometry is cylindrical or rectangular.
+
+    Parameters
+    ----------
+    FM : FieldMesh
+        Object containing the electric and magnetic field data, spatial coordinates, and geometry information.
+        Must specify a geometry via the `geometry` attribute, which can be either "cylindrical" or "rectangular".
+        Must also contain a `is_static` attribute.
+    **kwargs : dict, optional
+        Additional keyword arguments to be passed to the respective plotting functions (`plot_curl_equations_cylindrical`
+        or `plot_curl_equations_cartesian`). This may include parameters such as specific index positions or
+        options to plot the difference between spatial and temporal curls.
+
+    Raises
+    ------
+    AssertionError
+        If `FM.is_static` is True, indicating the fields are static, which does not meet the requirement
+        for oscillating fields.
+    ValueError
+        If the `geometry` attribute of `FM` is not "cylindrical" or "rectangular".
+
+    Notes
+    -----
+    This function is a wrapper that checks the geometry type of the `FieldMesh` (FM) and then
+    calls the appropriate curl plotting function based on that geometry.
+
+    Examples
+    --------
+    >>> plot_curl_equations(FM, ir=5, plot_diff=True)
+
+    This call will plot the curl equations for the fields in the `FieldMesh` (FM), assuming FM's geometry is
+    either cylindrical or rectangular. The `ir=5` argument will be passed to the appropriate plotting function.
+
+    """
+
+    assert not FM.is_static, "Must provide a time varying FieldMesh"
 
     if FM.geometry == "cylindrical":
         return plot_curl_equations_cylindrical(FM, **kwargs)
@@ -702,6 +915,52 @@ def plot_curl_equations(FM, **kwargs):
 
 
 def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
+    """
+    Plots the cylindrical curl equations for electric and magnetic field components.
+
+    This function computes and visualizes the curl of electric (E) and magnetic (B)
+    fields according to Maxwell's equations in the cylindrical coordinate system.
+    It evaluates the spatial derivatives of the field components and compares
+    them to the corresponding time derivatives assuming harmonic time dependence of the fields.
+    An optional plot of the difference between the spatial curl and the time derivative is shown
+    on a secondary y-axis.
+
+    Parameters
+    ----------
+    FM : FieldMesh
+        Object containing the electric and magnetic field data as well as spatial
+        coordinates and frequency. Must have attributes `Er`, `Ez`, and `Btheta`
+        representing the field components, and `dr` and `dz` representing grid
+        spacings in the r and z directions.
+    ir : int, optional
+        Index for the radial position to evaluate the fields at. If None, the function
+        selects the index closest to the r-axis origin (0).
+    plot_diff : bool, default=True
+        If True, plots the difference between the computed spatial curl and
+        the time derivative (based on Maxwell's equations) on a secondary y-axis.
+
+    Raises
+    ------
+    AssertionError
+        If `FM.is_static` is True, indicating the fields are static, which
+        does not meet the requirement for oscillating fields.
+
+    Notes
+    -----
+    This function requires `FM` to contain oscillating fields, as it computes
+    temporal derivative terms (curl E and curl B) based on frequency. For a
+    zero-frequency (static) field, this function is not valid.
+
+    Examples
+    --------
+    >>> plot_curl_equations_cylindrical(FM, ir=5, plot_diff=True)
+
+    This call will plot the cylindrical curl equations for the electric and
+    magnetic fields, evaluated at the radial index 5, and include a difference
+    plot on a secondary axis.
+
+    """
+
     c = 299792458
 
     assert not FM.is_static, "Test requires oscillating fields"
@@ -822,6 +1081,54 @@ def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
 
 
 def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
+    """
+    Plots the Cartesian curl equations for electric and magnetic field components.
+
+    This function plots the curl of electric (E) and magnetic (B) fields as per
+    Maxwell's equations in the Cartesian coordinate system. It computes the
+    spatial derivatives of the field components and visualizes the results
+    alongside the corresponding time derivatives assuming exp(-iwt) time dependence.
+    An optional plot of the difference between the two is shown on a secondary y-axis.
+
+    Parameters
+    ----------
+    FM : FieldMesh
+        Object containing the electric and magnetic field data as well as
+        spatial coordinates and frequency. Must have `Ex`, `Ey`, `Ez`,
+        `Bx`, `By`, `Bz` attributes representing the field components and
+        `dx`, `dy`, `dz` representing grid spacings in the x, y, and z directions.
+    ix : int, optional
+        Index for the x-coordinate position to evaluate the fields at. If None,
+        the function selects the index closest to the x-axis origin (0).
+    iy : int, optional
+        Index for the y-coordinate position to evaluate the fields at. If None,
+        the function selects the index closest to the y-axis origin (0).
+    plot_diff : bool, default=True
+        If True, plots the difference between the computed spatial curl and
+        the time derivative (based on Maxwell's equations) on a secondary y-axis.
+
+    Raises
+    ------
+    AssertionError
+        If `FM.is_static` is True, indicating the fields are static, which
+        does not meet the requirement for oscillating fields.
+
+    Notes
+    -----
+    This function requires `FM` to have oscillating fields, as it computes the
+    temporal derivative terms (curl E and curl B) based on frequency. For a
+    zero-frequency (static) field, this function is not valid.
+
+    Examples
+    --------
+    >>> plot_curl_equations_cartesian(FM, ix=5, iy=10, plot_diff=True)
+
+    This call will plot the curl equations for the electric and magnetic fields,
+    evaluated at the x and y indices 5 and 10, respectively, and include a
+    difference plot on a secondary axis.
+
+    """
+
     c = 299792458
 
     assert not FM.is_static, "Test requires oscillating fields"

@@ -668,12 +668,12 @@ def plot_curl_equations(FM, **kwargs):
         raise ValueError("Unknown FieldMesh geometry")
 
 
-def plot_curl_equations_cylindrical(FM, ir=None):
+def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
     c = 299792458
 
     assert not FM.is_static, "Test requires oscillating fields"
 
-    fig, axs = plt.subplots(3, 1, constrained_layout=True)
+    fig, axs = plt.subplots(3, 1, constrained_layout=True, figsize=(8, 6))
 
     dr = FM.dr
     dz = FM.dz
@@ -697,11 +697,31 @@ def plot_curl_equations_cylindrical(FM, ir=None):
         np.real(dErdz - dEzdr)[ir, :],
         label=r"$\Re\left[\frac{\partial E_r}{\partial z}-\frac{\partial E_z}{\partial r}\right]$",
     )
-    axs[0].plot(z, np.real(1j * w * Bth)[ir, :], label=r"$\Re[i\omega B_{\theta}]$")
+    axs[0].plot(
+        z,
+        np.real(1j * w * Bth)[ir, :],
+        "--",
+        label=r"$\Re[i\omega B_{\theta}]$",
+        color="tab:red",
+    )
     axs[0].set_xlabel("z (m)")
-    axs[0].set_ylabel("($V/m^2$)")
+    axs[0].set_ylabel("(V/m^2)")
     axs[0].set_title(rf"Fields evaluated at $r=${r[ir]:0.6f} meters.")
     axs[0].legend()
+
+    if plot_diff:
+        ax02 = axs[0].twinx()
+        ax02.plot(
+            z,
+            np.real(dErdz - dEzdr)[ir, :] - np.real(1j * w * Bth)[ir, :],
+            color="black",
+            alpha=0.2,
+        )
+        axs[0].set_zorder(ax02.get_zorder() + 1)  # Bring primary axis to the front
+        axs[0].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
+        ax02.tick_params(axis="y", colors="black")  # Set tick color
+        ax02.spines["right"].set_color("black")
+        ax02.set_ylabel("$\Delta$ ($V/m^2$)")
 
     dBthdz = np.gradient(Bth, dz, axis=1, edge_order=2)
 
@@ -711,11 +731,29 @@ def plot_curl_equations_cylindrical(FM, ir=None):
         label=r"$-\Im\left[\frac{\partial B_{\theta}}{\partial z}\right]$",
     )
     axs[1].plot(
-        z, -np.imag(1j * w / c**2 * Er)[ir, :], label=r"$-\Im[i(\omega/c^2) E_r]$"
+        z,
+        -np.imag(1j * w / c**2 * Er)[ir, :],
+        "--",
+        label=r"$-\Im[i(\omega/c^2) E_r]$",
+        color="tab:red",
     )
     axs[1].set_xlabel("z (m)")
     axs[1].set_ylabel("($V/m^3$)")
     axs[1].legend()
+
+    if plot_diff:
+        ax12 = axs[1].twinx()
+        ax12.plot(
+            z,
+            -np.imag(dBthdz)[ir, :] + np.imag(1j * w / c**2 * Er)[ir, :],
+            color="black",
+            alpha=0.2,
+        )
+        axs[1].set_zorder(ax12.get_zorder() + 1)  # Bring primary axis to the front
+        axs[1].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
+        # ax12.tick_params(axis='y', colors='tab:red')  # Set tick color
+        # ax12.spines['right'].set_color('tab:red')
+        ax12.set_ylabel("$\Delta$ ($V/m^3$)")
 
     R, _ = np.meshgrid(r, z, indexing="ij")
 
@@ -735,11 +773,36 @@ def plot_curl_equations_cylindrical(FM, ir=None):
         label=r"$-\Im\left[\frac{1}{r}\frac{\partial (rB_{\theta})}{\partial r}\right]$",
     )
     axs[2].plot(
-        z, -np.imag(1j * w / c**2 * Ez)[ir, :], label=r"$-\Im[i(\omega/c^2) E_z]$"
+        z,
+        -np.imag(1j * w / c**2 * Ez)[ir, :],
+        "--",
+        label=r"$-\Im[i(\omega/c^2) E_z]$",
+        color="tab:red",
     )
     axs[2].set_xlabel("z (m)")
     axs[2].set_ylabel("($V/m^3$)")
     axs[2].legend()
+
+    if plot_diff:
+        ax22 = axs[2].twinx()
+        ax22.plot(
+            z,
+            drBthdr_r[ir, :] + np.imag(1j * w / c**2 * Ez)[ir, :],
+            color="black",
+            alpha=0.2,
+        )
+        axs[2].set_zorder(ax22.get_zorder() + 1)  # Bring primary axis to the front
+        axs[2].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
+        # ax22.tick_params(axis='y', colors='tab:red')  # Set tick color
+        # ax22.spines['right'].set_color('tab:red')
+        ax22.set_ylabel("$\Delta$ ($V/m^3$)")
+
+    # ax22 = axs[2].twinx()
+    # ax22.plot(z, drBthdr_r[ir, :]+np.imag(1j*w/c**2 * Ez)[ir, :], color='tab:red', alpha=0.5)
+
+    # Set the z-order of the primary and twin axes explicitly
+    # axs[0].set_zorder(ax02.get_zorder() + 1)  # Bring primary axis to the front
+    # axs[0].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
 
 
 def plot_curl_equations_cartesian(FM, ix=None, iy=None):

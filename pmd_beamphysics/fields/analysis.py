@@ -2,6 +2,7 @@ import numpy as np
 from scipy import interpolate
 from scipy.integrate import solve_ivp
 from scipy.optimize import brent, brentq
+from scipy.constants import c
 
 from pmd_beamphysics.species import charge_state, mass_of
 from pmd_beamphysics.units import c_light, mec2
@@ -39,7 +40,7 @@ def accelerating_voltage_and_phase(z, Ez, frequency):
         voltage, phase in V, radian
 
     """
-    c = 299792458
+
     omega = 2 * np.pi * frequency
     k = omega / c
     fz = Ez * np.exp(-1j * k * z)
@@ -961,8 +962,6 @@ def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
 
     """
 
-    c = 299792458
-
     assert not FM.is_static, "Test requires oscillating fields"
 
     fig, axs = plt.subplots(3, 1, constrained_layout=True, figsize=(8, 6))
@@ -1128,8 +1127,6 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
     difference plot on a secondary axis.
 
     """
-
-    c = 299792458
 
     assert not FM.is_static, "Test requires oscillating fields"
 

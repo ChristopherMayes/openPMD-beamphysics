@@ -531,6 +531,54 @@ def plot_fieldmesh_cylindrical_2d(
         return fig
 
 
+
+def add_to_ax_real_imag(ax, x, fx, label='', color='black', real_plot_kwargs=None, imag_plot_kwargs=None):
+    """
+    Plot the real and imaginary components of a function on the given axis.
+
+    This function adds plots of the real and imaginary parts of the input array `fx` to the provided axis `ax`. 
+    If `fx` is entirely real, it plots only the real part; otherwise, it plots both the real and imaginary parts separately.
+
+    Parameters:
+    -----------
+    ax : matplotlib.axes.Axes
+        The axis on which to plot the function.
+    x : array-like, shape (n,)
+        The x-values for the plot. Should be a one-dimensional array-like structure of length `n`.
+    fx : array-like, shape (n,)
+        The function values to be plotted, which may be real or complex. Should be a one-dimensional array-like structure of length `n`.
+    label : str, optional
+        The label for the plotted lines (default is ''). If `fx` is complex, the labels will be formatted as 'Re(label)' for the real part and 'Im(label)' for the imaginary part.
+    real_plot_kwargs : dict, optional
+        Additional keyword arguments to customize the plot of the real part (e.g., color, linestyle).
+        
+        Example:
+            real_plot_kwargs = {'color': 'blue', 'linestyle': '--'}
+    imag_plot_kwargs : dict, optional
+        Additional keyword arguments to customize the plot of the imaginary part (e.g., color, linestyle).
+        
+        Example:
+            imag_plot_kwargs = {'color': 'red', 'linestyle': '-.'}
+
+    Returns:
+    --------
+    None
+    """
+    # Use np.real_if_close to convert complex numbers to real if the imaginary part is very small (close to zero).
+    # This helps avoid unnecessary plotting of negligible imaginary components.
+    fx = np.real_if_close(fx)
+    if real_plot_kwargs is None:
+        real_plot_kwargs = {'color': color}  # Default value for customizing the real part plot, with the specified color.
+    if imag_plot_kwargs is None:
+        imag_plot_kwargs = {'color': color, 'linestyle': '--'}  # Default value for customizing the imaginary part plot, with the specified color and dashed linestyle.
+
+    if np.all(np.isreal(fx)):
+        ax.plot(x, fx, label=label, **real_plot_kwargs)
+    else:
+        ax.plot(x, np.real(fx), label=f'Re({label})', **real_plot_kwargs)
+        ax.plot(x, np.imag(fx), label=f'Im({label})', **imag_plot_kwargs)
+
+
 # Intended to be used as a method in FieldMesh
 def plot_fieldmesh_cylindrical_1d(fm, axes=None, return_figure=False, **kwargs):
     """
@@ -552,29 +600,41 @@ def plot_fieldmesh_cylindrical_1d(fm, axes=None, return_figure=False, **kwargs):
 
     """
 
+    # Extract x=, r, etc. 
+    position_kwargs = {}    
+    position_labels = []
+    for key in list(kwargs):
+        if key in fm.axis_labels:
+            val = kwargs.pop(key)
+            position_kwargs[key] = val
+            position_labels.append(f"{mathlabel(key)}={val}")
+    if position_labels:
+        position_label = '(' + (','.join(position_labels)) + ')'
+    else:
+        position_label = ''
+
     if not axes:
         fig, ax = plt.subplots(**kwargs)
 
     has_Ez = "electricField/z" in fm.components
     has_Bz = "magneticField/z" in fm.components
 
-    Bzlabel = r"$B_z$ (T)"
-    z0 = fm.coord_vec("z")
+    Bzlabel = fr"$B_z${position_label} (T)" 
 
     ylabel = None
     if has_Ez:
-        Ez0 = fm["Ez"][0, 0, :]
-        ax.plot(z0, Ez0, color="black", label=r"E_{z0}")
-        ylabel = r"$E_z$ (V/m)"
+        z0, Ez0 = fm.axis_values('z', 'Ez', **position_kwargs)
+        add_to_ax_real_imag(ax, z0, Ez0, color='black', label=r"$E_{z0}$")
+        ylabel =fr"$E_z${position_label} (V/m)" 
 
     if has_Bz:
-        Bz0 = fm["Bz"][0, 0, :]
+        z0, Bz0 = fm.axis_values('z', 'Bz', **position_kwargs)
         if has_Ez:
             ax2 = ax.twinx()
-            ax2.plot(z0, Bz0, color="blue", label=r"$B_{z0}$")
+            add_to_ax_real_imag(ax2, z0, Bz0, color='blue', label=r"$B_{z0}$")
             ax2.set_ylabel(Bzlabel)
         else:
-            ax.plot(z0, Bz0, color="blue", label=r"$B_{z0}$")
+            add_to_ax_real_imag(ax, z0, Bz0, color="blue", label=r"$B_{z0}$")
             ylabel = Bzlabel
 
     if has_Ez and has_Bz:

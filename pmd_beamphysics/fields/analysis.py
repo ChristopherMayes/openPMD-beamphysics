@@ -723,7 +723,7 @@ def check_static_div_equation_cartesian(
             )
             ax.set_zorder(ax2.get_zorder() + 1)  # Bring primary axis to the front
             ax.patch.set_visible(False)  # Hide the 'canvas' of the primary axis
-            ax2.set_ylabel("$\Delta$ " + units)
+            ax2.set_ylabel(r"$\Delta$ " + units)
 
     non_zero = np.abs(dFzdz) > 0.1 * np.max(np.abs(dFzdz[ix, iy, :]))
 
@@ -853,7 +853,7 @@ def check_static_div_equation_cylindrical(
             ax2.plot(z, +drFrdr_r[ir, :] + dFzdz[ir, :], color="black", alpha=0.15)
             ax.set_zorder(ax2.get_zorder() + 1)  # Bring primary axis to the front
             ax.patch.set_visible(False)  # Hide the 'canvas' of the primary axis
-            ax2.set_ylabel("$\Delta$ " + units)
+            ax2.set_ylabel(r"$\Delta$ " + units)
 
     non_zero = np.abs(dFzdz) > 0.1 * np.max(np.abs(dFzdz))
 
@@ -1007,7 +1007,7 @@ def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
         axs[0].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
         ax02.tick_params(axis="y", colors="black")  # Set tick color
         ax02.spines["right"].set_color("black")
-        ax02.set_ylabel("$\Delta$ ($V/m^2$)")
+        ax02.set_ylabel(r"$\Delta$ ($V/m^2$)")
 
     dBthdz = np.gradient(Bth, dz, axis=1, edge_order=2)
 
@@ -1035,7 +1035,7 @@ def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
         axs[1].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
         # ax12.tick_params(axis='y', colors='tab:red')  # Set tick color
         # ax12.spines['right'].set_color('tab:red')
-        ax12.set_ylabel("$\Delta$ ($V/m^3$)")
+        ax12.set_ylabel(r"$\Delta$ ($V/m^3$)")
 
     R, _ = np.meshgrid(r, z, indexing="ij")
 
@@ -1077,7 +1077,7 @@ def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
         axs[2].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
         # ax22.tick_params(axis='y', colors='tab:red')  # Set tick color
         # ax22.spines['right'].set_color('tab:red')
-        ax22.set_ylabel("$\Delta$ ($V/m^3$)")
+        ax22.set_ylabel(r"$\Delta$ ($V/m^3$)")
 
 
 def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
@@ -1170,7 +1170,7 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
     )
     axs[0, 0].plot(z, +np.real(1j * w * Bx[ix, iy, :]), label=r"$-\Re[i\omega B_x]$")
     axs[0, 0].set_xlabel("z (m)")
-    axs[0, 0].set_ylabel("$(V/m^2)$")
+    axs[0, 0].set_ylabel(r"$(V/m^2)$")
     axs[0, 0].legend()
     axs[0, 0].set_title(
         r"$\vec\nabla\times\vec{E} = -\frac{\partial \vec{B}}{\partial t}$"
@@ -1188,7 +1188,7 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
         axs[0, 0].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
         # ax12.tick_params(axis='y', colors='tab:red')  # Set tick color
         # ax12.spines['right'].set_color('tab:red')
-        ax002.set_ylabel("$\Delta$ ($V/m^2$)")
+        ax002.set_ylabel(r"$\Delta$ ($V/m^2$)")
 
     axs[1, 0].plot(
         z,
@@ -1197,7 +1197,7 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
     )
     axs[1, 0].plot(z, +np.real(1j * w * By[ix, iy, :]), label=r"$-\Re[i\omega B_y]$")
     axs[1, 0].set_xlabel("z (m)")
-    axs[1, 0].set_ylabel("$(V/m^2)$")
+    axs[1, 0].set_ylabel(r"$(V/m^2)$")
     axs[1, 0].legend()
 
     if plot_diff:
@@ -1210,7 +1210,7 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
         )
         axs[1, 0].set_zorder(ax102.get_zorder() + 1)  # Bring primary axis to the front
         axs[1, 0].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
-        ax102.set_ylabel("$\Delta$ ($V/m^2$)")
+        ax102.set_ylabel(r"$\Delta$ ($V/m^2$)")
 
     axs[2, 0].plot(
         z,
@@ -1219,7 +1219,7 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
     )
     axs[2, 0].plot(z, +np.real(1j * w * Bz[ix, iy, :]), label=r"$-\Re[i\omega B_z]$")
     axs[2, 0].set_xlabel("z (m)")
-    axs[2, 0].set_ylabel("$(V/m^2)$")
+    axs[2, 0].set_ylabel(r"$(V/m^2)$")
     axs[2, 0].legend()
 
     if plot_diff:
@@ -1232,7 +1232,7 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
         )
         axs[2, 0].set_zorder(ax202.get_zorder() + 1)  # Bring primary axis to the front
         axs[2, 0].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
-        ax202.set_ylabel("$\Delta$ ($V/m^2$)")
+        ax202.set_ylabel(r"$\Delta$ ($V/m^2$)")
 
     # Curl(Bvec) = iw/c2 Evec
     DyBz = np.gradient(Bz, dy, axis=1, edge_order=2)
@@ -1269,7 +1269,7 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
         )
         axs[0, 1].set_zorder(ax012.get_zorder() + 1)  # Bring primary axis to the front
         axs[0, 1].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
-        ax012.set_ylabel("$\Delta$ ($V/m^3$)")
+        ax012.set_ylabel(r"$\Delta$ ($V/m^3$)")
 
     axs[1, 1].plot(
         z,
@@ -1280,7 +1280,7 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
         z, +np.imag(1j * w * Ey[ix, iy, :]) / c**2, label=r"$\Im[i(\omega/c^2) E_y]$"
     )
     axs[1, 1].set_xlabel("z (m)")
-    axs[1, 1].set_ylabel("$(V/m^3)$")
+    axs[1, 1].set_ylabel(r"$(V/m^3)$")
     axs[1, 1].legend()
 
     if plot_diff:
@@ -1293,7 +1293,7 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
         )
         axs[1, 1].set_zorder(ax112.get_zorder() + 1)  # Bring primary axis to the front
         axs[1, 1].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
-        ax112.set_ylabel("$\Delta$ ($V/m^3$)")
+        ax112.set_ylabel(r"$\Delta$ ($V/m^3$)")
 
     axs[2, 1].plot(
         z,
@@ -1304,7 +1304,7 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
         z, +np.imag(1j * w * Ez[ix, iy, :]) / c**2, label=r"$\Im[i(\omega/c^2) E_z]$"
     )
     axs[2, 1].set_xlabel("z (m)")
-    axs[2, 1].set_ylabel("$(V/m^3)$")
+    axs[2, 1].set_ylabel(r"$(V/m^3)$")
     axs[2, 1].legend()
 
     if plot_diff:
@@ -1317,7 +1317,7 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
         )
         axs[1, 1].set_zorder(ax202.get_zorder() + 1)  # Bring primary axis to the front
         axs[1, 1].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
-        ax212.set_ylabel("$\Delta$ ($V/m^3$)")
+        ax212.set_ylabel(r"$\Delta$ ($V/m^3$)")
 
     fig.suptitle(rf"Fields evaluated at $x=${x[ix]:0.6f}, $y=${y[iy]:0.6f} meters.")
     plt.tight_layout()

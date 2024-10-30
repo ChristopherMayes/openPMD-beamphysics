@@ -550,7 +550,9 @@ def check_static_div_equation(FM, plot=False, rtol=1e-4, **kwargs):
         raise ValueError("Unknown FieldMesh geometry")
 
 
-def check_static_div_equation_cartesian(FM, ix=None, iy=None, plot=False, rtol=1e-4):
+def check_static_div_equation_cartesian(
+    FM, ix=None, iy=None, plot=False, rtol=1e-4, plot_diff=True
+):
     assert FM.is_static, "Must provide static FieldMesh"
     assert (
         FM.geometry == "rectangular"
@@ -562,13 +564,13 @@ def check_static_div_equation_cartesian(FM, ix=None, iy=None, plot=False, rtol=1
 
     if FM.is_pure_electric:
         Fx, Fy, Fz = FM["Ex"], FM["Ey"], FM["Ez"]
-        units = r"$V/m^2$"
+        units = r"($V/m^2)$"
         div_xy = r"$\frac{\partial E_x}{\partial x} + \frac{\partial E_y}{\partial y}$"
         div_z = r"$-\frac{\partial E_z}{\partial z}$"
 
     elif FM.is_pure_magnetic:
         Fx, Fy, Fz = FM["Bx"], FM["By"], FM["Bz"]
-        units = r"$T/m$"
+        units = r"($T/m$)"
         div_xy = r"$\frac{\partial B_x}{\partial x} + \frac{\partial B_y}{\partial y}$"
         div_z = r"$-\frac{\partial B_z}{\partial z}$"
 
@@ -596,6 +598,19 @@ def check_static_div_equation_cartesian(FM, ix=None, iy=None, plot=False, rtol=1
         plt.title(rf"Fields evaluated at $x$={x[ix]:0.6f}, $y$={y[iy]:0.6f} meters.")
         plt.legend()
 
+        if plot_diff:
+            ax = plt.gca()
+            ax2 = ax.twinx()
+            ax2.plot(
+                z,
+                +dFxdx[ix, iy, :] + dFydy[ix, iy, :] + dFzdz[ix, iy, :],
+                color="black",
+                alpha=0.15,
+            )
+            ax.set_zorder(ax2.get_zorder() + 1)  # Bring primary axis to the front
+            ax.patch.set_visible(False)  # Hide the 'canvas' of the primary axis
+            ax2.set_ylabel("$\Delta$ " + units)
+
     non_zero = np.abs(dFzdz) > 0.1 * np.max(np.abs(dFzdz[ix, iy, :]))
 
     err = (dFxdx + dFydy + dFzdz)[non_zero] / dFzdz[non_zero]
@@ -603,28 +618,42 @@ def check_static_div_equation_cartesian(FM, ix=None, iy=None, plot=False, rtol=1
     return np.abs(np.mean(err)) < rtol
 
 
-def check_static_div_equation_cylindrical(FM, ir=None, plot=False, rtol=1e-4, **kwargs):
+def check_static_div_equation_cylindrical(
+    FM, ir=None, plot=False, rtol=1e-4, plot_diff=True, **kwargs
+):
     assert FM.is_static, "Must provide static FieldMesh"
     assert FM.geometry == "cylindrical", "Must provide cylindrical FieldMesh"
 
     dr, dz = FM.dr, FM.dz
+    r, z = FM.coord_vec("r"), FM.coord_vec("z")
+
+    # Get the point closest to the axis
+    if ir is None:
+        ir = np.argmin(np.abs(r))
 
     if FM.is_pure_electric:
         Fr, Fz = np.squeeze(FM["Er"]), np.squeeze(FM["Ez"])
-        units = r"$V/m^2$"
+        units = r"($V/m^2)$"
         div_r = r"$\frac{1}{r}\frac{\partial}{\partial r}\left(rE_r\right)$"
         div_z = r"$-\frac{\partial E_z}{\partial z}$"
+        title = (
+            r"$\vec\nabla\cdot \vec{E}=0$, fields evaluated at $r$="
+            + f"{r[ir]:0.6f} meters."
+        )
 
     elif FM.is_pure_magnetic:
         Fr, Fz = np.squeeze(FM["Br"]), np.squeeze(FM["Bz"])
-        units = r"$T/m$"
+        units = r"($T/m$)"
         div_r = r"$\frac{1}{r}\frac{\partial}{\partial r}\left(rB_r\right)$"
         div_z = r"$-\frac{\partial B_z}{\partial z}$"
+        title = (
+            r"$\vec\nabla\cdot \vec{B}=0$, fields evaluated at $r$="
+            + f"{r[ir]:0.6f} meters."
+        )
 
     else:
         raise ValueError("Invalid field type: mixed for test")
 
-    r, z = FM.coord_vec("r"), FM.coord_vec("z")
     R, _ = np.meshgrid(r, z, indexing="ij")
 
     # Handle r = 0 part of cylindrical divergence
@@ -637,17 +666,21 @@ def check_static_div_equation_cylindrical(FM, ir=None, plot=False, rtol=1e-4, **
 
     dFzdz = np.gradient(Fz, dz, axis=1, edge_order=2)
 
-    # Get the point closest to the axis
-    if ir is None:
-        ir = np.argmin(np.abs(r))
-
     if plot:
         plt.plot(z, +drFrdr_r[ir, :], label=div_r)
         plt.plot(z, -dFzdz[ir, :], label=div_z)
         plt.xlabel("z (m)")
         plt.ylabel(units)
-        plt.title(rf"Fields evaluated at $r$={r[ir]:0.6f} meters.")
+        plt.title(title)
         plt.legend()
+
+        if plot_diff:
+            ax = plt.gca()
+            ax2 = ax.twinx()
+            ax2.plot(z, +drFrdr_r[ir, :] + dFzdz[ir, :], color="black", alpha=0.15)
+            ax.set_zorder(ax2.get_zorder() + 1)  # Bring primary axis to the front
+            ax.patch.set_visible(False)  # Hide the 'canvas' of the primary axis
+            ax2.set_ylabel("$\Delta$ " + units)
 
     non_zero = np.abs(dFzdz) > 0.1 * np.max(np.abs(dFzdz))
 
@@ -697,13 +730,7 @@ def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
         np.real(dErdz - dEzdr)[ir, :],
         label=r"$\Re\left[\frac{\partial E_r}{\partial z}-\frac{\partial E_z}{\partial r}\right]$",
     )
-    axs[0].plot(
-        z,
-        np.real(1j * w * Bth)[ir, :],
-        "--",
-        label=r"$\Re[i\omega B_{\theta}]$",
-        color="tab:red",
-    )
+    axs[0].plot(z, np.real(1j * w * Bth)[ir, :], label=r"$\Re[i\omega B_{\theta}]$")
     axs[0].set_xlabel("z (m)")
     axs[0].set_ylabel("(V/m^2)")
     axs[0].set_title(rf"Fields evaluated at $r=${r[ir]:0.6f} meters.")
@@ -715,7 +742,7 @@ def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
             z,
             np.real(dErdz - dEzdr)[ir, :] - np.real(1j * w * Bth)[ir, :],
             color="black",
-            alpha=0.2,
+            alpha=0.15,
         )
         axs[0].set_zorder(ax02.get_zorder() + 1)  # Bring primary axis to the front
         axs[0].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
@@ -731,11 +758,7 @@ def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
         label=r"$-\Im\left[\frac{\partial B_{\theta}}{\partial z}\right]$",
     )
     axs[1].plot(
-        z,
-        -np.imag(1j * w / c**2 * Er)[ir, :],
-        "--",
-        label=r"$-\Im[i(\omega/c^2) E_r]$",
-        color="tab:red",
+        z, -np.imag(1j * w / c**2 * Er)[ir, :], label=r"$-\Im[i(\omega/c^2) E_r]$"
     )
     axs[1].set_xlabel("z (m)")
     axs[1].set_ylabel("($V/m^3$)")
@@ -747,7 +770,7 @@ def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
             z,
             -np.imag(dBthdz)[ir, :] + np.imag(1j * w / c**2 * Er)[ir, :],
             color="black",
-            alpha=0.2,
+            alpha=0.15,
         )
         axs[1].set_zorder(ax12.get_zorder() + 1)  # Bring primary axis to the front
         axs[1].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
@@ -771,13 +794,13 @@ def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
         z,
         drBthdr_r[ir, :],
         label=r"$-\Im\left[\frac{1}{r}\frac{\partial (rB_{\theta})}{\partial r}\right]$",
+        color="tab:blue",
     )
     axs[2].plot(
         z,
         -np.imag(1j * w / c**2 * Ez)[ir, :],
-        "--",
         label=r"$-\Im[i(\omega/c^2) E_z]$",
-        color="tab:red",
+        color="tab:orange",
     )
     axs[2].set_xlabel("z (m)")
     axs[2].set_ylabel("($V/m^3$)")
@@ -789,7 +812,7 @@ def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
             z,
             drBthdr_r[ir, :] + np.imag(1j * w / c**2 * Ez)[ir, :],
             color="black",
-            alpha=0.2,
+            alpha=0.15,
         )
         axs[2].set_zorder(ax22.get_zorder() + 1)  # Bring primary axis to the front
         axs[2].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
@@ -797,20 +820,15 @@ def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
         # ax22.spines['right'].set_color('tab:red')
         ax22.set_ylabel("$\Delta$ ($V/m^3$)")
 
-    # ax22 = axs[2].twinx()
-    # ax22.plot(z, drBthdr_r[ir, :]+np.imag(1j*w/c**2 * Ez)[ir, :], color='tab:red', alpha=0.5)
-
-    # Set the z-order of the primary and twin axes explicitly
-    # axs[0].set_zorder(ax02.get_zorder() + 1)  # Bring primary axis to the front
-    # axs[0].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
+    fig.suptitle("Fields evaluated at $x$=")  # or plt.suptitle('Main title')
 
 
-def plot_curl_equations_cartesian(FM, ix=None, iy=None):
+def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
     c = 299792458
 
     assert not FM.is_static, "Test requires oscillating fields"
 
-    fig, axs = plt.subplots(3, 2, constrained_layout=True, figsize=(8, 6))
+    fig, axs = plt.subplots(3, 2, figsize=(8, 8))
 
     dx = FM.dx
     dy = FM.dy
@@ -849,6 +867,23 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None):
     axs[0, 0].set_xlabel("z (m)")
     axs[0, 0].set_ylabel("$(V/m^2)$")
     axs[0, 0].legend()
+    axs[0, 0].set_title(
+        r"$\vec\nabla\times\vec{E} = -\frac{\partial \vec{B}}{\partial t}$"
+    )
+
+    if plot_diff:
+        ax002 = axs[0, 0].twinx()
+        ax002.plot(
+            z,
+            np.real(DyEz - DzEy)[ix, iy, :] - np.real(1j * w * Bx[ix, iy, :]),
+            color="black",
+            alpha=0.15,
+        )
+        axs[0, 0].set_zorder(ax002.get_zorder() + 1)  # Bring primary axis to the front
+        axs[0, 0].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
+        # ax12.tick_params(axis='y', colors='tab:red')  # Set tick color
+        # ax12.spines['right'].set_color('tab:red')
+        ax002.set_ylabel("$\Delta$ ($V/m^2$)")
 
     axs[1, 0].plot(
         z,
@@ -860,6 +895,18 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None):
     axs[1, 0].set_ylabel("$(V/m^2)$")
     axs[1, 0].legend()
 
+    if plot_diff:
+        ax102 = axs[1, 0].twinx()
+        ax102.plot(
+            z,
+            np.real(DzEx - DxEz)[ix, iy, :] - np.real(1j * w * By[ix, iy, :]),
+            color="black",
+            alpha=0.15,
+        )
+        axs[1, 0].set_zorder(ax102.get_zorder() + 1)  # Bring primary axis to the front
+        axs[1, 0].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
+        ax102.set_ylabel("$\Delta$ ($V/m^2$)")
+
     axs[2, 0].plot(
         z,
         +np.real(DxEy - DyEx)[ix, iy, :],
@@ -869,6 +916,18 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None):
     axs[2, 0].set_xlabel("z (m)")
     axs[2, 0].set_ylabel("$(V/m^2)$")
     axs[2, 0].legend()
+
+    if plot_diff:
+        ax202 = axs[2, 0].twinx()
+        ax202.plot(
+            z,
+            np.real(DxEy - DyEx)[ix, iy, :] - np.real(1j * w * Bz[ix, iy, :]),
+            color="black",
+            alpha=0.15,
+        )
+        axs[2, 0].set_zorder(ax202.get_zorder() + 1)  # Bring primary axis to the front
+        axs[2, 0].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
+        ax202.set_ylabel("$\Delta$ ($V/m^2$)")
 
     # Curl(Bvec) = iw/c2 Evec
     DyBz = np.gradient(Bz, dy, axis=1, edge_order=2)
@@ -890,7 +949,22 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None):
     )
     axs[0, 1].set_xlabel("z (m)")
     axs[0, 1].set_ylabel("$(V/m^3)$")
+    axs[0, 1].set_title(
+        r"$\vec\nabla\times\vec{B} = \frac{1}{c^2}\frac{\partial \vec{E}}{\partial t}$"
+    )
     axs[0, 1].legend()
+
+    if plot_diff:
+        ax012 = axs[0, 1].twinx()
+        ax012.plot(
+            z,
+            -np.imag(DyBz - DzBy)[ix, iy, :] - np.imag(1j * w * Ex[ix, iy, :]) / c**2,
+            color="black",
+            alpha=0.15,
+        )
+        axs[0, 1].set_zorder(ax012.get_zorder() + 1)  # Bring primary axis to the front
+        axs[0, 1].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
+        ax012.set_ylabel("$\Delta$ ($V/m^3$)")
 
     axs[1, 1].plot(
         z,
@@ -904,6 +978,18 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None):
     axs[1, 1].set_ylabel("$(V/m^3)$")
     axs[1, 1].legend()
 
+    if plot_diff:
+        ax112 = axs[1, 1].twinx()
+        ax112.plot(
+            z,
+            -np.imag(DzBx - DxBz)[ix, iy, :] - np.imag(1j * w * Ey[ix, iy, :]) / c**2,
+            color="black",
+            alpha=0.15,
+        )
+        axs[1, 1].set_zorder(ax112.get_zorder() + 1)  # Bring primary axis to the front
+        axs[1, 1].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
+        ax112.set_ylabel("$\Delta$ ($V/m^3$)")
+
     axs[2, 1].plot(
         z,
         -np.imag(DxBy - DyBx)[ix, iy, :],
@@ -916,4 +1002,17 @@ def plot_curl_equations_cartesian(FM, ix=None, iy=None):
     axs[2, 1].set_ylabel("$(V/m^3)$")
     axs[2, 1].legend()
 
+    if plot_diff:
+        ax212 = axs[2, 1].twinx()
+        ax212.plot(
+            z,
+            -np.imag(DxBy - DyBx)[ix, iy, :] - np.imag(1j * w * Ez[ix, iy, :]) / c**2,
+            color="black",
+            alpha=0.15,
+        )
+        axs[1, 1].set_zorder(ax202.get_zorder() + 1)  # Bring primary axis to the front
+        axs[1, 1].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
+        ax212.set_ylabel("$\Delta$ ($V/m^3$)")
+
+    fig.suptitle(rf"Fields evaluated at $x=${x[ix]:0.6f}, $y=${y[iy]:0.6f} meters.")
     plt.tight_layout()

@@ -542,9 +542,9 @@ def check_static_div_equation(FM, plot=False, rtol=1e-4, **kwargs):
     assert FM.is_static, "Must provide a static FieldMesh"
 
     if FM.geometry == "cylindrical":
-        return check_static_div_equation_cylindrical(FM, plot=plot, rtol=rtol, *kwargs)
+        return check_static_div_equation_cylindrical(FM, plot=plot, rtol=rtol, **kwargs)
     elif FM.geometry == "rectangular":
-        return check_static_div_equation_cartesian(FM, plot=plot, rtol=rtol, *kwargs)
+        return check_static_div_equation_cartesian(FM, plot=plot, rtol=rtol, **kwargs)
 
     else:
         raise ValueError("Unknown FieldMesh geometry")
@@ -732,7 +732,7 @@ def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
     )
     axs[0].plot(z, np.real(1j * w * Bth)[ir, :], label=r"$\Re[i\omega B_{\theta}]$")
     axs[0].set_xlabel("z (m)")
-    axs[0].set_ylabel("(V/m^2)")
+    axs[0].set_ylabel("($V/m^2$)")
     axs[0].set_title(rf"Fields evaluated at $r=${r[ir]:0.6f} meters.")
     axs[0].legend()
 

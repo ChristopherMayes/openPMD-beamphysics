@@ -820,8 +820,6 @@ def plot_curl_equations_cylindrical(FM, ir=None, plot_diff=True):
         # ax22.spines['right'].set_color('tab:red')
         ax22.set_ylabel("$\Delta$ ($V/m^3$)")
 
-    fig.suptitle("Fields evaluated at $x$=")  # or plt.suptitle('Main title')
-
 
 def plot_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
     c = 299792458

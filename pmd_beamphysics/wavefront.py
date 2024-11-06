@@ -26,6 +26,7 @@ _fft_workers = -1
 Ranges = Sequence[Tuple[float, float]]
 AnyPath = Union[str, pathlib.Path]
 Plane = Union[str, Tuple[int, int]]
+Z0 = np.pi * 119.9169832  # V^2/W exactly
 
 kspace_labels = {
     "x": r"\theta_x",
@@ -1293,7 +1294,7 @@ class Wavefront:
         rspace: bool = True,
         show_real: bool = False,
         show_imaginary: bool = False,
-        show_abs: bool = True,
+        show_power_density: bool = True,
         show_phase: bool = True,
         axs: Optional[List[matplotlib.axes.Axes]] = None,
         cmap: str = "viridis",
@@ -1324,8 +1325,8 @@ class Wavefront:
             Show the projection of the real portion of the data.
         show_imaginary : bool
             Show the projection of the imaginary portion of the data.
-        show_abs : bool
-            Show the projection of the absolute value of the data.
+        show_power_density : bool
+            Show the projection of the power density of the data.
         show_phase : bool
             Show the projection of the phase of the data.
         figsize : (float, float), optional
@@ -1379,7 +1380,6 @@ class Wavefront:
             units = tuple(reversed(units))
 
         sum_axis = tuple(axis for axis in range(data.ndim) if axis not in axis_indices)
-        plane_label = " ".join(labels)
 
         if axs is None:
             fig, gs = plt.subplots(
@@ -1427,8 +1427,9 @@ class Wavefront:
         if show_imaginary:
             plot(np.imag(data), title="Imaginary")
 
-        if show_abs:
-            plot(np.abs(data) ** 2, f"$|{plane_label}|^2$")
+        if show_power_density:
+            power_density = 1 / 1e4 * np.abs(data) ** 2 / (2.0 * Z0)
+            plot(power_density, "Power density $W/cm^2$")
 
         if show_phase:
             plot(np.angle(data), title="Phase")
@@ -1698,7 +1699,6 @@ class Wavefront:
 
         # NOTE: refer to here for more information:
         # https://github.com/slaclab/lume-genesis/blob/master/docs/notes/genesis_fields.pdf
-        Z0 = np.pi * 119.9169832  # V^2/W exactly
         genesis_to_v_over_m = np.sqrt(2.0 * Z0) / field.param.gridsize
 
         # TODO: to test:

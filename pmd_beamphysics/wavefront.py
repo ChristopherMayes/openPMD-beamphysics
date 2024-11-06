@@ -27,7 +27,7 @@ Ranges = Sequence[Tuple[float, float]]
 AnyPath = Union[str, pathlib.Path]
 Plane = Union[str, Tuple[int, int]]
 Z0 = np.pi * 119.9169832  # V^2/W exactly
-
+HBAR_EV_M = scipy.constants.hbar / scipy.constants.e * scipy.constants.c  # eV-m
 kspace_labels = {
     "x": r"\theta_x",
     "y": r"\theta_y",
@@ -143,6 +143,8 @@ def fft_phased(
     """
     Compute the N-D discrete Fourier Transform with phasors applied.
 
+    Ortho normalization is used.
+
     Parameters
     ----------
     array : np.ndarray
@@ -169,6 +171,8 @@ def ifft_phased(
 ) -> np.ndarray:
     """
     Compute the N-D inverse discrete Fourier Transform with phasors applied.
+
+    Ortho normalization is used.
 
     Parameters
     ----------
@@ -436,8 +440,7 @@ def conversion_coeffs(wavelength: float, dim: int) -> Tuple[float, ...]:
     Theta-x, theta-y, omega.
     """
     k0 = calculate_k0(wavelength)
-    hbar = scipy.constants.hbar / scipy.constants.e * scipy.constants.c  # eV-m
-    return tuple([2.0 * np.pi / k0] * (dim - 1) + [2.0 * np.pi * hbar])
+    return tuple([2.0 * np.pi / k0] * (dim - 1) + [2.0 * np.pi * HBAR_EV_M])
 
 
 def cartesian_domain(
@@ -1074,6 +1077,20 @@ class Wavefront:
     def metadata(self) -> WavefrontMetadata:
         return self._metadata
 
+    @property
+    def fft_unit_coeff(self) -> float:
+        """
+        FFT unit conversion coefficient.
+
+        See tech note section 3.4 (Plotting field intensity angular distribution for n-th slice)
+        """
+        return float(
+            np.prod(np.asarray(self.grid_spacing) ** 2)
+            * np.prod(self.pad.get_padded_shape(self.rmesh))
+            * self.k0**2
+            / (8 * np.pi**3 * HBAR_EV_M * scipy.constants.c**2)
+        )
+
     def _fft(self):
         """
         Calculate the FFT (rspace -> kspace) on the user data.
@@ -1087,6 +1104,7 @@ class Wavefront:
         assert self._rmesh is not None
         workers = get_num_fft_workers()
         dfl_pad = _pad_array(self.rmesh, self._pad.pad_shape)
+
         return fft_phased(
             dfl_pad,
             axes=(0, 1, 2),
@@ -1117,6 +1135,11 @@ class Wavefront:
     def wavelength(self) -> float:
         """Wavelength of the wavefront [m]."""
         return self._wavelength
+
+    @property
+    def k0(self) -> float:
+        """Wave number (units of m^-1)."""
+        return calculate_k0(self.wavelength)
 
     @property
     def photon_energy(self) -> float:
@@ -1275,17 +1298,18 @@ class Wavefront:
         return np.real(WT[zpad : zgrid + zpad, :])
 
     def plot_wigner_distribution(self):
-        # xgrid, ygrid, zgrid = self._rmesh_shape
-        # xpad, ypad, zpad = self.pad.pad
-        #
-        # extent = [
-        #     np.min(domain_w[0][0 : 2 * X.tgrid]),
-        #     np.max(domain_w[0][0 : 2 * X.tgrid]),
-        #     0,
-        #     X.tmax,
-        # ]
+        _, _, z = self.rspace_domain
+        kdomain = self._nice_kspace_domain
+        extent = (
+            float(np.min(z)),  # left
+            float(np.max(z)),  # right
+            float(np.min(kdomain.z) / 2.0),  # bottom
+            float(np.max(kdomain.z) / 2.0),  # top
+        )
         WT = self.wigner_distribution()
-        plt.imshow(WT, cmap="bwr")
+        plt.imshow(WT, cmap="bwr", extent=extent, aspect="auto")
+        plt.xlabel(f"Time (${kdomain.z_unit_prefix} s$)")
+        plt.ylabel("Photon energy ($eV$)")
 
     def plot(
         self,
@@ -1405,10 +1429,11 @@ class Wavefront:
 
         def plot(dat, title: str):
             ax = remaining_axes.pop(0)
-            _z_min, z_max = self.ranges[sum_axis]
-            dz = self.grid_spacing[sum_axis]
-            dat = np.sum(dat, axis=sum_axis) * dz / (2.0 * z_max)
-            img = ax.imshow(dat, cmap=cmap, extent=extent)
+            # TODO: balticfish will double-check
+            # _z_min, z_max = self.ranges[sum_axis]
+            # dz = self.grid_spacing[sum_axis]
+            # dat = np.sum(dat, axis=sum_axis) * dz / (2.0 * z_max)
+            img = ax.imshow(np.mean(dat, axis=sum_axis), cmap=cmap, extent=extent)
 
             ax.set_xlabel(f"${labels[0]}$ ({unit_prefix}{units[0]})")
             ax.set_ylabel(f"${labels[1]}$ ({unit_prefix}{units[1]})")
@@ -1437,8 +1462,14 @@ class Wavefront:
             plot(np.imag(data), title="Imaginary")
 
         if show_power_density:
-            power_density = 1 / 1e4 * np.abs(data) ** 2 / (2.0 * Z0)
-            plot(power_density, "Power density $W/cm^2$")
+            if rspace:
+                # See tech note 3.2
+                power_density = 1 / 1e4 * np.abs(data) ** 2 / (2.0 * Z0)
+                plot(power_density, "Power density $W/cm^2$")
+            else:
+                # See tech note 3.6 (coefficient is in 3.4)
+                power_density = np.abs(data) ** 2 / (2.0 * Z0) * self.fft_unit_coeff
+                plot(power_density, "Power density $J/eV/rad^2$")
 
         if show_phase:
             phase = np.angle(data)
@@ -1462,6 +1493,48 @@ class Wavefront:
                 fig.savefig(save, dpi=writers.savefig_dpi, bbox_inches="tight")
 
         return fig, axs, images
+
+    def plot_1d_far_field_spectral_density(
+        self,
+        *,
+        ax: Optional[matplotlib.axes.Axes] = None,
+        figsize: Optional[Tuple[float, float]] = None,
+        xlim: Optional[Tuple[float, float]] = None,
+        ylim: Optional[Tuple[float, float]] = None,
+        tight_layout: bool = True,
+        save: Optional[AnyPath] = None,
+    ):
+        if ax is not None:
+            fig = ax.get_figure()
+        else:
+            fig, ax = plt.subplots(nrows=1, ncols=1, figsize=figsize)
+
+            assert ax is not None
+
+        density = (
+            self.fft_unit_coeff * np.abs(self.kmesh * self.kmesh.conj()) / (2.0 * Z0)
+        )
+        nx, ny, _nz = density.shape
+        data = density[nx // 2, ny // 2, :]
+
+        kdomain = self._nice_kspace_domain
+        (xlabel,) = get_kspace_labels(axis_labels=self.axis_labels, axes=(2,))
+        ax.plot(kdomain.z, data)
+        ax.set_xlabel(f"${xlabel} ({kdomain.z_unit_prefix} eV)$")
+        ax.set_ylabel("Far-field spectral intensity ($J/eV$)")
+
+        if xlim is not None:
+            ax.set_xlim(xlim)
+        if ylim is not None:
+            ax.set_xlim(ylim)
+        if fig is not None:
+            if tight_layout:
+                fig.tight_layout()
+            # TODO Bounding box options? Higher DPI than default?
+            if save:
+                logger.info(f"Saving plot to {save!r}")
+                fig.savefig(save, dpi=writers.savefig_dpi, bbox_inches="tight")
+        return fig, ax
 
     def plot_1d_kmesh_projections(
         self,

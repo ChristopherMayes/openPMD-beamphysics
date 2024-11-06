@@ -1296,6 +1296,7 @@ class Wavefront:
         show_imaginary: bool = False,
         show_power_density: bool = True,
         show_phase: bool = True,
+        isophase_contour: bool = False,
         axs: Optional[List[matplotlib.axes.Axes]] = None,
         cmap: str = "viridis",
         figsize: Optional[Tuple[float, float]] = None,
@@ -1329,6 +1330,8 @@ class Wavefront:
             Show the projection of the power density of the data.
         show_phase : bool
             Show the projection of the phase of the data.
+        isophase_contour : bool, default=False
+            Add isophase contour to the phase plot.
         figsize : (float, float), optional
             Figure size for the axes.
             Defaults to Matplotlib's `rcParams["figure.figsize"]``.
@@ -1432,7 +1435,17 @@ class Wavefront:
             plot(power_density, "Power density $W/cm^2$")
 
         if show_phase:
-            plot(np.angle(data), title="Phase")
+            phase = np.angle(data)
+            if isophase_contour:
+                ax = remaining_axes[-1]
+                plot(phase, title="Phase")
+                ax.contour(
+                    np.mean(phase, axis=sum_axis),
+                    cmap="Greys",
+                    extent=extent,
+                )
+            else:
+                plot(phase, title="Phase")
 
         if fig is not None:
             if tight_layout:

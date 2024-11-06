@@ -1384,6 +1384,9 @@ class Wavefront:
 
         sum_axis = tuple(axis for axis in range(data.ndim) if axis not in axis_indices)
 
+        assert len(sum_axis) == 1
+        sum_axis = sum_axis[0]
+
         if axs is None:
             fig, gs = plt.subplots(
                 nrows=nrows,
@@ -1402,7 +1405,10 @@ class Wavefront:
 
         def plot(dat, title: str):
             ax = remaining_axes.pop(0)
-            img = ax.imshow(np.mean(dat, axis=sum_axis), cmap=cmap, extent=extent)
+            _z_min, z_max = self.ranges[sum_axis]
+            dz = self.grid_spacing[sum_axis]
+            dat = np.sum(dat, axis=sum_axis) * dz / (2.0 * z_max)
+            img = ax.imshow(dat, cmap=cmap, extent=extent)
 
             ax.set_xlabel(f"${labels[0]}$ ({unit_prefix}{units[0]})")
             ax.set_ylabel(f"${labels[1]}$ ({unit_prefix}{units[1]})")

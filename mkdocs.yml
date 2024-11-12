@@ -3,34 +3,36 @@ repo_url: https://github.com/ChristopherMayes/openPMD-beamphysics
 repo_name: ChristopherMayes/openPMD-beamphysics
 
 nav:
-    - Home: index.md
-    
-    - Examples:
-        - Particles:
-            - examples/particle_examples.ipynb
-            - examples/normalized_coordinates.ipynb
-            - examples/read_examples.ipynb
-            - examples/write_examples.ipynb
-            - examples/plot_examples.ipynb
-        - Fields:
-            - examples/fields/field_examples.ipynb
-            - examples/fields/field_expansion.ipynb
-            - examples/fields/field_tracking.ipynb
-        - Utilities:
-            - examples/units.ipynb
-            - examples/labels.ipynb
+  - Home: index.md
 
-    - API:
+  - Examples:
+      - Particles:
+          - examples/particle_examples.ipynb
+          - examples/normalized_coordinates.ipynb
+          - examples/read_examples.ipynb
+          - examples/write_examples.ipynb
+          - examples/plot_examples.ipynb
+          - examples/bunching.ipynb
+      - Fields:
+          - examples/fields/field_examples.ipynb
+          - examples/fields/field_expansion.ipynb
+          - examples/fields/field_tracking.ipynb
+          - examples/fields/field_conversion.ipynb
+          - examples/fields/corrector_modeling.ipynb
+      - Utilities:
+          - examples/units.ipynb
+          - examples/labels.ipynb
+
+  - API:
       - Particles: api/particles.md
       - Fields: api/fields.md
-
 
 theme:
   icon:
     repo: fontawesome/brands/github
   name: material
 
-  custom_dir: overrides
+  custom_dir: docs/overrides
   features:
     - navigation.top
     - navigation.tabs
@@ -53,12 +55,11 @@ markdown_extensions:
   - pymdownx.highlight
   - pymdownx.superfences
   - pymdownx.arithmatex: # Enable MathJAX https://squidfunk.github.io/mkdocs-material/reference/mathjax/
-      generic: true  
-      
+      generic: true
+
 extra_javascript:
   - javascripts/mathjax.js
-  - https://polyfill.io/v3/polyfill.min.js?features=es6
-  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js      
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 extra:
   generator: false
@@ -68,30 +69,24 @@ extra:
       name: openPMD-beamphysics
 
 extra_css:
-  - stylesheets/extra.css        
+  - stylesheets/extra.css
 
 plugins:
-    - search
-      
-    - mkdocs-jupyter:
-        include_source: True
-          
-    - mkdocstrings:
-        default_handler: python
-        handlers:
-          python:
-            selection:
-              docstring_style: "numpy"
-              inherited_members: false
-              filters:
-                - "!^_"  # exclude all members starting with _
-                - "^__init__$"  # but always include __init__ modules and methods
-            rendering:
-              show_source: true
-              show_root_heading: true
+  - search
 
+  - mkdocs-jupyter:
+      include_source: True
 
-
-
-
-
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          selection:
+            docstring_style: "numpy"
+            inherited_members: false
+            filters:
+              - "!^_" # exclude all members starting with _
+              - "^__init__$" # but always include __init__ modules and methods
+          rendering:
+            show_source: true
+            show_root_heading: true

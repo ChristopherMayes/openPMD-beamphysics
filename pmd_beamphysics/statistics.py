@@ -324,10 +324,10 @@ def particle_amplitude(particle_group, plane="x", twiss=None, mass_normalize=Tru
         'x' for the x, px plane
         'y' for the y, py plane
         `all` for the 6D phase space
-    Other planes will work, but please check that the units make sense. 
+    Other planes will work, but please check that the units make sense.
 
-    If mass_normalize (default=True), the momentum will be divided by the mass, so that the units are sqrt(m).        
-    
+    If mass_normalize (default=True), the momentum will be divided by the mass, so that the units are sqrt(m).
+
     See: normalized_particle_coordinate
     """
     if plane != "all":
@@ -350,8 +350,9 @@ def particle_amplitude(particle_group, plane="x", twiss=None, mass_normalize=Tru
         t_data = normalized_6D_coordinates(particle_group, mass_normalize)
 
         J = np.linalg.norm(t_data, axis=1)
-    
-    return J 
+
+    return J
+
 
 def normalized_6D_coordinates(particle_group, mass_normalize=True):
     """
@@ -396,8 +397,11 @@ def normalized_6D_coordinates(particle_group, mass_normalize=True):
     t_data = np.linalg.solve(np.linalg.cholesky(cov), data.T).T
 
     return t_data
-    
-def normalized_particle_coordinate(particle_group, key, twiss=None, mass_normalize=True):
+
+
+def normalized_particle_coordinate(
+    particle_group, key, twiss=None, mass_normalize=True
+):
     """
     Returns a single normalized coordinate array from a ParticleGroup
 

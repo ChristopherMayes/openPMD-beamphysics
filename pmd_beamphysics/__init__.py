@@ -1,13 +1,14 @@
-from .particles import ParticleGroup, single_particle
-from .status import ParticleStatus
 from .fields.fieldmesh import FieldMesh
+from .particles import ParticleGroup, single_particle
 from .readers import particle_paths
+from .status import ParticleStatus
 from .wavefront import Wavefront
 from .writers import pmd_init
 
-from . import _version
-
-__version__ = _version.get_versions()["version"]
+try:
+    from ._version import __version__
+except ImportError:
+    __version__ = "0.0.0"
 
 __all__ = [
     "FieldMesh",

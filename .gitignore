@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# Devel directory
+devel/*
+
 # Distribution / packaging
 .Python
 build/
@@ -102,10 +105,6 @@ venv.bak/
 
 # mypy
 .mypy_cache/
-
-# macOS
 .DS_Store
 
-# Anything in devel/
-devel/*
-opmd_beamphysics/.DS_Store
+/pmd_beamphysics/_version.py

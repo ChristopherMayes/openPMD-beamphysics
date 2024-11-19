@@ -17,6 +17,8 @@ nav:
           - examples/fields/field_examples.ipynb
           - examples/fields/field_expansion.ipynb
           - examples/fields/field_tracking.ipynb
+          - examples/fields/field_conversion.ipynb
+          - examples/fields/corrector_modeling.ipynb
       - Wavefronts:
           - examples/wavefront.ipynb
       - Utilities:
@@ -32,7 +34,7 @@ theme:
     repo: fontawesome/brands/github
   name: material
 
-  custom_dir: overrides
+  custom_dir: docs/overrides
   features:
     - navigation.top
     - navigation.tabs

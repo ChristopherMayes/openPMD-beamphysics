@@ -1,0 +1,69 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = [
+  "setuptools>=60",
+  "setuptools_scm[toml]>=8.0"
+]
+
+[project]
+authors = [
+  {name="Christopher Mayes"},
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Natural Language :: English",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering",
+]
+dependencies = [
+  # All core dependencies must be sourced from conda (conda-forge).
+  # See ``environment.yml`` for further information.
+]
+description = "Tools for analyzing and viewing particle data in the openPMD standard, extension beamphysics."
+dynamic = [ "version" ]
+keywords = []
+name = "openpmd-beamphysics"
+readme = {file = "README.md", content-type = "text/markdown"}
+requires-python = ">=3.9"
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-cov",
+]
+doc = [
+  "mkdocs==1.5.2",
+  "mkdocs-jupyter==0.24.6",
+  "mkdocs-macros-plugin",
+  "mkdocs-material",
+  "mkdocstrings",
+  "mkdocstrings-python",
+]
+
+[project.urls]
+Homepage = "https://github.com/ChristopherMayes/openPMD-beamphysics"
+
+[options]
+zip_safe = false
+include_package_data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [ "pmd_beamphysics*", ]
+namespaces = false
+
+[project.license]
+file = "LICENSE"
+
+[tool.ruff]
+# select = []
+# ignore = []
+
+[tool.pytest.ini_options]
+addopts = "--cov=pmd_beamphysics/"
+log_cli_level = "info"
+log_level = "debug"
+testpaths = ["tests"]
+
+[tool.setuptools_scm]
+version_file = "pmd_beamphysics/_version.py"

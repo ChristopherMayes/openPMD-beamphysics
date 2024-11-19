@@ -1,7 +1,7 @@
 import os
 
 import numpy as np
-from h5py import File
+from h5py import File, Group
 
 from pmd_beamphysics.statistics import twiss_calc
 from pmd_beamphysics.units import c_light, mec2, unit, write_unit_h5
@@ -438,8 +438,8 @@ def write_genesis4_distribution(particle_group, h5file, verbose=False):
 
 def genesis4_par_to_data(h5, species="electron", smear=True):
     """
-    Converts elegant data from an h5 handle or file
-    to data for openPMD-beamphysics.
+    Converts Genesis 4 data from an h5 handle or file to data for
+    openPMD-beamphysics.
 
     Genesis4 datasets in the HDF5 file are named:
     'x'
@@ -460,9 +460,11 @@ def genesis4_par_to_data(h5, species="electron", smear=True):
 
     Parameters
     ----------
-    h5: open h5py handle or str
+    h5 : open h5py handle or str
 
-    smear: bool:
+    species : str, default="electron"
+
+    smear : bool, default=True
         Genesis4 often samples the beam by skipping slices
         in a step called 'sample'.
         This will smear out the theta coordinate over these slices,
@@ -470,9 +472,8 @@ def genesis4_par_to_data(h5, species="electron", smear=True):
 
     Returns
     -------
-    data: dict for ParticleGroup
-
-
+    data : dict
+        For ParticleGroup
     """
     # Allow for opening a file
     if isinstance(h5, str):
@@ -515,8 +516,11 @@ def genesis4_par_to_data(h5, species="electron", smear=True):
     weight = []
 
     i0 = 0
-    for sname in sorted([g for g in h5 if g not in scalars]):
+    for sname in sorted(g for g in h5 if g not in scalars):
         g = h5[sname]
+        if not isinstance(g, Group) or "current" not in g:
+            # Groups like 'Meta' do not contain slice data.
+            continue
 
         current = g["current"][:]  # I * s_spacing/c = Q
         assert len(current) == 1

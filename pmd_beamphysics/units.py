@@ -379,9 +379,10 @@ def nice_array(a):
     if np.isscalar(a):
         x = a
     elif len(a) == 1:
+        a = np.asarray(a)
         x = a[0]
     else:
-        a = np.array(a)
+        a = np.asarray(a)
         x = max(np.ptp(a), abs(np.mean(a)))  # Account for tiny spread
 
     fac, prefix = nice_scale_prefix(x)

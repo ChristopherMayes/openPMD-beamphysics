@@ -382,7 +382,7 @@ def nice_array(a):
         a = np.asarray(a)
         x = a[0]
     else:
-        a = np.array(a)
+        a = np.asarray(a)
         x = max(np.ptp(a), abs(np.mean(a)))  # Account for tiny spread
 
     fac, prefix = nice_scale_prefix(x)

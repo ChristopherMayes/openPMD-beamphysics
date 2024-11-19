@@ -27,6 +27,7 @@ runs:
         miniforge-version: latest
         use-mamba: true
         channels: conda-forge
+        conda-remove-defaults: true
     - name: Update Python version in environment.yml
       shell: bash -l {0}
       run: |

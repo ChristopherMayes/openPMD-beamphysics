@@ -379,6 +379,7 @@ def nice_array(a):
     if np.isscalar(a):
         x = a
     elif len(a) == 1:
+        a = np.asarray(a)
         x = a[0]
     else:
         a = np.array(a)

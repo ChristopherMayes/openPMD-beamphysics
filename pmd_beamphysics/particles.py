@@ -1156,8 +1156,8 @@ class ParticleGroup:
         particle_groups : list of ParticleGroup
             A list of ParticleGroup objects, each representing a subset of particles based on the specified fractions.
 
-        Description:
-        ------------
+        Description
+        -----------
         This function splits the given group of particles into multiple subsets based on the provided attribute (e.g., position).
         The splits are determined such that each specified fraction of the total particle weights is separated.
         The function first sorts the particles by the specified key, computes the cumulative sum of weights,

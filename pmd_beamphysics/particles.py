@@ -1145,7 +1145,7 @@ class ParticleGroup:
 
         Parameters
         ----------
-        fractions : float, int, or list of float/int
+        fractions : float or list of float
             A fraction or a list of fractions used for splitting the particles. All values must be between 0 and 1 (exclusive).
 
         key : str
@@ -1174,8 +1174,8 @@ class ParticleGroup:
             raise ValueError("All fraction values must be between 0 and 1 (exclusive)")
 
         # Sort particles by the specified key
-        ixs = np.argsort(particles[key])
-        sorted_particles = particles[ixs]
+        ixs = np.argsort(self[key])
+        sorted_particles = self[ixs]
 
         # Sorted weights
         ws = sorted_particles.weight

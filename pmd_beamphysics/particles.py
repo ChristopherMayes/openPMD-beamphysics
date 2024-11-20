@@ -1164,7 +1164,6 @@ class ParticleGroup:
         and determines the split values. It then returns a list of ParticleGroup objects representing the split subsets.
 
         """
-        particles = self
 
         # Ensure fractions is a list
         if isinstance(fractions, (float, int)):

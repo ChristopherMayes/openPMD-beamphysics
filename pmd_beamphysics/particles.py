@@ -1151,8 +1151,8 @@ class ParticleGroup:
         key : str
             The attribute of particles to be used for sorting and splitting (e.g., 'z' for longitudinal position).
 
-        Returns:
-        --------
+        Returns
+        -------
         particle_groups : list of ParticleGroup
             A list of ParticleGroup objects, each representing a subset of particles based on the specified fractions.
 

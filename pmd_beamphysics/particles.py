@@ -2,6 +2,7 @@ import functools
 import os
 import pathlib
 from copy import deepcopy
+from typing import Union
 
 import numpy as np
 from h5py import File
@@ -1137,6 +1138,66 @@ class ParticleGroup:
     # New constructors
     def split(self, n_chunks=100, key="z"):
         return split_particles(self, n_chunks=n_chunks, key=key)
+
+    def fractional_split(self, fractions: Union[float, int, list], key: str):
+        """
+        Split particles based on a given array key and a list of specified fractions or a single fraction.
+
+        Parameters
+        ----------
+        fractions : float or list of float
+            A fraction or a list of fractions used for splitting the particles. All values must be between 0 and 1 (exclusive).
+
+        key : str
+            The attribute of particles to be used for sorting and splitting (e.g., 'z' for longitudinal position).
+
+        Returns
+        -------
+        particle_groups : list of ParticleGroup
+            A list of ParticleGroup objects, each representing a subset of particles based on the specified fractions.
+
+        Description
+        -----------
+        This function splits the given group of particles into multiple subsets based on the provided attribute (e.g., position).
+        The splits are determined such that each specified fraction of the total particle weights is separated.
+        The function first sorts the particles by the specified key, computes the cumulative sum of weights,
+        and determines the split values. It then returns a list of ParticleGroup objects representing the split subsets.
+
+        """
+
+        # Ensure fractions is a list
+        if isinstance(fractions, (float, int)):
+            fractions = [fractions]
+
+        # Validate fraction values
+        if any(f <= 0 or f >= 1 for f in fractions):
+            raise ValueError("All fraction values must be between 0 and 1 (exclusive)")
+
+        # Sort particles by the specified key
+        ixs = np.argsort(self[key])
+        sorted_particles = self[ixs]
+
+        # Sorted weights
+        ws = sorted_particles.weight
+        total_weight = np.sum(ws)
+        cw = np.cumsum(ws) / total_weight
+
+        # Use vectorized searchsorted to determine split indices
+        fractions = np.array(fractions)
+        split_indices = np.searchsorted(cw, fractions, side="right")
+
+        # Create ParticleGroup subsets for each split
+        particle_groups = []
+        previous_index = 0
+        for isplit in split_indices:
+            particle_groups.append(sorted_particles[previous_index:isplit])
+            previous_index = isplit
+
+        # Add the remaining particles to the last group
+        if previous_index < len(sorted_particles):
+            particle_groups.append(sorted_particles[previous_index:])
+
+        return particle_groups
 
     def copy(self):
         """Returns a deep copy"""

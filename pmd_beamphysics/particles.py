@@ -1143,8 +1143,8 @@ class ParticleGroup:
         """
         Split particles based on a given array key and a list of specified fractions or a single fraction.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         fractions : float, int, or list of float/int
             A fraction or a list of fractions used for splitting the particles. All values must be between 0 and 1 (exclusive).
 

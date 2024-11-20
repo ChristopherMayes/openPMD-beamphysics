@@ -85,3 +85,8 @@ def test_write_reload(tmp_path):
 
     P2.x += 1
     assert P != P2
+
+
+def test_fractional_split():
+    head, tail = P.fractional_split(0.5, "t")
+    head, core, tail = P.fractional_split((0.1, 0.9), "t")

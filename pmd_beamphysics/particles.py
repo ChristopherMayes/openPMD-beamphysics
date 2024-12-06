@@ -783,6 +783,12 @@ class ParticleGroup:
         if not isinstance(key, str):
             return particle_parts(self, key)
 
+        # '/c' suffix for dividing by the speed of light
+        nc = key.count("/c")
+        if nc > 0:
+            key = key.replace("/c", "")
+            return self[key] / (c_light**nc)
+
         if key.startswith("cov_"):
             subkeys = key[4:].split("__")
             assert (

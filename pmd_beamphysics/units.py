@@ -493,10 +493,20 @@ def pg_units(key):
     if key in PARTICLEGROUP_UNITS:
         return PARTICLEGROUP_UNITS[key]
 
+    # Operators
     for prefix in ["sigma_", "mean_", "min_", "max_", "ptp_", "delta_"]:
         if key.startswith(prefix):
             nkey = key[len(prefix) :]
             return pg_units(nkey)
+
+    # Handle '/c'  for dividing by the speed of light
+    nc = key.count("/c")
+    if nc > 0:
+        key = key.replace("/c", "")
+        u = pg_units(key)
+        for _ in range(nc):
+            u = u / unit("m") * unit("s")
+        return u
 
     if key.startswith("cov_"):
         subkeys = key.strip("cov_").split("__")

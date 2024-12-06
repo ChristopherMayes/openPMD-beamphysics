@@ -340,7 +340,7 @@ def marginal_plot(
         _, hist_prefix = nice_scale_prefix(hist_f / f1)
         ax_marg_x.set_ylabel(f"{hist_prefix}A")
     else:
-        ax_marg_x.set_ylabel(mathlabel(f"{hist_prefix}C/{ux}"))  # Always use tex
+        ax_marg_x.set_ylabel(f"{hist_prefix}" + mathlabel(f"C/{ux}"))  # Always use tex
 
     # Side histogram
     # Old method:
@@ -351,7 +351,7 @@ def marginal_plot(
     hist_width = np.diff(bin_edges)
     hist_y, hist_f, hist_prefix = nice_array(hist / hist_width)
     ax_marg_y.barh(hist_x, hist_y, hist_width, color="gray")
-    ax_marg_y.set_xlabel(mathlabel(f"{hist_prefix}C/{uy}"))  # Always use tex
+    ax_marg_y.set_xlabel(f"{hist_prefix}" + mathlabel(f"C/{uy}"))  # Always use tex
 
     # Turn off tick labels on marginals
     plt.setp(ax_marg_x.get_xticklabels(), visible=False)

@@ -2,6 +2,7 @@ from pmd_beamphysics import ParticleGroup
 import pytest
 import numpy as np
 import os
+from scipy.constants import c
 
 P = ParticleGroup("docs/examples/data/bmad_particles.h5")
 
@@ -13,7 +14,7 @@ r theta pr ptheta
 Lz
 gamma beta beta_x beta_y beta_z
 x_bar px_bar Jx Jy
-charge
+weight
 
 """.split()
 
@@ -34,6 +35,11 @@ def array_key(request):
     return request.param
 
 
+@pytest.fixture(params=ARRAY_KEYS)
+def array_key2(request):
+    return request.param
+
+
 @pytest.fixture(params=OPERATORS)
 def operator(request):
     return request.param
@@ -42,6 +48,22 @@ def operator(request):
 def test_operator(operator, array_key):
     key = f"{operator}{array_key}"
     P[key]
+
+
+def test_operator_over_c(operator, array_key):
+    key0 = f"{operator}{array_key}"
+    key1 = f"{operator}{array_key}/c"
+    key2 = f"{operator}{array_key}/c/c"
+    assert np.allclose(P[key0] / c, P[key1])
+    assert np.allclose(P[key0] / c / c, P[key2])
+
+
+def test_cov_over_c(array_key, array_key2):
+    key0 = f"cov_{array_key}__{array_key2}"
+    key1 = f"cov_{array_key}/c__{array_key2}"
+    key2 = f"cov_{array_key}/c__{array_key2}/c"
+    assert np.allclose(P[key0] / c, P[key1])
+    assert np.allclose(P[key0] / c / c, P[key2])
 
 
 # This is probably uneccessary:

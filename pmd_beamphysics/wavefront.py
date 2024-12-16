@@ -42,8 +42,8 @@ _kspace_labels = (
     r"\omega",
 )
 PlotKey = Literal[
-    "re",
-    "im",
+    "re_mesh",
+    "im_mesh",
     "power_density",
     "phase",
 ]
@@ -1367,7 +1367,7 @@ class Wavefront:
 
         Parameters
         ----------
-        key : {"re", "im", "power_density", "phase"}
+        key : {"re_mesh", "im_mesh", "power_density", "phase"}
             The type of data to plot.
         projection : {"xy", "yz", "xz", "kxky", "kykz", "kxkz"}
             The plane to project onto.
@@ -1482,11 +1482,11 @@ class Wavefront:
 
             return img
 
-        if key == "re":
-            img = plot(np.real(mesh_data), title="Real")
+        if key == "re_mesh":
+            img = plot(np.real(mesh_data), title=r"$\Re(\text{mesh})$")
 
-        elif key == "im":
-            img = plot(np.imag(mesh_data), title="Imaginary")
+        elif key == "im_mesh":
+            img = plot(np.imag(mesh_data), title=r"$\Im(\text{mesh})$")
 
         elif key == "power_density":
             if rspace:

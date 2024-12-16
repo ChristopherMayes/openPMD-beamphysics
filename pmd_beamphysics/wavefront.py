@@ -521,6 +521,8 @@ def thin_lens_kernel_xy(
     """
     Transfer function for thin lens focusing.
 
+    TODO: Alex - provide a reference and an actual LaTeX equation.
+
     Parameters
     ----------
     wavelength : float
@@ -783,7 +785,6 @@ class Wavefront:
         polarization: PolarizationDirection | None = None,
         axis_labels: Sequence[str] | None = None,
         metadata: WavefrontMetadata | dict | None = None,
-        longitudinal_axis: str | None = None,
         pad: Sequence[int] | int | None = None,
         fix_pad: bool = True,
     ) -> None:
@@ -808,7 +809,6 @@ class Wavefront:
             grid_spacing=grid_spacing,
         )
         self._check_metadata()
-        self._longitudinal_axis = longitudinal_axis or self.axis_labels[-1]
 
     def _set_metadata(
         self,
@@ -862,8 +862,6 @@ class Wavefront:
         res.wavelength = self.wavelength
         res._padding = self._padding
         res._metadata = copy.deepcopy(self._metadata)
-        # TODO there are more fields now
-        res._longitudinal_axis = self._longitudinal_axis
         return res
 
     def __deepcopy__(self, memo) -> Wavefront:
@@ -948,7 +946,6 @@ class Wavefront:
             grid_spacing=grid_spacing,
             pad=pad,
             axis_labels="xyz",
-            longitudinal_axis="z",
         )
 
     def with_rmesh(
@@ -964,7 +961,6 @@ class Wavefront:
             rmesh=rmesh,
             wavelength=self.wavelength,
             metadata=self.metadata,
-            longitudinal_axis=self._longitudinal_axis,
             pad=self.pad,
             fix_pad=fix_pad,
         )
@@ -991,7 +987,6 @@ class Wavefront:
             rmesh=self.rmesh,
             wavelength=self.wavelength,
             metadata=self.metadata,
-            longitudinal_axis=self._longitudinal_axis,
             pad=pad,
         )
 
@@ -1035,10 +1030,6 @@ class Wavefront:
         instantiate a new `Wavefront` instance.
         """
         return tuple(self._padding)
-
-    @property
-    def longitudinal_axis(self) -> str:
-        return self._longitudinal_axis
 
     @property
     def rspace_domain(self):
@@ -1239,13 +1230,10 @@ class Wavefront:
             Plane identifier (e.g., "xy") or dimension indices (e.g., ``(1, 2)``)
         focus : (float, float)
             Focal length of the lens in each dimension [m].
-        inplace : bool, default=False
-            Perform the operation in-place on this wavefront object.
 
         Returns
         -------
         Wavefront
-            This object if `inplace=True` or a new copy if `inplace=False`.
         """
         if plane not in ("xy", (1, 2)):
             raise NotImplementedError(f"Unsupported plane: {plane}")
@@ -1276,11 +1264,12 @@ class Wavefront:
         -------
         Wavefront
         """
-        indices = [
-            idx
-            for idx, label in enumerate(self.axis_labels)
-            if label != self._longitudinal_axis
-        ]
+        # indices = [
+        #     idx
+        #     for idx, label in enumerate(self.axis_labels)
+        #     if label != self._longitudinal_axis
+        # ]
+        indices = [0, 1]
         transverse_kspace_grid = nd_kspace_mesh(
             coeffs=(1.0,) * len(self._grid),
             sizes=[self.rmesh.shape[idx] for idx in indices],
@@ -1298,7 +1287,6 @@ class Wavefront:
             kmesh,
             wavelength=self.wavelength,
             metadata=self.metadata,
-            longitudinal_axis=self.longitudinal_axis,
             padding=self.pad,
         )
 
@@ -1817,7 +1805,6 @@ class Wavefront:
         polarization: PolarizationDirection | None = None,
         axis_labels: Sequence[str] | None = None,
         metadata: WavefrontMetadata | dict | None = None,
-        longitudinal_axis: str | None = None,
     ) -> Wavefront:
         if padding is None:
             padding = (0,) * kmesh.ndim
@@ -1844,7 +1831,6 @@ class Wavefront:
             grid_spacing=grid_spacing,
         )
         self._check_metadata()
-        self._longitudinal_axis = longitudinal_axis or self.axis_labels[-1]
         return self
 
     @classmethod
@@ -1887,7 +1873,6 @@ class Wavefront:
             pad=pad,
             polarization="x",
             axis_labels="xyz",
-            longitudinal_axis="z",
         )
         wf.metadata.mesh.grid_global_offset = (0.0, 0.0, field.param.refposition)
         return wf
@@ -1942,9 +1927,31 @@ class Wavefront:
 
     @classmethod
     def _from_h5_file(cls, h5: h5py.File, identifier: int) -> Wavefront:
-        base_path = h5.attrs["basePath"].decode()
+        def get_string_attr(parent: h5py.Group, attr: str) -> str:
+            value = parent.attrs[attr]
+            if isinstance(value, str):
+                return value
+            if isinstance(value, bytes):
+                return value.decode()
+            raise ValueError(
+                f"Expected bytes or strings for {h5.name} key {attr}; got {type(value).__name__}"
+            )
+
+        def require_group(parent: h5py.Group, name: str) -> h5py.Group:
+            try:
+                group = parent[name]
+            except KeyError:
+                raise KeyError(f"Expected HDF group {name} not found in {h5.name}")
+
+            if not isinstance(group, h5py.Group):
+                raise ValueError(
+                    f"Key {group} expected to be a group, but is a {type(group)}"
+                )
+            return group
+
+        base_path = get_string_attr(h5, "basePath")
         # data_type = h5.attrs["dataType"]
-        openpmd_extension = h5.attrs["openPMDextension"].decode()
+        openpmd_extension = get_string_attr(h5, "openPMDextension")
         if "Wavefront" not in openpmd_extension:
             raise ValueError(
                 f"Wavefront extension not enabled in file."
@@ -1952,15 +1959,12 @@ class Wavefront:
             )
 
         iteration_path = base_path.replace("%T", str(identifier))
-        wavefront_field_path = h5.attrs["wavefrontFieldPath"].decode()
+        wavefront_field_path = get_string_attr(h5, "wavefrontFieldPath")
 
-        group = h5[iteration_path][wavefront_field_path]
-        if not isinstance(group, h5py.Group):
-            raise ValueError(
-                f"Key {group} expected to be a group, but is a {type(group)}"
-            )
-
-        efield = group["electricField"]
+        # {iteration group}/{wavefront group}/{efield_group}
+        iteration_group = require_group(h5, iteration_path)
+        wavefront_group = require_group(iteration_group, wavefront_field_path)
+        efield = require_group(wavefront_group, "electricField")
 
         photon_energy = efield.attrs["photonEnergy"]
         assert isinstance(photon_energy, float)
@@ -1970,7 +1974,7 @@ class Wavefront:
         # efield["spatialDomain"]
         for polarization in "xyz":
             try:
-                rmesh_group = efield[polarization]
+                rmesh_group = require_group(efield, polarization)
             except KeyError:
                 pass
             else:

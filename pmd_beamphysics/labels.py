@@ -127,7 +127,7 @@ def texlabel(key: str):
         if nc == 1:
             return texlabel(key) + "/c"
         else:
-            return texlabel(key) + rf"/c^{nc}"
+            return texlabel(key) + f"/c^{nc}"
 
     if key.startswith("bunching"):
         wavelength = parse_bunching_str(key)

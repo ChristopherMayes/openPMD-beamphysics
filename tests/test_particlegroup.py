@@ -35,9 +35,7 @@ def array_key(request):
     return request.param
 
 
-@pytest.fixture(params=ARRAY_KEYS)
-def array_key2(request):
-    return request.param
+array_key2 = array_key
 
 
 @pytest.fixture(params=OPERATORS)

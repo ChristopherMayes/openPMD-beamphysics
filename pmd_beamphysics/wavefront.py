@@ -3,7 +3,8 @@ from __future__ import annotations
 import copy
 import logging
 import pathlib
-from typing import Any, NamedTuple, Union, TYPE_CHECKING
+import typing
+from typing import Any, Literal, NamedTuple, Union, TYPE_CHECKING
 from collections.abc import Sequence
 
 import h5py
@@ -31,10 +32,29 @@ AnyPath = Union[str, pathlib.Path]
 Plane = Union[str, tuple[int, int]]
 Z0 = np.pi * 119.9169832  # V^2/W exactly
 HBAR_EV_M = scipy.constants.hbar / scipy.constants.e * scipy.constants.c  # eV-m
-kspace_labels = {
-    "x": r"\theta_x",
-    "y": r"\theta_y",
-    "z": r"\omega",
+_rspace_labels = (
+    "x",
+    "y",
+    "z",
+)
+_kspace_labels = (
+    r"\theta_x",
+    r"\theta_y",
+    r"\omega",
+)
+PlotKey = Literal[
+    "re",
+    "im",
+    "power_density",
+    "phase",
+]
+projection_key_to_indices = {
+    "xy": ("rspace", 0, 1),
+    "yz": ("rspace", 1, 2),
+    "xz": ("rspace", 0, 2),
+    "kxky": ("kspace", 0, 1),
+    "kykz": ("kspace", 1, 2),
+    "kxkz": ("kspace", 0, 2),
 }
 
 
@@ -50,48 +70,22 @@ def set_num_fft_workers(workers: int):
     logger.info(f"Set number of FFT workers to: {workers}")
 
 
-def get_axis_index(axis_labels: Sequence[str], axis: str | int):
-    if isinstance(axis, int):
-        if axis >= len(axis_labels):
-            raise ValueError(f"Axis out of bounds: {axis} ({len(axis_labels)}D array)")
-        return axis
-    return axis_labels.index(axis)
-
-
-def get_axis_indices(
-    axis_labels: tuple[str, ...],
-    axes: Sequence[str] | Sequence[int],
-):
-    return tuple(get_axis_index(axis_labels, axis) for axis in axes)
-
-
-def get_rspace_label(
-    axis_labels: tuple[str, ...],
-    axis: int | str,
-):
-    return axis_labels[get_axis_index(axis_labels, axis)]
-
-
-def get_rspace_labels(
-    axis_labels: tuple[str, ...],
-    axes: Sequence[str] | Sequence[int],
-):
-    return tuple(get_rspace_label(axis_labels, axis) for axis in axes)
-
-
-def get_kspace_label(
-    axis_labels: tuple[str, ...],
-    axis: int | str,
-):
-    rspace_label = get_rspace_label(axis_labels, axis)
-    return kspace_labels.get(rspace_label, rspace_label)
-
-
-def get_kspace_labels(
-    axis_labels: tuple[str, ...],
-    axes: Sequence[str] | Sequence[int],
-):
-    return tuple(get_kspace_label(axis_labels, axis) for axis in axes)
+# Wwigner = Wavefront.gaussian_pulse(
+#     dims=(101, 101, 513),
+#     wavelength=1.35e-8,
+#     grid_spacing=(6e-6, 6e-6, 2.9333e-8),
+#     pad=(100, 100, 256),
+#     nphotons=1e12,
+#     zR=2.0,
+#     sigma_z=2.29e-7,
+# )
+#
+# phi = 2.0 * np.pi * (0.5 * Wwigner.rmesh) ** 3
+# Wwigner._rmesh *= np.exp(1j * phi)
+# Wwigner.plot_wigner_distribution()
+# # plt.xlim(200, 400)
+# # plt.ylim(200, 400)
+# plt.colorbar()
 
 
 def pad_array(wavefront: np.ndarray, pads: Sequence[int] | int):
@@ -1347,22 +1341,15 @@ class Wavefront:
 
     def plot(
         self,
-        plane: Plane,
+        key: PlotKey,
         *,
-        rspace: bool = True,
-        show_real: bool = False,
-        show_imaginary: bool = False,
-        show_power_density: bool = True,
-        show_phase: bool = True,
+        projection: Plane = "xy",
         isophase_contour: bool = False,
-        axs: list[matplotlib.axes.Axes] | None = None,
+        ax: matplotlib.axes.Axes | None = None,
         cmap: str = "viridis",
         figsize: tuple[float, float] | None = None,
-        nrows: int = 1,
-        ncols: int = 2,
         xlim: tuple[float, float] | None = None,
         ylim: tuple[float, float] | None = None,
-        tight_layout: bool = True,
         save: AnyPath | None = None,
         transpose: bool = False,
         colorbar: bool = True,
@@ -1418,16 +1405,32 @@ class Wavefront:
         Figure
         list of Axes
         """
-        axis_indices = get_axis_indices(self.metadata.mesh.axis_labels, plane)
+
+        if ax is None:
+            fig, ax = plt.subplots(1, 1, figsize=figsize)
+        else:
+            fig = ax.get_figure()
+
+        assert ax is not None
+
+        try:
+            r_or_k, xidx, yidx = projection_key_to_indices[projection]
+        except KeyError:
+            raise ValueError(
+                f"Unsupported projection: {projection} choose from {list(projection_key_to_indices)}"
+            ) from None
+
+        rspace = r_or_k == "rspace"
+        axis_indices = (xidx, yidx)
 
         if rspace:
-            data = self.rmesh
-            labels = get_rspace_labels(self.axis_labels, axis_indices)
+            mesh_data = self.rmesh
+            labels = [_rspace_labels[idx] for idx in axis_indices]
             domain = [self.rspace_domain[idx] for idx in axis_indices]
             units = ["m", "m"]
         else:
-            data = self.kmesh
-            labels = get_kspace_labels(self.axis_labels, axis_indices)
+            mesh_data = self.kmesh
+            labels = [_kspace_labels[idx] for idx in axis_indices]
             domain = [self.kspace_domain[idx] for idx in axis_indices]
             units = ["rad", "rad"]
 
@@ -1435,34 +1438,19 @@ class Wavefront:
         extent = (domain_x[0], domain_x[-1], domain_y[-1], domain_y[0])
 
         if transpose:
-            data = data.T
+            mesh_data = mesh_data.T
             labels = tuple(reversed(labels))
             extent = tuple(reversed(extent))
             units = tuple(reversed(units))
 
-        sum_axis = tuple(axis for axis in range(data.ndim) if axis not in axis_indices)
+        sum_axis = tuple(
+            axis for axis in range(mesh_data.ndim) if axis not in axis_indices
+        )
 
         assert len(sum_axis) == 1
         sum_axis = sum_axis[0]
 
-        if axs is None:
-            fig, gs = plt.subplots(
-                nrows=nrows,
-                ncols=ncols,
-                sharex=True,
-                sharey=True,
-                squeeze=False,
-                figsize=figsize,
-            )
-            axs = list(gs.flatten())
-        else:
-            fig = axs[0].get_figure()
-            assert fig is not None
-
-        remaining_axes = list(axs)
-
         def plot(dat, title: str):
-            ax = remaining_axes.pop(0)
             # TODO: balticfish will double-check
             # _z_min, z_max = self.ranges[sum_axis]
             # dz = self.grid_spacing[sum_axis]
@@ -1485,48 +1473,50 @@ class Wavefront:
             if ylim is not None:
                 ax.set_ylim(ylim)
 
-            images.append(img)
             return img
 
-        images = []
-        if show_real:
-            plot(np.real(data), title="Real")
+        if key == "re":
+            img = plot(np.real(mesh_data), title="Real")
 
-        if show_imaginary:
-            plot(np.imag(data), title="Imaginary")
+        elif key == "im":
+            img = plot(np.imag(mesh_data), title="Imaginary")
 
-        if show_power_density:
+        elif key == "power_density":
             if rspace:
                 # See tech note 3.2
-                power_density = 1 / 1e4 * np.abs(data) ** 2 / (2.0 * Z0)
-                plot(power_density, "Power density $W/cm^2$")
+                power_density = 1 / 1e4 * np.abs(mesh_data) ** 2 / (2.0 * Z0)
+                img = plot(power_density, "Power density $W/cm^2$")
             else:
                 # See tech note 3.6 (coefficient is in 3.4)
-                power_density = np.abs(data) ** 2 / (2.0 * Z0) * self.fft_unit_coeff
-                plot(power_density, "Power density $J/eV/rad^2$")
+                power_density = (
+                    np.abs(mesh_data) ** 2 / (2.0 * Z0) * self.fft_unit_coeff
+                )
+                img = plot(power_density, "Power density $J/eV/rad^2$")
 
-        if show_phase:
-            phase = np.angle(data)
+        elif key == "phase":
+            phase = np.angle(mesh_data)
             if isophase_contour:
-                ax = remaining_axes[-1]
-                plot(phase, title="Phase")
+                img = plot(phase, title="Phase")
                 ax.contour(
                     np.mean(phase, axis=sum_axis),
                     cmap="Greys",
                     extent=extent,
                 )
             else:
-                plot(phase, title="Phase")
+                img = plot(phase, title="Phase")
+
+        else:
+            valid_keys = typing.get_args(PlotKey)
+            raise ValueError(
+                f"Unsupported plot key: {key}. Supported keys: {valid_keys}"
+            )
 
         if fig is not None:
-            if tight_layout:
-                fig.tight_layout()
-
             if save:
                 logger.info(f"Saving plot to {save!r}")
                 fig.savefig(save, dpi=writers.savefig_dpi, bbox_inches="tight")
 
-        return fig, axs, images
+        return fig, ax, img
 
     def plot_1d_far_field_spectral_density(
         self,
@@ -1552,7 +1542,7 @@ class Wavefront:
         data = density[nx // 2, ny // 2, :]
 
         kdomain = self._nice_kspace_domain
-        (xlabel,) = get_kspace_labels(axis_labels=self.axis_labels, axes=(2,))
+        xlabel = _kspace_labels[2]
         ax.plot(kdomain.z, data)
         ax.set_xlabel(f"${xlabel} ({kdomain.z_unit_prefix} eV)$")
         ax.set_ylabel("Far-field spectral intensity ($J/eV$)")
@@ -1660,7 +1650,7 @@ class Wavefront:
             linewidth=2.0,
         )
 
-        xlabel, ylabel = get_kspace_labels(axis_labels=self.axis_labels, axes=(0, 1))
+        xlabel, ylabel = _kspace_labels[:2]
         ax.set_xlabel(rf"${xlabel}$ (${kdomain.xy_unit_prefix} rad$)")
         ax.set_ylabel(rf"${ylabel}$ (${kdomain.xy_unit_prefix} rad$)")
         ax.set_xlim(xmin, xmax)
@@ -1707,7 +1697,7 @@ class Wavefront:
             linewidth=2.0,
         )
 
-        xlabel, ylabel = get_kspace_labels(axis_labels=self.axis_labels, axes=(0, 2))
+        xlabel, ylabel = _kspace_labels[0], _kspace_labels[2]
         ax.set_ylabel(
             rf"Photon Energy, $(\Delta{ylabel} = {ylabel}-{ylabel}_0)$ (${kdomain.z_unit_prefix} eV$)"
         )

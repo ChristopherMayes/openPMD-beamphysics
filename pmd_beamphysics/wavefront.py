@@ -42,8 +42,8 @@ _kspace_labels = (
     r"\omega",
 )
 PlotKey = Literal[
-    "re_mesh",
-    "im_mesh",
+    "re",
+    "im",
     "power_density",
     "phase",
 ]
@@ -1367,7 +1367,7 @@ class Wavefront:
 
         Parameters
         ----------
-        key : {"re_mesh", "im_mesh", "power_density", "phase"}
+        key : {"re", "im", "power_density", "phase"}
             The type of data to plot.
         projection : {"xy", "yz", "xz", "kxky", "kykz", "kxkz"}
             The plane to project onto.
@@ -1482,23 +1482,23 @@ class Wavefront:
 
             return img
 
-        if key == "re_mesh":
+        if key == "re":
             img = plot(np.real(mesh_data), title=r"$\Re(\text{mesh})$")
 
-        elif key == "im_mesh":
+        elif key == "im":
             img = plot(np.imag(mesh_data), title=r"$\Im(\text{mesh})$")
 
         elif key == "power_density":
             if rspace:
                 # See tech note 3.2
                 power_density = 1 / 1e4 * np.abs(mesh_data) ** 2 / (2.0 * Z0)
-                img = plot(power_density, "Power density $W/cm^2$")
+                img = plot(power_density, "Power density of mesh $W/cm^2$")
             else:
                 # See tech note 3.6 (coefficient is in 3.4)
                 power_density = (
                     np.abs(mesh_data) ** 2 / (2.0 * Z0) * self.fft_unit_coeff
                 )
-                img = plot(power_density, "Power density $J/eV/rad^2$")
+                img = plot(power_density, "Power density of mesh $J/eV/rad^2$")
 
         elif key == "phase":
             phase = np.angle(mesh_data)
@@ -1510,7 +1510,7 @@ class Wavefront:
                     extent=extent,
                 )
             else:
-                img = plot(phase, title="Phase")
+                img = plot(phase, title=r"$Phase(\text{mesh})$")
 
         else:
             valid_keys = typing.get_args(PlotKey)

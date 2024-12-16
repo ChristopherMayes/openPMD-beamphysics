@@ -4,7 +4,7 @@ import dataclasses
 import datetime
 import getpass
 import platform
-from typing import Dict, Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
 
 from typing_extensions import Literal
 
@@ -18,7 +18,7 @@ PolarizationDirection = Literal["x", "y", "z"]
 def get_pmd_metadata_dict(
     obj: Dataclass,
     attrs: Sequence[str],
-) -> Dict[str, Union[str, float, None]]:
+) -> dict[str, str | float | None]:
     assert dataclasses.is_dataclass(obj)
     attr_to_field = {
         fld.name: fld.metadata.get("pmd_key", fld.name)
@@ -114,25 +114,25 @@ class MeshMetadata:
     """Per-Mesh metadata for OpenPMD spec files."""
 
     geometry: Geometry = "cartesian"
-    geometry_parameters: Optional[str] = dataclasses.field(
+    geometry_parameters: str | None = dataclasses.field(
         default=None, metadata=_key("geometryParameters")
     )
-    axis_labels: Tuple[str, ...] = dataclasses.field(
+    axis_labels: tuple[str, ...] = dataclasses.field(
         default=("x", "y", "z"), metadata=_key("axisLabels")
     )
-    grid_spacing: Tuple[float, ...] = dataclasses.field(
+    grid_spacing: tuple[float, ...] = dataclasses.field(
         default=(), metadata=_key("gridSpacing")
     )
-    grid_global_offset: Tuple[float, ...] = dataclasses.field(
+    grid_global_offset: tuple[float, ...] = dataclasses.field(
         default=(), metadata=_key("gridGlobalOffset")
     )
-    grid_unit_dimension: Tuple[float, ...] = dataclasses.field(
+    grid_unit_dimension: tuple[float, ...] = dataclasses.field(
         default=(), metadata=_key("gridUnitDimension")
     )
-    position: Tuple[float, ...] = dataclasses.field(
+    position: tuple[float, ...] = dataclasses.field(
         default_factory=tuple,
     )
-    particle_list: Tuple[str, ...] = dataclasses.field(
+    particle_list: tuple[str, ...] = dataclasses.field(
         default_factory=tuple, metadata=_key("particleList")
     )
 
@@ -164,7 +164,7 @@ class MeshMetadata:
 class WavefrontMetadata:
     """Per-Wavefront metadata for OpenPMD spec files."""
 
-    index: Optional[int] = None
+    index: int | None = None
     units: pmd_unit = dataclasses.field(default_factory=lambda: known_unit["V/m"])
 
     base: BaseMetadata = dataclasses.field(default_factory=BaseMetadata)
@@ -173,29 +173,29 @@ class WavefrontMetadata:
 
     polarization: PolarizationDirection = dataclasses.field(default="x")
     beamline: str = dataclasses.field(default="")
-    radius_of_curvature_x: Optional[float] = dataclasses.field(
+    radius_of_curvature_x: float | None = dataclasses.field(
         default=None,
         metadata=_key("radiusOfCurvatureX"),
     )
-    radius_of_curvature_y: Optional[float] = dataclasses.field(
+    radius_of_curvature_y: float | None = dataclasses.field(
         default=None,
         metadata=_key("radiusOfCurvatureY"),
     )
-    delta_radius_of_curvature_x: Optional[float] = dataclasses.field(
+    delta_radius_of_curvature_x: float | None = dataclasses.field(
         default=None,
         metadata=_key("deltaRadiusOfCurvatureX"),
     )
-    delta_radius_of_curvature_y: Optional[float] = dataclasses.field(
+    delta_radius_of_curvature_y: float | None = dataclasses.field(
         default=None,
         metadata=_key("deltaRadiusOfCurvatureY"),
     )
     z_coordinate: float = dataclasses.field(default=0.0, metadata=_key("zCoordinate"))
-    pads: Tuple[int, ...] = dataclasses.field(
+    pads: tuple[int, ...] = dataclasses.field(
         default_factory=tuple, metadata=_key("pads")
     )
 
     @property
-    def attrs(self) -> Dict[str, Union[str, float, None]]:
+    def attrs(self) -> dict[str, str | float | None]:
         """electricField attributes."""
         return get_pmd_metadata_dict(
             self,

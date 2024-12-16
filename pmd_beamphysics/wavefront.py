@@ -1881,8 +1881,10 @@ class Wavefront:
         from genesis.version4 import FieldFile
         from genesis.version4.field import FieldFileParams
 
-        rmesh = self.rmesh
-        nx, ny, nz = rmesh.shape
+        nx, ny, nz = self.rmesh.shape
+
+        if nx != ny:
+            raise ValueError(f"Genesis 4 expects nx == ny, however {nx=} and {ny=}")
 
         gridsize, _, slicespacing = self.grid_spacing
 

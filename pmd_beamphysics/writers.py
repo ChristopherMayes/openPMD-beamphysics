@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional, Union
 
 import h5py
 import numpy as np
@@ -10,7 +10,7 @@ from .units import pg_units, pmd_unit
 savefig_dpi = 450
 
 
-def write_attrs(h5: Union[h5py.Group, h5py.Dataset], dct: Dict[str, Any]) -> None:
+def write_attrs(h5: Union[h5py.Group, h5py.Dataset], dct: dict[str, Any]) -> None:
     """
     Write attributes to the given `h5py.Group` or `h5py.Dataset`.
 
@@ -155,7 +155,7 @@ def write_component_data(
     name: str,
     data,
     unit: Optional[pmd_unit] = None,
-    attrs: Optional[Dict[str, Any]] = None,
+    attrs: Optional[dict[str, Any]] = None,
 ):
     """
     Writes data to a dataset h5[name].

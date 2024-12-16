@@ -881,6 +881,17 @@ class Wavefront:
             )
         )
 
+    def __repr__(self) -> str:
+        def describe_arr(arr: np.ndarray | None):
+            if arr is None:
+                return "<to be calculated>"
+            return f"<np.ndarray of shape {arr.shape} (nbytes={arr.nbytes})>"
+
+        rmesh = describe_arr(self._rmesh)
+        kmesh = describe_arr(self._kmesh)
+        wavelength = self.wavelength
+        return f"<{type(self).__name__} {wavelength=} rmesh={rmesh} grid={self.grid} kmesh={kmesh}>"
+
     @classmethod
     def gaussian_pulse(
         cls,
@@ -1303,7 +1314,7 @@ class Wavefront:
 
     def wigner_distribution(self):
         xgrid, ygrid, zgrid = self._grid
-        xpad, ypad, zpad = self.pad
+        _xpad, _ypad, zpad = self.pad
 
         sig_z_corr = np.zeros((zgrid + 2 * zpad, zgrid), dtype=complex)
 
@@ -1836,7 +1847,7 @@ class Wavefront:
     def from_genesis4(
         cls,
         h5: h5py.File | pathlib.Path | str,
-        pad: int | tuple[int, int, int] = 100,
+        pad: int | tuple[int, int, int] = 0,
     ) -> Wavefront:
         """
         Load a Genesis4-format field file as a `Wavefront`.
@@ -1923,7 +1934,7 @@ class Wavefront:
         """
 
         field_file = self.to_genesis4_fieldfile()
-        field_file.write_genesis4(field_file)
+        field_file.write_genesis4(h5)
 
     @classmethod
     def _from_h5_file(cls, h5: h5py.File) -> Wavefront:

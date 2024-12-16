@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import logging
 import pathlib
-from typing import Any, NamedTuple, Union
+from typing import Any, NamedTuple, Union, TYPE_CHECKING
 from collections.abc import Sequence
 
 import h5py
@@ -18,6 +18,9 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from . import writers
 from .metadata import PolarizationDirection, WavefrontMetadata
 from .units import known_unit, nice_array
+
+if TYPE_CHECKING:
+    from genesis.version4 import FieldFile as Genesis4FieldFile
 
 logger = logging.getLogger(__name__)
 
@@ -1857,16 +1860,6 @@ class Wavefront:
         # https://github.com/slaclab/lume-genesis/blob/master/docs/notes/genesis_fields.pdf
         genesis_to_v_over_m = np.sqrt(2.0 * Z0) / field.param.gridsize
 
-        # TODO: to test:
-        #   1. write gaussian field
-        #   2. have genesis propagate it
-        #   3. read the output from genesis, roughly compare `imported_wf.drift("z", ...)`
-        #
-        # Split:
-        #   1. Run half genesis sim - get output
-        #   2. Run full genesis sim - get output
-        #   3. Drift (1) and compare with (2)
-
         # field.param.gridsize = 2 * field.dgrid / (ngrid - 1)
         wf = cls(
             rmesh=field.dfl * genesis_to_v_over_m,
@@ -1883,6 +1876,52 @@ class Wavefront:
         )
         wf.metadata.mesh.grid_global_offset = (0.0, 0.0, field.param.refposition)
         return wf
+
+    def to_genesis4_fieldfile(self) -> Genesis4FieldFile:
+        from genesis.version4 import FieldFile
+        from genesis.version4.field import FieldFileParams
+
+        rmesh = self.rmesh
+        nx, ny, nz = rmesh.shape
+
+        gridsize, _, slicespacing = self.grid_spacing
+
+        global_offset = self.metadata.mesh.grid_global_offset
+        if len(global_offset) == 3:
+            refposition = global_offset[2]
+        else:
+            refposition = 0.0
+
+        return FieldFile(
+            dfl=self.rmesh,
+            param=FieldFileParams(
+                #  number of gridpoints in one transverse dimension equal to nx and ny above
+                gridpoints=nx,
+                # gridspacing (meter)
+                gridsize=gridsize,
+                # starting position (meter)
+                refposition=refposition,
+                # radiation wavelength (meter)
+                wavelength=self.wavelength,
+                # number of slices
+                slicecount=nz,
+                # slice spacing (meter)
+                slicespacing=slicespacing,
+            ),
+        )
+
+    def write_genesis4(self, h5: h5py.File | pathlib.Path | str) -> None:
+        """
+        Save a Genesis4-format field file.
+
+        Parameters
+        ----------
+        h5 : h5py.File, pathlib.Path, or str
+            The opened h5py File or a path to it on disk.
+        """
+
+        field_file = self.to_genesis4_fieldfile()
+        field_file.write_genesis4(field_file)
 
     @classmethod
     def _from_h5_file(cls, h5: h5py.File) -> Wavefront:

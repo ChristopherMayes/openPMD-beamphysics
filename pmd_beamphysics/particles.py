@@ -788,7 +788,7 @@ class ParticleGroup:
             return self["z"] / (c_light)
 
         if key.startswith("cov_"):
-            subkeys = key.removeprefix("cov").split("__")
+            subkeys = key.removeprefix("cov_").split("__")
             assert (
                 len(subkeys) == 2
             ), f"Too many properties in covariance request: {key}"

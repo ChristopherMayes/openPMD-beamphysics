@@ -1,5 +1,6 @@
 import copy
 import pathlib
+import typing
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,6 +9,7 @@ import pytest
 from pmd_beamphysics import Wavefront
 from pmd_beamphysics.wavefront import (
     Plane,
+    PlotKey,
     fix_padding,
     get_padded_shape,
     get_num_fft_workers,
@@ -36,9 +38,14 @@ def wavefront() -> Wavefront:
 
 
 @pytest.fixture(
-    params=["xy"],
+    params=["xy", "yz", "xz", "kxky", "kykz", "kxkz"],
 )
 def projection_plane(request: pytest.FixtureRequest) -> str:
+    return request.param
+
+
+@pytest.fixture(params=typing.get_args(PlotKey))
+def plot_key(request: pytest.FixtureRequest) -> str:
     return request.param
 
 
@@ -140,16 +147,11 @@ def test_deepcopy(wavefront: Wavefront) -> None:
     assert copied.kmesh is not wavefront.kmesh
 
 
-def test_plot_projection_rspace(wavefront: Wavefront, projection_plane: Plane) -> None:
-    wavefront.plot(projection_plane, rspace=True)
-    plt.suptitle(f"rspace - {projection_plane}")
-
-
-@pytest.mark.xfail(reason="vstack shape")
-def test_plot_projection_kspace(wavefront: Wavefront, projection_plane: Plane) -> None:
-    # TODO check/fix
-    wavefront.plot(projection_plane, rspace=False)
-    plt.suptitle(f"kspace - {projection_plane}")
+def test_plot_projection_rspace(
+    wavefront: Wavefront, projection_plane: Plane, plot_key: PlotKey
+) -> None:
+    wavefront.plot(plot_key, projection=projection_plane)
+    plt.suptitle(f"- {projection_plane}")
 
 
 def test_write_and_validate(

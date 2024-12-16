@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 _fft_workers = -1
 Ranges = Sequence[tuple[float, float]]
 AnyPath = Union[str, pathlib.Path]
-Plane = Union[str, tuple[int, int]]
 Z0 = np.pi * 119.9169832  # V^2/W exactly
 HBAR_EV_M = scipy.constants.hbar / scipy.constants.e * scipy.constants.c  # eV-m
 _rspace_labels = (
@@ -47,6 +46,14 @@ PlotKey = Literal[
     "im",
     "power_density",
     "phase",
+]
+Plane = Literal[
+    "xy",
+    "yz",
+    "xz",
+    "kxky",
+    "kykz",
+    "kxkz",
 ]
 projection_key_to_indices = {
     "xy": ("rspace", 0, 1),
@@ -1225,8 +1232,8 @@ class Wavefront:
 
         Parameters
         ----------
-        plane : str or (int, int)
-            Plane identifier (e.g., "xy") or dimension indices (e.g., ``(1, 2)``)
+        plane : str
+            Plane identifier (e.g., "xy").
         focus : (float, float)
             Focal length of the lens in each dimension [m].
 
@@ -1234,7 +1241,7 @@ class Wavefront:
         -------
         Wavefront
         """
-        if plane not in ("xy", (1, 2)):
+        if plane != "xy":
             raise NotImplementedError(f"Unsupported plane: {plane}")
 
         new_rmesh = (
@@ -1360,11 +1367,10 @@ class Wavefront:
 
         Parameters
         ----------
-        plane : str, (int, int), or sequence of str
-            Plane to plot. With axis_labels of "xyz", the following would be equivalent:
-            * ``"xy"``
-            * (1, 2)
-            * ("x", "y")
+        key : {"re", "im", "power_density", "phase"}
+            The type of data to plot.
+        projection : {"xy", "yz", "xz", "kxky", "kykz", "kxkz"}
+            The plane to project onto.
         rspace : bool, default=True
             Plot the real/cartesian space data.
         show_real : bool
@@ -1434,7 +1440,8 @@ class Wavefront:
             domain = [self.kspace_domain[idx] for idx in axis_indices]
             units = ["rad", "rad"]
 
-        (domain_x, domain_y), _scale, unit_prefix = nice_array(np.vstack(domain))
+        domain_x, _scale, x_unit_prefix = nice_array(domain[0])
+        domain_y, _scale, y_unit_prefix = nice_array(domain[1])
         extent = (domain_x[0], domain_x[-1], domain_y[-1], domain_y[0])
 
         if transpose:
@@ -1457,8 +1464,8 @@ class Wavefront:
             # dat = np.sum(dat, axis=sum_axis) * dz / (2.0 * z_max)
             img = ax.imshow(np.mean(dat, axis=sum_axis), cmap=cmap, extent=extent)
 
-            ax.set_xlabel(f"${labels[0]}$ ({unit_prefix}{units[0]})")
-            ax.set_ylabel(f"${labels[1]}$ ({unit_prefix}{units[1]})")
+            ax.set_xlabel(f"${labels[0]}$ ({x_unit_prefix}{units[0]})")
+            ax.set_ylabel(f"${labels[1]}$ ({y_unit_prefix}{units[1]})")
             if colorbar:
                 divider = make_axes_locatable(ax)
                 fig = ax.get_figure()
@@ -1798,7 +1805,6 @@ class Wavefront:
         wavelength: float,
         grid_spacing: Sequence[float] | None = None,
         polarization: PolarizationDirection | None = None,
-        axis_labels: Sequence[str] | None = None,
         metadata: WavefrontMetadata | dict | None = None,
     ) -> Wavefront:
         if padding is None:
@@ -1822,7 +1828,7 @@ class Wavefront:
         self._set_metadata(
             metadata,
             polarization=polarization,
-            axis_labels=axis_labels,
+            axis_labels=("x", "y", "z"),
             grid_spacing=grid_spacing,
         )
         self._check_metadata()
@@ -1867,7 +1873,6 @@ class Wavefront:
             ),
             pad=pad,
             polarization="x",
-            axis_labels="xyz",
         )
         wf.metadata.mesh.grid_global_offset = (0.0, 0.0, field.param.refposition)
         return wf
@@ -1959,17 +1964,17 @@ class Wavefront:
         # {iteration group}/{wavefront group}/{efield_group}
         iteration_group = require_group(h5, iteration_path)
         wavefront_group = require_group(iteration_group, wavefront_field_path)
-        efield = require_group(wavefront_group, "electricField")
+        efield_group = require_group(wavefront_group, "electricField")
 
-        photon_energy = efield.attrs["photonEnergy"]
+        photon_energy = efield_group.attrs["photonEnergy"]
         assert isinstance(photon_energy, float)
-        # efield["photonEnergyUnitSI"]
-        # efield["photonEnergyUnitDimension"]
-        # efield["temporalDomain"]
-        # efield["spatialDomain"]
+        # efield_group["photonEnergyUnitSI"]
+        # efield_group["photonEnergyUnitDimension"]
+        # efield_group["temporalDomain"]
+        # efield_group["spatialDomain"]
         for polarization in "xyz":
             try:
-                rmesh_group = require_group(efield, polarization)
+                rmesh_group = efield_group[polarization]
             except KeyError:
                 pass
             else:
@@ -1977,7 +1982,7 @@ class Wavefront:
         else:
             raise ValueError("No supported polarization direction group found")
 
-        metadata = WavefrontMetadata.from_hdf5(h5, efield, rmesh_group)
+        metadata = WavefrontMetadata.from_hdf5(h5, efield_group, rmesh_group)
 
         rmesh = readers.component_data(rmesh_group)
         return cls(

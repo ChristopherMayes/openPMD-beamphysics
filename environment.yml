@@ -10,6 +10,7 @@ dependencies:
   - h5py
   - python-dateutil
   # Developer
+  - lume-genesis
   - pytest
   - pytest-cov
   - jupyterlab>=3

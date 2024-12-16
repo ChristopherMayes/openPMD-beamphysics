@@ -931,14 +931,22 @@ class Wavefront:
             longitudinal_axis="z",
         )
 
-    def with_rmesh(self, rmesh: np.ndarray) -> Wavefront:
+    def with_rmesh(
+        self,
+        rmesh: np.ndarray,
+        pad: Sequence[int] | int | None = None,
+        fix_pad: bool = True,
+    ) -> Wavefront:
         """Create a new Wavefront instance, replacing the `rmesh`."""
+        if pad is None:
+            pad = self.pad
         return Wavefront(
             rmesh=rmesh,
             wavelength=self.wavelength,
             metadata=self.metadata,
             longitudinal_axis=self._longitudinal_axis,
             pad=self.pad,
+            fix_pad=fix_pad,
         )
 
     def with_padding(

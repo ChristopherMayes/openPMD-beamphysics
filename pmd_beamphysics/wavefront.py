@@ -15,7 +15,7 @@ import scipy.constants
 import scipy.fft
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from . import writers
+from . import readers, writers
 from .metadata import PolarizationDirection, WavefrontMetadata
 from .units import known_unit, nice_array
 
@@ -731,6 +731,12 @@ def calculate_phasors(
     )
 
 
+def wavelength_to_photon_energy(wavelength: float) -> float:
+    h = scipy.constants.value("Planck constant in eV/Hz") / (2 * np.pi)
+    freq = scipy.constants.speed_of_light / wavelength
+    return h * freq
+
+
 class Wavefront:
     """
     Particle field wavefront.
@@ -1202,9 +1208,7 @@ class Wavefront:
     @property
     def photon_energy(self) -> float:
         """Photon energy [eV]."""
-        h = scipy.constants.value("Planck constant in eV/Hz") / (2 * np.pi)
-        freq = scipy.constants.speed_of_light / self.wavelength
-        return h * freq
+        return wavelength_to_photon_energy(self.wavelength)
 
     @property
     def grid_spacing(self) -> tuple[float, ...]:
@@ -1937,8 +1941,51 @@ class Wavefront:
         field_file.write_genesis4(h5)
 
     @classmethod
-    def _from_h5_file(cls, h5: h5py.File) -> Wavefront:
-        return cls()
+    def _from_h5_file(cls, h5: h5py.File, identifier: int) -> Wavefront:
+        base_path = h5.attrs["basePath"].decode()
+        # data_type = h5.attrs["dataType"]
+        openpmd_extension = h5.attrs["openPMDextension"].decode()
+        if "Wavefront" not in openpmd_extension:
+            raise ValueError(
+                f"Wavefront extension not enabled in file."
+                f"Extensions configured: {openpmd_extension}"
+            )
+
+        iteration_path = base_path.replace("%T", str(identifier))
+        wavefront_field_path = h5.attrs["wavefrontFieldPath"].decode()
+
+        group = h5[iteration_path][wavefront_field_path]
+        if not isinstance(group, h5py.Group):
+            raise ValueError(
+                f"Key {group} expected to be a group, but is a {type(group)}"
+            )
+
+        efield = group["electricField"]
+
+        photon_energy = efield.attrs["photonEnergy"]
+        assert isinstance(photon_energy, float)
+        # efield["photonEnergyUnitSI"]
+        # efield["photonEnergyUnitDimension"]
+        # efield["temporalDomain"]
+        # efield["spatialDomain"]
+        for polarization in "xyz":
+            try:
+                rmesh_group = efield[polarization]
+            except KeyError:
+                pass
+            else:
+                break
+        else:
+            raise ValueError("No supported polarization direction group found")
+
+        metadata = WavefrontMetadata.from_hdf5(h5, efield, rmesh_group)
+
+        rmesh = readers.component_data(rmesh_group)
+        return cls(
+            rmesh=rmesh,
+            wavelength=wavelength_to_photon_energy(photon_energy),
+            metadata=metadata,
+        )
 
     @classmethod
     def from_file(
@@ -1948,9 +1995,9 @@ class Wavefront:
     ) -> Wavefront:
         """Load a Wavefront from a file in the OpenPMD format."""
         if isinstance(h5, h5py.File):
-            return cls._from_h5_file(h5)
+            return cls._from_h5_file(h5, identifier=identifier)
         with h5py.File(h5) as h5p:
-            return cls._from_h5_file(h5p)
+            return cls._from_h5_file(h5p, identifier=identifier)
 
     # names = get_wavefront_names_from_file("something.h5")
     # for name in names:
@@ -1963,10 +2010,10 @@ class Wavefront:
         md = self.metadata
         base_path_template = "/data/%T/"
         if md.index is not None:
-            wavefront_base_path_template = "/wavefront/%T/"
+            wavefront_base_path_template = "wavefront/%T/"
         else:
             # For us, at least, second %T doesn't make much sense:
-            wavefront_base_path_template = "/wavefront"
+            wavefront_base_path_template = "wavefront"
         wavefront_base_path = wavefront_base_path_template.replace("%T", str(md.index))
         base_path = base_path_template.replace("%T", str(md.iteration.iteration))
 
@@ -1996,7 +2043,7 @@ class Wavefront:
         base_group = h5.create_group(base_path)
         writers.write_attrs(base_group, md.iteration.attrs)
 
-        electric_field_path = wavefront_path + "electricField/"
+        electric_field_path = wavefront_path + "/electricField/"
         efield_group = h5.create_group(electric_field_path)
         self.write_group(efield_group)
 

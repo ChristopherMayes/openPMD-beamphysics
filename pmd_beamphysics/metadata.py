@@ -5,8 +5,12 @@ import datetime
 import getpass
 import platform
 from collections.abc import Sequence
+from typing import TypeVar
 
 from typing_extensions import Literal
+
+import h5py
+import numpy as np
 
 from . import tools
 from .types import Dataclass
@@ -15,15 +19,27 @@ from .units import pmd_unit, known_unit
 PolarizationDirection = Literal["x", "y", "z"]
 
 
+def python_attrs_to_pmd_keys(obj: Dataclass | type[Dataclass]) -> dict[str, str]:
+    assert dataclasses.is_dataclass(obj)
+    return {
+        fld.name: fld.metadata.get("pmd_key", fld.name)
+        for fld in dataclasses.fields(obj)
+    }
+
+
+def hdf_to_python_attrs(obj: Dataclass | type[Dataclass]) -> dict[str, str]:
+    assert dataclasses.is_dataclass(obj)
+    return {
+        fld.metadata.get("pmd_key", fld.name): fld.name
+        for fld in dataclasses.fields(obj)
+    }
+
+
 def get_pmd_metadata_dict(
     obj: Dataclass,
     attrs: Sequence[str],
 ) -> dict[str, str | float | None]:
-    assert dataclasses.is_dataclass(obj)
-    attr_to_field = {
-        fld.name: fld.metadata.get("pmd_key", fld.name)
-        for fld in dataclasses.fields(obj)
-    }
+    attr_to_field = python_attrs_to_pmd_keys(obj)
     return {
         attr_to_field[attr]: getattr(obj, attr)
         for attr in attrs
@@ -33,6 +49,27 @@ def get_pmd_metadata_dict(
 
 def _key(pmd_key: str):
     return {"pmd_key": pmd_key}
+
+
+_T = TypeVar("_T", bound=Dataclass)
+
+
+def _dataclass_from_hdf5(cls: type[_T], h5: h5py.Group) -> _T:
+    hdf_key_to_attr = hdf_to_python_attrs(cls)
+
+    def maybe_decode(value):
+        if isinstance(value, bytes):
+            return value.decode()
+        if isinstance(value, np.ndarray):
+            return tuple(value.tolist())
+        return value
+
+    values = {
+        attr: maybe_decode(h5.attrs[hdf_key])
+        for hdf_key, attr in hdf_key_to_attr.items()
+        if hdf_key in h5.attrs
+    }
+    return cls(**values)
 
 
 @dataclasses.dataclass
@@ -170,7 +207,6 @@ class WavefrontMetadata:
     base: BaseMetadata = dataclasses.field(default_factory=BaseMetadata)
     iteration: IterationMetadata = dataclasses.field(default_factory=IterationMetadata)
     mesh: MeshMetadata = dataclasses.field(default_factory=MeshMetadata)
-
     polarization: PolarizationDirection = dataclasses.field(default="x")
     beamline: str = dataclasses.field(default="")
     radius_of_curvature_x: float | None = dataclasses.field(
@@ -190,9 +226,9 @@ class WavefrontMetadata:
         metadata=_key("deltaRadiusOfCurvatureY"),
     )
     z_coordinate: float = dataclasses.field(default=0.0, metadata=_key("zCoordinate"))
-    pads: tuple[int, ...] = dataclasses.field(
-        default_factory=tuple, metadata=_key("pads")
-    )
+    # pads: tuple[int, ...] = dataclasses.field(
+    #     default_factory=tuple, metadata=_key("pads")
+    # )
 
     @property
     def attrs(self) -> dict[str, str | float | None]:
@@ -205,7 +241,7 @@ class WavefrontMetadata:
                 "radius_of_curvature_y",
                 "delta_radius_of_curvature_x",
                 "delta_radius_of_curvature_y",
-                "pads",
+                # "pads",
             ],
         )
 
@@ -235,3 +271,16 @@ class WavefrontMetadata:
             iteration=IterationMetadata(**iteration_md),
             **md,
         )
+
+    @classmethod
+    def from_hdf5(cls, base_h5: h5py.Group, field_h5: h5py.Group, rmesh_h5: h5py.Group):
+        md = _dataclass_from_hdf5(cls, field_h5)
+        md.base = _dataclass_from_hdf5(BaseMetadata, base_h5.require_group("/"))
+        md.iteration = _dataclass_from_hdf5(IterationMetadata, base_h5)
+        md.mesh = _dataclass_from_hdf5(MeshMetadata, rmesh_h5)
+        if isinstance(md.base.date, str):
+            try:
+                md.base.date = datetime.datetime.fromisoformat(md.base.date)
+            except Exception:
+                md.base.date = tools.current_date_with_tzinfo()
+        return md

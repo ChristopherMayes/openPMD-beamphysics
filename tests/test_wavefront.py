@@ -200,3 +200,33 @@ def test_write_and_read_genesis4(
     # assert np.allclose(wavefront.rmesh.imag, loaded.rmesh.imag)
     # loaded._rmesh = wavefront.rmesh
     # assert wavefront == loaded
+
+
+def test_write_and_read_openpmd(
+    wavefront: Wavefront,
+    tmp_path: pathlib.Path,
+    request: pytest.FixtureRequest,
+):
+    fn = tmp_path / f"{request.node.name}.h5"
+    wavefront.metadata.mesh.grid_global_offset = (0.0, 0.0, 0.0)
+
+    wavefront.write(fn)
+    loaded = wavefront.from_file(fn).with_padding(wavefront.pad)
+
+    # check these individually before testing full equality, so we don't get just a final failure
+    assert wavefront.grid == loaded.grid
+    assert np.all(wavefront._rmesh == loaded._rmesh)
+    assert np.all(wavefront._kmesh == loaded._kmesh)
+    assert wavefront.wavelength == loaded.wavelength
+    # TODO  we don't store padding
+    assert wavefront.pad == loaded.pad
+
+    # TODO: we don't store microseconds
+    loaded.metadata.base.date = loaded.metadata.base.date.replace(
+        microsecond=wavefront.metadata.base.date.microsecond
+    )
+    assert wavefront.metadata.base == loaded.metadata.base
+    assert wavefront.metadata.iteration == loaded.metadata.iteration
+    assert wavefront.metadata.mesh == loaded.metadata.mesh
+    assert wavefront.metadata == loaded.metadata
+    assert wavefront == loaded

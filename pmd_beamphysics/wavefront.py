@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import dataclasses
 import logging
 import pathlib
 from typing import Any, List, NamedTuple, Optional, Sequence, Tuple, Union
@@ -91,7 +90,7 @@ def get_kspace_labels(
     return tuple(get_kspace_label(axis_labels, axis) for axis in axes)
 
 
-def _pad_array(wavefront: np.ndarray, shape):
+def pad_array(wavefront: np.ndarray, pads: Union[Sequence[int], int]):
     """
     Pad an array with complex zero elements.
 
@@ -99,18 +98,22 @@ def _pad_array(wavefront: np.ndarray, shape):
     ----------
     wavefront : np.ndarray
         The array to pad
-    shape : array_like
-        Number of values padded to the edges of each axis
+    pads : array_like
+        Number of values padded to the edges of each axis.
 
     Returns
     -------
     np.ndarray
-
     """
+
+    if isinstance(pads, int):
+        pad_shape = ((pads, pads),)
+    else:
+        pad_shape = tuple((pad, pad) for pad in pads)
 
     return np.pad(
         wavefront,
-        shape,
+        pad_shape,
         mode="constant",
         constant_values=(0.0 + 1j * 0.0, 0.0 + 1j * 0.0),
     )
@@ -351,6 +354,10 @@ def fix_padding(
     Fix gridding and padding values for symmetry and FFT efficiency.
 
     This works on all dimensions of gridding and padding.
+
+    pad = (scipy_fft_fast_length - grid) // 2
+
+    Such that the total array size will be: `grid + 2 * pad`.
 
     Parameters
     ----------
@@ -613,68 +620,22 @@ def transverse_divergence_padding_factor(
     return 2.0 * (theta_max * drift_distance) / beam_size
 
 
-@dataclasses.dataclass(frozen=True)
-class WavefrontPadding:
-    """
-    Wavefront padding settings.
+PadShape = Tuple[Tuple[int, int], ...]
 
-    Parameters
-    ----------
-    grid : tuple of int
-        Number of grid points.
-    pad : tuple of int
-        Number of pad points in time on each side.
-    """
 
-    grid: Tuple[int, ...]
-    pad: Tuple[int, ...]
+def get_padded_shape(
+    rmesh_shape: Sequence[int], padding: Sequence[int]
+) -> Tuple[int, ...]:
+    """Get the padded shape given a 3D field rspace array."""
+    rmesh_shape = tuple(rmesh_shape)
+    padding = tuple(padding)
+    if len(rmesh_shape) != len(padding):
+        raise ValueError(
+            f"Padding shape must be equal to the array dimensions. "
+            f"Got {len(padding)} but expected {len(rmesh_shape)}"
+        )
 
-    @property
-    def ifft_slices(self):
-        """Slices to extract the cartesian space data from its padded form (i.e., post-ifft)."""
-        return tuple(slice(pad, -pad) for pad in self.pad)
-
-    @property
-    def pad_shape(self) -> Tuple[Tuple[int, int], ...]:
-        """Padding in each dimension."""
-        return tuple((pad, pad) for pad in self.pad)
-
-    @classmethod
-    def from_array(
-        cls,
-        data: np.ndarray,
-        pad: Sequence[int],
-        fix: bool = True,
-    ) -> WavefrontPadding:
-        if data.ndim != len(pad):
-            raise ValueError("Dimensions of the grid and the padding must be identical")
-
-        padding = WavefrontPadding(data.shape, tuple(pad))
-        return padding.fix() if fix else padding
-
-    def fix(self) -> WavefrontPadding:
-        """
-        Grid and pad values will be automatically adjusted as follows:
-
-        * grid will be made odd for the purposes of symmetry.
-        * pad = (scipy_fft_fast_length - grid) // 2
-
-        Such that the total array size will be: `grid + 2 * pad`.
-        """
-        return WavefrontPadding(self.grid, fix_padding(self.grid, self.pad))
-
-    def get_padded_shape(self, rmesh: np.ndarray) -> Tuple[int, ...]:
-        """Get the padded shape given a 3D field rspace array."""
-        nd = len(self.grid)
-        if rmesh.ndim != nd:
-            raise ValueError(f"`rmesh` is not an {nd}D array")
-
-        # if not all(is_odd(dim) for dim in rmesh.shape):
-        #     raise ValueError(
-        #         f"`rmesh` dimensions are not all odd numbers: {rmesh.shape}"
-        #     )
-
-        return tuple(dim + 2 * pad for dim, pad in zip(rmesh.shape, self.pad))
+    return tuple(dim + 2 * pad for dim, pad in zip(rmesh_shape, padding))
 
 
 def get_range_for_grid_spacing(grid_spacing: float, dim: int) -> Tuple[float, float]:
@@ -732,6 +693,40 @@ def _get_projection(img, axis: int) -> np.ndarray:
     return sum_ / np.max(sum_)
 
 
+def calculate_phasors(
+    wavelength: float,
+    rmesh_grid_spacing: tuple[float, ...],
+    rmesh_grid: tuple[int, ...],
+    pad: tuple[int, ...],
+) -> Tuple[np.ndarray, ...]:
+    """Calculate phasors for each dimension of the cartesian domain."""
+    ranges = get_ranges_for_grid_spacing(
+        grid_spacing=rmesh_grid_spacing,
+        dims=rmesh_grid,
+    )
+    coeffs = conversion_coeffs(
+        wavelength=wavelength,
+        dim=len(rmesh_grid),
+    )
+    shifts = get_shifts(
+        dims=rmesh_grid,
+        ranges=ranges,
+        pads=pad,
+        deltas=rmesh_grid_spacing,
+    )
+    meshes_wkxky = nd_kspace_mesh(
+        coeffs=coeffs,
+        sizes=rmesh_grid,
+        pads=pad,
+        steps=rmesh_grid_spacing,
+    )
+
+    return tuple(
+        np.exp(1j * 2.0 * np.pi * mesh * shift / coeff)
+        for coeff, mesh, shift in zip(coeffs, meshes_wkxky, shifts)
+    )
+
+
 class Wavefront:
     """
     Particle field wavefront.
@@ -750,25 +745,24 @@ class Wavefront:
         Circular or generalized polarization is not currently supported.
     metadata : Metadata, optional
         OpenPMD-specific metadata.
-    pad : int or tuple of int, optional
-    pad_theta_max : float, default=5e-5
-    pad_drift_distance : float, default=1.0
-    pad_beam_size : float, default=1e-4
 
     See Also
     --------
     [OpenPMD standard](https://github.com/openPMD/openPMD-standard/blob/upcoming-2.0.0/EXT_Wavefront.md)
     """
 
+    # Saved into OpenPMD-compatible file:
     _rmesh: Optional[np.ndarray]
+    wavelength: float
+    _metadata: WavefrontMetadata
+
+    # Internal state for Wavefront:
     _kmesh: Optional[np.ndarray]
-    _phasors: Optional[Tuple[np.ndarray, ...]]
+    _grid: tuple[int, ...]  # rmesh shape
+    _padding: tuple[int, ...]
     # TODO:
     # time snapshot in Z
     # attributes on mesh show where it is in 3D space
-    _wavelength: float
-    _pad: WavefrontPadding
-    _metadata: WavefrontMetadata
 
     def __init__(
         self,
@@ -776,37 +770,29 @@ class Wavefront:
         *,
         wavelength: float,
         grid_spacing: Optional[Sequence[float]] = None,
-        pad: Optional[Union[int, Sequence[int]]] = None,
         polarization: Optional[PolarizationDirection] = None,
         axis_labels: Optional[Sequence[str]] = None,
         metadata: Optional[Union[WavefrontMetadata, dict]] = None,
-        pad_theta_max: float = 5e-5,
-        pad_drift_distance: float = 1.0,
-        pad_beam_size: float = 1e-4,
         longitudinal_axis: Optional[str] = None,
+        pad: Optional[Union[Sequence[int], int]] = None,
+        fix_pad: bool = True,
     ) -> None:
-        self._phasors = None
         self._rmesh = rmesh
-        self._rmesh_shape = rmesh.shape
+        self._grid = rmesh.shape
         self._kmesh = None
-        self._wavelength = wavelength
+        self.wavelength = wavelength
+        if isinstance(pad, int):
+            self._padding = (pad,) * rmesh.ndim
+        elif pad is None:
+            self._padding = (0,) * rmesh.ndim
+        else:
+            self._padding = tuple(pad)
 
-        if pad is None:
-            pad_factor = transverse_divergence_padding_factor(
-                theta_max=pad_theta_max,
-                drift_distance=pad_drift_distance,
-                beam_size=pad_beam_size,
-            )
-            # TODO: current factor is just for transverse, we need to calculate
-            # for longitudinal as well
-            if pad_factor < 1:
-                pad = (0, 0, 0)
-            else:
-                pad = tuple((dim * pad_factor) - dim for dim in rmesh.shape)
+        if fix_pad:
+            self._padding = fix_padding(self._grid, pad=self._padding)
 
         self._set_metadata(
             metadata,
-            pad=pad,
             polarization=polarization,
             axis_labels=axis_labels,
             grid_spacing=grid_spacing,
@@ -818,35 +804,23 @@ class Wavefront:
         self,
         metadata: Any,
         grid_spacing: Optional[Sequence[float]] = None,
-        pad: Optional[Union[int, Sequence[int]]] = None,
         polarization: Optional[PolarizationDirection] = None,
         axis_labels: Optional[Sequence[str]] = None,
         # units: Optional[pmd_unit] = None,
     ) -> None:
         if metadata is None:
-            metadata = WavefrontMetadata()
-
-        if isinstance(metadata, dict):
+            md = WavefrontMetadata()
+        elif isinstance(metadata, dict):
             md = WavefrontMetadata.from_dict(metadata)
         elif isinstance(metadata, WavefrontMetadata):
-            md = metadata
+            md = copy.deepcopy(metadata)
         else:
             raise ValueError(
                 f"Unsupported type for metadata: {type(metadata).__name__}. Expected "
                 f"'WavefrontMetadata', 'dict', or None to reset the metadata"
             )
 
-        ndim = len(self._rmesh_shape)
-        if isinstance(pad, int):
-            pad = (pad,) * ndim
-        if pad is None:
-            if md.pads:
-                pad = md.pads
-            else:
-                pad = (100,) * ndim
-
-        self._pad = WavefrontPadding.from_array(self.rmesh, pad=pad, fix=True)
-        md.pads = self._pad.pad
+        # ndim = len(self._grid)
         if polarization is not None:
             md.polarization = polarization
         if axis_labels is not None:
@@ -859,25 +833,24 @@ class Wavefront:
         self._metadata = md
 
     def _check_metadata(self) -> None:
-        if len(self.metadata.mesh.grid_spacing) != len(self._rmesh_shape):
+        if len(self.metadata.mesh.grid_spacing) != len(self._grid):
             raise ValueError(
                 "'grid_spacing' must have the same number of dimensions as `rmesh`; "
                 "each should describe the cartesian range of the corresponding axis."
             )
 
-        if len(self.metadata.mesh.axis_labels) != len(self._rmesh_shape):
+        if len(self.metadata.mesh.axis_labels) != len(self._grid):
             raise ValueError(
                 "'axis_labels' must have the same number of dimensions as `rmesh`"
             )
 
     def __copy__(self) -> Wavefront:
         res = Wavefront.__new__(Wavefront)
-        res._phasors = self._phasors
-        res._rmesh_shape = self._rmesh_shape
+        res._grid = self._grid
         res._rmesh = self._rmesh
         res._kmesh = self._kmesh
-        res._wavelength = self._wavelength
-        res._pad = self._pad
+        res.wavelength = self.wavelength
+        res._padding = self._padding
         res._metadata = copy.deepcopy(self._metadata)
         # TODO there are more fields now
         res._longitudinal_axis = self._longitudinal_axis
@@ -895,11 +868,11 @@ class Wavefront:
 
         return all(
             (
-                self._rmesh_shape == other._rmesh_shape,
+                self._grid == other._grid,
                 np.all(self._rmesh == other._rmesh),
                 np.all(self._kmesh == other._kmesh),
-                self._wavelength == other._wavelength,
-                self._pad == other._pad,
+                self.wavelength == other.wavelength,
+                self.pad == other.pad,
                 self.metadata == other.metadata,
             )
         )
@@ -907,7 +880,7 @@ class Wavefront:
     @classmethod
     def gaussian_pulse(
         cls,
-        dims: Sequence[int],
+        dims: Tuple[int, int, int],
         wavelength: float,
         nphotons: float,
         zR: float,
@@ -922,8 +895,8 @@ class Wavefront:
 
         Parameters
         ----------
-        dims :
-            TODO update params
+        dims : tuple of (nx, ny, nz)
+            Shape of the generated pulse.
         wavelength : float
             Wavelength (lambda0) [m].
         nphotons : float
@@ -937,6 +910,8 @@ class Wavefront:
         -------
         Wavefront
         """
+        if len(dims) != 3:
+            raise ValueError("Only 3D wavefronts are supported currently")
         pulse = create_gaussian_pulse_3d_with_q(
             wavelength=wavelength,
             nphotons=nphotons,
@@ -955,6 +930,87 @@ class Wavefront:
             longitudinal_axis="z",
         )
 
+    def with_rmesh(self, rmesh: np.ndarray) -> Wavefront:
+        """Create a new Wavefront instance, replacing the `rmesh`."""
+        return Wavefront(
+            rmesh=rmesh,
+            wavelength=self.wavelength,
+            metadata=self.metadata,
+            longitudinal_axis=self._longitudinal_axis,
+            pad=self.pad,
+        )
+
+    def with_padding(
+        self,
+        pad: Union[int, Sequence[int]],
+        fix: bool = True,
+    ) -> Wavefront:
+        ndim = len(self._grid)
+        if isinstance(pad, int):
+            pad = (pad,) * ndim
+        else:
+            if len(pad) != ndim:
+                raise ValueError(
+                    f"Padding shape must be equal to the array dimensions. "
+                    f"Got {len(pad)} but expected {ndim}"
+                )
+
+        if fix:
+            pad = fix_padding(self._grid, pad=pad)
+
+        return Wavefront(
+            rmesh=self.rmesh,
+            wavelength=self.wavelength,
+            metadata=self.metadata,
+            longitudinal_axis=self._longitudinal_axis,
+            pad=pad,
+        )
+
+    def with_padding_divergence(
+        self,
+        theta_max: float = 5e-5,
+        drift_distance: float = 1.0,
+        beam_size: float = 1e-4,
+        fix: bool = True,
+    ) -> Wavefront:
+        pad_factor = transverse_divergence_padding_factor(
+            theta_max=theta_max,
+            drift_distance=drift_distance,
+            beam_size=beam_size,
+        )
+        # TODO: current factor is just for transverse, we need to calculate
+        # for longitudinal as well
+        if pad_factor < 1:
+            pad = (0, 0, 0)
+        else:
+            pad = tuple(int((dim * pad_factor) - dim) for dim in self._grid)
+
+        return self.with_padding(pad, fix=fix)
+
+    @property
+    def grid(self) -> Tuple[int, ...]:
+        """The rmesh shape, without padding."""
+        return self._grid
+
+    @property
+    def rmesh_shape(self) -> Tuple[int, ...]:
+        """The rmesh shape, without padding."""
+        return self._grid
+
+    @property
+    def pad(self) -> Tuple[int, ...]:
+        """
+        Per-dimension padding used in the FFT.
+
+        To change this, use `.with_padding` or `.with_padding_divergence` and
+        instantiate a new `Wavefront` instance.
+        """
+        return tuple(self._padding)
+
+    @property
+    def longitudinal_axis(self) -> str:
+        return self._longitudinal_axis
+
     @property
     def rspace_domain(self):
         """
@@ -963,7 +1019,7 @@ class Wavefront:
         For each dimension of the wavefront, this is the evenly-spaced set of values over
         its specified range.
         """
-        return cartesian_domain(ranges=self.ranges, grids=self._pad.grid)
+        return cartesian_domain(ranges=self.ranges, grids=self._grid)
 
     @property
     def kspace_domain(self):
@@ -976,12 +1032,12 @@ class Wavefront:
 
         coeffs = conversion_coeffs(
             wavelength=self.wavelength,
-            dim=len(self._rmesh_shape),
+            dim=len(self._grid),
         )
         return nd_kspace_domains(
             coeffs=coeffs,
-            sizes=self._rmesh_shape,
-            pads=self.pad.pad,
+            sizes=self._grid,
+            pads=self.pad,
             steps=self.grid_spacing,
             shifted=True,
         )
@@ -1012,41 +1068,7 @@ class Wavefront:
 
     @property
     def _k_center_indices(self) -> Tuple[int, ...]:
-        return tuple(
-            grid // 2 + pad for grid, pad in zip(self.rmesh.shape, self.pad.pad)
-        )
-
-    def _calc_phasors(self) -> Tuple[np.ndarray, ...]:
-        """Calculate phasors for each dimension of the cartesian domain."""
-        coeffs = conversion_coeffs(
-            wavelength=self._wavelength,
-            dim=len(self._rmesh_shape),
-        )
-        shifts = get_shifts(
-            dims=self._pad.grid,
-            ranges=self.ranges,
-            pads=self._pad.pad,
-            deltas=self.grid_spacing,
-        )
-        meshes_wkxky = nd_kspace_mesh(
-            coeffs=coeffs,
-            sizes=self._pad.grid,
-            pads=self._pad.pad,
-            steps=self.grid_spacing,
-        )
-
-        return tuple(
-            np.exp(1j * 2.0 * np.pi * mesh * shift / coeff)
-            for coeff, mesh, shift in zip(coeffs, meshes_wkxky, shifts)
-        )
-
-    @property
-    def phasors(self) -> Tuple[np.ndarray, ...]:
-        """Phasors for each dimension of the cartesian domain."""
-        if self._phasors is None:
-            self._phasors = self._calc_phasors()
-
-        return self._phasors
+        return tuple(grid // 2 + pad for grid, pad in zip(self.rmesh.shape, self.pad))
 
     @property
     def rmesh(self) -> np.ndarray:
@@ -1084,9 +1106,10 @@ class Wavefront:
 
         See tech note section 3.4 (Plotting field intensity angular distribution for n-th slice)
         """
+        padded_shape = get_padded_shape(self._grid, padding=self._padding)
         return float(
             np.prod(np.asarray(self.grid_spacing) ** 2)
-            * np.prod(self.pad.get_padded_shape(self.rmesh))
+            * np.prod(padded_shape)
             * self.k0**2
             / (8 * np.pi**3 * HBAR_EV_M * scipy.constants.c**2)
         )
@@ -1103,12 +1126,18 @@ class Wavefront:
         """
         assert self._rmesh is not None
         workers = get_num_fft_workers()
-        dfl_pad = _pad_array(self.rmesh, self._pad.pad_shape)
+        dfl_pad = pad_array(self._rmesh, self._padding)
 
+        phasors = calculate_phasors(
+            wavelength=self.wavelength,
+            rmesh_grid_spacing=self.grid_spacing,
+            rmesh_grid=self._grid,
+            pad=self._padding,
+        )
         return fft_phased(
             dfl_pad,
             axes=(0, 1, 2),
-            phasors=self.phasors,
+            phasors=phasors,
             workers=workers,
         )
 
@@ -1124,17 +1153,23 @@ class Wavefront:
         """
         assert self._kmesh is not None
         workers = get_num_fft_workers()
-        return ifft_phased(
+        phasors = calculate_phasors(
+            wavelength=self.wavelength,
+            rmesh_grid_spacing=self.grid_spacing,
+            rmesh_grid=self._grid,
+            pad=self._padding,
+        )
+
+        full_ifft = ifft_phased(
             self._kmesh,
             axes=(0, 1, 2),
-            phasors=self.phasors,
+            phasors=phasors,
             workers=workers,
-        )[self._pad.ifft_slices]
+        )
 
-    @property
-    def wavelength(self) -> float:
-        """Wavelength of the wavefront [m]."""
-        return self._wavelength
+        # Remove padding from the inverse fft result:
+        ifft_slices = tuple(slice(pad, -pad) for pad in self._padding)
+        return full_ifft[ifft_slices]
 
     @property
     def k0(self) -> float:
@@ -1147,11 +1182,6 @@ class Wavefront:
         h = scipy.constants.value("Planck constant in eV/Hz") / (2 * np.pi)
         freq = scipy.constants.speed_of_light / self.wavelength
         return h * freq
-
-    @property
-    def pad(self):
-        """Padding settings."""
-        return self._pad
 
     @property
     def grid_spacing(self) -> Tuple[float, ...]:
@@ -1172,8 +1202,6 @@ class Wavefront:
         self,
         plane: Plane,
         focus: Tuple[float, float],
-        *,
-        inplace: bool = False,
     ) -> Wavefront:
         """
         Apply thin lens focusing.
@@ -1195,30 +1223,20 @@ class Wavefront:
         if plane not in ("xy", (1, 2)):
             raise NotImplementedError(f"Unsupported plane: {plane}")
 
-        if not inplace:
-            wavefront = copy.copy(self)
-            return wavefront.focus(plane, focus, inplace=True)
-
-        self._rmesh = (
+        new_rmesh = (
             self.rmesh
             * thin_lens_kernel_xy(
                 wavelength=self.wavelength,
                 ranges=self.ranges,
-                grid=self._pad.grid,
+                grid=self._grid,
                 f_lens_x=focus[0],
                 f_lens_y=focus[1],
             )[:, :, np.newaxis]
         )
-        # Invalidate the spectral data
-        self._kmesh = None
-        return self
 
-    def drift(
-        self,
-        distance: float,
-        *,
-        inplace: bool = False,
-    ) -> Wavefront:
+        return self.with_rmesh(new_rmesh)
+
+    def drift(self, distance: float) -> Wavefront:
         """
         Drift this Wavefront along the longitudinal direction in meters.
 
@@ -1226,64 +1244,60 @@ class Wavefront:
         ----------
         distance : float
             Distance in meters.
-        inplace : bool, default=False
-            Perform the operation in-place on this wavefront object.
 
         Returns
         -------
         Wavefront
-            This object if `inplace=True` or a new copy if `inplace=False`.
         """
-
-        if not inplace:
-            wavefront = copy.copy(self)
-            return wavefront.drift(distance, inplace=True)
-
         indices = [
             idx
             for idx, label in enumerate(self.axis_labels)
             if label != self._longitudinal_axis
         ]
         transverse_kspace_grid = nd_kspace_mesh(
-            coeffs=(1.0,) * len(self._rmesh_shape),
-            sizes=[self._pad.grid[idx] for idx in indices],
-            pads=[self._pad.pad[idx] for idx in indices],
+            coeffs=(1.0,) * len(self._grid),
+            sizes=[self.rmesh.shape[idx] for idx in indices],
+            pads=[self._padding[idx] for idx in indices],
             steps=[self.grid_spacing[idx] for idx in indices],
         )
 
-        self._kmesh = drift_propagator_paraxial(
+        kmesh = drift_propagator_paraxial(
             kmesh=self.kmesh,
             transverse_kspace_grid=transverse_kspace_grid,
-            wavelength=self._wavelength,
+            wavelength=self.wavelength,
             z=float(distance),
         )
-        # Invalidate the real space data
-        self._rmesh = None
-        return self
+        return Wavefront.from_kmesh(
+            kmesh,
+            wavelength=self.wavelength,
+            metadata=self.metadata,
+            longitudinal_axis=self.longitudinal_axis,
+            padding=self.pad,
+        )
 
     def _get_wigner_zphasor(self):
         coeff = conversion_coeffs(self.wavelength, dim=1)
-        zpad = self.pad.pad[2]
-        zgrid = self._rmesh_shape[2]
+        zpad = self.pad[2]
+        zgrid = self._grid[2]
         dz = self.grid_spacing[2]
         shift = (zgrid + zpad) * dz
         (mesh,) = nd_kspace_mesh(
             coeffs=coeff,
             sizes=[zgrid],
-            pads=[0],  # self.pad.pad[2]],
+            pads=[0],  # self.pad[2]],
             steps=[dz],
         )
         return np.exp(1j * 2.0 * np.pi * mesh * shift / coeff)
 
     def wigner_distribution(self):
-        xgrid, ygrid, zgrid = self._rmesh_shape
-        xpad, ypad, zpad = self.pad.pad
+        xgrid, ygrid, zgrid = self._grid
+        xpad, ypad, zpad = self.pad
 
         sig_z_corr = np.zeros((zgrid + 2 * zpad, zgrid), dtype=complex)
 
         sig_z = self.rmesh[xgrid // 2 + 1, ygrid // 2 + 1, :]
 
-        sig_z_pad = _pad_array(sig_z, (zpad, zpad))
+        sig_z_pad = pad_array(sig_z, zpad)
         sig_zconj_pad = np.conj(sig_z_pad)
 
         plt.plot(np.abs(sig_z_pad) ** 2)
@@ -1764,6 +1778,47 @@ class Wavefront:
             fig.savefig(save, dpi=writers.savefig_dpi, bbox_inches="tight")
 
         return ax1, ax2
+
+    @classmethod
+    def from_kmesh(
+        cls,
+        kmesh: np.ndarray,
+        padding: Optional[Sequence[int]],
+        *,
+        wavelength: float,
+        grid_spacing: Optional[Sequence[float]] = None,
+        polarization: Optional[PolarizationDirection] = None,
+        axis_labels: Optional[Sequence[str]] = None,
+        metadata: Optional[Union[WavefrontMetadata, dict]] = None,
+        longitudinal_axis: Optional[str] = None,
+    ) -> Wavefront:
+        if padding is None:
+            padding = (0,) * kmesh.ndim
+        else:
+            padding = tuple(padding)
+
+        if kmesh.ndim != len(padding):
+            raise ValueError(
+                f"Padding shape must be equal to the array dimensions. "
+                f"Got {len(padding)} but expected {kmesh.ndim}"
+            )
+
+        self = Wavefront.__new__(Wavefront)
+        self._rmesh = None
+        self._kmesh = kmesh
+        self._grid = tuple(dim - 2 * pad for dim, pad in zip(kmesh.shape, padding))
+        self._padding = padding
+        self.wavelength = wavelength
+
+        self._set_metadata(
+            metadata,
+            polarization=polarization,
+            axis_labels=axis_labels,
+            grid_spacing=grid_spacing,
+        )
+        self._check_metadata()
+        self._longitudinal_axis = longitudinal_axis or self.axis_labels[-1]
+        return self
 
     @classmethod
     def from_genesis4(

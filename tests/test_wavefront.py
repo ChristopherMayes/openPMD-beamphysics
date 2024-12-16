@@ -8,7 +8,8 @@ import pytest
 from pmd_beamphysics import Wavefront
 from pmd_beamphysics.wavefront import (
     Plane,
-    WavefrontPadding,
+    fix_padding,
+    get_padded_shape,
     get_num_fft_workers,
     get_range_for_grid_spacing,
     set_num_fft_workers,
@@ -67,55 +68,55 @@ def test_get_range_for_grid_spacing(
     assert (low, high) == (expected_low, expected_high)
 
 
-def test_smoke_drift_z_in_place(wavefront: Wavefront) -> None:
-    # Implicitly calculates the FFT:
-    wavefront.drift(distance=0.0, inplace=True)
-    # Use the property to calculate the inverse fft:
-    wavefront.rmesh
-
-
 def test_smoke_drift_z(wavefront: Wavefront) -> None:
-    new = wavefront.drift(distance=0.0, inplace=False)
+    new = wavefront.drift(distance=0.0)
     assert new is not wavefront
 
 
 def test_smoke_focusing_element_in_place(wavefront: Wavefront) -> None:
-    wavefront.focus(plane="xy", focus=(1.0, 1.0), inplace=True)
+    wavefront.focus(plane="xy", focus=(1.0, 1.0))
 
 
 def test_smoke_focusing_element(wavefront: Wavefront) -> None:
-    new = wavefront.focus(plane="xy", focus=(1.0, 1.0), inplace=False)
+    new = wavefront.focus(plane="xy", focus=(1.0, 1.0))
     assert new is not wavefront
 
 
 @pytest.mark.parametrize(
-    ("padding", "expected"),
+    ("grid", "padding", "expected_padding"),
     [
         pytest.param(
-            WavefrontPadding(grid=(10,), pad=(10,)),
-            WavefrontPadding(grid=(10,), pad=(11,)),
+            (10,),
+            (10,),
+            (11,),
             id="1d",
         ),
         pytest.param(
-            WavefrontPadding(grid=(10, 10), pad=(10, 10)),
-            WavefrontPadding(grid=(10, 10), pad=(11, 11)),
+            (10, 10),
+            (10, 10),
+            (11, 11),
             id="2d",
         ),
     ],
 )
-def test_padding_fix(padding: WavefrontPadding, expected: WavefrontPadding) -> None:
-    assert padding.fix() == expected
+def test_padding_fix(
+    grid: tuple[int, ...], padding: tuple[int, ...], expected_padding: tuple[int, ...]
+) -> None:
+    fixed = fix_padding(grid, padding)
+    assert fixed == expected_padding
 
 
 def test_smoke_properties(wavefront: Wavefront) -> None:
-    assert len(wavefront.phasors) == 3
+    # assert len(wavefront.phasors) == 3
     assert wavefront.rmesh.shape == (21, 21, 11)
-    assert wavefront.kmesh.shape == wavefront.pad.get_padded_shape(wavefront.rmesh)
-    assert np.isclose(wavefront.wavelength, 1.35e-8)
-    assert wavefront.pad.grid == (21, 21, 11)
-    assert wavefront.pad.pad == (42, 100, 110)
 
-    for dim, pad in zip(wavefront.pad.grid, wavefront.pad.pad):
+    padded_shape = get_padded_shape(wavefront.grid, padding=wavefront.pad)
+    assert wavefront.kmesh.shape == padded_shape
+    assert np.isclose(wavefront.wavelength, 1.35e-8)
+    assert wavefront.grid == (21, 21, 11)
+    assert wavefront.pad == (42, 100, 110)
+
+    for dim, pad in zip(wavefront.grid, wavefront.pad):
         assert (dim + pad) % 2 == 1
 
 

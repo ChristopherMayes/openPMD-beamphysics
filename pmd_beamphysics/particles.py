@@ -783,14 +783,12 @@ class ParticleGroup:
         if not isinstance(key, str):
             return particle_parts(self, key)
 
-        # '/c' suffix for dividing by the speed of light
-        nc = key.count("/c")
-        if nc > 0:
-            key = key.replace("/c", "")
-            return self[key] / (c_light**nc)
+        # 'z/c' special case
+        if key == "z/c":
+            return self["z"] / (c_light)
 
         if key.startswith("cov_"):
-            subkeys = key[4:].split("__")
+            subkeys = key.removeprefix("cov").split("__")
             assert (
                 len(subkeys) == 2
             ), f"Too many properties in covariance request: {key}"

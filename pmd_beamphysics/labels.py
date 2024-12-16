@@ -120,15 +120,6 @@ def texlabel(key: str):
         tex1 = texlabel(subkeys[1])
         return rf"\left<{tex0}, {tex1}\right>"
 
-    # '/c' suffix for dividing by the speed of light
-    nc = key.count("/c")
-    if nc > 0:
-        key = key.replace("/c", "")
-        if nc == 1:
-            return texlabel(key) + "/c"
-        else:
-            return texlabel(key) + f"/c^{nc}"
-
     if key.startswith("bunching"):
         wavelength = parse_bunching_str(key)
         x, _, prefix = nice_array(wavelength)

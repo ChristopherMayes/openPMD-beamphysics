@@ -2,13 +2,13 @@ from pmd_beamphysics import ParticleGroup
 import pytest
 import numpy as np
 import os
-from scipy.constants import c
 
 P = ParticleGroup("docs/examples/data/bmad_particles.h5")
 
 
 ARRAY_KEYS = """
 x y z px py pz t status weight id
+z/c
 p energy kinetic_energy xp yp higher_order_energy
 r theta pr ptheta
 Lz
@@ -50,29 +50,9 @@ def test_operator(operator, array_key):
     P[key]
 
 
-def test_operator_over_c(operator, array_key):
-    key0 = f"{operator}{array_key}"
-    key1 = f"{operator}{array_key}/c"
-    key2 = f"{operator}{array_key}/c/c"
-    assert np.allclose(P[key0] / c, P[key1])
-    assert np.allclose(P[key0] / c / c, P[key2])
-
-
-def test_cov_over_c(array_key, array_key2):
-    key0 = f"cov_{array_key}__{array_key2}"
-    key1 = f"cov_{array_key}/c__{array_key2}"
-    key2 = f"cov_{array_key}/c__{array_key2}/c"
-    assert np.allclose(P[key0] / c, P[key1])
-    assert np.allclose(P[key0] / c / c, P[key2])
-
-
-# This is probably uneccessary:
-# @pytest.fixture(params=array_keys)
-# def array_key2(request):
-#     return request.param
-#
-# def test_cov(array_key, array_key2):
-#     P[f'cov_{array_key}__{array_key}']
+def test_cov_(array_key, array_key2):
+    key = f"cov_{array_key}__{array_key2}"
+    P[key]
 
 
 @pytest.fixture(params=SPECIAL_STATS)

@@ -438,7 +438,7 @@ def plottable_array(x, nice=True, lim=None):
 PARTICLEGROUP_UNITS = {}
 for k in ["n_particle", "status", "id", "n_alive", "n_dead"]:
     PARTICLEGROUP_UNITS[k] = unit("1")
-for k in ["t"]:
+for k in ["t", "z/c"]:
     PARTICLEGROUP_UNITS[k] = unit("s")
 for k in [
     "energy",
@@ -498,15 +498,6 @@ def pg_units(key):
         if key.startswith(prefix):
             nkey = key[len(prefix) :]
             return pg_units(nkey)
-
-    # Handle '/c'  for dividing by the speed of light
-    nc = key.count("/c")
-    if nc > 0:
-        key = key.replace("/c", "")
-        u = pg_units(key)
-        for _ in range(nc):
-            u = u / unit("m") * unit("s")
-        return u
 
     if key.startswith("cov_"):
         subkeys = key.strip("cov_").split("__")

@@ -743,6 +743,11 @@ class Wavefront:
     """
     Particle field wavefront.
 
+    Only 3D Wavefront meshes are currently supported.
+
+    Axis labels are implicitly "x", "y", and "z", with Z as the longitudinal
+    axis.
+
     Parameters
     ----------
     rmesh : np.ndarray
@@ -783,11 +788,16 @@ class Wavefront:
         wavelength: float,
         grid_spacing: Sequence[float] | None = None,
         polarization: PolarizationDirection | None = None,
-        axis_labels: Sequence[str] | None = None,
         metadata: WavefrontMetadata | dict | None = None,
         pad: Sequence[int] | int | None = None,
         fix_pad: bool = True,
     ) -> None:
+        if rmesh.ndim != 3:
+            raise NotImplementedError(
+                "Only 3D Wavefront meshes are currently supported "
+                "with implicit axis labels of {x,y,z} with Z as the longitudinal axis."
+            )
+
         self._rmesh = rmesh
         self._grid = rmesh.shape
         self._kmesh = None
@@ -805,7 +815,7 @@ class Wavefront:
         self._set_metadata(
             metadata,
             polarization=polarization,
-            axis_labels=axis_labels,
+            axis_labels=("x", "y", "z"),
             grid_spacing=grid_spacing,
         )
         self._check_metadata()
@@ -945,7 +955,6 @@ class Wavefront:
             wavelength=wavelength,
             grid_spacing=grid_spacing,
             pad=pad,
-            axis_labels="xyz",
         )
 
     def with_rmesh(
@@ -1211,10 +1220,6 @@ class Wavefront:
             grid_spacing=self.metadata.mesh.grid_spacing,
             dims=self.rmesh.shape,
         )
-
-    @property
-    def axis_labels(self):
-        return self.metadata.mesh.axis_labels
 
     def focus(
         self,

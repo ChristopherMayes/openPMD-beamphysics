@@ -115,7 +115,7 @@ def texlabel(key: str):
                 return rf"\left<{tex0}\right>"
 
     if key.startswith("cov_"):
-        subkeys = key[4:].split("__")
+        subkeys = key.removeprefix("cov_").split("__")
         tex0 = texlabel(subkeys[0])
         tex1 = texlabel(subkeys[1])
         return rf"\left<{tex0}, {tex1}\right>"

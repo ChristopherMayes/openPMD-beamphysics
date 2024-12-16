@@ -8,12 +8,13 @@ P = ParticleGroup("docs/examples/data/bmad_particles.h5")
 
 ARRAY_KEYS = """
 x y z px py pz t status weight id
+z/c
 p energy kinetic_energy xp yp higher_order_energy
 r theta pr ptheta
 Lz
 gamma beta beta_x beta_y beta_z
 x_bar px_bar Jx Jy
-charge
+weight
 
 """.split()
 
@@ -34,6 +35,9 @@ def array_key(request):
     return request.param
 
 
+array_key2 = array_key
+
+
 @pytest.fixture(params=OPERATORS)
 def operator(request):
     return request.param
@@ -44,13 +48,9 @@ def test_operator(operator, array_key):
     P[key]
 
 
-# This is probably uneccessary:
-# @pytest.fixture(params=array_keys)
-# def array_key2(request):
-#     return request.param
-#
-# def test_cov(array_key, array_key2):
-#     P[f'cov_{array_key}__{array_key}']
+def test_cov_(array_key, array_key2):
+    key = f"cov_{array_key}__{array_key2}"
+    P[key]
 
 
 @pytest.fixture(params=SPECIAL_STATS)

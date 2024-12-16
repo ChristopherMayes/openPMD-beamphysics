@@ -438,7 +438,7 @@ def plottable_array(x, nice=True, lim=None):
 PARTICLEGROUP_UNITS = {}
 for k in ["n_particle", "status", "id", "n_alive", "n_dead"]:
     PARTICLEGROUP_UNITS[k] = unit("1")
-for k in ["t"]:
+for k in ["t", "z/c"]:
     PARTICLEGROUP_UNITS[k] = unit("s")
 for k in [
     "energy",
@@ -493,6 +493,7 @@ def pg_units(key):
     if key in PARTICLEGROUP_UNITS:
         return PARTICLEGROUP_UNITS[key]
 
+    # Operators
     for prefix in ["sigma_", "mean_", "min_", "max_", "ptp_", "delta_"]:
         if key.startswith(prefix):
             nkey = key[len(prefix) :]

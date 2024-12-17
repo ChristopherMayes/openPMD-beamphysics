@@ -1076,11 +1076,6 @@ class Wavefront:
         return self._grid
 
     @property
-    def rmesh_shape(self) -> tuple[int, ...]:
-        """The rmesh shape, without padding."""
-        return self._grid
-
-    @property
     def pad(self) -> tuple[int, ...]:
         """
         Per-dimension padding used in the FFT.
@@ -1120,10 +1115,6 @@ class Wavefront:
             steps=self.grid_spacing,
             shifted=True,
         )
-
-    @property
-    def _k_center_indices(self) -> tuple[int, ...]:
-        return tuple(grid // 2 + pad for grid, pad in zip(self.rmesh.shape, self.pad))
 
     @property
     def rmesh(self) -> np.ndarray:
@@ -1246,7 +1237,7 @@ class Wavefront:
     @property
     def ranges(self):
         """
-        Get the physical range the entire mesh represents in (low, high) pairs
+        Get the physical range the entire rmesh represents in (low, high) pairs
         for each dimension.
 
         Returns
@@ -2173,7 +2164,7 @@ def drift(wf: Wavefront, distance: float) -> Wavefront:
     #     for idx, label in enumerate(wf.axis_labels)
     #     if label != wf.longitudinal_axis
     # ]
-    indices = [0, 1]
+    indices = (0, 1)
     transverse_kspace_grid = nd_kspace_mesh(
         coeffs=(1.0,) * len(wf.grid),
         sizes=[wf.rmesh.shape[idx] for idx in indices],

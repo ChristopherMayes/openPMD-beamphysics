@@ -446,28 +446,6 @@ def cartesian_domain(
     )
 
 
-def domains_omega_thx_thy(
-    wavelength: float,
-    grids: Sequence[int],
-    pads: Sequence[int],
-    deltas: Sequence[float],
-):
-    """
-    Fourier space domain of the padded field.
-
-    Units of (eV, radians, ...)
-    """
-    coeffs = conversion_coeffs(wavelength=wavelength, dim=len(grids))
-
-    assert len(grids) == len(pads) == len(deltas) == len(coeffs)
-    return nd_kspace_mesh(
-        coeffs=coeffs,
-        sizes=grids,
-        pads=pads,
-        steps=deltas,
-    )
-
-
 def drift_kernel_paraxial(
     transverse_kspace_grid: list[np.ndarray],
     z: float,
@@ -1566,27 +1544,25 @@ class Wavefront:
         if fig is not None:
             if tight_layout:
                 fig.tight_layout()
-            # TODO Bounding box options? Higher DPI than default?
             if save:
                 logger.info(f"Saving plot to {save!r}")
                 fig.savefig(save, dpi=writers.savefig_dpi, bbox_inches="tight")
         return fig, ax
 
-    def plot_1d_kmesh_projections(
+    def plot_1d_kmesh_angular_divergence(
         self,
         *,
-        axs: list[matplotlib.axes.Axes] | None = None,
+        ax: matplotlib.axes.Axes | None = None,
         figsize: tuple[float, float] | None = None,
         xlim: tuple[float, float] | None = None,
         ylim: tuple[float, float] | None = None,
-        tight_layout: bool = True,
         save: AnyPath | None = None,
     ):
-        if axs:
-            (ax1, ax2) = axs
-            fig = ax1.get_figure()
+        if ax is not None:
+            fig = ax.get_figure()
         else:
-            fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=figsize)
+            fig, ax = plt.subplots(figsize=figsize)
+            assert ax is not None
 
         img_xy = np.sum(np.abs(self.kmesh) ** 2, axis=2)
         # TODO fix naming in other function
@@ -1594,32 +1570,54 @@ class Wavefront:
         proj_x = _get_projection(img_xy, axis=1)
 
         kdomain = self._nice_kspace_domain
-        ax1.plot(kdomain.y, proj_y, label="Vertical")
-        ax1.plot(kdomain.x, proj_x, label="Horizontal")
-        ax1.set_xlabel(rf"$\theta$ (${kdomain.x_unit_prefix} rad$)")
-        ax1.set_ylabel("Angular Divergence [arb units]")
-        ax1.legend(loc="best")
-
-        ax2.set_xlabel(rf"$\omega - \omega_0$ (${kdomain.z_unit_prefix} eV$)")
-        ax2.set_ylabel("Spectrum [arb units]")
-        img_xz = np.sum(np.abs(self.kmesh) ** 2, axis=1)
-        proj_z = _get_projection(img_xz, axis=0)
-        ax2.plot(kdomain.z, proj_z)
+        ax.plot(kdomain.y, proj_y, label="Vertical")
+        ax.plot(kdomain.x, proj_x, label="Horizontal")
+        ax.set_xlabel(rf"$\theta$ (${kdomain.x_unit_prefix} rad$)")
+        ax.set_ylabel("Angular Divergence [arb units]")
+        ax.legend(loc="best")
 
         if xlim is not None:
-            ax1.set_xlim(xlim)
-            ax2.set_ylim(xlim)
+            ax.set_xlim(xlim)
         if ylim is not None:
-            ax2.set_xlim(ylim)
-            ax1.set_ylim(ylim)
+            ax.set_ylim(ylim)
         if fig is not None:
-            if tight_layout:
-                fig.tight_layout()
-            # TODO Bounding box options? Higher DPI than default?
             if save:
                 logger.info(f"Saving plot to {save!r}")
                 fig.savefig(save, dpi=writers.savefig_dpi, bbox_inches="tight")
-        return fig, (ax1, ax2)
+        return fig, ax
+
+    def plot_1d_kmesh_spectrum(
+        self,
+        *,
+        ax: matplotlib.axes.Axes | None = None,
+        figsize: tuple[float, float] | None = None,
+        xlim: tuple[float, float] | None = None,
+        ylim: tuple[float, float] | None = None,
+        save: AnyPath | None = None,
+    ):
+        if ax is not None:
+            fig = ax.get_figure()
+        else:
+            fig, ax = plt.subplots(figsize=figsize)
+            assert ax is not None
+
+        kdomain = self._nice_kspace_domain
+
+        ax.set_xlabel(rf"$\omega - \omega_0$ (${kdomain.z_unit_prefix} eV$)")
+        ax.set_ylabel("Spectrum [arb units]")
+        img_xz = np.sum(np.abs(self.kmesh) ** 2, axis=1)
+        proj_z = _get_projection(img_xz, axis=0)
+        ax.plot(kdomain.z, proj_z)
+
+        if xlim is not None:
+            ax.set_ylim(xlim)
+        if ylim is not None:
+            ax.set_xlim(ylim)
+        if fig is not None:
+            if save:
+                logger.info(f"Saving plot to {save!r}")
+                fig.savefig(save, dpi=writers.savefig_dpi, bbox_inches="tight")
+        return fig, ax
 
     def _plot_reciprocal_thy_vs_thx(
         self,

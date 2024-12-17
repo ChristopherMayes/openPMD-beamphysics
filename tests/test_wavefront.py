@@ -89,6 +89,15 @@ def test_smoke_focusing_element(wavefront: Wavefront) -> None:
     assert new is not wavefront
 
 
+def test_other_type_equality(wavefront: Wavefront) -> None:
+    assert wavefront != 0
+
+
+def test_smoke_repr(wavefront: Wavefront) -> None:
+    print(repr(wavefront))
+    print(str(wavefront))
+
+
 @pytest.mark.parametrize(
     ("grid", "padding", "expected_padding"),
     [
@@ -125,6 +134,14 @@ def test_smoke_properties(wavefront: Wavefront) -> None:
 
     for dim, pad in zip(wavefront.grid, wavefront.pad):
         assert (dim + pad) % 2 == 1
+
+
+def test_smoke_ifft(wavefront: Wavefront) -> None:
+    assert wavefront.rmesh.shape == (21, 21, 11)
+    wavefront.kmesh  # FFT to generate kmesh
+    # invalidate the rmesh
+    wavefront._rmesh = None
+    wavefront.rmesh  # IFFT to generate rmesh
 
 
 def test_copy(wavefront: Wavefront) -> None:
@@ -231,6 +248,27 @@ def test_write_and_read_genesis4_legacy_openpmd(
     assert wavefront == loaded
 
 
+def detailed_compare(W1: Wavefront, W2: Wavefront) -> None:
+    assert W1.grid == W2.grid
+    assert np.all(W1._rmesh == W2._rmesh)
+    assert np.all(W1._kmesh == W2._kmesh)
+    assert W1.wavelength == W2.wavelength
+    # TODO  we don't store padding
+    assert W1.pad == W2.pad
+
+    # TODO: we don't store microseconds
+    # NOTE: the date should be retained here as when it was originally stored,
+    # minus microseconds as above
+    W2.metadata.base.date = W2.metadata.base.date.replace(
+        microsecond=W1.metadata.base.date.microsecond
+    )
+    assert W1.metadata.base == W2.metadata.base
+    assert W1.metadata.iteration == W2.metadata.iteration
+    assert W1.metadata.mesh == W2.metadata.mesh
+    assert W1.metadata == W2.metadata
+    assert W1 == W2
+
+
 def test_write_and_read_openpmd(
     wavefront: Wavefront,
     tmp_path: pathlib.Path,
@@ -240,15 +278,8 @@ def test_write_and_read_openpmd(
     wavefront.metadata.mesh.grid_global_offset = (0.0, 0.0, 0.0)
 
     wavefront.write(fn)
-    loaded = wavefront.from_file(fn).with_padding(wavefront.pad)
-
-    # check these individually before testing full equality, so we don't get just a final failure
-    assert wavefront.grid == loaded.grid
-    assert np.all(wavefront._rmesh == loaded._rmesh)
-    assert np.all(wavefront._kmesh == loaded._kmesh)
-    assert wavefront.wavelength == loaded.wavelength
     # TODO  we don't store padding
-    assert wavefront.pad == loaded.pad
+    loaded = wavefront.from_file(fn).with_padding(wavefront.pad)
 
     # TODO: we don't store microseconds
     # NOTE: the date should be retained here as when it was originally stored,
@@ -256,11 +287,7 @@ def test_write_and_read_openpmd(
     loaded.metadata.base.date = loaded.metadata.base.date.replace(
         microsecond=wavefront.metadata.base.date.microsecond
     )
-    assert wavefront.metadata.base == loaded.metadata.base
-    assert wavefront.metadata.iteration == loaded.metadata.iteration
-    assert wavefront.metadata.mesh == loaded.metadata.mesh
-    assert wavefront.metadata == loaded.metadata
-    assert wavefront == loaded
+    detailed_compare(wavefront, loaded)
 
 
 def test_legacy_wavefront_ids_from_file(
@@ -286,6 +313,56 @@ def test_wavefront_ids_from_file(
         wavefront.write(fn)
 
         assert wavefront_ids_from_file(fn) == [str(iteration)]
+
+
+def test_plot_1d_kmesh_angular_divergence(
+    wavefront: Wavefront,
+    tmp_path: pathlib.Path,
+    request: pytest.FixtureRequest,
+) -> None:
+    wavefront.plot_1d_kmesh_angular_divergence(
+        save=tmp_path / f"{request.node.name}.png"
+    )
+
+
+def test_plot_1d_kmesh_spectrum(
+    wavefront: Wavefront,
+    tmp_path: pathlib.Path,
+    request: pytest.FixtureRequest,
+) -> None:
+    wavefront.plot_1d_kmesh_spectrum(save=tmp_path / f"{request.node.name}.png")
+
+
+def test_plot_1d_far_field_spectral_density(
+    wavefront: Wavefront,
+    tmp_path: pathlib.Path,
+    request: pytest.FixtureRequest,
+) -> None:
+    wavefront.plot_1d_far_field_spectral_density(
+        save=tmp_path / f"{request.node.name}.png"
+    )
+
+
+def test_plot_reciprocal(
+    wavefront: Wavefront,
+    tmp_path: pathlib.Path,
+    request: pytest.FixtureRequest,
+) -> None:
+    wavefront.plot_reciprocal(save=tmp_path / f"{request.node.name}.png")
+
+
+def test_from_metadata_dict(wavefront: Wavefront) -> None:
+    md = wavefront.metadata.to_dict()
+    W = Wavefront(
+        rmesh=wavefront.rmesh,
+        wavelength=wavefront.wavelength,
+        metadata=md,
+        pad=wavefront.pad,
+    )
+    W.metadata.base.date = W.metadata.base.date.replace(
+        microsecond=wavefront.metadata.base.date.microsecond
+    )
+    detailed_compare(wavefront, W)
 
 
 @pytest.fixture

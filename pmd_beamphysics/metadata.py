@@ -5,7 +5,7 @@ import datetime
 import getpass
 import platform
 from collections.abc import Sequence
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from typing_extensions import Literal
 
@@ -72,6 +72,19 @@ def _dataclass_from_hdf5(cls: type[_T], h5: h5py.Group) -> _T:
     return cls(**values)
 
 
+def _to_dataclass_dict(cls: type[_T], dct: dict[str, Any]) -> dict[str, Any]:
+    hdf_key_to_attr = hdf_to_python_attrs(cls)
+
+    result: dict[str, Any] = {}
+    for hdf_key, attr in hdf_key_to_attr.items():
+        if hdf_key in dct:
+            result[attr] = dct.pop(hdf_key)
+        if attr in dct:
+            result[attr] = dct.pop(attr)
+
+    return result
+
+
 @dataclasses.dataclass
 class BaseMetadata:
     """Base metadata for OpenPMD spec files."""
@@ -99,6 +112,13 @@ class BaseMetadata:
         default_factory=tools.current_date_with_tzinfo,
         metadata=_key("date"),
     )
+
+    def __post_init__(self):
+        if isinstance(self.date, str):
+            try:
+                self.date = datetime.datetime.fromisoformat(self.date)
+            except Exception:
+                self.date = tools.current_date_with_tzinfo()
 
     @property
     def attrs(self):
@@ -245,30 +265,33 @@ class WavefrontMetadata:
             ],
         )
 
+    def to_dict(self):
+        return {
+            "base": self.base.attrs,
+            "iteration": self.iteration.attrs,
+            "mesh": self.mesh.attrs,
+        }
+
     @classmethod
     def from_dict(cls, md: dict) -> WavefrontMetadata:
         md = dict(md)
-        if "base" in md:
-            base_md = md.pop("base")
-        else:
-            base_md = {
-                key: value
-                for key, value in md.items()
-                if key in BaseMetadata.__dataclass_fields__
-            }
-        if "iteration" in md:
-            iteration_md = md.pop("base")
-        else:
-            iteration_md = {
-                key: value
-                for key, value in md.items()
-                if key in IterationMetadata.__dataclass_fields__
-            }
-        for key in list(base_md) + list(iteration_md):
-            md.pop(key)
+        base_md = _to_dataclass_dict(
+            BaseMetadata,
+            md.pop("base") if "base" in md else md,
+        )
+        iteration_md = _to_dataclass_dict(
+            IterationMetadata,
+            md.pop("iteration") if "iteration" in md else md,
+        )
+        mesh_md = _to_dataclass_dict(
+            MeshMetadata,
+            md.pop("mesh") if "mesh" in md else md,
+        )
+
         return WavefrontMetadata(
             base=BaseMetadata(**base_md),
             iteration=IterationMetadata(**iteration_md),
+            mesh=MeshMetadata(**mesh_md),
             **md,
         )
 

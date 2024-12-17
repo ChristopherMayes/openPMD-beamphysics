@@ -1,8 +1,10 @@
 import datetime
 import logging
+from typing import Sequence
 
 import h5py
 import numpy as np
+import scipy.fft
 
 logger = logging.getLogger(__name__)
 _global_fft_workers = -1
@@ -211,3 +213,62 @@ def set_num_fft_workers(workers: int):
     _global_fft_workers = workers
 
     logger.info(f"Set number of FFT workers to: {workers}")
+
+
+def fft_phased(
+    array: np.ndarray,
+    axes: Sequence[int],
+    phasors,
+    workers=-1,
+) -> np.ndarray:
+    """
+    Compute the N-D discrete Fourier Transform with phasors applied.
+
+    Ortho normalization is used.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        Input array which can be complex.
+    axes : sequence of int
+        Axis indices to apply the FFT to.
+    phasors : np.ndarray
+        Apply these per-dimension phasors after performing the FFT.
+    workers : int, default=-1
+        Maximum number of workers to use for parallel computation. If negative,
+        the value wraps around from ``os.cpu_count()``.
+    """
+    array_fft = scipy.fft.fftn(array, axes=axes, workers=workers, norm="ortho")
+    for phasor in phasors:
+        array_fft *= phasor
+    return scipy.fft.fftshift(array_fft, axes=axes)
+
+
+def ifft_phased(
+    array: np.ndarray,
+    axes: Sequence[int],
+    phasors,
+    workers=-1,
+) -> np.ndarray:
+    """
+    Compute the N-D inverse discrete Fourier Transform with phasors applied.
+
+    Ortho normalization is used.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        Input array which can be complex.
+    axes : Sequence[int]
+        Axis indices to apply the FFT to.
+    phasors : np.ndarray
+        Apply the complex conjugate of these per-dimension phasors after the
+        inverse FFT.
+    workers : int, default=-1
+        Maximum number of workers to use for parallel computation. If negative,
+        the value wraps around from ``os.cpu_count()``.
+    """
+    array_fft = scipy.fft.ifftn(array, axes=axes, workers=workers, norm="ortho")
+    for phasor in phasors:
+        array_fft *= np.conj(phasor)
+    return scipy.fft.ifftshift(array_fft, axes=axes)

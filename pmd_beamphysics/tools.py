@@ -102,18 +102,93 @@ def pmd_format_date(dt: datetime.datetime) -> str:
     return dt.strftime("%Y-%m-%d %H:%M:%S %z")
 
 
+def require_h5_dataset(h5: h5py.Group, name: str) -> h5py.Dataset:
+    """
+    Require a dataset from an HDF5 group.
+
+    Parameters
+    ----------
+    h5 : h5py.Group
+        The HDF5 group from which the dataset is required.
+    name : str
+        The key name of the dataset to retrieve.
+
+    Returns
+    -------
+    h5py.Dataset
+        The requested dataset.
+
+    Raises
+    ------
+    KeyError
+        If the dataset named `name` is not found in the HDF5 group `h5`.
+    ValueError
+        If the found object named `name` is not a dataset.
+    """
+    try:
+        dataset = h5[name]
+    except KeyError:
+        raise KeyError(f"Expected HDF dataset {name} not found in {h5.name}")
+
+    if not isinstance(dataset, h5py.Dataset):
+        raise ValueError(
+            f"Key {name} expected to be a dataset, but is a {type(dataset)}"
+        )
+    return dataset
+
+
 def require_h5_group(h5: h5py.Group, name: str) -> h5py.Group:
+    """
+    Require a subgroup from an HDF5 group.
+
+    Parameters
+    ----------
+    h5 : h5py.Group
+        The HDF5 group from which the subgroup is required.
+    name : str
+        The key name of the subgroup to retrieve.
+
+    Returns
+    -------
+    h5py.Group
+        The requested group.
+
+    Raises
+    ------
+    KeyError
+        If the subgroup named `name` is not found in the HDF5 group `h5`.
+    ValueError
+        If the found object named `name` is not a dataset.
+    """
     try:
         group = h5[name]
     except KeyError:
         raise KeyError(f"Expected HDF group {name} not found in {h5.name}")
 
     if not isinstance(group, h5py.Group):
-        raise ValueError(f"Key {group} expected to be a group, but is a {type(group)}")
+        raise ValueError(f"Key {name} expected to be a group, but is a {type(group)}")
     return group
 
 
 def require_h5_string_attr(h5: h5py.Group, attr: str) -> str:
+    """
+    Retrieve a required string attribute from an HDF5 group.
+
+    Parameters
+    ----------
+    h5 : h5py.Group
+    attr : str
+        The name of the attribute to retrieve.
+
+    Returns
+    -------
+    str
+
+    Raises
+    ------
+    ValueError
+        If the attribute is not a string or bytes.
+    """
     value = h5.attrs[attr]
     if isinstance(value, str):
         return value
@@ -125,10 +200,12 @@ def require_h5_string_attr(h5: h5py.Group, attr: str) -> str:
 
 
 def get_num_fft_workers() -> int:
+    """Get the global number of FFT workers."""
     return _global_fft_workers
 
 
 def set_num_fft_workers(workers: int):
+    """Set the global number of FFT workers."""
     global _global_fft_workers
 
     _global_fft_workers = workers

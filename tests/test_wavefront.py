@@ -80,12 +80,8 @@ def test_smoke_drift_z(wavefront: Wavefront) -> None:
     assert new is not wavefront
 
 
-def test_smoke_focusing_element_in_place(wavefront: Wavefront) -> None:
-    wavefront.focus(plane="xy", focus=(1.0, 1.0))
-
-
 def test_smoke_focusing_element(wavefront: Wavefront) -> None:
-    new = wavefront.focus(plane="xy", focus=(1.0, 1.0))
+    new = wavefront.focus(plane="xy", fx=1.0, fy=1.0)
     assert new is not wavefront
 
 
@@ -195,6 +191,7 @@ def test_write_and_read_genesis4(
     wavefront.metadata.mesh.grid_global_offset = (0.0, 0.0, 0.0)
 
     wavefront.write_genesis4(fn)
+    assert len(wavefront.pad) == 3
     loaded = wavefront.from_genesis4(fn, pad=wavefront.pad)
 
     # TODO date is not stored in Genesis4 file
@@ -378,7 +375,11 @@ def wigner_wavefront() -> Wavefront:
     )
 
 
-def test_plot_wigner(wigner_wavefront: Wavefront) -> None:
+def test_plot_wigner(
+    wigner_wavefront: Wavefront,
+    tmp_path: pathlib.Path,
+    request: pytest.FixtureRequest,
+) -> None:
     phi = 2.0 * np.pi * (0.5 * wigner_wavefront.rmesh) ** 3
     W = wigner_wavefront.with_rmesh(wigner_wavefront.rmesh * np.exp(1j * phi))
-    W.plot_wigner_distribution()
+    W.plot_wigner_distribution(save=tmp_path / f"{request.node.name}.png")

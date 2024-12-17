@@ -54,7 +54,7 @@ def _key(pmd_key: str):
 _T = TypeVar("_T", bound=Dataclass)
 
 
-def _dataclass_from_hdf5(cls: type[_T], h5: h5py.Group) -> _T:
+def _dataclass_from_hdf5(cls: type[_T], h5: h5py.Group | h5py.Dataset) -> _T:
     hdf_key_to_attr = hdf_to_python_attrs(cls)
 
     def maybe_decode(value):
@@ -296,7 +296,9 @@ class WavefrontMetadata:
         )
 
     @classmethod
-    def from_hdf5(cls, base_h5: h5py.Group, field_h5: h5py.Group, rmesh_h5: h5py.Group):
+    def from_hdf5(
+        cls, base_h5: h5py.Group, field_h5: h5py.Group, rmesh_h5: h5py.Dataset
+    ):
         md = _dataclass_from_hdf5(cls, field_h5)
         md.base = _dataclass_from_hdf5(BaseMetadata, base_h5.require_group("/"))
         md.iteration = _dataclass_from_hdf5(IterationMetadata, base_h5)

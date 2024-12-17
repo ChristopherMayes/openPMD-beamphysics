@@ -122,6 +122,29 @@ class _NiceXYZ(NamedTuple):
     z_scale: float
     z_unit_prefix: str
 
+    @classmethod
+    def from_domain(cls, domain: tuple[np.ndarray, ...]) -> _NiceXYZ:
+        """`nice_array`-modified kspace domain."""
+        assert len(domain) == 3
+
+        domain_x, x_scale, x_unit_prefix = nice_array(domain[0])
+        domain_y, y_scale, y_unit_prefix = nice_array(domain[1])
+        domain_z, z_scale, z_unit_prefix = nice_array(domain[2])
+        assert isinstance(domain_x, np.ndarray)
+        assert isinstance(domain_y, np.ndarray)
+        assert isinstance(domain_z, np.ndarray)
+        return _NiceXYZ(
+            x=domain_x,
+            y=domain_y,
+            z=domain_z,
+            x_scale=x_scale,
+            y_scale=y_scale,
+            z_scale=z_scale,
+            x_unit_prefix=x_unit_prefix,
+            y_unit_prefix=y_unit_prefix,
+            z_unit_prefix=z_unit_prefix,
+        )
+
 
 def fft_phased(
     array: np.ndarray,
@@ -188,7 +211,7 @@ def nd_kspace_domains(
     pads: Sequence[int],
     steps: Sequence[float],
     shifted: bool = True,
-) -> list[np.ndarray]:
+) -> tuple[np.ndarray, ...]:
     """
     Generate reciprocal space domains for given grid sizes and steps.
 
@@ -207,19 +230,19 @@ def nd_kspace_domains(
 
     Returns
     -------
-    np.ndarray
+    tuple of np.ndarray
     """
 
     if not shifted:
-        return [
+        return tuple(
             coeff * np.fft.fftfreq(n + 2 * pad, step)
             for coeff, n, pad, step in zip(coeffs, sizes, pads, steps)
-        ]
+        )
 
-    return [
+    return tuple(
         np.fft.fftshift(coeff * np.fft.fftfreq(n + 2 * pad, step))
         for coeff, n, pad, step in zip(coeffs, sizes, pads, steps)
-    ]
+    )
 
 
 def nd_kspace_mesh(
@@ -699,6 +722,37 @@ def wavelength_to_photon_energy(wavelength: float) -> float:
     return h * freq
 
 
+def wigner_zphasor(wavelength: float, pad: float, grid: int, grid_spacing: float):
+    """
+    Calculate the Wigner z-Phasor.
+
+    Parameters
+    ----------
+    wavelength : float
+        The wavelength of the wavefront.
+    pad : float
+        Padding size for the grid in Z.
+    grid : int
+        Number of grid points in Z.
+    grid_spacing : float
+        Spacing between grid points in Z.
+
+    Returns
+    -------
+    ndarray
+        The computed Wigner z-Phasor.
+    """
+    coeff = conversion_coeffs(wavelength, dim=1)
+    shift = (grid + pad) * grid_spacing
+    (mesh,) = nd_kspace_mesh(
+        coeffs=coeff,
+        sizes=[grid],
+        pads=[0],  # self.pad[2]],
+        steps=[grid_spacing],
+    )
+    return np.exp(1j * 2.0 * np.pi * mesh * shift / coeff)
+
+
 def _wavefront_ids_from_h5_file(h5: h5py.File) -> list[str]:
     extensions = tools.require_h5_string_attr(h5, "openPMDextension").split(";")
     if "wavefront" in extensions:
@@ -848,7 +902,6 @@ class Wavefront:
                 f"'WavefrontMetadata', 'dict', or None to reset the metadata"
             )
 
-        # ndim = len(self._grid)
         if polarization is not None:
             md.polarization = polarization
         if axis_labels is not None:
@@ -1059,7 +1112,7 @@ class Wavefront:
         return cartesian_domain(ranges=self.ranges, grids=self._grid)
 
     @property
-    def kspace_domain(self):
+    def kspace_domain(self) -> tuple[np.ndarray, ...]:
         """
         Reciprocal space domain values in all dimensions.
 
@@ -1077,27 +1130,6 @@ class Wavefront:
             pads=self.pad,
             steps=self.grid_spacing,
             shifted=True,
-        )
-
-    @property
-    def _nice_kspace_domain(self) -> _NiceXYZ:
-        """`nice_array`-modified kspace domain."""
-        domain_x, x_scale, x_unit_prefix = nice_array(self.kspace_domain[0])
-        domain_y, y_scale, y_unit_prefix = nice_array(self.kspace_domain[1])
-        domain_z, z_scale, z_unit_prefix = nice_array(self.kspace_domain[2])
-        assert isinstance(domain_x, np.ndarray)
-        assert isinstance(domain_y, np.ndarray)
-        assert isinstance(domain_z, np.ndarray)
-        return _NiceXYZ(
-            x=domain_x,
-            y=domain_y,
-            z=domain_z,
-            x_scale=x_scale,
-            y_scale=y_scale,
-            z_scale=z_scale,
-            x_unit_prefix=x_unit_prefix,
-            y_unit_prefix=y_unit_prefix,
-            z_unit_prefix=z_unit_prefix,
         )
 
     @property
@@ -1207,7 +1239,7 @@ class Wavefront:
 
     @property
     def k0(self) -> float:
-        """Wave number (units of m^-1)."""
+        """Wave number. [m^-1]"""
         return calculate_k0(self.wavelength)
 
     @property
@@ -1217,29 +1249,41 @@ class Wavefront:
 
     @property
     def grid_spacing(self) -> tuple[float, ...]:
+        """Per-dimension grid spacing in rspace. [m]"""
         return self.metadata.mesh.grid_spacing
 
     @property
     def ranges(self):
+        """
+        Get the physical range the entire mesh represents in (low, high) pairs
+        for each dimension.
+
+        Returns
+        -------
+        (low_x, high_x)
+            Range of X values [m].
+        (low_y, high_y)
+            Range of Y values [m].
+        (low_z, high_z)
+            Range of Z values [eV].
+        """
         return get_ranges_for_grid_spacing(
             grid_spacing=self.metadata.mesh.grid_spacing,
             dims=self.rmesh.shape,
         )
 
-    def focus(
-        self,
-        plane: Plane,
-        focus: tuple[float, float],
-    ) -> Wavefront:
+    def focus(self, plane: Plane, fx: float, fy: float) -> Wavefront:
         """
-        Apply thin lens focusing.
+        Apply thin lens focusing to this Wavefront, returning a new one.
 
         Parameters
         ----------
         plane : str
             Plane identifier (e.g., "xy").
-        focus : (float, float)
-            Focal length of the lens in each dimension [m].
+        fx : float
+            Focal length of the lens in x [m].
+        fy : float
+            Focal length of the lens in y [m].
 
         Returns
         -------
@@ -1248,18 +1292,7 @@ class Wavefront:
         if plane != "xy":
             raise NotImplementedError(f"Unsupported plane: {plane}")
 
-        new_rmesh = (
-            self.rmesh
-            * thin_lens_kernel_xy(
-                wavelength=self.wavelength,
-                ranges=self.ranges,
-                grid=self._grid,
-                f_lens_x=focus[0],
-                f_lens_y=focus[1],
-            )[:, :, np.newaxis]
-        )
-
-        return self.with_rmesh(new_rmesh)
+        return focus(self, plane=plane, focus=(fx, fy))
 
     def drift(self, distance: float) -> Wavefront:
         """
@@ -1274,48 +1307,17 @@ class Wavefront:
         -------
         Wavefront
         """
-        # indices = [
-        #     idx
-        #     for idx, label in enumerate(self.axis_labels)
-        #     if label != self._longitudinal_axis
-        # ]
-        indices = [0, 1]
-        transverse_kspace_grid = nd_kspace_mesh(
-            coeffs=(1.0,) * len(self._grid),
-            sizes=[self.rmesh.shape[idx] for idx in indices],
-            pads=[self._padding[idx] for idx in indices],
-            steps=[self.grid_spacing[idx] for idx in indices],
-        )
+        return drift(self, distance=distance)
 
-        kmesh = drift_propagator_paraxial(
-            kmesh=self.kmesh,
-            transverse_kspace_grid=transverse_kspace_grid,
-            wavelength=self.wavelength,
-            z=float(distance),
-        )
-        return Wavefront.from_kmesh(
-            kmesh,
-            wavelength=self.wavelength,
-            metadata=self.metadata,
-            padding=self.pad,
-        )
+    def wigner_distribution(self) -> np.ndarray:
+        """
+        Compute the Wigner distribution.
 
-    def _get_wigner_zphasor(self):
-        coeff = conversion_coeffs(self.wavelength, dim=1)
-        zpad = self.pad[2]
-        zgrid = self._grid[2]
-        dz = self.grid_spacing[2]
-        shift = (zgrid + zpad) * dz
-        (mesh,) = nd_kspace_mesh(
-            coeffs=coeff,
-            sizes=[zgrid],
-            pads=[0],  # self.pad[2]],
-            steps=[dz],
-        )
-        return np.exp(1j * 2.0 * np.pi * mesh * shift / coeff)
-
-    def wigner_distribution(self):
-        xgrid, ygrid, zgrid = self._grid
+        Returns
+        -------
+        np.ndarray
+        """
+        xgrid, ygrid, zgrid = self.grid
         _xpad, _ypad, zpad = self.pad
 
         sig_z_corr = np.zeros((zgrid + 2 * zpad, zgrid), dtype=complex)
@@ -1332,13 +1334,35 @@ class Wavefront:
             j = zpad - i
             sig_z_corr[:, i] = np.roll(sig_z_pad, j) * np.roll(sig_zconj_pad, -j)
 
-        zphasor = self._get_wigner_zphasor()
+        zphasor = wigner_zphasor(
+            wavelength=self.wavelength,
+            pad=self.pad[2],
+            grid=self.grid[2],
+            grid_spacing=self.grid_spacing[2],
+        )
         WT = np.fft.fftshift(zphasor * np.fft.fft(sig_z_corr, axis=1), axes=1)
         return np.real(WT[zpad : zgrid + zpad, :])
 
-    def plot_wigner_distribution(self):
+    def plot_wigner_distribution(
+        self,
+        ax: matplotlib.axes.Axes | None = None,
+        cmap: str = "bwr",
+        figsize: tuple[float, float] | None = None,
+        save: AnyPath | None = None,
+        colorbar: bool = True,
+    ):
+        """
+        Plot the Wigner distribution for the wavefront.
+        """
+        if ax is None:
+            fig, ax = plt.subplots(1, 1, figsize=figsize)
+            assert ax is not None
+        else:
+            fig = ax.get_figure()
+            assert fig is not None
+
         _, _, z = self.rspace_domain
-        kdomain = self._nice_kspace_domain
+        kdomain = _NiceXYZ.from_domain(self.kspace_domain)
         extent = (
             float(np.min(z)),  # left
             float(np.max(z)),  # right
@@ -1346,9 +1370,20 @@ class Wavefront:
             float(np.max(kdomain.z) / 2.0),  # top
         )
         WT = self.wigner_distribution()
-        plt.imshow(WT, cmap="bwr", extent=extent, aspect="auto")
-        plt.xlabel(f"Time (${kdomain.z_unit_prefix} s$)")
-        plt.ylabel("Photon energy ($eV$)")
+        im = ax.imshow(WT, cmap=cmap, extent=extent, aspect="auto")
+        ax.set_xlabel(f"Time (${kdomain.z_unit_prefix} s$)")
+        ax.set_ylabel("Photon energy ($eV$)")
+        if colorbar:
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="10%")
+            fig.colorbar(im, cax=cax, orientation="vertical")
+
+        if fig is not None:
+            if save:
+                logger.info(f"Saving plot to {save!r}")
+                fig.savefig(save, dpi=writers.savefig_dpi, bbox_inches="tight")
+
+        return fig, ax
 
     def plot(
         self,
@@ -1401,10 +1436,9 @@ class Wavefront:
 
         if ax is None:
             fig, ax = plt.subplots(1, 1, figsize=figsize)
+            assert ax is not None
         else:
             fig = ax.get_figure()
-
-        assert ax is not None
 
         try:
             r_or_k, axis_indices = projection_key_to_indices[projection]
@@ -1426,6 +1460,8 @@ class Wavefront:
 
         domain_x, _scale, x_unit_prefix = nice_array(domain[0])
         domain_y, _scale, y_unit_prefix = nice_array(domain[1])
+        assert isinstance(domain_x, np.ndarray)
+        assert isinstance(domain_y, np.ndarray)
         extent = (domain_x[0], domain_x[-1], domain_y[-1], domain_y[0])
 
         sum_axis = tuple(
@@ -1531,7 +1567,7 @@ class Wavefront:
         nx, ny, _nz = density.shape
         data = density[nx // 2, ny // 2, :]
 
-        kdomain = self._nice_kspace_domain
+        kdomain = _NiceXYZ.from_domain(self.kspace_domain)
         xlabel = _kspace_labels[2]
         ax.plot(kdomain.z, data)
         ax.set_xlabel(f"${xlabel} ({kdomain.z_unit_prefix} eV)$")
@@ -1569,7 +1605,7 @@ class Wavefront:
         proj_y = _get_projection(img_xy, axis=0)
         proj_x = _get_projection(img_xy, axis=1)
 
-        kdomain = self._nice_kspace_domain
+        kdomain = _NiceXYZ.from_domain(self.kspace_domain)
         ax.plot(kdomain.y, proj_y, label="Vertical")
         ax.plot(kdomain.x, proj_x, label="Horizontal")
         ax.set_xlabel(rf"$\theta$ (${kdomain.x_unit_prefix} rad$)")
@@ -1601,7 +1637,7 @@ class Wavefront:
             fig, ax = plt.subplots(figsize=figsize)
             assert ax is not None
 
-        kdomain = self._nice_kspace_domain
+        kdomain = _NiceXYZ.from_domain(self.kspace_domain)
 
         ax.set_xlabel(rf"$\omega - \omega_0$ (${kdomain.z_unit_prefix} eV$)")
         ax.set_ylabel("Spectrum [arb units]")
@@ -1626,7 +1662,7 @@ class Wavefront:
         xlim: tuple[float, float] | None = None,
         ylim: tuple[float, float] | None = None,
     ):
-        kdomain = self._nice_kspace_domain
+        kdomain = _NiceXYZ.from_domain(self.kspace_domain)
 
         extent = (
             np.min(kdomain.y),
@@ -1674,7 +1710,7 @@ class Wavefront:
         xlim: tuple[float, float] | None = None,
         ylim: tuple[float, float] | None = None,
     ):
-        kdomain = self._nice_kspace_domain
+        kdomain = _NiceXYZ.from_domain(self.kspace_domain)
         extent = (
             np.min(kdomain.y),
             np.max(kdomain.y),
@@ -1810,6 +1846,28 @@ class Wavefront:
         polarization: PolarizationDirection | None = None,
         metadata: WavefrontMetadata | dict | None = None,
     ) -> Wavefront:
+        """
+        Create a Wavefront from a k-space mesh.
+
+        Parameters
+        ----------
+        kmesh : np.ndarray
+            The k-space mesh.
+        padding : Sequence[int] or None
+            Padding to be applied to the mesh.
+        wavelength : float
+            Wavelength of the wavefront.
+        grid_spacing : Sequence[float] or None, optional
+            Grid spacing for the wavefront.
+        polarization : PolarizationDirection or None, optional
+            Polarization direction of the wavefront.
+        metadata : WavefrontMetadata or dict or None, optional
+            Metadata associated with the wavefront.
+
+        Returns
+        -------
+        Wavefront
+        """
         if padding is None:
             padding = (0,) * kmesh.ndim
         else:
@@ -1942,7 +2000,7 @@ class Wavefront:
         # efield_group["spatialDomain"]
         for polarization in "xyz":
             try:
-                rmesh_group = efield_group[polarization]
+                rmesh_dataset = tools.require_h5_dataset(efield_group, polarization)
             except KeyError:
                 pass
             else:
@@ -1950,9 +2008,9 @@ class Wavefront:
         else:
             raise ValueError("No supported polarization direction group found")
 
-        metadata = WavefrontMetadata.from_hdf5(h5, efield_group, rmesh_group)
+        metadata = WavefrontMetadata.from_hdf5(h5, efield_group, rmesh_dataset)
 
-        rmesh = readers.component_data(rmesh_group)
+        rmesh = readers.component_data(rmesh_dataset)
         return cls(
             rmesh=rmesh,
             wavelength=wavelength_to_photon_energy(photon_energy),
@@ -1966,13 +2024,28 @@ class Wavefront:
         iteration: int = 0,
         identifier: int = 0,
     ) -> Wavefront:
-        """Load a Wavefront from a file in the OpenPMD format."""
+        """Load a Wavefront from a file in the OpenPMD format.
+
+        Parameters
+        ----------
+        h5 : h5py.File or pathlib.Path or str
+            The HDF5 file object (or path to the file) to load the Wavefront from.
+        iteration : int, optional
+            The iteration number to load, by default 0.
+        identifier : int, optional
+            The identifier for the wavefront for the given iteration, by default 0.
+
+        Returns
+        -------
+        Wavefront
+        """
         if isinstance(h5, h5py.File):
             return cls._from_h5_file(h5, iteration=iteration, identifier=identifier)
         with h5py.File(h5) as h5p:
             return cls._from_h5_file(h5p, iteration=iteration, identifier=identifier)
 
     def _write_file(self, h5: h5py.File):
+        """Write the Wavefront to the given HDF5 File."""
         md = self.metadata
         base_path_template = "/data/%T/"
         # if md.index is not None:
@@ -2012,17 +2085,24 @@ class Wavefront:
 
         electric_field_path = wavefront_path + "/electricField/"
         efield_group = h5.create_group(electric_field_path)
-        self.write_group(efield_group)
+        self._write_group(efield_group)
 
     def write(self, h5: h5py.File | pathlib.Path | str) -> None:
-        """Write the Wavefront in OpenPMD format."""
+        """
+        Write the Wavefront in OpenPMD format.
+
+        Parameters
+        ----------
+        h5 : h5py.File or pathlib.Path or str
+            The h5py File handle or filename to write.
+        """
         if isinstance(h5, h5py.File):
             return self._write_file(h5)
 
         with h5py.File(h5, "w") as h5p:
             return self._write_file(h5p)
 
-    def write_group(self, group: h5py.Group) -> None:
+    def _write_group(self, group: h5py.Group) -> None:
         """Write the Wavefront in OpenPMD format to a specific HDF group."""
 
         writers.write_attrs(
@@ -2044,3 +2124,81 @@ class Wavefront:
             unit=self.metadata.units,
             attrs=self.metadata.mesh.attrs,
         )
+
+
+def focus(
+    wf: Wavefront,
+    plane: Plane,
+    focus: tuple[float, float],
+) -> Wavefront:
+    """
+    Apply thin lens focusing to a Wavefront.
+
+    Parameters
+    ----------
+    wf : Wavefront
+    plane : str
+        Plane identifier (e.g., "xy").
+    focus : (float, float)
+        Focal length of the lens in each dimension [m].
+
+    Returns
+    -------
+    Wavefront
+    """
+    if plane != "xy":
+        raise NotImplementedError(f"Unsupported plane: {plane}")
+
+    new_rmesh = (
+        wf.rmesh
+        * thin_lens_kernel_xy(
+            wavelength=wf.wavelength,
+            ranges=wf.ranges,
+            grid=wf.grid,
+            f_lens_x=focus[0],
+            f_lens_y=focus[1],
+        )[:, :, np.newaxis]
+    )
+
+    return wf.with_rmesh(new_rmesh)
+
+
+def drift(wf: Wavefront, distance: float) -> Wavefront:
+    """
+    Drift a Wavefront along the longitudinal direction in meters.
+
+    Parameters
+    ----------
+    wf : Wavefront
+    distance : float
+        Distance in meters.
+
+    Returns
+    -------
+    Wavefront
+    """
+    # indices = [
+    #     idx
+    #     for idx, label in enumerate(wf.axis_labels)
+    #     if label != wf.longitudinal_axis
+    # ]
+    indices = [0, 1]
+    transverse_kspace_grid = nd_kspace_mesh(
+        coeffs=(1.0,) * len(wf.grid),
+        sizes=[wf.rmesh.shape[idx] for idx in indices],
+        pads=[wf.pad[idx] for idx in indices],
+        steps=[wf.grid_spacing[idx] for idx in indices],
+    )
+
+    kmesh = drift_propagator_paraxial(
+        kmesh=wf.kmesh,
+        transverse_kspace_grid=transverse_kspace_grid,
+        wavelength=wf.wavelength,
+        z=float(distance),
+    )
+    return Wavefront.from_kmesh(
+        kmesh,
+        wavelength=wf.wavelength,
+        metadata=wf.metadata,
+        padding=wf.pad,
+    )

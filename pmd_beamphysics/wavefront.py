@@ -1483,13 +1483,13 @@ class Wavefront:
             if r_or_k == "rspace":
                 # See tech note 3.2
                 power_density = 1 / 1e4 * np.abs(mesh_data) ** 2 / (2.0 * Z0)
-                img = plot(power_density, "Power density of mesh (W/cm$^2$)")
+                img = plot(power_density, "Power density (W/cm$^2$)")
             else:
                 # See tech note 3.6 (coefficient is in 3.4)
                 power_density = (
                     np.abs(mesh_data) ** 2 / (2.0 * Z0) * self.fft_unit_coeff
                 )
-                img = plot(power_density, "Power density of mesh (J/eV/rad$^2$)")
+                img = plot(power_density, "Power density (J/eV/rad$^2$)")
 
         elif key == "phase":
             phase = np.angle(mesh_data)

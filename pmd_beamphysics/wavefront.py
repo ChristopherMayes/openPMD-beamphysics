@@ -51,17 +51,29 @@ Plane = Literal[
     "xy",
     "yz",
     "xz",
+    "yx",
+    "zy",
+    "zx",
     "kxky",
     "kykz",
     "kxkz",
+    "kykx",
+    "kzky",
+    "kzkx",
 ]
 projection_key_to_indices = {
-    "xy": ("rspace", 0, 1),
-    "yz": ("rspace", 1, 2),
-    "xz": ("rspace", 0, 2),
-    "kxky": ("kspace", 0, 1),
-    "kykz": ("kspace", 1, 2),
-    "kxkz": ("kspace", 0, 2),
+    "xy": ("rspace", (0, 1)),
+    "yz": ("rspace", (1, 2)),
+    "xz": ("rspace", (0, 2)),
+    "yx": ("rspace", (1, 0)),
+    "zy": ("rspace", (2, 1)),
+    "zx": ("rspace", (2, 0)),
+    "kxky": ("kspace", (0, 1)),
+    "kykz": ("kspace", (1, 2)),
+    "kxkz": ("kspace", (0, 2)),
+    "kykx": ("kspace", (1, 0)),
+    "kzky": ("kspace", (2, 1)),
+    "kzkx": ("kspace", (2, 0)),
 }
 
 
@@ -1358,7 +1370,6 @@ class Wavefront:
         xlim: tuple[float, float] | None = None,
         ylim: tuple[float, float] | None = None,
         save: AnyPath | None = None,
-        transpose: bool = False,
         colorbar: bool = True,
         # contour: bool = True,
     ):
@@ -1370,7 +1381,7 @@ class Wavefront:
         key : {"re", "im", "power_density", "phase"}
             The type of data to plot.
         projection : {"xy", "yz", "xz", "kxky", "kykz", "kxkz"}
-            The plane to project onto.
+            The plane to project onto.  Flipped versions are also supported.
         rspace : bool, default=True
             Plot the real/cartesian space data.
         show_real : bool
@@ -1403,8 +1414,6 @@ class Wavefront:
             Y axis limits.
         tight_layout : bool, default=True
             Set a tight layout.
-        transpose : bool, default=False
-            Transpose the data for plotting.
 
         Returns
         -------
@@ -1420,16 +1429,13 @@ class Wavefront:
         assert ax is not None
 
         try:
-            r_or_k, xidx, yidx = projection_key_to_indices[projection]
+            r_or_k, axis_indices = projection_key_to_indices[projection]
         except KeyError:
             raise ValueError(
                 f"Unsupported projection: {projection} choose from {list(projection_key_to_indices)}"
             ) from None
 
-        rspace = r_or_k == "rspace"
-        axis_indices = (xidx, yidx)
-
-        if rspace:
+        if r_or_k == "rspace":
             mesh_data = self.rmesh
             labels = [_rspace_labels[idx] for idx in axis_indices]
             domain = [self.rspace_domain[idx] for idx in axis_indices]
@@ -1443,12 +1449,6 @@ class Wavefront:
         domain_x, _scale, x_unit_prefix = nice_array(domain[0])
         domain_y, _scale, y_unit_prefix = nice_array(domain[1])
         extent = (domain_x[0], domain_x[-1], domain_y[-1], domain_y[0])
-
-        if transpose:
-            mesh_data = mesh_data.T
-            labels = tuple(reversed(labels))
-            extent = tuple(reversed(extent))
-            units = tuple(reversed(units))
 
         sum_axis = tuple(
             axis for axis in range(mesh_data.ndim) if axis not in axis_indices
@@ -1489,7 +1489,7 @@ class Wavefront:
             img = plot(np.imag(mesh_data), title=r"$\Im(\text{mesh})$")
 
         elif key == "power_density":
-            if rspace:
+            if r_or_k == "rspace":
                 # See tech note 3.2
                 power_density = 1 / 1e4 * np.abs(mesh_data) ** 2 / (2.0 * Z0)
                 img = plot(power_density, "Power density of mesh (W/cm$^2$)")
@@ -1955,7 +1955,7 @@ class Wavefront:
         openpmd_extension = get_string_attr(h5, "openPMDextension")
         if "Wavefront" not in openpmd_extension:
             raise ValueError(
-                f"Wavefront extension not enabled in file."
+                f"Wavefront extension not enabled in file. "
                 f"Extensions configured: {openpmd_extension}"
             )
 

@@ -190,14 +190,6 @@ def test_write_and_read_genesis4(
     assert wavefront.pad == loaded.pad
     assert wavefront.metadata == loaded.metadata
 
-    # Differences in sign make this not quite equal:
-    # E             array([[[0.+0.j, 0.+0.j, 0.+0.j, ..., 0.+0.j, 0.+0.j, 0.+0.j],
-    # E           -         [0.+0.j, 0.+0.j, 0.+0.j, ..., 0.+0.j, 0.+0.j, 0.+0.j],
-    # E           ?            ^       ^       ^            ^       ^       ^
-    # E           +         [0.-0.j, 0.-0.j, 0.-0.j, ..., 0.-0.j, 0.-0.j, 0.-0.j],
-    # E           ?            ^       ^       ^            ^       ^       ^...
-    # Should probably switch to `allclose` in `__eq__` but I think Chris has a
-    # preference for true equality
     assert np.allclose(wavefront.rmesh.real, loaded.rmesh.real)
     assert np.allclose(wavefront.rmesh.imag, loaded.rmesh.imag)
     loaded._rmesh = wavefront.rmesh

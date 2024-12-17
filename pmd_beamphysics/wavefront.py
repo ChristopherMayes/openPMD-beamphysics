@@ -1371,7 +1371,7 @@ class Wavefront:
         ylim: tuple[float, float] | None = None,
         save: AnyPath | None = None,
         colorbar: bool = True,
-        # contour: bool = True,
+        aspect: float | Literal["equal", "auto"] = "auto",
     ):
         """
         Plot the projection onto the given plane.
@@ -1382,38 +1382,24 @@ class Wavefront:
             The type of data to plot.
         projection : {"xy", "yz", "xz", "kxky", "kykz", "kxkz"}
             The plane to project onto.  Flipped versions are also supported.
-        rspace : bool, default=True
-            Plot the real/cartesian space data.
-        show_real : bool
-            Show the projection of the real portion of the data.
-        show_imaginary : bool
-            Show the projection of the imaginary portion of the data.
-        show_power_density : bool
-            Show the projection of the power density of the data.
-        show_phase : bool
-            Show the projection of the phase of the data.
         isophase_contour : bool, default=False
             Add isophase contour to the phase plot.
         figsize : (float, float), optional
             Figure size for the axes.
             Defaults to Matplotlib's `rcParams["figure.figsize"]``.
-        axs : List[matplotlib.axes.Axes], optional
+        ax : matplotlib.axes.Axes, optional
             Plot the data in the provided matplotlib Axes.
             Creates a new figure and Axes if not specified.
         cmap : str, default="viridis"
             Color map to use.
-        nrows : int, default=2
-            Number of rows for the plot.
-        ncols : int, default=2
-            Number of columns for the plot.
         save : pathlib.Path or str, optional
             Save the plot to the given filename.
         xlim : (float, float), optional
             X axis limits.
         ylim : (float, float), optional
             Y axis limits.
-        tight_layout : bool, default=True
-            Set a tight layout.
+        aspect : float, "equal", or "auto", optional
+            Aspect ratio for the plot. Default is "auto".
 
         Returns
         -------
@@ -1462,7 +1448,12 @@ class Wavefront:
             # _z_min, z_max = self.ranges[sum_axis]
             # dz = self.grid_spacing[sum_axis]
             # dat = np.sum(dat, axis=sum_axis) * dz / (2.0 * z_max)
-            img = ax.imshow(np.mean(dat, axis=sum_axis), cmap=cmap, extent=extent)
+            img = ax.imshow(
+                np.mean(dat, axis=sum_axis),
+                cmap=cmap,
+                extent=extent,
+                aspect=aspect,
+            )
 
             ax.set_xlabel(f"${labels[0]}$ ({x_unit_prefix}{units[0]})")
             ax.set_ylabel(f"${labels[1]}$ ({y_unit_prefix}{units[1]})")
@@ -1470,7 +1461,7 @@ class Wavefront:
                 divider = make_axes_locatable(ax)
                 fig = ax.get_figure()
                 assert fig is not None
-                cax = divider.append_axes("right", size="10%")
+                cax = divider.append_axes("right", size="10%", pad=0.1)
                 fig.colorbar(img, cax=cax, orientation="vertical")
                 cax.set_ylabel(title)
             else:
@@ -1927,6 +1918,13 @@ class Wavefront:
         field_file.write_genesis4(h5)
 
     @classmethod
+    def _from_legacy_h5_file(cls, h5: h5py.File, identifier: int) -> Wavefront:
+        # Legacy file format - written by lume-genesis
+        raise NotImplementedError(
+            "Legacy lume-genesis openpmd-beamphysics format is not yet supported"
+        )
+
+    @classmethod
     def _from_h5_file(cls, h5: h5py.File, identifier: int) -> Wavefront:
         def get_string_attr(parent: h5py.Group, attr: str) -> str:
             value = parent.attrs[attr]
@@ -1952,7 +1950,9 @@ class Wavefront:
 
         base_path = get_string_attr(h5, "basePath")
         # data_type = h5.attrs["dataType"]
-        openpmd_extension = get_string_attr(h5, "openPMDextension")
+        openpmd_extension = get_string_attr(h5, "openPMDextension").split(";")
+        if "wavefront" in openpmd_extension:
+            return cls._load_legacy_wavefront_file(h5)
         if "Wavefront" not in openpmd_extension:
             raise ValueError(
                 f"Wavefront extension not enabled in file. "

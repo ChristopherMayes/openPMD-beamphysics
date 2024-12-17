@@ -89,15 +89,26 @@ def set_num_fft_workers(workers: int):
     logger.info(f"Set number of FFT workers to: {workers}")
 
 
-def _require_h5_group(parent: h5py.Group, name: str) -> h5py.Group:
+def _require_h5_group(h5: h5py.Group, name: str) -> h5py.Group:
     try:
-        group = parent[name]
+        group = h5[name]
     except KeyError:
-        raise KeyError(f"Expected HDF group {name} not found in {parent.name}")
+        raise KeyError(f"Expected HDF group {name} not found in {h5.name}")
 
     if not isinstance(group, h5py.Group):
         raise ValueError(f"Key {group} expected to be a group, but is a {type(group)}")
     return group
+
+
+def _require_h5_string_attr(h5: h5py.Group, attr: str) -> str:
+    value = h5.attrs[attr]
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bytes):
+        return value.decode()
+    raise ValueError(
+        f"Expected bytes or strings for {h5.name} key {attr}; got {type(value).__name__}"
+    )
 
 
 # Wwigner = Wavefront.gaussian_pulse(
@@ -761,6 +772,54 @@ def wavelength_to_photon_energy(wavelength: float) -> float:
     h = scipy.constants.value("Planck constant in eV/Hz") / (2 * np.pi)
     freq = scipy.constants.speed_of_light / wavelength
     return h * freq
+
+
+def _wavefront_ids_from_h5_file(h5: h5py.File) -> list[str]:
+    openpmd_extension = _require_h5_string_attr(h5, "openPMDextension").split(";")
+    if "wavefront" in openpmd_extension:
+        data = _require_h5_group(h5, "/data")
+        ids = []
+        for name, group in data.items():
+            if isinstance(group, h5py.Group) and "meshes" in group:
+                ids.append(name)
+        return ids
+
+    if "Wavefront" not in openpmd_extension:
+        raise ValueError(
+            f"Wavefront extension not enabled in file. "
+            f"Extensions configured: {openpmd_extension}"
+        )
+
+    # TODO this will work in the normal case but perhaps not in other weird configurations
+    base_path = _require_h5_string_attr(h5, "basePath").replace("%T", "")
+    base_group = _require_h5_group(h5, base_path)
+    ids = []
+    for name, group in base_group.items():
+        if isinstance(group, h5py.Group) and "wavefront" in group:
+            ids.append(name)
+    return ids
+
+
+def wavefront_ids_from_file(
+    h5: h5py.File | pathlib.Path | str,
+) -> list[str]:
+    """
+    Get a list of Wavefront identifiers available in the given file.
+
+    Parameters
+    ----------
+    h5 : h5py.File or pathlib.Path or str
+        The HDF5 file instance or a path to the file.
+
+    Returns
+    -------
+    list of str
+    """
+    if isinstance(h5, h5py.File):
+        return _wavefront_ids_from_h5_file(h5)
+
+    with h5py.File(h5, "r") as h5p:
+        return _wavefront_ids_from_h5_file(h5p)
 
 
 class Wavefront:
@@ -1950,12 +2009,18 @@ class Wavefront:
         field_file.write_genesis4(h5)
 
     @classmethod
-    def _from_legacy_genesis_pmd(cls, h5: h5py.File, identifier: int) -> Wavefront:
+    def _from_legacy_genesis_pmd(
+        cls, h5: h5py.File, identifier: str | int
+    ) -> Wavefront:
         from genesis.version4 import FieldFile
         from genesis.version4.field import FieldFileParams
 
+        if isinstance(identifier, int):
+            data_path = f"/data/{identifier:06}/"
+        else:
+            data_path = f"/data/{identifier}/"
         # Legacy file format - written by lume-genesis `write_openpmd_wavefront`
-        group = _require_h5_group(h5, f"/data/{identifier:06}/")
+        group = _require_h5_group(h5, data_path)
         assert isinstance(group, h5py.Group)
         h5_meshes = _require_h5_group(group, "meshes")
 
@@ -2002,20 +2067,15 @@ class Wavefront:
         return cls.from_genesis4_fieldfile(field_file)
 
     @classmethod
-    def _from_h5_file(cls, h5: h5py.File, identifier: int) -> Wavefront:
-        def get_string_attr(parent: h5py.Group, attr: str) -> str:
-            value = parent.attrs[attr]
-            if isinstance(value, str):
-                return value
-            if isinstance(value, bytes):
-                return value.decode()
-            raise ValueError(
-                f"Expected bytes or strings for {h5.name} key {attr}; got {type(value).__name__}"
-            )
-
-        base_path = get_string_attr(h5, "basePath")
+    def _from_h5_file(
+        cls,
+        h5: h5py.File,
+        identifier: str | int,
+        iteration: str | int = 0,
+    ) -> Wavefront:
+        base_path = _require_h5_string_attr(h5, "basePath")
         # data_type = h5.attrs["dataType"]
-        openpmd_extension = get_string_attr(h5, "openPMDextension").split(";")
+        openpmd_extension = _require_h5_string_attr(h5, "openPMDextension").split(";")
         if "wavefront" in openpmd_extension:
             return cls._from_legacy_genesis_pmd(h5, identifier=identifier)
         if "Wavefront" not in openpmd_extension:
@@ -2024,8 +2084,8 @@ class Wavefront:
                 f"Extensions configured: {openpmd_extension}"
             )
 
-        iteration_path = base_path.replace("%T", str(identifier))
-        wavefront_field_path = get_string_attr(h5, "wavefrontFieldPath")
+        iteration_path = base_path.replace("%T", str(iteration))
+        wavefront_field_path = _require_h5_string_attr(h5, "wavefrontFieldPath")
 
         # {iteration group}/{wavefront group}/{efield_group}
         iteration_group = _require_h5_group(h5, iteration_path)
@@ -2061,13 +2121,14 @@ class Wavefront:
     def from_file(
         cls,
         h5: h5py.File | pathlib.Path | str,
+        iteration: int = 0,
         identifier: int = 0,
     ) -> Wavefront:
         """Load a Wavefront from a file in the OpenPMD format."""
         if isinstance(h5, h5py.File):
-            return cls._from_h5_file(h5, identifier=identifier)
+            return cls._from_h5_file(h5, iteration=iteration, identifier=identifier)
         with h5py.File(h5) as h5p:
-            return cls._from_h5_file(h5p, identifier=identifier)
+            return cls._from_h5_file(h5p, iteration=iteration, identifier=identifier)
 
     # names = get_wavefront_names_from_file("something.h5")
     # for name in names:
@@ -2079,11 +2140,12 @@ class Wavefront:
     def _write_file(self, h5: h5py.File):
         md = self.metadata
         base_path_template = "/data/%T/"
-        if md.index is not None:
-            wavefront_base_path_template = "wavefront/%T/"
-        else:
-            # For us, at least, second %T doesn't make much sense:
-            wavefront_base_path_template = "wavefront"
+        # if md.index is not None:
+        #     wavefront_base_path_template = "wavefront/%T/"
+        # else:
+        # For us, at least, second %T doesn't make much sense. Each iteration
+        # stores one wavefront for now.
+        wavefront_base_path_template = "wavefront"
         wavefront_base_path = wavefront_base_path_template.replace("%T", str(md.index))
         base_path = base_path_template.replace("%T", str(md.iteration.iteration))
 

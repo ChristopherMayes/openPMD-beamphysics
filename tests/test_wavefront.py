@@ -15,6 +15,7 @@ from pmd_beamphysics.wavefront import (
     get_num_fft_workers,
     get_range_for_grid_spacing,
     set_num_fft_workers,
+    wavefront_ids_from_file,
 )
 
 
@@ -261,3 +262,28 @@ def test_write_and_read_openpmd(
     assert wavefront.metadata.mesh == loaded.metadata.mesh
     assert wavefront.metadata == loaded.metadata
     assert wavefront == loaded
+
+
+def test_legacy_wavefront_ids_from_file(
+    wavefront: Wavefront,
+    tmp_path: pathlib.Path,
+    request: pytest.FixtureRequest,
+):
+    fn = tmp_path / f"{request.node.name}.h5"
+    field_file = wavefront.to_genesis4_fieldfile()
+    field_file.write_openpmd_wavefront(dest=fn)
+
+    assert wavefront_ids_from_file(fn) == ["000000"]
+
+
+def test_wavefront_ids_from_file(
+    wavefront: Wavefront,
+    tmp_path: pathlib.Path,
+    request: pytest.FixtureRequest,
+):
+    for iteration in range(3):
+        fn = tmp_path / f"{request.node.name}-{iteration}.h5"
+        wavefront.metadata.iteration.iteration = iteration
+        wavefront.write(fn)
+
+        assert wavefront_ids_from_file(fn) == [str(iteration)]

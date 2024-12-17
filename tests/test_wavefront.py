@@ -196,6 +196,41 @@ def test_write_and_read_genesis4(
     assert wavefront == loaded
 
 
+def test_write_and_read_genesis4_legacy_openpmd(
+    wavefront: Wavefront,
+    tmp_path: pathlib.Path,
+    request: pytest.FixtureRequest,
+):
+    fn = tmp_path / f"{request.node.name}.h5"
+    field_file = wavefront.to_genesis4_fieldfile()
+
+    field_file.write_openpmd_wavefront(dest=fn)
+
+    wavefront.metadata.mesh.grid_global_offset = (0.0, 0.0, 0.0)
+
+    loaded = wavefront.from_file(fn).with_padding(wavefront.pad)
+
+    # check these individually before testing full equality, so we don't get just a final failure
+    assert wavefront.grid == loaded.grid
+    assert np.allclose(wavefront.rmesh.real, loaded.rmesh.real)
+    assert np.allclose(wavefront.rmesh.imag, loaded.rmesh.imag)
+    assert np.isclose(wavefront.wavelength, loaded.wavelength)
+    assert wavefront.pad == loaded.pad
+
+    # NOTE the date isn't retained in the old format
+    loaded.metadata.base.date = wavefront.metadata.base.date
+    assert wavefront.metadata.base == loaded.metadata.base
+    assert wavefront.metadata.iteration == loaded.metadata.iteration
+    assert wavefront.metadata.mesh == loaded.metadata.mesh
+    assert wavefront.metadata == loaded.metadata
+
+    # Overwrite the above stuff that's close but not equal:
+    loaded._rmesh = wavefront._rmesh
+    loaded._kmesh = wavefront._kmesh
+    loaded.wavelength = wavefront.wavelength
+    assert wavefront == loaded
+
+
 def test_write_and_read_openpmd(
     wavefront: Wavefront,
     tmp_path: pathlib.Path,
@@ -216,6 +251,8 @@ def test_write_and_read_openpmd(
     assert wavefront.pad == loaded.pad
 
     # TODO: we don't store microseconds
+    # NOTE: the date should be retained here as when it was originally stored,
+    # minus microseconds as above
     loaded.metadata.base.date = loaded.metadata.base.date.replace(
         microsecond=wavefront.metadata.base.date.microsecond
     )

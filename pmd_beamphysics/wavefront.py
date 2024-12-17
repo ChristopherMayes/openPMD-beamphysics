@@ -4,7 +4,7 @@ import copy
 import logging
 import pathlib
 import typing
-from typing import Any, Literal, NamedTuple, Union, TYPE_CHECKING
+from typing import cast, Any, Literal, NamedTuple, Union, TYPE_CHECKING
 from collections.abc import Sequence
 
 import h5py
@@ -87,6 +87,17 @@ def set_num_fft_workers(workers: int):
     _fft_workers = workers
 
     logger.info(f"Set number of FFT workers to: {workers}")
+
+
+def _require_h5_group(parent: h5py.Group, name: str) -> h5py.Group:
+    try:
+        group = parent[name]
+    except KeyError:
+        raise KeyError(f"Expected HDF group {name} not found in {parent.name}")
+
+    if not isinstance(group, h5py.Group):
+        raise ValueError(f"Key {group} expected to be a group, but is a {type(group)}")
+    return group
 
 
 # Wwigner = Wavefront.gaussian_pulse(
@@ -1826,6 +1837,45 @@ class Wavefront:
         return self
 
     @classmethod
+    def from_genesis4_fieldfile(
+        cls,
+        field: Genesis4FieldFile,
+        pad: int | tuple[int, int, int] = 0,
+    ) -> Wavefront:
+        """
+        Load a Genesis4 `FieldFile` as a `Wavefront`.
+
+        Parameters
+        ----------
+        h5 : h5py.File, pathlib.Path, or str
+            The opened h5py File or a path to it on disk.
+        pad : int or (int, int, int), default=100
+            Specify either (padx, pady, padz) or all-around padding.
+
+        Returns
+        -------
+        Wavefront
+        """
+        # NOTE: refer to here for more information:
+        # https://github.com/slaclab/lume-genesis/blob/master/docs/notes/genesis_fields.pdf
+        genesis_to_v_over_m = np.sqrt(2.0 * Z0) / field.param.gridsize
+
+        # field.param.gridsize = 2 * field.dgrid / (ngrid - 1)
+        wf = cls(
+            rmesh=field.dfl * genesis_to_v_over_m,
+            wavelength=field.param.wavelength,
+            grid_spacing=(
+                field.param.gridsize,
+                field.param.gridsize,
+                field.param.slicespacing,
+            ),
+            pad=pad,
+            polarization="x",
+        )
+        wf.metadata.mesh.grid_global_offset = (0.0, 0.0, field.param.refposition)
+        return wf
+
+    @classmethod
     def from_genesis4(
         cls,
         h5: h5py.File | pathlib.Path | str,
@@ -1847,26 +1897,8 @@ class Wavefront:
         """
         from genesis.version4 import FieldFile
 
-        field = FieldFile.from_file(h5)
-
-        # NOTE: refer to here for more information:
-        # https://github.com/slaclab/lume-genesis/blob/master/docs/notes/genesis_fields.pdf
-        genesis_to_v_over_m = np.sqrt(2.0 * Z0) / field.param.gridsize
-
-        # field.param.gridsize = 2 * field.dgrid / (ngrid - 1)
-        wf = cls(
-            rmesh=field.dfl * genesis_to_v_over_m,
-            wavelength=field.param.wavelength,
-            grid_spacing=(
-                field.param.gridsize,
-                field.param.gridsize,
-                field.param.slicespacing,
-            ),
-            pad=pad,
-            polarization="x",
-        )
-        wf.metadata.mesh.grid_global_offset = (0.0, 0.0, field.param.refposition)
-        return wf
+        field_file = FieldFile.from_file(h5)
+        return cls.from_genesis4_fieldfile(field_file, pad=pad)
 
     def to_genesis4_fieldfile(self) -> Genesis4FieldFile:
         from genesis.version4 import FieldFile
@@ -1918,11 +1950,56 @@ class Wavefront:
         field_file.write_genesis4(h5)
 
     @classmethod
-    def _from_legacy_h5_file(cls, h5: h5py.File, identifier: int) -> Wavefront:
-        # Legacy file format - written by lume-genesis
-        raise NotImplementedError(
-            "Legacy lume-genesis openpmd-beamphysics format is not yet supported"
+    def _from_legacy_genesis_pmd(cls, h5: h5py.File, identifier: int) -> Wavefront:
+        from genesis.version4 import FieldFile
+        from genesis.version4.field import FieldFileParams
+
+        # Legacy file format - written by lume-genesis `write_openpmd_wavefront`
+        group = _require_h5_group(h5, f"/data/{identifier:06}/")
+        assert isinstance(group, h5py.Group)
+        h5_meshes = _require_h5_group(group, "meshes")
+
+        # Point to the real and imaginary h5 handles
+        E_complex = _require_h5_group(h5_meshes, "electricField")
+
+        gridsize, gridsize, slicespacing = cast(
+            tuple[float, float, float], E_complex.attrs["gridSpacing"]
         )
+        photon_energy = cast(float, E_complex.attrs["photonEnergy"])
+        refposition = E_complex.attrs["timeOffset"]
+        wavelength = 12398.425 / photon_energy * 1.0e-10
+
+        # Get arrays
+        if "x" in E_complex:
+            fld = E_complex["x"]
+        elif "y" in E_complex:
+            fld = E_complex["y"]
+        else:
+            raise NotImplementedError(
+                "X or Y polarization are only supported in the legacy field file format"
+            )
+
+        assert isinstance(fld, h5py.Dataset)
+
+        gridpoints, gridpoints, slicecount = np.array(fld.shape)
+        factorGenesis = gridsize / np.sqrt(2.0 * Z0)  # factor to genesis units
+        unitSI = fld.attrs["unitSI"]  # factor to convert to V/m
+        dflfactor = unitSI * factorGenesis  # V/m -> Genesis
+        dfl = dflfactor * np.asarray(fld)
+
+        field_file = FieldFile(
+            label=identifier,
+            dfl=dfl,
+            param=FieldFileParams(
+                gridpoints=gridpoints,
+                slicecount=slicecount,
+                gridsize=gridsize,
+                refposition=refposition,
+                slicespacing=slicespacing,
+                wavelength=wavelength,
+            ),
+        )
+        return cls.from_genesis4_fieldfile(field_file)
 
     @classmethod
     def _from_h5_file(cls, h5: h5py.File, identifier: int) -> Wavefront:
@@ -1936,23 +2013,11 @@ class Wavefront:
                 f"Expected bytes or strings for {h5.name} key {attr}; got {type(value).__name__}"
             )
 
-        def require_group(parent: h5py.Group, name: str) -> h5py.Group:
-            try:
-                group = parent[name]
-            except KeyError:
-                raise KeyError(f"Expected HDF group {name} not found in {h5.name}")
-
-            if not isinstance(group, h5py.Group):
-                raise ValueError(
-                    f"Key {group} expected to be a group, but is a {type(group)}"
-                )
-            return group
-
         base_path = get_string_attr(h5, "basePath")
         # data_type = h5.attrs["dataType"]
         openpmd_extension = get_string_attr(h5, "openPMDextension").split(";")
         if "wavefront" in openpmd_extension:
-            return cls._load_legacy_wavefront_file(h5)
+            return cls._from_legacy_genesis_pmd(h5, identifier=identifier)
         if "Wavefront" not in openpmd_extension:
             raise ValueError(
                 f"Wavefront extension not enabled in file. "
@@ -1963,9 +2028,9 @@ class Wavefront:
         wavefront_field_path = get_string_attr(h5, "wavefrontFieldPath")
 
         # {iteration group}/{wavefront group}/{efield_group}
-        iteration_group = require_group(h5, iteration_path)
-        wavefront_group = require_group(iteration_group, wavefront_field_path)
-        efield_group = require_group(wavefront_group, "electricField")
+        iteration_group = _require_h5_group(h5, iteration_path)
+        wavefront_group = _require_h5_group(iteration_group, wavefront_field_path)
+        efield_group = _require_h5_group(wavefront_group, "electricField")
 
         photon_energy = efield_group.attrs["photonEnergy"]
         assert isinstance(photon_energy, float)

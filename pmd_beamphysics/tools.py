@@ -1,5 +1,11 @@
 import datetime
+import logging
+
+import h5py
 import numpy as np
+
+logger = logging.getLogger(__name__)
+_global_fft_workers = -1
 
 
 def fstr(s):
@@ -94,3 +100,37 @@ def current_date_with_tzinfo() -> datetime.datetime:
 
 def pmd_format_date(dt: datetime.datetime) -> str:
     return dt.strftime("%Y-%m-%d %H:%M:%S %z")
+
+
+def require_h5_group(h5: h5py.Group, name: str) -> h5py.Group:
+    try:
+        group = h5[name]
+    except KeyError:
+        raise KeyError(f"Expected HDF group {name} not found in {h5.name}")
+
+    if not isinstance(group, h5py.Group):
+        raise ValueError(f"Key {group} expected to be a group, but is a {type(group)}")
+    return group
+
+
+def require_h5_string_attr(h5: h5py.Group, attr: str) -> str:
+    value = h5.attrs[attr]
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bytes):
+        return value.decode()
+    raise ValueError(
+        f"Expected bytes or strings for {h5.name} key {attr}; got {type(value).__name__}"
+    )
+
+
+def get_num_fft_workers() -> int:
+    return _global_fft_workers
+
+
+def set_num_fft_workers(workers: int):
+    global _global_fft_workers
+
+    _global_fft_workers = workers
+
+    logger.info(f"Set number of FFT workers to: {workers}")

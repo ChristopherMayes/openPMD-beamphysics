@@ -1,14 +1,25 @@
+from __future__ import annotations
 import os
+from typing import cast, TYPE_CHECKING
 
+import h5py
 import numpy as np
 from h5py import File, Group
 
-from pmd_beamphysics.statistics import twiss_calc
-from pmd_beamphysics.units import c_light, mec2, unit, write_unit_h5
+from .. import tools
+from ..statistics import twiss_calc
+from ..wavefront import Wavefront
+from ..units import c_light, mec2, unit, write_unit_h5
+
+
+if TYPE_CHECKING:
+    from genesis.version4 import FieldFile as FieldFile
+
 
 # Genesis 1.3
 # -------------
 # Version 2 routines
+Z0 = np.pi * 119.9169832  # V^2/W exactly
 
 
 def genesis2_beam_data1(pg):
@@ -376,9 +387,9 @@ def genesis4_beam_input_str(data_keys):
 
 def write_genesis4_distribution(particle_group, h5file, verbose=False):
     """
+    Write `particle_group` as a Genesis 4 distribution to `h5file`.
 
-
-    Cooresponds to the `import distribution` section in the Genesis4 manual.
+    Corresponds to the `import distribution` section in the Genesis4 manual.
 
     Writes datesets to an h5 file:
 
@@ -392,9 +403,7 @@ def write_genesis4_distribution(particle_group, h5file, verbose=False):
         t is the time in seconds
         p  = relativistic gamma*beta is the total momentum divided by mc
 
-
         These should be the same as in .interfaces.elegant.write_elegant
-
 
     If particles are at different z, they will be drifted to the same z,
     because the output should have different times.
@@ -582,3 +591,146 @@ def genesis4_par_to_data(h5, species="electron", smear=True):
     }
 
     return data
+
+
+def genesis_to_v_over_m_scale_factor(gridsize: float) -> float:
+    return np.sqrt(2.0 * Z0) / gridsize
+
+
+def read_legacy_genesis_pmd_wavefront(
+    h5: h5py.File,
+    identifier: str | int,
+) -> Wavefront:
+    """
+    Read a legacy interpretation of the openPMD-Wavefront standard.
+
+    This interprets files written by lume-genesis `write_openpmd_wavefront`,
+    which will be deprecated and replaced with openPMD-beamphysics Wavefront
+    support.
+    """
+    from genesis.version4 import FieldFile
+    from genesis.version4.field import FieldFileParams
+
+    if isinstance(identifier, int):
+        data_path = f"/data/{identifier:06}/"
+    else:
+        data_path = f"/data/{identifier}/"
+    group = tools.require_h5_group(h5, data_path)
+    h5_meshes = tools.require_h5_group(group, "meshes")
+
+    # Point to the real and imaginary h5 handles
+    E_complex = tools.require_h5_group(h5_meshes, "electricField")
+
+    gridsize, gridsize, slicespacing = cast(
+        tuple[float, float, float], E_complex.attrs["gridSpacing"]
+    )
+    photon_energy = cast(float, E_complex.attrs["photonEnergy"])
+    refposition = E_complex.attrs["timeOffset"]
+    wavelength = 12398.425 / photon_energy * 1.0e-10
+
+    # Get arrays
+    if "x" in E_complex:
+        fld = E_complex["x"]
+    elif "y" in E_complex:
+        fld = E_complex["y"]
+    else:
+        raise NotImplementedError(
+            "X or Y polarization are only supported in the legacy field file format"
+        )
+
+    assert isinstance(fld, h5py.Dataset)
+
+    gridpoints, gridpoints, slicecount = np.array(fld.shape)
+    factor = 1.0 / genesis_to_v_over_m_scale_factor(gridsize)
+    unitSI = cast(float, fld.attrs["unitSI"])  # factor to convert to V/m
+    dflfactor = unitSI * factor  # V/m -> Genesis
+    dfl = dflfactor * np.asarray(fld)
+
+    field_file = FieldFile(
+        label=identifier,
+        dfl=dfl,
+        param=FieldFileParams(
+            gridpoints=gridpoints,
+            slicecount=slicecount,
+            gridsize=gridsize,
+            refposition=refposition,
+            slicespacing=slicespacing,
+            wavelength=wavelength,
+        ),
+    )
+    return Wavefront.from_genesis4_fieldfile(field_file)
+
+
+def wavefront_to_genesis4_fieldfile(wf: Wavefront) -> FieldFile:
+    from genesis.version4 import FieldFile
+    from genesis.version4.field import FieldFileParams
+
+    nx, ny, nz = wf.rmesh.shape
+
+    if nx != ny:
+        raise ValueError(f"Genesis 4 expects nx == ny, however {nx=} and {ny=}")
+
+    gridsize, _, slicespacing = wf.grid_spacing
+
+    global_offset = wf.metadata.mesh.grid_global_offset
+    if len(global_offset) == 3:
+        refposition = global_offset[2]
+    else:
+        refposition = 0.0
+
+    v_over_m_to_genesis = gridsize / np.sqrt(2.0 * Z0)
+    return FieldFile(
+        dfl=wf.rmesh * v_over_m_to_genesis,
+        param=FieldFileParams(
+            #  number of gridpoints in one transverse dimension equal to nx and ny above
+            gridpoints=nx,
+            # gridspacing (meter)
+            gridsize=gridsize,
+            # starting position (meter)
+            refposition=refposition,
+            # radiation wavelength (meter)
+            wavelength=wf.wavelength,
+            # number of slices
+            slicecount=nz,
+            # slice spacing (meter)
+            slicespacing=slicespacing,
+        ),
+    )
+
+
+def genesis4_fieldfile_to_wavefront(
+    field: FieldFile,
+    pad: int | tuple[int, int, int] = 0,
+) -> Wavefront:
+    """
+    Load a Genesis4 `FieldFile` as a `Wavefront`.
+
+    Parameters
+    ----------
+    h5 : h5py.File, pathlib.Path, or str
+        The opened h5py File or a path to it on disk.
+    pad : int or (int, int, int), default=100
+        Specify either (padx, pady, padz) or all-around padding.
+
+    Returns
+    -------
+    Wavefront
+    """
+    # NOTE: refer to here for more information:
+    # https://github.com/slaclab/lume-genesis/blob/master/docs/notes/genesis_fields.pdf
+    scale = genesis_to_v_over_m_scale_factor(field.param.gridsize)
+
+    # field.param.gridsize = 2 * field.dgrid / (ngrid - 1)
+    wf = Wavefront(
+        rmesh=field.dfl * scale,
+        wavelength=field.param.wavelength,
+        grid_spacing=(
+            field.param.gridsize,
+            field.param.gridsize,
+            field.param.slicespacing,
+        ),
+        pad=pad,
+        polarization="x",
+    )
+    wf.metadata.mesh.grid_global_offset = (0.0, 0.0, field.param.refposition)
+    return wf

@@ -4,8 +4,8 @@ import copy
 import logging
 import pathlib
 import typing
-from typing import cast, Any, Literal, NamedTuple, Union, TYPE_CHECKING
 from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Union
 
 import h5py
 import matplotlib
@@ -16,7 +16,7 @@ import scipy.constants
 import scipy.fft
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from . import readers, writers
+from . import readers, tools, writers
 from .metadata import PolarizationDirection, WavefrontMetadata
 from .units import known_unit, nice_array
 
@@ -26,7 +26,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-_fft_workers = -1
 Ranges = Sequence[tuple[float, float]]
 AnyPath = Union[str, pathlib.Path]
 Z0 = np.pi * 119.9169832  # V^2/W exactly
@@ -77,58 +76,6 @@ projection_key_to_indices = {
 }
 
 
-def get_num_fft_workers() -> int:
-    return _fft_workers
-
-
-def set_num_fft_workers(workers: int):
-    global _fft_workers
-
-    _fft_workers = workers
-
-    logger.info(f"Set number of FFT workers to: {workers}")
-
-
-def _require_h5_group(h5: h5py.Group, name: str) -> h5py.Group:
-    try:
-        group = h5[name]
-    except KeyError:
-        raise KeyError(f"Expected HDF group {name} not found in {h5.name}")
-
-    if not isinstance(group, h5py.Group):
-        raise ValueError(f"Key {group} expected to be a group, but is a {type(group)}")
-    return group
-
-
-def _require_h5_string_attr(h5: h5py.Group, attr: str) -> str:
-    value = h5.attrs[attr]
-    if isinstance(value, str):
-        return value
-    if isinstance(value, bytes):
-        return value.decode()
-    raise ValueError(
-        f"Expected bytes or strings for {h5.name} key {attr}; got {type(value).__name__}"
-    )
-
-
-# Wwigner = Wavefront.gaussian_pulse(
-#     dims=(101, 101, 513),
-#     wavelength=1.35e-8,
-#     grid_spacing=(6e-6, 6e-6, 2.9333e-8),
-#     pad=(100, 100, 256),
-#     nphotons=1e12,
-#     zR=2.0,
-#     sigma_z=2.29e-7,
-# )
-#
-# phi = 2.0 * np.pi * (0.5 * Wwigner.rmesh) ** 3
-# Wwigner._rmesh *= np.exp(1j * phi)
-# Wwigner.plot_wigner_distribution()
-# # plt.xlim(200, 400)
-# # plt.ylim(200, 400)
-# plt.colorbar()
-
-
 def pad_array(wavefront: np.ndarray, pads: Sequence[int] | int):
     """
     Pad an array with complex zero elements.
@@ -160,16 +107,16 @@ def pad_array(wavefront: np.ndarray, pads: Sequence[int] | int):
 
 class _NiceXYZ(NamedTuple):
     """
-    `nice_array`-modified values.
-
-    Axes X and Y are always of the same units (rspace and kspace), but Z may be
-    of different units (kspace) so they are separated here.
+    `nice_array`-modified values for x, y, and z domains.
     """
 
     x: np.ndarray
+    x_scale: float
+    x_unit_prefix: str
+
     y: np.ndarray
-    xy_scale: float
-    xy_unit_prefix: str
+    y_scale: float
+    y_unit_prefix: str
 
     z: np.ndarray
     z_scale: float
@@ -775,24 +722,24 @@ def wavelength_to_photon_energy(wavelength: float) -> float:
 
 
 def _wavefront_ids_from_h5_file(h5: h5py.File) -> list[str]:
-    openpmd_extension = _require_h5_string_attr(h5, "openPMDextension").split(";")
-    if "wavefront" in openpmd_extension:
-        data = _require_h5_group(h5, "/data")
+    extensions = tools.require_h5_string_attr(h5, "openPMDextension").split(";")
+    if "wavefront" in extensions:
+        data = tools.require_h5_group(h5, "/data")
         ids = []
         for name, group in data.items():
             if isinstance(group, h5py.Group) and "meshes" in group:
                 ids.append(name)
         return ids
 
-    if "Wavefront" not in openpmd_extension:
+    if "Wavefront" not in extensions:
         raise ValueError(
             f"Wavefront extension not enabled in file. "
-            f"Extensions configured: {openpmd_extension}"
+            f"Extensions configured: {extensions}"
         )
 
     # TODO this will work in the normal case but perhaps not in other weird configurations
-    base_path = _require_h5_string_attr(h5, "basePath").replace("%T", "")
-    base_group = _require_h5_group(h5, base_path)
+    base_path = tools.require_h5_string_attr(h5, "basePath").replace("%T", "")
+    base_group = tools.require_h5_group(h5, base_path)
     ids = []
     for name, group in base_group.items():
         if isinstance(group, h5py.Group) and "wavefront" in group:
@@ -1156,14 +1103,9 @@ class Wavefront:
 
     @property
     def _nice_kspace_domain(self) -> _NiceXYZ:
-        """
-        `nice_array`-modified kspace domain.
-
-        X and Y share units (m) and Z (eV) remains separate.
-        """
-        (domain_x, domain_y), xy_scale, xy_unit_prefix = nice_array(
-            np.vstack(self.kspace_domain[:2])
-        )
+        """`nice_array`-modified kspace domain."""
+        domain_x, x_scale, x_unit_prefix = nice_array(self.kspace_domain[0])
+        domain_y, y_scale, y_unit_prefix = nice_array(self.kspace_domain[1])
         domain_z, z_scale, z_unit_prefix = nice_array(self.kspace_domain[2])
         assert isinstance(domain_x, np.ndarray)
         assert isinstance(domain_y, np.ndarray)
@@ -1171,10 +1113,12 @@ class Wavefront:
         return _NiceXYZ(
             x=domain_x,
             y=domain_y,
-            xy_scale=xy_scale,
-            xy_unit_prefix=xy_unit_prefix,
             z=domain_z,
+            x_scale=x_scale,
+            y_scale=y_scale,
             z_scale=z_scale,
+            x_unit_prefix=x_unit_prefix,
+            y_unit_prefix=y_unit_prefix,
             z_unit_prefix=z_unit_prefix,
         )
 
@@ -1237,7 +1181,7 @@ class Wavefront:
         or k-space wavefront data is up-to-date.
         """
         assert self._rmesh is not None
-        workers = get_num_fft_workers()
+        workers = tools.get_num_fft_workers()
         dfl_pad = pad_array(self._rmesh, self._padding)
 
         phasors = calculate_phasors(
@@ -1264,7 +1208,7 @@ class Wavefront:
         or k-space wavefront data is up-to-date.
         """
         assert self._kmesh is not None
-        workers = get_num_fft_workers()
+        workers = tools.get_num_fft_workers()
         phasors = calculate_phasors(
             wavelength=self.wavelength,
             rmesh_grid_spacing=self.grid_spacing,
@@ -1652,7 +1596,7 @@ class Wavefront:
         kdomain = self._nice_kspace_domain
         ax1.plot(kdomain.y, proj_y, label="Vertical")
         ax1.plot(kdomain.x, proj_x, label="Horizontal")
-        ax1.set_xlabel(rf"$\theta$ (${kdomain.xy_unit_prefix} rad$)")
+        ax1.set_xlabel(rf"$\theta$ (${kdomain.x_unit_prefix} rad$)")
         ax1.set_ylabel("Angular Divergence [arb units]")
         ax1.legend(loc="best")
 
@@ -1719,8 +1663,8 @@ class Wavefront:
         )
 
         xlabel, ylabel = _kspace_labels[:2]
-        ax.set_xlabel(rf"${xlabel}$ (${kdomain.xy_unit_prefix} rad$)")
-        ax.set_ylabel(rf"${ylabel}$ (${kdomain.xy_unit_prefix} rad$)")
+        ax.set_xlabel(rf"${xlabel}$ (${kdomain.x_unit_prefix} rad$)")
+        ax.set_ylabel(rf"${ylabel}$ (${kdomain.y_unit_prefix} rad$)")
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         return im
@@ -1769,7 +1713,7 @@ class Wavefront:
         ax.set_ylabel(
             rf"Photon Energy, $(\Delta{ylabel} = {ylabel}-{ylabel}_0)$ (${kdomain.z_unit_prefix} eV$)"
         )
-        ax.set_xlabel(rf"${xlabel}$ (${kdomain.xy_unit_prefix} rad$)")
+        ax.set_xlabel(rf"${xlabel}$ (${kdomain.x_unit_prefix} rad$)")
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         return im
@@ -1915,24 +1859,9 @@ class Wavefront:
         -------
         Wavefront
         """
-        # NOTE: refer to here for more information:
-        # https://github.com/slaclab/lume-genesis/blob/master/docs/notes/genesis_fields.pdf
-        genesis_to_v_over_m = np.sqrt(2.0 * Z0) / field.param.gridsize
+        from .interfaces.genesis import genesis4_fieldfile_to_wavefront
 
-        # field.param.gridsize = 2 * field.dgrid / (ngrid - 1)
-        wf = cls(
-            rmesh=field.dfl * genesis_to_v_over_m,
-            wavelength=field.param.wavelength,
-            grid_spacing=(
-                field.param.gridsize,
-                field.param.gridsize,
-                field.param.slicespacing,
-            ),
-            pad=pad,
-            polarization="x",
-        )
-        wf.metadata.mesh.grid_global_offset = (0.0, 0.0, field.param.refposition)
-        return wf
+        return genesis4_fieldfile_to_wavefront(field, pad=pad)
 
     @classmethod
     def from_genesis4(
@@ -1960,40 +1889,10 @@ class Wavefront:
         return cls.from_genesis4_fieldfile(field_file, pad=pad)
 
     def to_genesis4_fieldfile(self) -> Genesis4FieldFile:
-        from genesis.version4 import FieldFile
-        from genesis.version4.field import FieldFileParams
+        """Convert to an in-memory Genesis4 `FieldFile` instance."""
+        from .interfaces.genesis import wavefront_to_genesis4_fieldfile
 
-        nx, ny, nz = self.rmesh.shape
-
-        if nx != ny:
-            raise ValueError(f"Genesis 4 expects nx == ny, however {nx=} and {ny=}")
-
-        gridsize, _, slicespacing = self.grid_spacing
-
-        global_offset = self.metadata.mesh.grid_global_offset
-        if len(global_offset) == 3:
-            refposition = global_offset[2]
-        else:
-            refposition = 0.0
-
-        v_over_m_to_genesis = gridsize / np.sqrt(2.0 * Z0)
-        return FieldFile(
-            dfl=self.rmesh * v_over_m_to_genesis,
-            param=FieldFileParams(
-                #  number of gridpoints in one transverse dimension equal to nx and ny above
-                gridpoints=nx,
-                # gridspacing (meter)
-                gridsize=gridsize,
-                # starting position (meter)
-                refposition=refposition,
-                # radiation wavelength (meter)
-                wavelength=self.wavelength,
-                # number of slices
-                slicecount=nz,
-                # slice spacing (meter)
-                slicespacing=slicespacing,
-            ),
-        )
+        return wavefront_to_genesis4_fieldfile(self)
 
     def write_genesis4(self, h5: h5py.File | pathlib.Path | str) -> None:
         """
@@ -2009,88 +1908,33 @@ class Wavefront:
         field_file.write_genesis4(h5)
 
     @classmethod
-    def _from_legacy_genesis_pmd(
-        cls, h5: h5py.File, identifier: str | int
-    ) -> Wavefront:
-        from genesis.version4 import FieldFile
-        from genesis.version4.field import FieldFileParams
-
-        if isinstance(identifier, int):
-            data_path = f"/data/{identifier:06}/"
-        else:
-            data_path = f"/data/{identifier}/"
-        # Legacy file format - written by lume-genesis `write_openpmd_wavefront`
-        group = _require_h5_group(h5, data_path)
-        assert isinstance(group, h5py.Group)
-        h5_meshes = _require_h5_group(group, "meshes")
-
-        # Point to the real and imaginary h5 handles
-        E_complex = _require_h5_group(h5_meshes, "electricField")
-
-        gridsize, gridsize, slicespacing = cast(
-            tuple[float, float, float], E_complex.attrs["gridSpacing"]
-        )
-        photon_energy = cast(float, E_complex.attrs["photonEnergy"])
-        refposition = E_complex.attrs["timeOffset"]
-        wavelength = 12398.425 / photon_energy * 1.0e-10
-
-        # Get arrays
-        if "x" in E_complex:
-            fld = E_complex["x"]
-        elif "y" in E_complex:
-            fld = E_complex["y"]
-        else:
-            raise NotImplementedError(
-                "X or Y polarization are only supported in the legacy field file format"
-            )
-
-        assert isinstance(fld, h5py.Dataset)
-
-        gridpoints, gridpoints, slicecount = np.array(fld.shape)
-        factorGenesis = gridsize / np.sqrt(2.0 * Z0)  # factor to genesis units
-        unitSI = fld.attrs["unitSI"]  # factor to convert to V/m
-        dflfactor = unitSI * factorGenesis  # V/m -> Genesis
-        dfl = dflfactor * np.asarray(fld)
-
-        field_file = FieldFile(
-            label=identifier,
-            dfl=dfl,
-            param=FieldFileParams(
-                gridpoints=gridpoints,
-                slicecount=slicecount,
-                gridsize=gridsize,
-                refposition=refposition,
-                slicespacing=slicespacing,
-                wavelength=wavelength,
-            ),
-        )
-        return cls.from_genesis4_fieldfile(field_file)
-
-    @classmethod
     def _from_h5_file(
         cls,
         h5: h5py.File,
         identifier: str | int,
         iteration: str | int = 0,
     ) -> Wavefront:
-        base_path = _require_h5_string_attr(h5, "basePath")
+        base_path = tools.require_h5_string_attr(h5, "basePath")
         # data_type = h5.attrs["dataType"]
-        openpmd_extension = _require_h5_string_attr(h5, "openPMDextension").split(";")
-        if "wavefront" in openpmd_extension:
-            return cls._from_legacy_genesis_pmd(h5, identifier=identifier)
-        if "Wavefront" not in openpmd_extension:
+        extensions = tools.require_h5_string_attr(h5, "openPMDextension").split(";")
+        if "wavefront" in extensions:
+            from .interfaces.genesis import read_legacy_genesis_pmd_wavefront
+
+            return read_legacy_genesis_pmd_wavefront(h5, identifier=identifier)
+
+        if "Wavefront" not in extensions:
             raise ValueError(
                 f"Wavefront extension not enabled in file. "
-                f"Extensions configured: {openpmd_extension}"
+                f"Extensions configured: {extensions}"
             )
 
         iteration_path = base_path.replace("%T", str(iteration))
-        wavefront_field_path = _require_h5_string_attr(h5, "wavefrontFieldPath")
+        wavefront_field_path = tools.require_h5_string_attr(h5, "wavefrontFieldPath")
 
         # {iteration group}/{wavefront group}/{efield_group}
-        iteration_group = _require_h5_group(h5, iteration_path)
-        wavefront_group = _require_h5_group(iteration_group, wavefront_field_path)
-        efield_group = _require_h5_group(wavefront_group, "electricField")
+        iteration_group = tools.require_h5_group(h5, iteration_path)
+        wavefront_group = tools.require_h5_group(iteration_group, wavefront_field_path)
+        efield_group = tools.require_h5_group(wavefront_group, "electricField")
 
         photon_energy = efield_group.attrs["photonEnergy"]
         assert isinstance(photon_energy, float)
@@ -2129,13 +1973,6 @@ class Wavefront:
             return cls._from_h5_file(h5, iteration=iteration, identifier=identifier)
         with h5py.File(h5) as h5p:
             return cls._from_h5_file(h5p, iteration=iteration, identifier=identifier)
-
-    # names = get_wavefront_names_from_file("something.h5")
-    # for name in names:
-    #    wavefront = Wavefront.from_file("something.h5", identifier=name)
-    #    wavefront.rmesh  # <-- single wavefront
-    #
-    # wavefront = Wavefront.from_file("something.h5", identifier=5)
 
     def _write_file(self, h5: h5py.File):
         md = self.metadata

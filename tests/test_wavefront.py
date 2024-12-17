@@ -12,11 +12,10 @@ from pmd_beamphysics.wavefront import (
     PlotKey,
     fix_padding,
     get_padded_shape,
-    get_num_fft_workers,
     get_range_for_grid_spacing,
-    set_num_fft_workers,
     wavefront_ids_from_file,
 )
+from pmd_beamphysics.tools import get_num_fft_workers, set_num_fft_workers
 
 
 @pytest.fixture(autouse=True)
@@ -287,3 +286,22 @@ def test_wavefront_ids_from_file(
         wavefront.write(fn)
 
         assert wavefront_ids_from_file(fn) == [str(iteration)]
+
+
+@pytest.fixture
+def wigner_wavefront() -> Wavefront:
+    return Wavefront.gaussian_pulse(
+        dims=(101, 101, 513),
+        wavelength=1.35e-8,
+        grid_spacing=(6e-6, 6e-6, 2.9333e-8),
+        pad=(100, 100, 256),
+        nphotons=1e12,
+        zR=2.0,
+        sigma_z=2.29e-7,
+    )
+
+
+def test_plot_wigner(wigner_wavefront: Wavefront) -> None:
+    phi = 2.0 * np.pi * (0.5 * wigner_wavefront.rmesh) ** 3
+    W = wigner_wavefront.with_rmesh(wigner_wavefront.rmesh * np.exp(1j * phi))
+    W.plot_wigner_distribution()

@@ -1894,8 +1894,9 @@ class Wavefront:
         else:
             refposition = 0.0
 
+        v_over_m_to_genesis = gridsize / np.sqrt(2.0 * Z0)
         return FieldFile(
-            dfl=self.rmesh,
+            dfl=self.rmesh * v_over_m_to_genesis,
             param=FieldFileParams(
                 #  number of gridpoints in one transverse dimension equal to nx and ny above
                 gridpoints=nx,

@@ -198,10 +198,10 @@ def test_write_and_read_genesis4(
     # E           ?            ^       ^       ^            ^       ^       ^...
     # Should probably switch to `allclose` in `__eq__` but I think Chris has a
     # preference for true equality
-    # assert np.allclose(wavefront.rmesh.real, loaded.rmesh.real)
-    # assert np.allclose(wavefront.rmesh.imag, loaded.rmesh.imag)
-    # loaded._rmesh = wavefront.rmesh
-    # assert wavefront == loaded
+    assert np.allclose(wavefront.rmesh.real, loaded.rmesh.real)
+    assert np.allclose(wavefront.rmesh.imag, loaded.rmesh.imag)
+    loaded._rmesh = wavefront.rmesh
+    assert wavefront == loaded
 
 
 def test_write_and_read_openpmd(

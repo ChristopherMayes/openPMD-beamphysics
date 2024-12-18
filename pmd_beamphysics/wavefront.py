@@ -1254,43 +1254,6 @@ class Wavefront:
             dims=self.rmesh.shape,
         )
 
-    def focus(self, plane: Plane, fx: float, fy: float) -> Wavefront:
-        """
-        Apply thin lens focusing to this Wavefront, returning a new one.
-
-        Parameters
-        ----------
-        plane : str
-            Plane identifier (e.g., "xy").
-        fx : float
-            Focal length of the lens in x [m].
-        fy : float
-            Focal length of the lens in y [m].
-
-        Returns
-        -------
-        Wavefront
-        """
-        if plane != "xy":
-            raise NotImplementedError(f"Unsupported plane: {plane}")
-
-        return focus(self, plane=plane, focus=(fx, fy))
-
-    def drift(self, distance: float) -> Wavefront:
-        """
-        Drift this Wavefront along the longitudinal direction in meters.
-
-        Parameters
-        ----------
-        distance : float
-            Distance in meters.
-
-        Returns
-        -------
-        Wavefront
-        """
-        return drift(self, distance=distance)
-
     def wigner_distribution(self) -> np.ndarray:
         """
         Compute the Wigner distribution.

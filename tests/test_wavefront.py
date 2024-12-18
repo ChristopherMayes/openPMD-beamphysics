@@ -14,6 +14,8 @@ from pmd_beamphysics.wavefront import (
     get_padded_shape,
     get_range_for_grid_spacing,
     wavefront_ids_from_file,
+    drift,
+    focus,
 )
 from pmd_beamphysics.tools import get_num_fft_workers, set_num_fft_workers
 
@@ -76,12 +78,12 @@ def test_get_range_for_grid_spacing(
 
 
 def test_smoke_drift_z(wavefront: Wavefront) -> None:
-    new = wavefront.drift(distance=0.0)
+    new = drift(wavefront, distance=0.0)
     assert new is not wavefront
 
 
 def test_smoke_focusing_element(wavefront: Wavefront) -> None:
-    new = wavefront.focus(plane="xy", fx=1.0, fy=1.0)
+    new = focus(wavefront, plane="xy", focus=(1.0, 1.0))
     assert new is not wavefront
 
 

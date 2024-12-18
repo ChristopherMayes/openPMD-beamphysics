@@ -385,18 +385,13 @@ def get_shifts(
     )
 
 
-def calculate_k0(wavelength: float) -> float:
-    """K-value angular wavenumber: 2 pi / wavelength."""
-    return 2.0 * np.pi / wavelength
-
-
 def conversion_coeffs(wavelength: float, dim: int) -> tuple[float, ...]:
     """
     Conversion coefficients to (radians, radians, eV).
 
     Theta-x, theta-y, omega.
     """
-    k0 = calculate_k0(wavelength)
+    k0 = 2.0 * np.pi / wavelength
     return tuple([2.0 * np.pi / k0] * (dim - 1) + [2.0 * np.pi * HBAR_EV_M])
 
 
@@ -462,7 +457,7 @@ def thin_lens_kernel_xy(
     -------
     np.ndarray
     """
-    k0 = calculate_k0(wavelength)
+    k0 = 2.0 * np.pi / wavelength
     xx, yy = nd_space_mesh(ranges[:2], grid[:2])
     return np.exp(-1j * k0 / 2.0 * (xx**2 / f_lens_x + yy**2 / f_lens_y))
 
@@ -507,7 +502,7 @@ def create_gaussian_pulse_3d_with_q(
     ranges = get_ranges_for_grid_spacing(grid_spacing=grid_spacing, dims=grid)
     min_z, max_z = ranges[-1]
 
-    k0 = calculate_k0(wavelength)
+    k0 = 2.0 * np.pi / wavelength
     z_mid = (max_z + min_z) / 2.0
     x_mesh, y_mesh, z_mesh = nd_space_mesh(ranges=ranges, sizes=grid)
     qx = 1j * zR
@@ -1222,7 +1217,7 @@ class Wavefront:
     @property
     def k0(self) -> float:
         """Wave number. [m^-1]"""
-        return calculate_k0(self.wavelength)
+        return 2.0 * np.pi / self.wavelength
 
     @property
     def photon_energy(self) -> float:

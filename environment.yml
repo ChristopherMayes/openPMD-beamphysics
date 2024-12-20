@@ -10,6 +10,7 @@ dependencies:
   - h5py
   - python-dateutil
   # Developer
+  - lume-genesis
   - pytest
   - pytest-cov
   - jupyterlab>=3
@@ -22,3 +23,4 @@ dependencies:
   - pip
   - pip:
       - mkdocstrings-python
+      - git+https://github.com/openPMD/openPMD-validator@2.0.X

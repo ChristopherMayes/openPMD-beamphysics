@@ -392,7 +392,7 @@ def conversion_coeffs(wavelength: float, dim: int) -> tuple[float, ...]:
     Theta-x, theta-y, omega.
     """
     k0 = 2.0 * np.pi / wavelength
-    return tuple([2.0 * np.pi / k0] * (dim - 1) + [2.0 * np.pi * HBAR_EV_M])
+    return tuple([wavelength] * (dim - 1) + [2.0 * np.pi * HBAR_EV_M])
 
 
 def cartesian_domain(

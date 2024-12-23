@@ -3,6 +3,8 @@ import numpy as np
 from pmd_beamphysics.units import mu_0
 from pmd_beamphysics import FieldMesh
 
+from scipy.optimize import curve_fit
+
 from scipy.integrate import quad
 
 
@@ -266,7 +268,8 @@ def make_solenoid_fieldmesh(
     nz: int = 40,
     radius: float = None,
     L: float = None,
-    nI: float = 1.0,
+    nI: float = None,
+    B0: float = None,
 ):
     """
     Generates a 2D cylindrically symmetric ideal solenoid FieldMesh.
@@ -299,9 +302,16 @@ def make_solenoid_fieldmesh(
         The inner radius of the solenoid (in meters). Default is 0.1.
     L : float, optional
         The half length of the solenoid (in meters). Default is 0.2.
+
     nI : float, optional
         The product of the number of turns per unit length (n) and current (I) in amperes.
-        This determines the current density of the solenoid. Default is 1.0.
+        This determines the current density of the solenoid.
+        default: None
+
+    B0 : float, optional
+        Peak on-axis magnetic field in T
+        This can be used instead of nI to scale the field.
+        default: None
 
     Returns
     -------
@@ -313,6 +323,15 @@ def make_solenoid_fieldmesh(
     >>> field_mesh = make_solenoid_fieldmesh(rmin=0, rmax=0.02, zmin=-0.3, zmax=0.3, nr=150, nz=300, a=0.05, b=0.15, nI=2.0)
     >>> print(field_mesh)
     """
+
+    if nI is None and B0 is not None:
+        nI = B0 * np.hypot(radius, L / 2) / (mu_0 * L / 2)
+    elif nI is None and B0 is None:
+        B0 = 1
+    elif nI is not None and B0 is None:
+        pass
+    else:
+        raise ValueError("Cannot set nI and B0. Choose one")
 
     # Form coordinate mesh
     rs = np.linspace(rmin, rmax, nr)
@@ -353,3 +372,84 @@ def make_solenoid_fieldmesh(
     data = dict(attrs=attrs, components=components)
 
     return FieldMesh(data=data)
+
+
+def _fit_ideal_solenoid_model(z: np.ndarray, radius: float, L: float) -> np.ndarray:
+    """
+    Computes the normalized magnetic field on the solenoid's axis.
+
+    This function calculates the on-axis magnetic field of an ideal solenoid
+    normalized to a maximum value of 1.
+
+    Parameters
+    ----------
+    z : np.ndarray
+        Array of axial positions (z) where the magnetic field is evaluated.
+    radius : float
+        Radius of the solenoid (meters).
+    L : float
+        Total length of the solenoid (meters).
+
+    Returns
+    -------
+    np.ndarray
+        Normalized magnetic field values at the specified z positions.
+    """
+    a = radius
+    b = L / 2
+
+    A = np.hypot(a, b) / (2 * b)
+    term1 = (z + b) / np.hypot(z + b, a)
+    term2 = (z - b) / np.hypot(z - b, a)
+    return A * (term1 - term2)
+
+
+def fit_ideal_solenoid(
+    z0: np.ndarray, Bz0: np.ndarray, radius0: float = 0.1, L0: float = 0.1
+) -> dict:
+    """
+    Fits the ideal solenoid model to experimental or simulated data.
+
+    This function fits the normalized on-axis magnetic field of an ideal solenoid
+    to the provided data using a non-linear least squares optimization. It returns
+    the fitted solenoid parameters: radius, length, and the normalization factor (B0).
+
+    Parameters
+    ----------
+    z0 : np.ndarray
+        Array of axial positions (z) corresponding to the measured magnetic field data.
+    Bz0 : np.ndarray
+        Array of measured magnetic field values (Bz) at the positions in `z0`.
+    radius0 : float, optional
+        Initial guess for the radius of the solenoid (meters). Default is 0.1 m.
+    L0 : float, optional
+        Initial guess for the total length of the solenoid (meters). Default is 0.1 m.
+
+    Returns
+    -------
+    dict
+        Dictionary containing the fitted parameters:
+        - 'B0' : float
+            Normalization factor for the magnetic field (peak field at z = 0).
+        - 'radius' : float
+            Fitted solenoid radius (meters).
+        - 'L' : float
+            Fitted solenoid length (meters).
+    """
+
+    B0 = Bz0.max()
+    Bz_data = Bz0 / B0
+    z_data = z0 - z0[np.argmax(Bz_data)]  # Shift z so maximum is at z=0
+
+    # Fit the data to the model
+    popt, pcov = curve_fit(_fit_ideal_solenoid_model, z_data, Bz_data, p0=[radius0, L0])
+
+    # Extract fitted parameters
+    radius_fit, L_fit = popt
+
+    d = {}
+    d["B0"] = B0
+    d["radius"] = float(abs(radius_fit))
+    d["L"] = float(abs(L_fit))
+
+    return d

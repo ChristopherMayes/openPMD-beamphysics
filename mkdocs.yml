@@ -19,6 +19,7 @@ nav:
           - examples/fields/field_tracking.ipynb
           - examples/fields/field_conversion.ipynb
           - examples/fields/corrector_modeling.ipynb
+          - examples/fields/solenoid_modeling.ipynb
       - Utilities:
           - examples/units.ipynb
           - examples/labels.ipynb

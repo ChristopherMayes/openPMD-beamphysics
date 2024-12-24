@@ -34,7 +34,7 @@ def parse_impact_particles(
 
     """
 
-    dtype = {"names": names, "formats": 6 * [np.float]}
+    dtype = {"names": names, "formats": 6 * [float]}
     pdat = np.loadtxt(
         filePath, skiprows=skiprows, dtype=dtype, ndmin=1
     )  # to make sure that 1 particle is parsed the same as many.

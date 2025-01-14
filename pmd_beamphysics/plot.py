@@ -296,8 +296,8 @@ def marginal_plot(
                 ylim = (-1, 1)
             else:
                 ylim = tuple(sorted((0.9 * y0, 1.1 * y0)))
-        gridsize = (1, 1)
         bins = 100
+        gridsize = (bins, bins)
     else:
         gridsize = bins
 

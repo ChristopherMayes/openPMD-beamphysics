@@ -284,6 +284,18 @@ def marginal_plot(
     y = particle_group[key2]
 
     if len(x) == 1:
+        if xlim is None:
+            (x0,) = x
+            if np.isclose(x0, 0.0):
+                xlim = (-1, 1)
+            else:
+                xlim = tuple(sorted((0.9 * x0, 1.1 * x0)))
+        if ylim is None:
+            (y0,) = y
+            if np.isclose(y0, 0.0):
+                ylim = (-1, 1)
+            else:
+                ylim = tuple(sorted((0.9 * y0, 1.1 * y0)))
         gridsize = (1, 1)
         bins = 1
     else:
@@ -305,6 +317,12 @@ def marginal_plot(
     labely = mathlabel(key2, units=uy, tex=tex)
 
     fig = plt.figure(**kwargs)
+    if np.all(np.isnan(x)):
+        fig.text(0.5, 0.5, f"{key1} is all NaN", ha="center", va="center")
+        return fig
+    if np.all(np.isnan(y)):
+        fig.text(0.5, 0.5, f"{key2} is all NaN", ha="center", va="center")
+        return fig
 
     gs = GridSpec(4, 4)
 

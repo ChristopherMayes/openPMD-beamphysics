@@ -283,6 +283,12 @@ def marginal_plot(
     x = particle_group[key1]
     y = particle_group[key2]
 
+    if len(x) == 1:
+        gridsize = (1, 1)
+        bins = 1
+    else:
+        gridsize = bins
+
     # Form nice arrays
     x, f1, p1, xmin, xmax = plottable_array(x, nice=nice, lim=xlim)
     y, f2, p2, ymin, ymax = plottable_array(y, nice=nice, lim=ylim)
@@ -311,7 +317,7 @@ def marginal_plot(
     # Main plot
     # Proper weighting
     ax_joint.hexbin(
-        x, y, C=w, reduce_C_function=np.sum, gridsize=bins, cmap=CMAP0, vmin=1e-20
+        x, y, C=w, reduce_C_function=np.sum, gridsize=gridsize, cmap=CMAP0, vmin=1e-20
     )
 
     if ellipse:

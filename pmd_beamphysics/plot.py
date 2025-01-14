@@ -284,6 +284,8 @@ def marginal_plot(
     y = particle_group[key2]
 
     if len(x) == 1:
+        bins = 100
+
         if xlim is None:
             (x0,) = x
             if np.isclose(x0, 0.0):
@@ -296,10 +298,6 @@ def marginal_plot(
                 ylim = (-1, 1)
             else:
                 ylim = tuple(sorted((0.9 * y0, 1.1 * y0)))
-        bins = 100
-        gridsize = (bins, bins)
-    else:
-        gridsize = bins
 
     # Form nice arrays
     x, f1, p1, xmin, xmax = plottable_array(x, nice=nice, lim=xlim)
@@ -334,9 +332,18 @@ def marginal_plot(
 
     # Main plot
     # Proper weighting
-    ax_joint.hexbin(
-        x, y, C=w, reduce_C_function=np.sum, gridsize=gridsize, cmap=CMAP0, vmin=1e-20
-    )
+    if len(x) == 1:
+        ax_joint.scatter(x, y)
+    else:
+        ax_joint.hexbin(
+            x,
+            y,
+            C=w,
+            reduce_C_function=np.sum,
+            gridsize=bins,
+            cmap=CMAP0,
+            vmin=1e-20,
+        )
 
     if ellipse:
         sigma_mat2 = particle_group.cov(key1, key2)

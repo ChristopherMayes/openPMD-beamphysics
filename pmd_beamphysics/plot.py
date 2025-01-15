@@ -283,6 +283,22 @@ def marginal_plot(
     x = particle_group[key1]
     y = particle_group[key2]
 
+    if len(x) == 1:
+        bins = 100
+
+        if xlim is None:
+            (x0,) = x
+            if np.isclose(x0, 0.0):
+                xlim = (-1, 1)
+            else:
+                xlim = tuple(sorted((0.9 * x0, 1.1 * x0)))
+        if ylim is None:
+            (y0,) = y
+            if np.isclose(y0, 0.0):
+                ylim = (-1, 1)
+            else:
+                ylim = tuple(sorted((0.9 * y0, 1.1 * y0)))
+
     # Form nice arrays
     x, f1, p1, xmin, xmax = plottable_array(x, nice=nice, lim=xlim)
     y, f2, p2, ymin, ymax = plottable_array(y, nice=nice, lim=ylim)
@@ -299,6 +315,12 @@ def marginal_plot(
     labely = mathlabel(key2, units=uy, tex=tex)
 
     fig = plt.figure(**kwargs)
+    if np.all(np.isnan(x)):
+        fig.text(0.5, 0.5, f"{key1} is all NaN", ha="center", va="center")
+        return fig
+    if np.all(np.isnan(y)):
+        fig.text(0.5, 0.5, f"{key2} is all NaN", ha="center", va="center")
+        return fig
 
     gs = GridSpec(4, 4)
 
@@ -310,9 +332,18 @@ def marginal_plot(
 
     # Main plot
     # Proper weighting
-    ax_joint.hexbin(
-        x, y, C=w, reduce_C_function=np.sum, gridsize=bins, cmap=CMAP0, vmin=1e-20
-    )
+    if len(x) == 1:
+        ax_joint.scatter(x, y)
+    else:
+        ax_joint.hexbin(
+            x,
+            y,
+            C=w,
+            reduce_C_function=np.sum,
+            gridsize=bins,
+            cmap=CMAP0,
+            vmin=1e-20,
+        )
 
     if ellipse:
         sigma_mat2 = particle_group.cov(key1, key2)

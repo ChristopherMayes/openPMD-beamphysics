@@ -1343,3 +1343,61 @@ def plot_maxwell_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
 
     fig.suptitle(rf"Fields evaluated at $x=${x[ix]:0.6f}, $y=${y[iy]:0.6f} meters.")
     plt.tight_layout()
+
+
+def solenoid_analysis(z0, Bz0):
+    r"""
+    This computes the hard edge equivalent magnetic field and length
+    from on-axis solenoid field data using two integrals:
+
+    $B_1 = \int B/B_0 dz$
+
+    $B_2 = \int (B/B_0)^2 dz$
+
+    These give:
+
+    $L_\text{hard} = B_1$^2/B_2$
+
+    $B_\text{hard} = B_0 * B_2 / B_1$
+
+
+    Parameters
+    ----------
+    z0: array-like
+        On-axis z points in meters
+    Bz0: array-like
+        On-axis Bz points in T
+
+    Returns
+    -------
+    dict with:
+        'B0': float
+            maximum field in T
+
+        'int_BL': float
+            \int B(z) dz
+
+        'int_B2L': float
+            \int [B(z)]^2 dz
+
+        'L_hard': float
+            hard-edge length in meters
+
+        'B_hard':
+            hard-edge field in T
+
+
+    """
+    B0 = Bz0.max()
+
+    Bz0 = Bz0 / B0
+    BL = np.trapezoid(Bz0, z0)
+    B2L = np.trapezoid(Bz0**2, z0)
+    d = {}
+    d["B0"] = B0
+    d["int_BL"] = BL * B0
+    d["int_B2L"] = B2L * B0**2
+    d["L_hard"] = BL**2 / B2L
+    d["B_hard"] = B2L / BL * B0
+
+    return d

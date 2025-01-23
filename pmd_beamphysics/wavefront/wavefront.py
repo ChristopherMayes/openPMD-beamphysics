@@ -1,10 +1,11 @@
 from abc import ABC
 from enum import Enum
 from dataclasses import dataclass, replace
+from copy import deepcopy
 
 from math import pi
 import numpy as np
-from numpy.fft import fftfreq, fftshift, ifftshift, fftn, ifftn
+from numpy.fft import fftfreq, fftshift, ifftshift, ifftn
 
 from scipy.constants import epsilon_0, c
 
@@ -40,6 +41,21 @@ class TemporalDomain(str, Enum):
 class SpatialDomain(str, Enum):
     R = "r"
     K = "k"
+
+
+# Axes to sum over for intensity/probability projections
+# TODO: cleaner code.
+_axis_for_sum = {
+    "x": (1, 2),
+    "y": (0, 2),
+    "z": (0, 1),
+    "kx": (1, 2),
+    "ky": (0, 2),
+    "kz": (0, 1),
+}
+_axis_for_sum["thetax"] = _axis_for_sum["kx"]
+_axis_for_sum["thetay"] = _axis_for_sum["ky"]
+_axis_for_sum["thetaz"] = _axis_for_sum["kz"]
 
 
 class WavefrontBase(ABC):
@@ -230,6 +246,33 @@ class WavefrontBase(ABC):
     def in_kspace(self):
         return self.spatial_domain == SpatialDomain.K
 
+    def _mean(self, key):
+        """
+        mean of a standard key
+
+        Internal method
+        """
+        axis = _axis_for_sum[key]
+        P = np.sum(self.intensity, axis=axis)
+        P = P / np.sum(P)
+        x = getattr(self, key + "vec")
+        mean = np.sum(x * P)
+        return mean
+
+    def _std(self, key):
+        """
+        Standard deviation of a standard key
+
+        Internal method
+        """
+        axis = _axis_for_sum[key]
+        P = np.sum(self.intensity, axis=axis)
+        P = P / np.sum(P)
+        x = getattr(self, key + "vec")
+        mean = np.sum(x * P)
+        variance = np.sum((x - mean) ** 2 * P)
+        return np.sqrt(variance)
+
     def pad(self, nx=(0, 0), ny=(0, 0), nz=(0, 0)):
         """
         zero-pad the field arrays.
@@ -246,6 +289,10 @@ class WavefrontBase(ABC):
         Ey = np.pad(self.Ey, (nx, ny, nz)) if self.Ey is not None else None
 
         return replace(self, Ex=Ex, Ey=Ey)
+
+    def copy(self):
+        """Returns a deep copy"""
+        return deepcopy(self)
 
 
 @dataclass
@@ -292,8 +339,10 @@ class WavefrontK(WavefrontBase):
         return 2 * pi / (self.nz * self.dkz)
 
     def to_rspace(self):
+        """
+        See Wavefront.to_kspace()
+        """
         # Normalized for the Plancherel theorem (see def energy)
-        # (see to_kspace)
         norm = (
             self.dx
             * self.dy
@@ -321,43 +370,62 @@ class WavefrontK(WavefrontBase):
         )
 
     @property
+    def spectral_energy_density(self):
+        """
+        Spectral energy density ϵ0/2 |Ẽ|^2 in J * m^3
+
+        3D real array
+
+        """
+        Ex = self.Ex if self.Ex is not None else 0
+        Ey = self.Ey if self.Ey is not None else 0
+
+        return epsilon_0 / 2 * (np.abs(Ex) ** 2 + np.abs(Ey) ** 2)
+
+    @property
     def energy(self):
         """
         Total (time-averaged) energy in J
 
         energy = ϵ0/2  ∫∫∫ |E|^2 dx dy dz
 
-               = ϵ0/2  ∫∫∫ |Ehat|^2 dkx dky dkz
+               = ϵ0/2  ∫∫∫ |Ẽ|^2 dkx dky dkz
         """
-        Ex = self.Ex if self.Ex is not None else 0
-        Ey = self.Ey if self.Ey is not None else 0
-        sum_E2 = np.sum(np.abs(Ex) ** 2 + np.abs(Ey) ** 2)
 
-        return sum_E2 * self.dkx * self.dky * self.dkz * epsilon_0 / 2
+        return np.sum(self.spectral_energy_density) * self.dkx * self.dky * self.dkz
 
     @property
-    def Ix(self):
+    def spectral_fluence(self):
+        """
+        K-space Fluence in the z direction:
+
+        F(kx,ky) = ϵ0/2  ∫∫∫ |Ẽ(kx,ky,kz)|^2 dkz in J * m^2
+        """
+        return self.dkz * np.sum(self.intensity, axis=2) * epsilon_0 / 2
+
+    @property
+    def intensity_x(self):
         """
         x polarization field intensity in ??
-        Intensity ~ |Ex|^2
+        Intensity ~ |Ẽx|^2
         """
         return np.abs(self.Ex) ** 2 if self.Ex is not None else 0
 
     @property
-    def Iy(self):
+    def intensity_y(self):
         """
         y polarization field intensity in ??
-        Intensity ~ |Ey|^2
+        Intensity ~ |Ẽy|^2
         """
-        return c * epsilon_0 / 2 * np.abs(self.Ex) ** 2 if self.Ex is not None else 0
+        return np.abs(self.Ey) ** 2 if self.Ey is not None else 0
 
     @property
     def intensity(self):
         """
         total field intensity in ??
-        ~ (|Ex|^2 + |Ey|^2)
+        ~ (|Ẽx|^2 + |Ẽy|^2)
         """
-        return self.Ix + self.Iy
+        return self.intensity_x + self.intensity_y
 
     def plot(self, cmap="inferno", logscale=False):
         """
@@ -365,35 +433,117 @@ class WavefrontK(WavefrontBase):
 
         """
 
-        extent = (self.thetaxmin, self.thetaxmax, self.thetaymin, self.thetaymax)
-        xlabel = r"$\theta_x$ (rad)"
-        ylabel = r"$\theta_y$ (rad)"
+        xlabel = r"$\theta_x$ (µrad)"
+        ylabel = r"$\theta_y$ (µrad)"
+        xfactor = 1e6
+        yfactor = 1e6
+        zfactor = self.k0**2 / (1e6 * 1e6)
+        label = r"Spectral $F$ (J/µrad$^2$)"
+
+        extent = (
+            self.thetaxmin * xfactor,
+            self.thetaxmax * xfactor,
+            self.thetaymin * yfactor,
+            self.thetaymax * yfactor,
+        )
 
         # Alternatively:
         # extent = (self.kxmin, self.kxmax, self.kymin, self.kymax)
         # xlabel = r'$k_x$ (rad/m)'
         # ylabel = r'$k_y$ (rad/m)'
-        zfactor = self.dkz
-        label = ""  # r'$I2$ (W/m?)' # TODO
+        # zfactor = 1
+        # label = r"Spectral $F$ (J$\cdot$m$^2$)"
 
-        Ixy = zfactor * np.sum(self.intensity, axis=2)
-        Imax = np.max(Ixy)
+        F = zfactor * self.spectral_fluence
+        Fmax = np.max(F)
 
         fig, ax = plt.subplots()
         im = ax.imshow(
-            Ixy.T,
+            F.T,
             cmap=cmap,
             extent=extent,
             origin="lower",
         )  # Note data.T and origin='lower' are required
         if logscale:
-            norm = LogNorm(vmin=Imax / 1e6, vmax=Imax)
+            norm = LogNorm(vmin=Fmax / 1e6, vmax=Fmax)
             im.set_norm(norm)
 
         fig.colorbar(im, ax=ax, label=label)
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
+
+    # Statistics
+
+    @property
+    def mean_kx(self):
+        """
+        <kx> in rad/m
+        """
+        return self._mean("kx")
+
+    @property
+    def mean_ky(self):
+        """
+        <ky> in rad/m
+        """
+        return self._mean("ky")
+
+    @property
+    def mean_kz(self):
+        """
+        <kz> in rad/m
+        """
+        return self._mean("kz")
+
+    @property
+    def mean_thetax(self):
+        """
+        <thetax> in rad
+        """
+        return self._mean("thetax")
+
+    @property
+    def mean_thetay(self):
+        """
+        <thetay> in rad
+        """
+        return self._mean("thetay")
+
+    @property
+    def sigma_kx(self):
+        """
+        sqrt(<kx^2> - <kx>^2) in rad/m
+        """
+        return self._std("kx")
+
+    @property
+    def sigma_ky(self):
+        """
+        sqrt(<ky^2> - <ky>^2) in rad/m
+        """
+        return self._std("ky")
+
+    @property
+    def sigma_kz(self):
+        """
+        sqrt(<kz^2> - <kz>^2) in rad/m
+        """
+        return self._std("kz")
+
+    @property
+    def sigma_thetax(self):
+        """
+        sqrt(<thetax^2> - <thetax>^2) in rad
+        """
+        return self._std("thetax")
+
+    @property
+    def sigma_thetay(self):
+        """
+        sqrt(<thetay^2> - <thetay>^2) in rad
+        """
+        return self._std("thetay")
 
 
 @dataclass
@@ -449,7 +599,7 @@ class Wavefront(WavefrontBase):
     # Everything else is computed on the  fly
 
     @property
-    def Ix(self):
+    def intensity_x(self):
         """
         x polarization field intensity in W/m^2
         Intensity = c ϵ0/2 |Ex|^2
@@ -457,20 +607,54 @@ class Wavefront(WavefrontBase):
         return c * epsilon_0 / 2 * np.abs(self.Ex) ** 2 if self.Ex is not None else 0
 
     @property
-    def Iy(self):
+    def intensity_y(self):
         """
         y polarization field intensity in W/m^2
         Intensity = c ϵ0/2 |Ey|^2
         """
-        return c * epsilon_0 / 2 * np.abs(self.Ex) ** 2 if self.Ex is not None else 0
+        return c * epsilon_0 / 2 * np.abs(self.Ey) ** 2 if self.Ey is not None else 0
 
     @property
     def intensity(self):
         """
         total field intensity in W/m^2
-        c ϵ0/2 (|Ex|^2 + |Ey|^2)
+        I = c ϵ0/2 (|Ex|^2 + |Ey|^2)
         """
-        return self.Ix + self.Iy
+        return self.intensity_x + self.intensity_y
+
+    @property
+    def energy_density(self):
+        """
+        Energy density ϵ0/2 |E|^2 in J/m^3
+
+        3D real array
+
+        """
+        Ex = self.Ex if self.Ex is not None else 0
+        Ey = self.Ey if self.Ey is not None else 0
+
+        return epsilon_0 / 2 * (np.abs(Ex) ** 2 + np.abs(Ey) ** 2)
+
+    @property
+    def energy(self):
+        """
+        Total (time-averaged) energy in J
+
+        energy = ϵ0/2  ∫∫∫ |E|^2 dx dy dz
+
+               = ϵ0/2  ∫∫∫ |Ẽ|^2 dkx dky dkz
+        """
+
+        return np.sum(self.energy_density) * self.dx * self.dy * self.dz
+
+    @property
+    def fluence(self):
+        """
+        Fluence in the z direction:
+
+        F(x,y) = ϵ0/2  ∫∫∫ |E(x,y,z)|^2 dz
+        """
+        return self.dz * np.sum(self.intensity, axis=2) / c  # J / m^2
 
     # @property
     # def marginal_intensity_x(self):
@@ -480,7 +664,32 @@ class Wavefront(WavefrontBase):
     #    return self.I.sum(axis=(1, 2)) * self.dy * self.dz
 
     # Representations
-    def to_kspace(self):
+    def to_kspace(self, backend=np):
+        """
+        Transform to k-space according to the Fourier transform convention:
+
+        Ẽ(kx,ky,kz) = 1/(2π)^(2/3) ∫∫∫ E(x,y,z) exp(-i kx x) exp(-i ky y) exp(-i kz z) dx dy dz
+
+        E(x,y,z)   =  1/(2π)^(2/3) ∫∫∫ Ẽ(kx, ky, kz) exp(i kx x) exp(i ky y) exp(i kz z) dkx dky dkz
+
+        This ensures that that Plancherel's theorm applies without any addition factors
+            ∫∫∫ |E(x, y, z)|^2 dx dy dz =  ∫∫∫ |Ẽ(kx, ky, kz)|^2 dkx dky dkz
+
+        And therefore ϵ0/2 |Ẽ|^2 can be directly interpreted as the spectral energy density.
+
+        This is realized with factors so that:
+        Ẽ = [dx sqrt(nx/(2π))] [...] [...]  fftn(E, norm = 'ortho') in units of V * m^2
+
+        E = [dkx sqrt(nx/(2π))] [...] [...]  fftn(Ẽ, norm = 'ortho') in units of V/m
+
+        Here  [...] is similar for y, z, etc. We use `norm='ortho'` to simplify the symmetry in the code.
+
+        """
+
+        fftn = backend.fft.fftn
+        fftshift = backend.fft.fftshift
+        ifftshift = backend.fft.ifftshift
+
         # Normalized for the Plancherel theorem (see energy def)
         norm = (
             self.dx
@@ -508,55 +717,37 @@ class Wavefront(WavefrontBase):
             wavelength=self.wavelength,
         )
 
-    @property
-    def energy(self):
-        """
-        Total (time-averaged) energy in J
-
-        energy = ϵ0/2  ∫∫∫ |E|^2 dx dy dz
-
-               = ϵ0/2  ∫∫∫ |Ehat|^2 dkx dky dkz
-        """
-        Ex = self.Ex if self.Ex is not None else 0
-        Ey = self.Ey if self.Ey is not None else 0
-        sum_E2 = np.sum(np.abs(Ex) ** 2 + np.abs(Ey) ** 2)
-
-        return sum_E2 * self.dx * self.dy * self.dz * epsilon_0 / 2
-
     def plot(self, cmap="inferno", logscale=False):
         """
-        Simple projected intensity plot
+        Simple fluence plot
 
         """
-        extent = (self.xmin, self.xmax, self.ymin, self.ymax)
-        xlabel = r"$x$ (m)"
-        ylabel = r"$y$ (m)"
-        zfactor = self.dz
-        label = ""  # r'$I$ (W/m?)' # TODO
 
-        # else:
-        #    extent = (self.thetaxmin, self.thetaxmax, self.thetaymin, self.thetaymax)
-        #    xlabel = r'$\theta_x$ (rad)'
-        #    ylabel = r'$\theta_y$ (rad)'
-        #    # Alternatively:
-        #    #extent = (self.kxmin, self.kxmax, self.kymin, self.kymax)
-        #    #xlabel = r'$k_x$ (rad/m)'
-        #    #ylabel = r'$k_y$ (rad/m)'
-        #    zfactor = self.dkz
-        #    label = '' #r'$I2$ (W/m?)' # TODO
+        xlabel = r"$x$ (cm)"
+        ylabel = r"$y$ (cm)"
+        xfactor = 100
+        yfactor = 100
+        zfactor = 1 / (100 * 100)  # 1/m^2 -> 1/cm^2
+        label = r"$F$ (J/cm$^2$)"
+        extent = (
+            self.xmin * xfactor,
+            self.xmax * xfactor,
+            self.ymin * yfactor,
+            self.ymax * yfactor,
+        )
 
-        Ixy = zfactor * np.sum(self.intensity, axis=2)
-        Imax = np.max(Ixy)
+        F = self.fluence * zfactor
+        Fmax = np.max(F)
 
         fig, ax = plt.subplots()
         im = ax.imshow(
-            Ixy.T,
+            F.T,
             cmap=cmap,
             extent=extent,
             origin="lower",
         )  # Note data.T and origin='lower' are required
         if logscale:
-            norm = LogNorm(vmin=Imax / 1e6, vmax=Imax)
+            norm = LogNorm(vmin=Fmax / 1e6, vmax=Fmax)
             im.set_norm(norm)
 
         fig.colorbar(im, ax=ax, label=label)
@@ -564,14 +755,46 @@ class Wavefront(WavefrontBase):
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
 
+    # Statistics
+
+    @property
+    def mean_x(self):
+        """
+        <x> in meters
+        """
+        return self._mean("x")
+
+    @property
+    def mean_y(self):
+        """
+        <y> in meters
+        """
+        return self._mean("y")
+
+    @property
+    def mean_z(self):
+        """
+        <y> in meters
+        """
+        return self._mean("z")
+
     @property
     def sigma_x(self):
-        P = np.sum(self.intensity, axis=(1, 2))
-        P = P / np.sum(P)
-        x = self.xvec
+        """
+        sqrt(<x^2> - <x>^2) in meters
+        """
+        return self._std("x")
 
-        mean = np.sum(x * P)
-        variance = np.sum((x - mean) ** 2 * P)
-        sigma = np.sqrt(variance)
+    @property
+    def sigma_y(self):
+        """
+        sqrt(<y^2> - <y>^2) in meters
+        """
+        return self._std("y")
 
-        return sigma
+    @property
+    def sigma_z(self):
+        """
+        sqrt(<z^2> - <z>^2) in meters
+        """
+        return self._std("z")

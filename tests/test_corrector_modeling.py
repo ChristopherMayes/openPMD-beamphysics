@@ -111,9 +111,6 @@ def test_make_thin_straight_wire_fieldmesh(seed=42):
                                            ymin=ys.min(), ymax=ys.max(), ny=len(ys),
                                            zmin=zs.min(), zmax=zs.max(), nz=len(zs))
     
-    Bnorm = np.sqrt(FM.Bx**2 + FM.By**2 + FM.Bz**2)
-    
-    e3x, e3y, e3z = FM.Bx/Bnorm, FM.By/Bnorm, FM.Bz/Bnorm
 
     for ii, x in enumerate(xs):
         for jj, y in enumerate(ys):

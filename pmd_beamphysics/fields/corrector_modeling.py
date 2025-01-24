@@ -164,9 +164,9 @@ def bfield_from_thin_straight_wire(
         ax.set_zlabel("z (m)")
 
     if plot_wire and return_axes:
-        B[:, :, :, 0], B[:, :, :, 1], B[:, :, :, 2], ax
-
-    return B[:, :, :, 0], B[:, :, :, 1], B[:, :, :, 2]
+        return  B[:, :, :, 0], B[:, :, :, 1], B[:, :, :, 2], ax
+    else:
+        return B[:, :, :, 0], B[:, :, :, 1], B[:, :, :, 2]
 
     
 

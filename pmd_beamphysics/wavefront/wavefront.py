@@ -12,6 +12,9 @@ from scipy.constants import epsilon_0, c
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
+from pmd_beamphysics.statistics import mean_calc, mean_variance_calc
+from pmd_beamphysics.plot import plot_2d_density_with_marginals
+
 
 def fftfreq_max(n, d=1.0):
     """Return the maximum frequency in fftfreq for given n and d."""
@@ -254,10 +257,8 @@ class WavefrontBase(ABC):
         """
         axis = _axis_for_sum[key]
         P = np.sum(self.intensity, axis=axis)
-        P = P / np.sum(P)
         x = getattr(self, key + "vec")
-        mean = np.sum(x * P)
-        return mean
+        return mean_calc(x, P)
 
     def _std(self, key):
         """
@@ -267,10 +268,8 @@ class WavefrontBase(ABC):
         """
         axis = _axis_for_sum[key]
         P = np.sum(self.intensity, axis=axis)
-        P = P / np.sum(P)
         x = getattr(self, key + "vec")
-        mean = np.sum(x * P)
-        variance = np.sum((x - mean) ** 2 * P)
+        _, variance = mean_variance_calc(x, P)
         return np.sqrt(variance)
 
     def pad(self, nx=(0, 0), ny=(0, 0), nz=(0, 0)):
@@ -754,6 +753,39 @@ class Wavefront(WavefrontBase):
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
+
+    def plot2(self, cmap="inferno", logscale=False):
+        """
+        Simple fluence plot
+
+        """
+
+        # xlabel = r"$x$ (cm)"
+        # ylabel = r"$y$ (cm)"
+        xfactor = 100
+        yfactor = 100
+        zfactor = 1 / (100 * 100)  # 1/m^2 -> 1/cm^2
+        # label = r"$F$ (J/cm$^2$)"
+        F = self.fluence
+
+        plot_2d_density_with_marginals(
+            F * zfactor,
+            dx=self.dx * xfactor,
+            dy=self.dy * yfactor,
+            xmin=self.xmin * xfactor,
+            ymin=self.ymin * yfactor,
+            x_name=r"$x$",
+            x_units="cm",
+            y_name=r"$y$",
+            y_units="cm",
+            z_name=r"$F$",
+            z_units="J/cm$^2$",
+        )
+
+        # if logscale:
+        # Fmax = np.max(F)
+        #    norm = LogNorm(vmin=Fmax / 1e6, vmax=Fmax)
+        #    im.set_norm(norm)
 
     # Statistics
 

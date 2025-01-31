@@ -2,10 +2,13 @@
 
 from copy import copy
 
+from typing import Optional, Tuple, Dict, List, Union
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
+from matplotlib.colors import LogNorm, Normalize, TwoSlopeNorm
 
 # For field legends
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -847,3 +850,184 @@ def plot_fieldmesh_rectangular_2d(
         orientation="vertical",
         label=llabel,
     )
+
+
+def plot_2d_density_with_marginals(
+    data: np.ndarray,
+    dx: Optional[float] = 1,
+    dy: Optional[float] = 1,
+    xmin: Optional[float] = None,
+    ymin: Optional[float] = None,
+    x_name: str = "",
+    y_name: str = "",
+    z_name: str = "",
+    x_units: Optional[str] = None,
+    y_units: Optional[str] = None,
+    z_units: Optional[str] = None,
+    cmap: str = "inferno",
+    figsize: Tuple[float, float] = (5, 5),
+    log_scale_z: bool = False,
+    log_scale_marginals: bool = False,
+    marginal_titles: Tuple[Optional[str], Optional[str]] = (None, None),
+    highlight_regions: Optional[
+        List[Dict[str, Union[float, Tuple[float, float]]]]
+    ] = None,
+    marginal_style: Optional[Dict[str, Union[str, float]]] = None,
+    show_stats: bool = False,
+    show_colorbar: bool = True,
+    xlim: Tuple[float, float] = None,
+    ylim: Tuple[float, float] = None,
+    vmin: Optional[float] = None,
+    vcenter: Optional[float] = None,
+    vmax: Optional[float] = None,
+    aspect: Optional[str] = "auto",
+    return_axes: bool = False,
+) -> Optional[Tuple[plt.Figure, Dict[str, plt.Axes]]]:
+    """
+    Basic plot for a 2D density map with marginal histograms.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        2D array representing the binned density data.
+    extent : tuple of float
+        The spatial range of the data in the form (xmin, xmax, ymin, ymax).
+    x_name : str
+        Label for the X-axis.
+    y_name : str
+        Label for the Y-axis.
+    z_name : str
+        Label for the Z-axis (density).
+    x_units : str, optional
+        Units for the X-axis, displayed in parentheses next to the label.
+    y_units : str, optional
+        Units for the Y-axis, displayed in parentheses next to the label.
+    z_units : str, optional
+        Units for the Z-axis (density), displayed in parentheses next to the label.
+    cmap : str, default="viridis"
+        Colormap to use for the density plot.
+    figsize : tuple of float, default=(8, 8)
+        Figure size for the plot.
+    log_scale_z : bool, default=False
+        If True, apply a log scale to the density data (Z-axis) using a LogNorm.
+    log_scale_marginals : bool, default=False
+        If True, use a log scale for the marginal histograms.
+    marginal_titles : tuple of str, optional
+        Titles for the X and Y marginal plots in the form (x_title, y_title).
+    annotations : list of dict, optional
+        List of annotations for the main density plot. Each dict should include:
+        {"x": float, "y": float, "text": str}.
+    marginal_style : dict, optional
+        Style for the marginal bars (e.g., {"color": "gray", "alpha": 0.7}).
+    show_stats : bool, default=False
+        If True, display basic statistics (mean, median, std) on the plot.
+    return_axes : bool, default=False
+        If True, return the figure and axis objects for further customization.
+
+    Returns
+    -------
+    None or (plt.Figure, dict)
+        Returns None if `return_axes` is False. Otherwise, returns the figure and
+        a dictionary of axis objects.
+    """
+
+    # Compute bin edges from extent and data shape
+    nx, ny = data.shape
+
+    # Coordinates represent centers of pixels
+    if xmin is None:
+        # Put 0 in the center
+        xmin = -((nx - 1) * dx) / 2
+    if ymin is None:
+        # Put 0 in the center
+        ymin = -((ny - 1) * dy) / 2
+
+    xmax = xmin + (nx - 1) * dx
+    ymax = ymin + (ny - 1) * dy
+
+    xvec = np.linspace(xmin, xmax, nx)
+    yvec = np.linspace(ymin, ymax, ny)
+
+    # Compute marginal histograms
+    x_marginal = np.sum(data, axis=1) * dy  # sum over y
+    y_marginal = np.sum(data, axis=0) * dx
+
+    # Define normalization for the density plot
+    # Set defaults for vmin and vmax based on the data
+    vmin = vmin if vmin is not None else np.min(data)
+    vmax = vmax if vmax is not None else np.max(data)
+
+    # Choose normalization
+    if log_scale_z:
+        norm = LogNorm(vmin=vmin, vmax=vmax)
+    elif vcenter is None:
+        norm = Normalize(vmin=vmin, vmax=vmax)
+    else:
+        norm = TwoSlopeNorm(vmin=vmin, vcenter=vcenter, vmax=vmax)
+
+    # Create figure and GridSpec
+    fig = plt.figure(figsize=figsize)
+    gs = GridSpec(6, 6, figure=fig, wspace=0.05, hspace=0.05)
+
+    # Main density plot
+    ax_main = fig.add_subplot(gs[1:, :-1])
+    extent = (xmin - dx / 2, xmax + dx / 2, ymin - dy / 2, ymax + dy / 2)
+    density_plot = ax_main.imshow(
+        data.T,
+        origin="lower",
+        # Extent is the full extent of all pixels, so add half widths
+        extent=extent,
+        cmap=cmap,
+        aspect=aspect,
+    )
+    ax_main.set_xlabel(f"{x_name} ({x_units})" if x_units else x_name)
+    ax_main.set_ylabel(f"{y_name} ({y_units})" if y_units else y_name)
+    density_plot.set_norm(norm)
+
+    # Top marginal
+    ax_top = fig.add_subplot(gs[0, :-1], sharex=ax_main)
+    bar_style = marginal_style if marginal_style else {"color": "gray"}
+    ax_top.bar(xvec, x_marginal, width=dx, align="center", **bar_style)
+    # ax_top.set_ylabel(marginal_titles[0] if marginal_titles[0] else "Density")
+    if z_units and y_units:
+        ax_top.set_ylabel(f"{z_units}" + r"$\cdot$" + f"{y_units}")
+
+    if log_scale_marginals:
+        ax_top.set_yscale("log")
+
+    # Right marginal
+    ax_right = fig.add_subplot(gs[1:, -1], sharey=ax_main)
+    ax_right.barh(yvec, y_marginal, height=dy, align="edge", **bar_style)
+    # ax_right.set_xlabel(marginal_titles[1] if marginal_titles[1] else "Density")
+    if z_units and x_units:
+        ax_right.set_xlabel(f"{z_units}" + r"$\cdot$" + f"{x_units}")
+    if log_scale_marginals:
+        ax_right.set_xscale("log")
+
+    # Return axes if requested
+    axes = {"main": ax_main, "top": ax_top, "right": ax_right}
+
+    # Add color bar
+    if show_colorbar:
+        cbar_ax = fig.add_axes([0.91, 0.15, 0.02, 0.7])
+        fig.colorbar(density_plot, cax=cbar_ax, orientation="vertical")
+        cbar_ax.set_ylabel(f"{z_name} ({z_units})" if z_units else z_name)
+        axes["cbar"] = cbar_ax
+
+    # Turn off tick labels on marginals
+    plt.setp(ax_top.get_xticklabels(), visible=False)
+    plt.setp(ax_right.get_yticklabels(), visible=False)
+
+    if xlim is None:
+        xlim = (extent[0], extent[1])
+    ax_main.set_xlim(xlim)
+    ax_top.set_xlim(xlim)
+
+    if ylim is None:
+        ylim = (extent[2], extent[3])
+    ax_main.set_ylim(ylim)
+    ax_right.set_ylim(ylim)
+
+    # Return axes if requested
+    if return_axes:
+        return fig, axes

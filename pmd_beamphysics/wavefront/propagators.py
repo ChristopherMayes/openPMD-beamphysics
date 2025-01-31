@@ -91,6 +91,8 @@ def drift_wavefront_advanced(w: Wavefront, z, Rcurv=2):
     """
     Work in progress
     """
+    if z == 0:
+        return w.copy()
 
     x_mesh, y_mesh, _ = np.meshgrid(w.xvec, w.yvec, w.zvec, indexing="ij")
 

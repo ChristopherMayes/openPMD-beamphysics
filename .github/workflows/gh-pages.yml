@@ -38,7 +38,7 @@ jobs:
           zip -r openpmd-beamphysics-examples.zip docs/examples/
           mv openpmd-beamphysics-examples.zip ./site/assets/
       - name: Upload docs artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v2
         with:
           path: ./site
   deploy:

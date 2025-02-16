@@ -128,7 +128,8 @@ def write_component_data(h5, name, data, unit=None):
 
     """
     # Check for constant component
-    dat0 = data[0]
+    dat0 = data.flat[0]
+
     if np.all(data == dat0):
         g = h5.create_group(name)
         g.attrs["value"] = dat0

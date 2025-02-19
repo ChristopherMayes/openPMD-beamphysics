@@ -7,6 +7,9 @@ For more advanced units, use a package like Pint:
 
 """
 
+from __future__ import annotations
+from typing import Sequence
+
 import numpy as np
 import scipy.constants
 
@@ -16,18 +19,27 @@ c_light = scipy.constants.c
 e_charge = scipy.constants.e
 mu_0 = scipy.constants.mu_0  # Note that this is no longer 4pi*10^-7 !
 
+Dimension = tuple[int, int, int, int, int, int, int]
+
 
 class pmd_unit:
     """
+    OpenPMD representation of a unit.
 
-    Params
-    ------
+    Parameters
+    ----------
+    unitSymbol : str
+        Native units name
+    unitSI : float
+        Conversion factor to the corresponding SI unit.
+    unitDimension : list
+        SI Base Exponents
 
-    unitSymbol: Native units name
-    unitSI:     Conversion factor to the the correspontign SI unit
-    unitDimension: SI Base Exponents
+    Notes
+    -----
 
     Base unit dimensions are defined as:
+
        Base dimension  | exponents.       | SI unit
        ---------------- -----------------   -------
        length          : (1,0,0,0,0,0,0)     m
@@ -38,91 +50,119 @@ class pmd_unit:
        mol             : (0,0,0,0,0,1,0)     mol
        luminous        : (0,0,0,0,0,0,1)     cd
 
-    Example:
-        pmd_unit('eV', 1.602176634e-19, (2, 1, -2, 0, 0, 0, 0))
-        defines that an eV is 1.602176634e-19 of base units m^2 kg/s^2, which is a Joule (J)
+    Examples
+    --------
 
-    If unitSI=0 (default), init with a known symbol:
-        pmd_unit('T')
-    returns:
-        pmd_unit('T', 1, (0, 1, -2, -1, 0, 0, 0))
+    Define that an eV is 1.602176634e-19 of base units m^2 kg/s^2, which is a Joule (J):
 
+    >>> pmd_unit('eV', 1.602176634e-19, (2, 1, -2, 0, 0, 0, 0))
 
-    Simple equalities are provided:
-        u1 == u2
-    Returns True if the params are all the same.
+    If unitSI=0 (default), `pmd_unit` may be initialized with a known symbol:
 
+    >>> pmd_unit('T')
+    pmd_unit('T', 1, (0, 1, -2, -1, 0, 0, 0))
+
+    Simple equalities are possible:
+
+    >>> pmd_unit("T") == pmd_unit("T")
+    True
+    >>> pmd_unit("eV") == pmd_unit("T")
+    False
     """
 
-    def __init__(self, unitSymbol="", unitSI=0, unitDimension=(0, 0, 0, 0, 0, 0, 0)):
+    def __init__(
+        self,
+        unitSymbol: str = "",
+        unitSI: int | float = 0,
+        unitDimension: str | Dimension | tuple[int, ...] = (0, 0, 0, 0, 0, 0, 0),
+    ):
         # Allow to return an internally known unit
         if unitSI == 0:
-            if unitSymbol in known_unit:
-                # Copy internals
-                u = known_unit[unitSymbol]
-                unitSI = u.unitSI
-                unitDimension = u.unitDimension
-            else:
-                raise ValueError(f"unknown unitSymbol: {unitSymbol}")
+            if unitSymbol not in known_unit:
+                raise ValueError(f"Unknown unitSymbol: {unitSymbol}")
+
+            # Copy internals
+            u = known_unit[unitSymbol]
+            unitSI = u.unitSI
+            unitDimension = u.unitDimension
 
         self._unitSymbol = unitSymbol
         self._unitSI = unitSI
         if isinstance(unitDimension, str):
             self._unitDimension = DIMENSION[unitDimension]
         else:
-            self._unitDimension = unitDimension
+            self._unitDimension = make_dimension(unitDimension)
 
     def __hash__(self) -> int:
         return hash((self.unitSymbol, self.unitSI, self.unitDimension))
 
     @property
-    def unitSymbol(self):
+    def unitSymbol(self) -> str:
         return self._unitSymbol
 
     @property
-    def unitSI(self):
+    def unitSI(self) -> float:
         return self._unitSI
 
     @property
-    def unitDimension(self):
+    def unitDimension(self) -> Dimension:
         return self._unitDimension
 
-    def __mul__(self, other):
+    def __mul__(self, other) -> pmd_unit:
         return multiply_units(self, other)
 
-    def __truediv__(self, other):
+    def __truediv__(self, other) -> pmd_unit:
         return divide_units(self, other)
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if isinstance(other, self.__class__):
             return self.__dict__ == other.__dict__
         else:
             return False
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> bool:
         return not self.__eq__(other)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.unitSymbol
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"pmd_unit('{self.unitSymbol}', {self.unitSI}, {self.unitDimension})"
 
 
-def is_dimensionless(u):
+def is_dimensionless(u: pmd_unit) -> bool:
     """Checks if the unit is dimensionless"""
+    if not isinstance(u, pmd_unit):
+        raise ValueError("`u` is not a pmd_unit instance")
     return u.unitDimension == (0, 0, 0, 0, 0, 0, 0)
 
 
-def is_identity(u):
+def is_identity(u: pmd_unit) -> bool:
     """Checks if the unit is equivalent to 1"""
+    if not isinstance(u, pmd_unit):
+        raise ValueError("`u` is not a pmd_unit instance")
     return u.unitSI == 1 and u.unitDimension == (0, 0, 0, 0, 0, 0, 0)
 
 
-def multiply_units(u1, u2):
+def multiply_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
     """
-    Multiplies two pmd_unit symbols
+    Multiplies two pmd_unit symbols.
+
+    Parameters
+    ----------
+    u1 : pmd_unit
+    u2 : pmd_unit
+
+    Returns
+    -------
+    pmd_unit
+        The resulting unit after multiplication.
     """
+
+    if not isinstance(u1, pmd_unit):
+        raise ValueError("u1 is not a pmd_unit instance")
+    if not isinstance(u2, pmd_unit):
+        raise ValueError("u2 is not a pmd_unit instance")
 
     if is_identity(u1):
         return u2
@@ -143,10 +183,25 @@ def multiply_units(u1, u2):
     return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)
 
 
-def divide_units(u1, u2):
+def divide_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
     """
-    Divides two pmd_unit symbols : u1/u2
+    Divides two pmd_unit symbols: u1 / u2
+
+    Parameters
+    ----------
+    u1 : pmd_unit
+        The numerator unit.
+    u2 : pmd_unit
+        The denominator unit.
+
+    Returns
+    -------
+    pmd_unit
     """
+    if not isinstance(u1, pmd_unit):
+        raise ValueError("u1 is not a pmd_unit instance")
+    if not isinstance(u2, pmd_unit):
+        raise ValueError("u2 is not a pmd_unit instance")
 
     if is_identity(u2):
         return u1
@@ -159,17 +214,27 @@ def divide_units(u1, u2):
         symbol = s1 + "/" + s2
     d1 = u1.unitDimension
     d2 = u2.unitDimension
-    dim = tuple(a - b for a, b in zip(d1, d2))
+    dim = make_dimension(a - b for a, b in zip(d1, d2))
     unitSI = u1.unitSI / u2.unitSI
 
     return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)
 
 
-def sqrt_unit(u):
+def sqrt_unit(u: pmd_unit) -> pmd_unit:
     """
-    Returns the sqrt of a unit
+    Returns the square root of a unit.
+
+    Parameters
+    ----------
+    u : pmd_unit
+        The unit to take the square root of.
+
+    Returns
+    -------
+    pmd_unit
     """
-    u.unitDimension
+    if not isinstance(u, pmd_unit):
+        raise ValueError("`u` is not a pmd_unit instance")
 
     symbol = u.unitSymbol
     if symbol not in ["", "1"]:
@@ -182,7 +247,7 @@ def sqrt_unit(u):
 
 
 # length mass time current temperature mol luminous
-DIMENSION = {
+DIMENSION: dict[str, Dimension] = {
     "1": (0, 0, 0, 0, 0, 0, 0),
     # Base units
     "length": (1, 0, 0, 0, 0, 0, 0),
@@ -202,21 +267,25 @@ DIMENSION = {
     "momentum": (1, 1, -1, 0, 0, 0, 0),
 }
 # Inverse
-DIMENSION_NAME = {v: k for k, v in DIMENSION.items()}
+DIMENSION_NAME: dict[Dimension, str] = {v: k for k, v in DIMENSION.items()}
 
 
-def dimension(name):
-    if name in DIMENSION:
-        return DIMENSION[name]
-    else:
-        return None
+def make_dimension(dim: Sequence[int]) -> Dimension:
+    dim = tuple(int(d) for d in dim)
+    if len(dim) != 7:
+        raise ValueError("Dimensions must be 7 elements.")
+    return dim
 
 
-def dimension_name(dim_array):
-    return DIMENSION_NAME[tuple(dim_array)]
+def dimension(name: str) -> Dimension | None:
+    return DIMENSION.get(name, None)
 
 
-SI_symbol = {
+def dimension_name(dim_array: Dimension) -> str:
+    return DIMENSION_NAME[make_dimension(dim_array)]
+
+
+SI_symbol: dict[str, str] = {
     "1": "1",
     "length": "m",
     "mass": "kg",
@@ -234,10 +303,10 @@ SI_symbol = {
     "magnetic_field": "T",
 }
 # Inverse
-SI_name = {v: k for k, v in SI_symbol.items()}
+SI_name: dict[str, str] = {v: k for k, v in SI_symbol.items()}
 
 # length mass time current temperature mol luminous
-known_unit = {
+known_unit: dict[str, pmd_unit] = {
     "1": pmd_unit("", 1, "1"),
     "degree": pmd_unit("degree", np.pi / 180, "1"),
     "rad": pmd_unit("rad", 1, "1"),

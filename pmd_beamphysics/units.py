@@ -72,6 +72,9 @@ class pmd_unit:
         else:
             self._unitDimension = unitDimension
 
+    def __hash__(self) -> int:
+        return hash((self.unitSymbol, self.unitSI, self.unitDimension))
+
     @property
     def unitSymbol(self):
         return self._unitSymbol

@@ -8,7 +8,7 @@ For more advanced units, use a package like Pint:
 from __future__ import annotations
 
 import re
-from typing import Sequence, TypeAlias
+from typing import Sequence
 
 import numpy as np
 import scipy.constants
@@ -20,8 +20,8 @@ e_charge = scipy.constants.e
 mu_0 = scipy.constants.mu_0  # Note that this is no longer 4pi*10^-7 !
 
 
-Limit: TypeAlias = tuple[float | None, float | None]
-Dimension: TypeAlias = tuple[int, int, int, int, int, int, int]
+Limit = tuple[float | None, float | None]
+Dimension = tuple[int, int, int, int, int, int, int]
 
 
 class pmd_unit:

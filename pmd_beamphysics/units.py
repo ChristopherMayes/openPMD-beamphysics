@@ -3,12 +3,12 @@ Simple units functionality for the openPMD beamphysics records.
 
 For more advanced units, use a package like Pint:
     https://pint.readthedocs.io/
-
-
 """
 
 from __future__ import annotations
-from typing import Sequence
+
+import re
+from typing import Sequence, TypeAlias
 
 import numpy as np
 import scipy.constants
@@ -19,7 +19,9 @@ c_light = scipy.constants.c
 e_charge = scipy.constants.e
 mu_0 = scipy.constants.mu_0  # Note that this is no longer 4pi*10^-7 !
 
-Dimension = tuple[int, int, int, int, int, int, int]
+
+Limit: TypeAlias = tuple[float | None, float | None]
+Dimension: TypeAlias = tuple[int, int, int, int, int, int, int]
 
 
 class pmd_unit:
@@ -29,11 +31,30 @@ class pmd_unit:
     Parameters
     ----------
     unitSymbol : str
-        Native units name
-    unitSI : float
-        Conversion factor to the corresponding SI unit.
-    unitDimension : list
-        SI Base Exponents
+        Native units name.
+    unitSI : float, optional
+        Conversion factor to the corresponding SI unit.  Defaults to 0.
+        If unspecified, `unitSymbol` must be a recognized symbol name.
+    unitDimension : str, or list of int, optional
+        Common name of dimensions or list of 7 SI Base Exponents.
+        Valid names include:
+        * "1"
+        * "length"
+        * "mass"
+        * "time"
+        * "current"
+        * "temperture"
+        * "mol"
+        * "luminous"
+        * "charge"
+        * "electric_field"
+        * "electric_potential"
+        * "magnetic_field"
+        * "velocity"
+        * "energy"
+        * "momentum"
+
+        For a full list, see `pmd_beamphysics.units.DIMENSION`.
 
     Notes
     -----
@@ -117,8 +138,7 @@ class pmd_unit:
     def __eq__(self, other) -> bool:
         if isinstance(other, self.__class__):
             return self.__dict__ == other.__dict__
-        else:
-            return False
+        return False
 
     def __ne__(self, other) -> bool:
         return not self.__eq__(other)
@@ -241,7 +261,7 @@ def sqrt_unit(u: pmd_unit) -> pmd_unit:
         symbol = rf"\sqrt{{ {symbol} }}"
 
     unitSI = np.sqrt(u.unitSI)
-    dim = tuple(x / 2 for x in u.unitDimension)
+    dim = tuple(x // 2 for x in u.unitDimension)
 
     return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)
 
@@ -335,26 +355,31 @@ known_unit: dict[str, pmd_unit] = {
 }
 
 
-def unit(symbol):
+def unit(symbol: str) -> pmd_unit:
     """
     Returns a pmd_unit from a known symbol.
 
-    * is allowed between two known symbols:
+    * and / are allowed between two known symbols.
     """
     if symbol in known_unit:
         return known_unit[symbol]
 
-    if "*" in symbol:
-        subunits = [known_unit[s] for s in symbol.split("*")]
-        # Require these to be in known units
-        assert len(subunits) == 2, "TODO: more complicated units"
-        return multiply_units(subunits[0], subunits[1])
+    if "*" in symbol or "/" in symbol:
+        parts = re.split(r"([*/])", symbol)
+        result = known_unit[parts[0]]
+        for op, part in zip(parts[1::2], parts[2::2]):
+            unit = known_unit[part]
+            if op == "*":
+                result = result * unit
+            elif op == "/":
+                result = result / unit
+        return result
 
     raise ValueError(f"Unknown unit symbol: {symbol}")
 
 
 # Dicts for prefixes
-PREFIX_FACTOR = {
+PREFIX_FACTOR: dict[str, float] = {
     "yocto-": 1e-24,
     "zepto-": 1e-21,
     "atto-": 1e-18,
@@ -377,9 +402,9 @@ PREFIX_FACTOR = {
     "yotta-": 1e24,
 }
 # Inverse
-PREFIX = dict((v, k) for k, v in PREFIX_FACTOR.items())
+PREFIX: dict[float, str] = dict((v, k) for k, v in PREFIX_FACTOR.items())
 
-SHORT_PREFIX_FACTOR = {
+SHORT_PREFIX_FACTOR: dict[str, float] = {
     "y": 1e-24,
     "z": 1e-21,
     "a": 1e-18,
@@ -403,22 +428,32 @@ SHORT_PREFIX_FACTOR = {
     "Y": 1e24,
 }
 # Inverse
-SHORT_PREFIX = dict((v, k) for k, v in SHORT_PREFIX_FACTOR.items())
+SHORT_PREFIX: dict[float, str] = dict((v, k) for k, v in SHORT_PREFIX_FACTOR.items())
 
 
 # Nice scaling
 
 
-def nice_scale_prefix(scale):
+def nice_scale_prefix(scale: float) -> tuple[float, str]:
     """
-    Returns a nice factor and a SI prefix string
+    Returns a nice factor and an SI prefix string.
 
-    Example:
-        scale = 2e-10
+    Parameters
+    ----------
+    scale : float
+        The scale to be converted into a nice factor and SI prefix.
 
-        f, u = nice_scale_prefix(scale)
+    Returns
+    -------
+    f : float
+        The nice factor corresponding to the scale.
+    u : str
+        The SI prefix string corresponding to the scale.
 
-
+    Examples
+    --------
+    >>> nice_scale_prefix(scale=2e-10)
+    (1e-12, 'p')
     """
 
     if scale == 0:
@@ -438,15 +473,29 @@ def nice_scale_prefix(scale):
     return f, SHORT_PREFIX[f]
 
 
-def nice_array(a):
+def nice_array(a: np.ndarray) -> tuple[np.ndarray, float, str]:
     """
-    Returns a scaled array, the scaling, and a unit prefix
+    Scale an input array and return the scaled array, the scaling factor, and the
+    corresponding unit prefix.
 
-    Example:
-        nice_array( np.array([2e-10, 3e-10]) )
-    Returns:
-        (array([200., 300.]), 1e-12, 'p')
+    Parameters
+    ----------
+    a : array-like, or float
+        Input array to be scaled.
 
+    Returns
+    -------
+    scaled_array : np.ndarray
+        The scaled array, of the same shape as `a`.
+    scaling : float
+        The scale factor applied to the input array.
+    prefix : str
+        The unit prefix corresponding to the scale factor (e.g., 'p' for pico).
+
+    Examples
+    --------
+    >>> nice_array(np.array([2e-10, 3e-10]))
+    (array([200., 300.]), 1e-12, 'p')
     """
     if np.isscalar(a):
         x = a
@@ -458,11 +507,10 @@ def nice_array(a):
         x = max(np.ptp(a), abs(np.mean(a)))  # Account for tiny spread
 
     fac, prefix = nice_scale_prefix(x)
-
     return a / fac, fac, prefix
 
 
-def plottable_array(x, nice=True, lim=None):
+def plottable_array(x: np.ndarray, nice: bool = True, lim: Limit | None = None):
     """
     Similar to nice_array, but also considers limits for plotting
 
@@ -482,6 +530,7 @@ def plottable_array(x, nice=True, lim=None):
     xmax : float
 
     """
+    x = np.asarray(x)
     if lim is not None:
         if lim[0] is None:
             xmin = x.min()

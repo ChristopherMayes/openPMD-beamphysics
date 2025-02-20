@@ -8,7 +8,7 @@ For more advanced units, use a package like Pint:
 from __future__ import annotations
 
 import re
-from typing import Sequence
+from typing import Optional, Sequence
 
 import numpy as np
 import scipy.constants
@@ -20,7 +20,7 @@ e_charge = scipy.constants.e
 mu_0 = scipy.constants.mu_0  # Note that this is no longer 4pi*10^-7 !
 
 
-Limit = tuple[float | None, float | None]
+Limit = tuple[Optional[float], Optional[float]]
 Dimension = tuple[int, int, int, int, int, int, int]
 
 

@@ -110,6 +110,3 @@ plugins:
             import:
               - https://docs.python.org/3/objects.inv
               - https://docs.h5py.org/en/stable/objects.inv
-          rendering:
-            show_source: true
-            show_root_heading: true

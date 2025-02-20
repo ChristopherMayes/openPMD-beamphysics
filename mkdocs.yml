@@ -81,12 +81,32 @@ plugins:
       default_handler: python
       handlers:
         python:
-          selection:
-            docstring_style: "numpy"
-            inherited_members: false
+          options:
             filters:
               - "!^_" # exclude all members starting with _
               - "^__init__$" # but always include __init__ modules and methods
-          rendering:
-            show_source: true
+            docstring_style: numpy
+            docstring_options:
+              ignore_init_summary: false
+            heading_level: 3
             show_root_heading: true
+            show_root_toc_entry: true
+            show_root_full_path: true
+            show_root_members_full_path: false
+            show_object_full_path: true
+            show_category_heading: true
+            show_if_no_docstring: false
+            show_signature: true
+            signature_crossrefs: true
+            show_signature_annotations: false
+            separate_signature: true
+            line_length: 100
+            merge_init_into_class: true
+            show_source: true
+            show_bases: true
+            show_submodules: false
+            group_by_category: true
+            unwrap_annotated: true
+            import:
+              - https://docs.python.org/3/objects.inv
+              - https://docs.h5py.org/en/stable/objects.inv

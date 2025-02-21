@@ -110,7 +110,7 @@ class pmd_unit:
         self._unitSymbol = unitSymbol
         self._unitSI = unitSI
         if isinstance(unitDimension, str):
-            self._unitDimension = DIMENSION[unitDimension]
+            self._unitDimension = dimension(unitDimension)
         else:
             self._unitDimension = make_dimension(unitDimension)
 
@@ -298,7 +298,13 @@ def make_dimension(dim: Sequence[int]) -> Dimension:
 
 
 def dimension(name: str) -> Dimension | None:
-    return DIMENSION.get(name, None)
+    try:
+        return DIMENSION[name]
+    except KeyError:
+        options = ", ".join(DIMENSION)
+        raise ValueError(
+            f"Invalid unit dimension string: {name}. Valid options are: {options}"
+        )
 
 
 def dimension_name(dim_array: Dimension) -> str:

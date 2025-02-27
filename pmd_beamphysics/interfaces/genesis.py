@@ -668,27 +668,54 @@ def wavefront_write_genesis4(
     refposition: float = 0,
 ) -> None:
     """
-    Write the field data in the Genesis 4 format.
+    Write the wavefront field data to a Genesis4-style HDF5 file.
 
-    The full field data is stored as a 3D array of complex numbers `DFL` in units of `sqrt(W)`.
+    This function stores the full field data as a 3D array of complex numbers (`DFL`) in units of `sqrt(W)`,
+    following the Genesis 4 format. The relation between the stored `DFL` data and the electric field `E` in V/m is:
 
-    The relation of this and the electric field `E` in V/m is:
-    ```
-    E = DFL * sqrt(2*Z0) / Δ
-    ```
-    Where `Z0 = π * 119.9169832 V^2/W` exactly and `Δ` is the grid spacing.
+    .. math::
 
+        E = DFL \\times \\frac{\\sqrt{2Z_0}}{\\Delta}
+
+    where `Z0` is the characteristic impedance of free space:
+
+    .. math::
+
+        Z_0 = \\pi \\times 119.9169832 \\text{ V}^2/\\text{W}
+
+    and `Δ` represents the grid spacing.
 
     Parameters
     ----------
-    w: Wavefront
+    w : Wavefront
+        The `Wavefront` instance containing the field data to be written.
 
-    h5: h5py.File
+    h5 : h5py.File
+        The HDF5 file object where the data will be stored in Genesis4 format.
 
-    polarization: str
+    polarization : str, optional
+        The polarization component to write. Must be either `"x"` or `"y"`. If `None`, the function
+        will attempt to infer the correct component:
+        - If only `Ex` exists, it will be written.
+        - If only `Ey` exists, it will be written.
+        - If both components exist, a `ValueError` is raised.
 
-    refposition: float
+    refposition : float, optional
+        The reference position in meters, stored as metadata in the output file. Default is `0`.
 
+    Raises
+    ------
+    ValueError
+        - If both `Ex` and `Ey` exist but no polarization is explicitly specified.
+        - If `nx != ny`, as Genesis4 requires a square grid.
+        - If `dx != dy`, as Genesis4 requires equal grid spacing in both transverse directions.
+        - If `polarization` is specified but not `"x"` or `"y"`.
+
+    Notes
+    -----
+    - The function ensures that the grid size and spacing meet Genesis4's requirements.
+    - The data is stored in slices, following the indexing convention of Genesis4:
+      The x-coordinates are stored as the inner loop, requiring a transpose before flattening.
 
     """
     nx, ny, nz = w.shape

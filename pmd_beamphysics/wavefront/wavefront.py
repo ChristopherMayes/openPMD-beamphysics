@@ -846,7 +846,30 @@ class Wavefront(WavefrontBase):
         file: Union[pathlib.Path, str, h5py.Group],
     ):
         """
-        Wavefront from a Genesis4 field file
+        Create a Wavefront instance from a Genesis4 field file.
+
+        This method reads a Genesis4 field file (either from disk or an open HDF5 group)
+        and initializes a `Wavefront` instance with the extracted field data.
+
+        Parameters
+        ----------
+        file : Union[pathlib.Path, str, h5py.Group]
+            The path to the Genesis4 HDF5 field file or an open `h5py.Group`.
+
+        Returns
+        -------
+        Wavefront
+            A new instance of `Wavefront` initialized with field data from the Genesis4 file.
+
+        Raises
+        ------
+        ValueError
+            If the provided file is not a valid path, string, or `h5py.Group`.
+
+        Notes
+        -----
+        - The field data is extracted and converted into an electric field representation.
+        - The grid spacing (`dx` and `dz`) and wavelength are obtained from the file metadata.
         """
 
         if isinstance(file, (str, pathlib.Path)):
@@ -871,7 +894,25 @@ class Wavefront(WavefrontBase):
         file: Union[pathlib.Path, str, h5py.Group],
     ):
         """
-        Write a Genesis4-style field field
+        Write the Wavefront field data to a Genesis4-style HDF5 file.
+
+        This method saves the wavefront field data into a Genesis4-compatible HDF5 file,
+        either by creating a new file on disk or writing into an existing HDF5 group.
+
+        Parameters
+        ----------
+        file : Union[pathlib.Path, str, h5py.Group]
+            The path to the output HDF5 file or an open `h5py.Group` for writing.
+
+        Raises
+        ------
+        ValueError
+            If the provided file is not a valid path, string, or `h5py.Group`.
+
+        Notes
+        -----
+        - If `file` is a path or string, a new HDF5 file is created and written to.
+        - If `file` is an `h5py.Group`, the data is written directly into the provided group.
         """
         if isinstance(file, (str, pathlib.Path)):
             with h5py.File(file, "w") as h5:

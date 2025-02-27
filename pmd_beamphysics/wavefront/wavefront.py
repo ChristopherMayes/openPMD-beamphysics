@@ -2,6 +2,7 @@ from abc import ABC
 from enum import Enum
 from dataclasses import dataclass, replace
 from copy import deepcopy
+from typing import Union
 
 from math import pi
 import numpy as np
@@ -9,11 +10,19 @@ from numpy.fft import fftfreq, fftshift, ifftshift, ifftn
 
 from scipy.constants import epsilon_0, c
 
+import h5py
+import pathlib
+
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
 from pmd_beamphysics.statistics import mean_calc, mean_variance_calc
 from pmd_beamphysics.plot import plot_2d_density_with_marginals
+from pmd_beamphysics.units import Z0
+from pmd_beamphysics.interfaces.genesis import (
+    wavefront_write_genesis4,
+    load_genesis4_fields,
+)
 
 
 def fftfreq_max(n, d=1.0):
@@ -830,3 +839,46 @@ class Wavefront(WavefrontBase):
         sqrt(<z^2> - <z>^2) in meters
         """
         return self._std("z")
+
+    @classmethod
+    def from_genesis4(
+        cls,
+        file: Union[pathlib.Path, str, h5py.Group],
+    ):
+        """
+        Wavefront from a Genesis4 field file
+        """
+
+        if isinstance(file, (str, pathlib.Path)):
+            with h5py.File(file, "r") as h5:
+                dfl, param = load_genesis4_fields(h5)
+
+        elif isinstance(file, h5py.Group):
+            dfl, param = load_genesis4_fields(h5)
+        else:
+            raise ValueError(f"{file=} must be a str, pathlib.Path, or h5py.Group")
+
+        dx = param["gridsize"]
+        dz = param["slicespacing"]
+        wavelength = param["wavelength"]
+
+        Ex = dfl * np.sqrt(2 * Z0) / dx
+
+        return cls(Ex=Ex, dx=dx, dy=dx, dz=dz, wavelength=wavelength)
+
+    def write_genesis4(
+        self,
+        file: Union[pathlib.Path, str, h5py.Group],
+    ):
+        """
+        Write a Genesis4-style field field
+        """
+        if isinstance(file, (str, pathlib.Path)):
+            with h5py.File(file, "w") as h5:
+                wavefront_write_genesis4(self, h5)
+            return
+
+        if isinstance(file, h5py.Group):
+            wavefront_write_genesis4(self, h5)
+
+        raise ValueError(type(file))  # type: ignore[unreachable]

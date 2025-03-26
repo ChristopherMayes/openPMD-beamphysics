@@ -1312,6 +1312,14 @@ def centroid(particle_group: ParticleGroup) -> ParticleGroup:
     return ParticleGroup(data=data)
 
 
+def _scalar_maybe_from_array(value):
+    if np.isscalar(value):
+        return value
+
+    assert len(value) == 1
+    return value[0]
+
+
 def load_bunch_data(h5):
     """
     Load particles into structured numpy array.
@@ -1335,12 +1343,7 @@ def load_bunch_data(h5):
         else species_type
     )
 
-    try:
-        # numParticles might be a single element array:
-        n_particle = int(attrs["numParticles"][0])
-    except TypeError:
-        # Fall back to just interpreting it as an integer:
-        n_particle = int(attrs["numParticles"])
+    n_particle = int(_scalar_maybe_from_array(attrs["numParticles"]))
 
     data["total_charge"] = attrs["totalCharge"] * attrs["chargeUnitSI"]
 

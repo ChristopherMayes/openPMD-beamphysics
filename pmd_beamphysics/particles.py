@@ -1327,8 +1327,21 @@ def load_bunch_data(h5):
 
     attrs = dict(h5.attrs)
     data = {}
-    data["species"] = attrs["speciesType"].decode("utf-8")  # String
-    n_particle = int(attrs["numParticles"])
+
+    species_type = attrs["speciesType"]
+    data["species"] = (
+        species_type.decode("utf-8")
+        if isinstance(species_type, bytes)
+        else species_type
+    )
+
+    try:
+        # numParticles might be a single element array:
+        n_particle = int(attrs["numParticles"][0])
+    except TypeError:
+        # Fall back to just interpreting it as an integer:
+        n_particle = int(attrs["numParticles"])
+
     data["total_charge"] = attrs["totalCharge"] * attrs["chargeUnitSI"]
 
     for key in ["x", "px", "y", "py", "z", "pz", "t"]:

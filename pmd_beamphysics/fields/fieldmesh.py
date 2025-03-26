@@ -39,8 +39,8 @@ from ..readers import (
     expected_record_unit_dimension,
     field_paths,
     field_record_components,
-    load_field_attrs,
     is_legacy_fortran_data_ordering,
+    load_field_attrs,
 )
 from ..units import pg_units
 from ..writers import pmd_field_init, write_pmd_field

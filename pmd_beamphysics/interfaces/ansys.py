@@ -1,6 +1,6 @@
 import numpy as np
 
-from pmd_beamphysics.units import mu_0
+from ..units import mu_0
 
 
 def get_vec(x):

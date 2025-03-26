@@ -4,7 +4,7 @@ import subprocess
 import numpy as np
 from h5py import File
 
-from pmd_beamphysics.units import mec2
+from ..units import mec2
 
 
 def write_elegant(particle_group, outfile, verbose=False):
@@ -56,7 +56,7 @@ def write_elegant(particle_group, outfile, verbose=False):
 !
 ! Created using the openPMD-beamphysics Python package
 ! https://github.com/ChristopherMayes/openPMD-beamphysics
-! species: {P['species']}
+! species: {P["species"]}
 !
 &parameter name=Charge, type=double, units=C, description="total charge in Coulombs" &end
 &column name=t,  type=double, units=s, description="time in seconds" &end
@@ -66,7 +66,7 @@ def write_elegant(particle_group, outfile, verbose=False):
 &column name=yp, type=double, description="py/pz" &end
 &column name=p,  type=double, {p_units}description="relativistic gamma*beta" &end
 &data mode=ascii &end
-{P['charge']}
+{P["charge"]}
 {len(P)}"""
 
     # Write ASCII

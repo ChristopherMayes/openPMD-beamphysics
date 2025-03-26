@@ -57,8 +57,12 @@ def write_pmd_bunch(h5, data, name=None):
     else:
         g = h5
 
+    # Write into species group
+    species = data["species"]
+    g = g.create_group(species)
+
     # Attributes
-    g.attrs["speciesType"] = fstr(data["species"])
+    g.attrs["speciesType"] = fstr(species)
     g.attrs["numParticles"] = data["n_particle"]
     g.attrs["totalCharge"] = data["charge"]
     g.attrs["chargeUnitSI"] = 1.0
@@ -97,8 +101,10 @@ def write_pmd_field(h5, data, name=None):
     # Validate attrs
     attrs, other = load_field_attrs(data["attrs"])
 
-    # Encode and write required and optional
+    # Encode for writing
     attrs = encode_attrs(attrs)
+
+    # Write attributes
     for k, v in attrs.items():
         g.attrs[k] = v
 
@@ -137,8 +143,6 @@ def write_component_data(h5, name, data, unit=None):
     else:
         h5[name] = data
         g = h5[name]
-        if len(data.shape) > 1:
-            g.attrs["gridDataOrder"] = fstr("C")  # C order for numpy/h5py
 
     if unit:
         g.attrs["unitSI"] = unit.unitSI

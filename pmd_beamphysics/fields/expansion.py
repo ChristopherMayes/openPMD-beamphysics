@@ -2,7 +2,7 @@ import numpy as np
 from scipy import fft
 from scipy.interpolate import UnivariateSpline
 
-from pmd_beamphysics.units import c_light
+from ..units import c_light
 
 
 def expand_1d_static_fieldmap(z0, fz0, spline_s=0):

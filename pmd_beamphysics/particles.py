@@ -7,26 +7,26 @@ from typing import Union
 import numpy as np
 from h5py import File
 
-import pmd_beamphysics.interfaces.bmad as bmad
-import pmd_beamphysics.statistics as statistics
-from pmd_beamphysics.interfaces.astra import write_astra
-from pmd_beamphysics.interfaces.elegant import write_elegant
-from pmd_beamphysics.interfaces.genesis import (
+from . import statistics
+from .interfaces import bmad
+from .interfaces.astra import write_astra
+from .interfaces.elegant import write_elegant
+from .interfaces.genesis import (
     genesis2_beam_data,
     write_genesis2_beam_file,
     write_genesis4_beam,
     write_genesis4_distribution,
 )
-from pmd_beamphysics.interfaces.gpt import write_gpt
-from pmd_beamphysics.interfaces.impact import write_impact
-from pmd_beamphysics.interfaces.litrack import write_litrack
-from pmd_beamphysics.interfaces.lucretia import write_lucretia
-from pmd_beamphysics.interfaces.opal import write_opal
-from pmd_beamphysics.interfaces.simion import write_simion
-from pmd_beamphysics.plot import density_plot, marginal_plot, slice_plot
-from pmd_beamphysics.readers import particle_array, particle_paths
-from pmd_beamphysics.species import charge_of, mass_of
-from pmd_beamphysics.statistics import (
+from .interfaces.gpt import write_gpt
+from .interfaces.impact import write_impact
+from .interfaces.litrack import write_litrack
+from .interfaces.lucretia import write_lucretia
+from .interfaces.opal import write_opal
+from .interfaces.simion import write_simion
+from .plot import density_plot, marginal_plot, slice_plot
+from .readers import particle_array, particle_paths
+from .species import charge_of, mass_of
+from .statistics import (
     matched_particles,
     norm_emit_calc,
     normalized_particle_coordinate,
@@ -35,8 +35,8 @@ from pmd_beamphysics.statistics import (
     resample_particles,
     slice_statistics,
 )
-from pmd_beamphysics.units import c_light, parse_bunching_str, pg_units
-from pmd_beamphysics.writers import pmd_init, write_pmd_bunch
+from .units import c_light, parse_bunching_str, pg_units
+from .writers import pmd_init, write_pmd_bunch
 
 # -----------------------------------------
 # Classes
@@ -983,7 +983,8 @@ class ParticleGroup:
         if isinstance(h5, (str, pathlib.Path)):
             fname = os.path.expandvars(h5)
             g = File(fname, "w")
-            pmd_init(g, basePath="/", particlesPath=".")
+            pmd_init(g, basePath="/", particlesPath="particles")
+            g = g.create_group("particles")
         else:
             g = h5
 
@@ -1311,14 +1312,39 @@ def centroid(particle_group: ParticleGroup) -> ParticleGroup:
     return ParticleGroup(data=data)
 
 
+def _scalar_maybe_from_array(value):
+    if np.isscalar(value):
+        return value
+
+    assert len(value) == 1
+    return value[0]
+
+
 def load_bunch_data(h5):
     """
     Load particles into structured numpy array.
     """
+    # Legacy-style particles with no species
+    if "position" not in h5:
+        species = list(h5)
+        if len(species) != 1:
+            raise NotImplementedError(f"multiple species in particle paths: {species}")
+        h5 = h5[species[0]]
+
+    # n = len(h5["position/x"])
+
     attrs = dict(h5.attrs)
     data = {}
-    data["species"] = attrs["speciesType"].decode("utf-8")  # String
-    n_particle = int(attrs["numParticles"])
+
+    species_type = attrs["speciesType"]
+    data["species"] = (
+        species_type.decode("utf-8")
+        if isinstance(species_type, bytes)
+        else species_type
+    )
+
+    n_particle = int(_scalar_maybe_from_array(attrs["numParticles"]))
+
     data["total_charge"] = attrs["totalCharge"] * attrs["chargeUnitSI"]
 
     for key in ["x", "px", "y", "py", "z", "pz", "t"]:
@@ -1390,7 +1416,7 @@ def full_data(data, exclude=None):
     nlist = [len(v) for _, v in full_data.items()]
     assert (
         len(set(nlist)) == 1
-    ), f"arrays must have the same length. Found len: { {k:len(v) for k, v in full_data.items()} }"
+    ), f"arrays must have the same length. Found len: { {k: len(v) for k, v in full_data.items()} }"
 
     for k, v in scalars.items():
         full_data[k] = np.full(nlist[0], v)
@@ -1415,7 +1441,6 @@ def split_particles(particle_group, n_chunks=100, key="z"):
     for chunk in np.array_split(iz, n_chunks):
         # Prepare data
         data = {}
-        # keys = ['x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight']
         for k in particle_group._settable_array_keys:
             data[k] = getattr(particle_group, k)[chunk]
         # These should be scalars

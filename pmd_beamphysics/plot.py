@@ -10,10 +10,9 @@ from matplotlib.gridspec import GridSpec
 # For field legends
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from pmd_beamphysics.labels import mathlabel
-from pmd_beamphysics.units import nice_array, nice_scale_prefix, plottable_array
-
+from .labels import mathlabel
 from .statistics import slice_statistics, twiss_ellipse_points
+from .units import nice_array, nice_scale_prefix, plottable_array
 
 CMAP0 = copy(plt.get_cmap("viridis"))
 CMAP0.set_under("white")

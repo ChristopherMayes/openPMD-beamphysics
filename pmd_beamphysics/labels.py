@@ -1,14 +1,13 @@
-from pmd_beamphysics.units import parse_bunching_str, nice_array
-
+from .units import nice_array, parse_bunching_str
 
 TEXLABEL = {
     # 'status'
     "t": "t",
     "energy": "E",
-    "kinetic_energy": r"E_{kinetic}",
+    "kinetic_energy": r"E_\text{kinetic}",
     # 'mass',
-    # 'higher_order_energy_spread',
-    # 'higher_order_energy',
+    "higher_order_energy_spread": r"\sigma_{E_{(2)}}",
+    "higher_order_energy": r"E_{(2)}",
     "Ex": "E_x",
     "Ey": "E_y",
     "Ez": "E_z",
@@ -36,20 +35,20 @@ TEXLABEL = {
     "gamma": r"\gamma",
     "theta": r"\theta",
     "charge": "Q",
-    "twiss_alpha_x": r"Twiss\ \alpha_x",
-    "twiss_beta_x": r"Twiss\ \beta_x",
-    "twiss_gamma_x": r"Twiss\ \gamma_x",
-    "twiss_eta_x": r"Twiss\ \eta_x",
-    "twiss_etap_x": r"Twiss\ \eta'_x",
-    "twiss_emit_x": r"Twiss\ \epsilon_{x}",
-    "twiss_norm_emit_x": r"Twiss\ \epsilon_{n, x}",
-    "twiss_alpha_y": r"Twiss\ \alpha_y",
-    "twiss_beta_y": r"Twiss\ \beta_y",
-    "twiss_gamma_y": r"Twiss\ \gamma_y",
-    "twiss_eta_y": r"Twiss\ \eta_y",
-    "twiss_etap_y": r"Twiss\ \eta'_y",
-    "twiss_emit_y": r"Twiss\ \epsilon_{y}",
-    "twiss_norm_emit_y": r"Twiss\ \epsilon_{n, y}",
+    "twiss_alpha_x": r"\text{Twiss}\ \alpha_x",
+    "twiss_beta_x": r"\text{Twiss}\ \beta_x",
+    "twiss_gamma_x": r"\text{Twiss}\ \gamma_x",
+    "twiss_eta_x": r"\text{Twiss}\ \eta_x",
+    "twiss_etap_x": r"\text{Twiss}\ \eta'_x",
+    "twiss_emit_x": r"\text{Twiss}\ \epsilon_{x}",
+    "twiss_norm_emit_x": r"\text{Twiss}\ \epsilon_{n, x}",
+    "twiss_alpha_y": r"\text{Twiss}\ \alpha_y",
+    "twiss_beta_y": r"\text{Twiss}\ \beta_y",
+    "twiss_gamma_y": r"\text{Twiss}\ \gamma_y",
+    "twiss_eta_y": r"\text{Twiss}\ \eta_y",
+    "twiss_etap_y": r"\text{Twiss}\ \eta'_y",
+    "twiss_emit_y": r"\text{Twiss}\ \epsilon_{y}",
+    "twiss_norm_emit_y": r"\text{Twiss}\ \epsilon_{n, y}",
     # 'species_charge',
     # 'weight',
     "average_current": r"I_{av}",
@@ -99,6 +98,7 @@ def texlabel(key: str):
     if key in TEXLABEL:
         return TEXLABEL[key]
 
+    # Operators
     for prefix in ["sigma_", "mean_", "min_", "max_", "ptp_", "delta_"]:
         if key.startswith(prefix):
             pre = prefix[:-1]
@@ -115,7 +115,7 @@ def texlabel(key: str):
                 return rf"\left<{tex0}\right>"
 
     if key.startswith("cov_"):
-        subkeys = key.strip("cov_").split("__")
+        subkeys = key.removeprefix("cov_").split("__")
         tex0 = texlabel(subkeys[0])
         tex1 = texlabel(subkeys[1])
         return rf"\left<{tex0}, {tex1}\right>"
@@ -125,7 +125,7 @@ def texlabel(key: str):
         x, _, prefix = nice_array(wavelength)
         return rf"\mathrm{{bunching~at}}~{x:.1f}~\mathrm{{ {prefix}m }}"
 
-    return None
+    return rf"\mathrm{{ {key} }}"
 
 
 def mathlabel(*keys, units=None, tex=True):
@@ -165,9 +165,10 @@ def mathlabel(*keys, units=None, tex=True):
         units = str(units)
 
     if tex:
-        l = [texlabel(key) or rf"\mathrm{{ {key} }}" for key in keys]
-        label = ", ".join(l)
+        label_list = [texlabel(key) or rf"\mathrm{{ {key} }}" for key in keys]
+        label = ", ".join(label_list)
         if units:
+            units = units.replace("*", r"{\cdot}")
             label = rf"{label}~(\mathrm{{ {units} }} )"
 
         return rf"${label}$"

@@ -1,52 +1,53 @@
-from pmd_beamphysics.units import pg_units
+import functools
+import os
+from copy import deepcopy
 
-from pmd_beamphysics.readers import (
-    component_data,
-    expected_record_unit_dimension,
-    field_record_components,
-    field_paths,
-    component_from_alias,
-    load_field_attrs,
-    component_alias,
-    is_legacy_fortran_data_ordering,
-    decode_attr,
-)
+import numpy as np
+from h5py import File
+from scipy.interpolate import RegularGridInterpolator
 
-from pmd_beamphysics.writers import write_pmd_field, pmd_field_init
-
-from pmd_beamphysics import tools
-
-from pmd_beamphysics.plot import (
-    plot_fieldmesh_cylindrical_2d,
-    plot_fieldmesh_cylindrical_1d,
-)
-
-from pmd_beamphysics.interfaces.ansys import read_ansys_ascii_3d_fields
-from pmd_beamphysics.interfaces.astra import (
-    write_astra_1d_fieldmap,
-    read_astra_3d_fieldmaps,
-    write_astra_3d_fieldmaps,
+from .. import tools
+from ..interfaces.ansys import read_ansys_ascii_3d_fields
+from ..interfaces.astra import (
     astra_1d_fieldmap_data,
+    read_astra_3d_fieldmaps,
+    write_astra_1d_fieldmap,
+    write_astra_3d_fieldmaps,
 )
-from pmd_beamphysics.interfaces.gpt import write_gpt_fieldmesh
-from pmd_beamphysics.interfaces.impact import create_impact_solrf_ele
-from pmd_beamphysics.interfaces.superfish import write_superfish_t7, read_superfish_t7
-
-from pmd_beamphysics.fields.expansion import expand_fieldmesh_from_onaxis
-from pmd_beamphysics.fields.conversion import (
+from ..interfaces.cst import (
+    read_cst_ascii_3d_complex_fields,
+    read_cst_ascii_3d_static_field,
+)
+from ..interfaces.gpt import write_gpt_fieldmap
+from ..interfaces.impact import (
+    create_impact_emfield_cartesian_ele,
+    create_impact_solrf_ele,
+    parse_impact_emfield_cartesian,
+    write_impact_emfield_cartesian,
+)
+from ..interfaces.superfish import read_superfish_t7, write_superfish_t7
+from ..plot import (
+    plot_fieldmesh_cylindrical_1d,
+    plot_fieldmesh_cylindrical_2d,
+    plot_fieldmesh_rectangular_1d,
+    plot_fieldmesh_rectangular_2d,
+)
+from ..readers import (
+    component_alias,
+    component_data,
+    component_from_alias,
+    expected_record_unit_dimension,
+    field_paths,
+    field_record_components,
+    load_field_attrs,
+    is_legacy_fortran_data_ordering,
+)
+from ..units import pg_units
+from ..writers import pmd_field_init, write_pmd_field
+from .conversion import (
     fieldmesh_rectangular_to_cylindrically_symmetric_data,
 )
-
-import functools
-
-from h5py import File
-import numpy as np
-from copy import deepcopy
-import os
-
-
-c_light = 299792458.0
-
+from .expansion import expand_fieldmesh_from_onaxis
 
 # -----------------------------------------
 # Classes
@@ -56,6 +57,56 @@ axis_labels_from_geometry = {
     "rectangular": ("x", "y", "z"),
     "cylindrical": ("r", "theta", "z"),
 }
+
+
+def _create_delta_property(name):
+    def getter(self):
+        return self.deltas[self.axis_index(name)]
+
+    return property(getter, doc=f"Mesh spacing in {name}  in units of {pg_units(name)}")
+
+
+def _create_max_property(name):
+    def getter(self):
+        return self.maxs[self.axis_index(name)]
+
+    def setter(self, value):
+        # Setting the max => shift the min
+        i = self.axis_index(name)
+        mins = list(self.attrs["gridOriginOffset"])
+        mins[i] = mins[i] + float(value) - self.maxs[i]
+        self.attrs["gridOriginOffset"] = tuple(mins)
+
+    return property(
+        getter,
+        setter,
+        doc=f"Mesh maximum in {name} in units of {pg_units(name)}. This can also be set.",
+    )
+
+
+def _create_min_property(name):
+    def getter(self):
+        return self.mins[self.axis_index(name)]
+
+    def setter(self, value):
+        mins = list(self.attrs["gridOriginOffset"])
+        mins[self.axis_index(name)] = float(value)
+        self.attrs["gridOriginOffset"] = tuple(mins)
+
+    return property(
+        getter,
+        setter,
+        doc=f"Mesh minimum in {name} in units of {pg_units(name)}. This can also be set.",
+    )
+
+
+def _create_scaled_component_property(name):
+    def getter(self):
+        return self.scaled_component(name)
+
+    return property(
+        getter, doc=f"Scaled 3D mesh for {name} in units of {pg_units(name)}"
+    )
 
 
 class FieldMesh:
@@ -123,9 +174,12 @@ class FieldMesh:
     - `.write`
     - `.write_astra_1d`
     - `.write_astra_3d`
+    - `.write_gpt`
+    - `.write_impact_emfield_cartesian`
     - `.to_cylindrical`
     - `.to_astra_1d`
     - `.to_impact_solrf`
+    - `.to_impact_impact_emfield_cartesian`
     - `.write_gpt`
     - `.write_superfish`
 
@@ -242,6 +296,57 @@ class FieldMesh:
                 return i
         raise ValueError(f"Axis not found: {key}")
 
+    def axis_points(self, axis_label):
+        """
+        Returns 3D points for the specified axis to be used by the interpolator.
+
+        Parameters
+        ----------
+        axis_label : str
+            The label of the coordinate axis. Example: 'r' for cylindrical geometries.
+
+        Returns
+        -------
+        numpy.ndarray of shape (n, 3)
+            An array of 3D points, where the specified axis is populated, and other axes are zero.
+        """
+        x = self.coord_vec(axis_label)
+        points = np.zeros((len(x), 3))
+        points[:, self.axis_index(axis_label)] = x
+        return points
+
+    def axis_values(self, axis_label, field_key, **kwargs):
+        """
+        Returns the values of the specified field along the given axis, allowing for partial replacement of points.
+
+        Parameters
+        ----------
+        axis_label : str
+            The label of the coordinate axis.
+        field_key : str
+            The key representing the field data to interpolate.
+        **kwargs : dict
+            Key-value pairs to replace parts of the internal points array.
+            The keys should be axis labels, and the values should be the corresponding values to set.
+            Example: `x=0, y=1` will set points along 'x' and 'y' axes.
+
+        Returns
+        -------
+        tuple (numpy.ndarray, numpy.ndarray)
+            A tuple containing:
+            - An array of coordinate values along the specified axis.
+            - An array of interpolated field values at the corresponding points.
+        """
+        points3d = self.axis_points(axis_label)
+
+        # Replace parts of points3d with the values from kwargs
+        for axis, value in kwargs.items():
+            points3d[:, self.axis_index(axis)] = value
+
+        vec = points3d[:, self.axis_index(axis_label)]
+        values = self.interpolate(field_key, points3d)
+        return vec, values
+
     @property
     def coord_vecs(self):
         """
@@ -315,6 +420,53 @@ class FieldMesh:
         a = self[key]
         return not np.any(a)
 
+    def interpolator(self, key):
+        """
+        Returns an interpolator for a given field key.
+
+        Parameters
+        ----------
+        key : str
+            The key representing the field data to interpolate. Examples include:
+            - 'Ez' for scaled/phased data
+            - 'magneticField/y' for raw component data
+
+        Returns
+        -------
+        RegularGridInterpolator
+            An interpolator object that can be used to interpolate points. The points
+            to interpolate should be ordered according to `.axis_labels`.
+        """
+        field = self[key]
+        return RegularGridInterpolator(
+            tuple(map(self.coord_vec, self.axis_labels)), field
+        )
+
+    def interpolate(self, key, points):
+        """
+        Interpolates the field data for the given key at specified points.
+
+        Parameters
+        ----------
+        key : str
+            The key representing the field data to interpolate.
+        points : numpy.ndarray of shape (3,) or (n, 3)
+            An array of n 3d points at which to interpolate the field data. The points should
+            be ordered according to `.axis_labels`.
+
+        Returns
+        -------
+        numpy.ndarray
+            The interpolated field values at the specified points.
+        """
+        points = np.array(points)
+
+        # Convenience for a single point
+        if len(points.shape) == 1:
+            return self.interpolator(key)([points])[0]
+
+        return self.interpolator(key)(points)
+
     # Plotting
     # TODO: more general plotting
     def plot(
@@ -324,25 +476,42 @@ class FieldMesh:
         axes=None,
         cmap=None,
         return_figure=False,
+        nice=True,
         **kwargs,
     ):
-        if self.geometry != "cylindrical":
+        if self.geometry == "cylindrical":
+            return plot_fieldmesh_cylindrical_2d(
+                self,
+                component=component,
+                time=time,
+                axes=axes,
+                return_figure=return_figure,
+                cmap=cmap,
+                **kwargs,
+            )
+        elif self.geometry == "rectangular":
+            plot_fieldmesh_rectangular_2d(
+                self,
+                component=component,
+                time=time,
+                axes=axes,
+                return_figure=return_figure,
+                nice=nice,
+                cmap=cmap,
+                **kwargs,
+            )
+
+        else:
             raise NotImplementedError(f"Geometry {self.geometry} not implemented")
 
-        return plot_fieldmesh_cylindrical_2d(
-            self,
-            component=component,
-            time=time,
-            axes=axes,
-            return_figure=return_figure,
-            cmap=cmap,
-            **kwargs,
-        )
-
-    @functools.wraps(plot_fieldmesh_cylindrical_1d)
+    # @functools.wraps(plot_fieldmesh_cylindrical_1d)
     def plot_onaxis(self, *args, **kwargs):
-        assert self.geometry == "cylindrical"
-        return plot_fieldmesh_cylindrical_1d(self, *args, **kwargs)
+        if self.geometry == "cylindrical":
+            return plot_fieldmesh_cylindrical_1d(self, *args, **kwargs)
+        elif self.geometry == "rectangular":
+            return plot_fieldmesh_rectangular_1d(self, *args, **kwargs)
+        else:
+            raise ValueError(f"Unsupported geometry for plot_onaxis: {self.geometry}")
 
     def units(self, key):
         """Returns the units of any key"""
@@ -388,6 +557,10 @@ class FieldMesh:
     def to_impact_solrf(self, *args, **kwargs):
         return create_impact_solrf_ele(self, *args, **kwargs)
 
+    @functools.wraps(create_impact_emfield_cartesian_ele)
+    def to_impact_emfield_cartesian(self, *args, **kwargs):
+        return create_impact_emfield_cartesian_ele(self, *args, **kwargs)
+
     def to_cylindrical(self):
         """
         Returns a new FieldMesh in cylindrical geometry.
@@ -410,9 +583,24 @@ class FieldMesh:
         Writes a GPT field file.
         """
 
-        return write_gpt_fieldmesh(
+        return write_gpt_fieldmap(
             self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose
         )
+
+    @functools.wraps(write_impact_emfield_cartesian)
+    def write_impact_emfield_cartesian(self, filename):
+        """
+        Writes Impact-T style 1Tv3.T7 file corresponding to
+        the `111: EMfldCart` element.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the file where the field data will be written.
+
+        """
+
+        return write_impact_emfield_cartesian(self, filename)
 
     # Superfish
     @functools.wraps(write_superfish_t7)
@@ -425,16 +613,6 @@ class FieldMesh:
         For dynamic (`harmonic /= 0`) fields, a Fish T7 file is written
         """
         return write_superfish_t7(self, filePath, verbose=verbose)
-
-    @classmethod
-    @functools.wraps(read_superfish_t7)
-    def from_superfish(cls, filename, type=None, geometry="cylindrical"):
-        """
-        Class method to parse a superfish T7 style file.
-        """
-        data = read_superfish_t7(filename, type=type, geometry=geometry)
-        c = cls(data=data)
-        return c
 
     @classmethod
     def from_ansys_ascii_3d(cls, *, efile=None, hfile=None, frequency=None):
@@ -472,6 +650,18 @@ class FieldMesh:
         return cls(data=data)
 
     @classmethod
+    def from_cst_3d(cls, field_file1, field_file2=None, frequency=0):
+        if field_file2 is not None:
+            # field_file1 -> efile, field_file2 -> hfile
+            data = read_cst_ascii_3d_complex_fields(
+                field_file1, field_file2, frequency=frequency, harmonic=1
+            )
+        else:
+            data = read_cst_ascii_3d_static_field(field_file1)
+
+        return cls(data=data)
+
+    @classmethod
     def from_astra_3d(cls, common_filename, frequency=0):
         """
         Class method to parse multiple 3D astra fieldmap files,
@@ -480,6 +670,50 @@ class FieldMesh:
 
         data = read_astra_3d_fieldmaps(common_filename, frequency=frequency)
         return cls(data=data)
+
+    @classmethod
+    def from_impact_emfield_cartesian(
+        cls, filename, frequency=0, eleAnchorPt="beginning"
+    ):
+        """
+        Class method to read an Impact-T style 1Tv3.T7 file corresponding to
+        the `111: EMfldCart` element.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the file where the field data will be written.
+
+
+        frequency : float, optional
+            Fundamental frequency in Hz
+            This simply adds 'fundamentalFrequency' to attrs
+            default=0
+
+        Returns
+        -------
+            FieldMesh
+        """
+
+        attrs, components = parse_impact_emfield_cartesian(filename)
+
+        # These aren't in the file, they must be added
+        attrs["fundamentalFrequency"] = frequency
+        if frequency == 0:
+            attrs["harmonic"] = 0
+
+        attrs["eleAnchorPt"] = eleAnchorPt
+        return cls(data=dict(attrs=attrs, components=components))
+
+    @classmethod
+    @functools.wraps(read_superfish_t7)
+    def from_superfish(cls, filename, type=None, geometry="cylindrical"):
+        """
+        Class method to parse a superfish T7 style file.
+        """
+        data = read_superfish_t7(filename, type=type, geometry=geometry)
+        c = cls(data=data)
+        return c
 
     @classmethod
     def from_onaxis(
@@ -583,7 +817,6 @@ class FieldMesh:
         """
         Checks that all attributes and component internal data are the same
         """
-
         if not tools.data_are_equal(self.attrs, other.attrs):
             return False
 
@@ -636,7 +869,6 @@ class FieldMesh:
             return dat
 
     # Convenient properties
-    # TODO: Automate this?
     @property
     def r(self):
         return self.coord_vec("r")
@@ -650,86 +882,55 @@ class FieldMesh:
         return self.coord_vec("z")
 
     # Deltas
-    ## cartesian
-    @property
-    def dx(self):
-        return self.deltas[self.axis_index("x")]
+    dx = _create_delta_property("x")
+    dy = _create_delta_property("y")
+    dz = _create_delta_property("z")
+    dr = _create_delta_property("r")
+    dtheta = _create_delta_property("theta")
 
-    @property
-    def dy(self):
-        return self.deltas[self.axis_index("y")]
+    # Maxs
+    # Create max properties dynamically
+    xmax = _create_max_property("x")
+    ymax = _create_max_property("y")
+    zmax = _create_max_property("z")
+    rmax = _create_max_property("r")
+    thetamax = _create_max_property("theta")
 
-    ## cylindrical
-    @property
-    def dr(self):
-        return self.deltas[self.axis_index("r")]
-
-    @property
-    def dtheta(self):
-        return self.deltas[self.axis_index("theta")]
-
-    @property
-    def dz(self):
-        return self.deltas[self.axis_index("z")]
+    # Mins
+    # Create min properties dynamically
+    xmin = _create_min_property("x")
+    ymin = _create_min_property("y")
+    zmin = _create_min_property("z")
+    rmin = _create_min_property("r")
+    thetamin = _create_min_property("theta")
 
     # Scaled components
-    # TODO: Check geometry
-    ## cartesian
-    @property
-    def Bx(self):
-        return self.scaled_component("Bx")
-
-    @property
-    def By(self):
-        return self.scaled_component("By")
-
-    @property
-    def Ex(self):
-        return self.scaled_component("Ex")
-
-    @property
-    def Ey(self):
-        return self.scaled_component("Ey")
-
-    ## cylindrical
-    @property
-    def Br(self):
-        return self.scaled_component("Br")
-
-    @property
-    def Btheta(self):
-        return self.scaled_component("Btheta")
-
-    @property
-    def Bz(self):
-        return self.scaled_component("Bz")
-
-    @property
-    def Er(self):
-        return self.scaled_component("Er")
-
-    @property
-    def Etheta(self):
-        return self.scaled_component("Etheta")
-
-    @property
-    def Ez(self):
-        return self.scaled_component("Ez")
+    # Dynamically create scaled properties
+    Bx = _create_scaled_component_property("Bx")
+    By = _create_scaled_component_property("By")
+    Bz = _create_scaled_component_property("Bz")
+    Br = _create_scaled_component_property("Br")
+    Btheta = _create_scaled_component_property("Btheta")
+    Ex = _create_scaled_component_property("Ex")
+    Ey = _create_scaled_component_property("Ey")
+    Ez = _create_scaled_component_property("Ez")
+    Er = _create_scaled_component_property("Er")
+    Etheta = _create_scaled_component_property("Etheta")
 
     @property
     def B(self):
         if self.geometry == "cylindrical":
             if self.is_static:
-                return np.hypot(self["Br"], self["Bz"])
+                return np.hypot(self.Br, self.Bz)
             else:
-                return np.abs(self["Btheta"])
+                return np.abs(self.Btheta)
         else:
             raise ValueError(f"Unknown geometry: {self.geometry}")
 
     @property
     def E(self):
         if self.geometry == "cylindrical":
-            return np.hypot(np.abs(self["Er"]), np.abs(self["Ez"]))
+            return np.hypot(np.abs(self.Er), np.abs(self.Ez))
         else:
             raise ValueError(f"Unknown geometry: {self.geometry}")
 
@@ -829,7 +1030,7 @@ def load_field_data_h5(h5, verbose=True):
             continue
 
         # Extract axis labels for data transposing
-        axis_labels = tuple([decode_attr(a) for a in h5.attrs["axisLabels"]])
+        axis_labels = tuple([tools.decode_attr(a) for a in h5.attrs["axisLabels"]])
 
         # Get the full openPMD unitDimension
         required_dim = expected_record_unit_dimension[g]

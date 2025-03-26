@@ -1,9 +1,9 @@
-from .units import dimension, dimension_name, SI_symbol, c_light, e_charge
-from .tools import decode_attrs, decode_attr
+import warnings
 
 import numpy as np
 
-import warnings
+from .tools import decode_attr, decode_attrs
+from .units import SI_symbol, c_light, dimension, dimension_name, e_charge
 
 # -----------------------------------------
 # General Utilities
@@ -158,7 +158,10 @@ def component_unit_dimension(h5):
 def is_legacy_fortran_data_ordering(component_data_attrs):
     if "gridDataOrder" in component_data_attrs:
         warnings.warn(
-            "Legacy gridDataOrder in component. Please remove and use axisLabels at the group level."
+            "Legacy gridDataOrder in component. Please remove and use "
+            "axisLabels at the group level.",
+            category=UserWarning,
+            stacklevel=2,
         )
         if decode_attr(component_data_attrs["gridDataOrder"]) == "F":
             return True
@@ -169,15 +172,31 @@ def component_data(h5, slice=slice(None), unit_factor=1, axis_labels=None):
     """
     Returns a numpy array from an h5 component.
 
-    Determines wheter a component has constant data, or array data, and returns that.
+    Parameters
+    ----------
+    h5 : h5py.Dataset or h5py.Group
+        The HDF5 component to extract data from.
+    slice : slice or tuple, optional
+        Slice or tuple of slices to retrieve parts of the array, by default slice(None).
+    unit_factor : float, optional
+        Additional factor to convert from SI units to output units, by default 1.
+    axis_labels : tuple of str
+        Required for multidimensional arrays.
+        Supported options are:
+        * ("z", "y", "x")
+        * ("z", "theta", "r")
+        * ("x", "y", "z")
+        * ("r", "theta", "z")
 
-    An optional slice allows parts of the array to be retrieved.
+    Returns
+    -------
+    numpy.ndarray
 
-    This checks for legacy gridDataOrder attribute: F or C. If F, the np array is transposed.
-
-    Unit factor is an additional factor to convert from SI units to output units.
-
-
+    Notes
+    -----
+    Determines whether a component has constant data or array data and handles both cases.
+    Checks for legacy gridDataOrder attribute: F or C. If F, the numpy array is transposed.
+    Applies unitSI factor from h5 attributes if available.
     """
 
     # look for unitSI factor.
@@ -210,10 +229,10 @@ def component_data(h5, slice=slice(None), unit_factor=1, axis_labels=None):
         elif axis_labels in [("x", "y", "z"), ("r", "theta", "z")]:
             dat = h5[slice]
         else:
-            raise NotImplementedError(f"axis_labels: {axis_labels}")
-
-    # 1-D array
+            # C-order
+            dat = h5[slice]
     else:
+        # 1-D array
         dat = h5[slice]
 
     if factor != 1:

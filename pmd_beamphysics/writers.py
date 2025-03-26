@@ -1,8 +1,8 @@
 import numpy as np
 
-from .units import pg_units
 from .readers import component_from_alias, load_field_attrs
-from .tools import fstr, encode_attrs
+from .tools import encode_attrs, fstr
+from .units import pg_units
 
 
 def pmd_init(h5, basePath="/data/%T/", particlesPath="./"):
@@ -62,7 +62,7 @@ def write_pmd_bunch(h5, data, name=None):
     g = g.create_group(species)
 
     # Attributes
-    g.attrs["speciesType"] = fstr(species)
+    g.attrs["speciesType"] = species
     g.attrs["numParticles"] = data["n_particle"]
     g.attrs["totalCharge"] = data["charge"]
     g.attrs["chargeUnitSI"] = 1.0
@@ -121,7 +121,7 @@ def write_pmd_field(h5, data, name=None):
         val = val.astype(complex)
 
         # Write
-        g2 = write_component_data(g, key, val, unit=u)
+        write_component_data(g, key, val, unit=u)
 
 
 def write_component_data(h5, name, data, unit=None):
@@ -134,7 +134,8 @@ def write_component_data(h5, name, data, unit=None):
 
     """
     # Check for constant component
-    dat0 = data[0]
+    dat0 = data.flat[0]
+
     if np.all(data == dat0):
         g = h5.create_group(name)
         g.attrs["value"] = dat0

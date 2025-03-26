@@ -62,7 +62,7 @@ def write_pmd_bunch(h5, data, name=None):
     g = g.create_group(species)
 
     # Attributes
-    g.attrs["speciesType"] = species
+    g.attrs["speciesType"] = fstr(species)
     g.attrs["numParticles"] = data["n_particle"]
     g.attrs["totalCharge"] = data["charge"]
     g.attrs["chargeUnitSI"] = 1.0

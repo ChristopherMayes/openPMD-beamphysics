@@ -1,5 +1,149 @@
+import typing
 import numpy as np
 from scipy import stats as scipy_stats
+
+
+class Twiss(typing.NamedTuple):
+    """
+    A named tuple representing the Twiss parameters.
+
+    The Twiss parameters describe the beam envelope and phase space
+    evolution in terms of second-order moments.
+
+    Attributes
+    ----------
+    alpha : float
+        The alpha Twiss parameter, representing the phase space correlation.
+        It is a dimensionless quantity.
+    beta : float
+        The beta Twiss parameter, which relates the beam size to the emittance.
+        Its units are `[ux / up]`, where `ux` is the unit of position and `up`
+        is the unit of momentum.
+    emit : float
+        The emittance, representing the phase space area occupied by the beam.
+        It has units of `[ux * up]`.
+    gamma : float
+        The gamma Twiss parameter, computed as `(1 + alpha**2) / beta`.
+        Its units are `[up / ux]`.
+
+    Notes
+    -----
+    The Twiss parameters are derived from the second moments of the phase space
+    distribution, where the covariance matrix is defined as:
+
+        σ = [[ <x, x>,  <x, p> ],
+             [ <p, x>,  <p, p> ]]
+
+    The Twiss parameters are computed from the covariance matrix as:
+
+        alpha = - <x, p> / emit
+        beta  =  <x, x> / emit
+        gamma =  (1 + alpha^2) / beta
+        emit  =  sqrt(det(σ))
+
+    The choice of `ux` (units of `x`) and `up` (units of `p`) depends on the
+    specific phase space convention used (e.g., canonical momentum vs. normalized
+    momentum). When using normalized momentum, emittance is typically measured in
+    meters-radians (m·rad), and beta has units of meters (m).
+    """
+
+    alpha: float
+    beta: float
+    emit: float
+
+    @property
+    def gamma(self) -> float:
+        """
+        Compute the gamma Twiss parameter.
+
+        Returns
+        -------
+        float
+            The gamma Twiss parameter, given by (1 + alpha**2) / beta.
+        """
+        return (1 + self.alpha**2) / self.beta
+
+
+def twiss_from_sigma(sigma_mat: np.ndarray) -> Twiss:
+    """
+    Compute the Twiss parameters from a 2x2 sigma (covariance) matrix.
+
+    Parameters
+    ----------
+    sigma_mat : np.ndarray
+        A 2x2 covariance matrix of the form:
+
+        [[ <x, x>,  <x, p> ],
+         [ <p, x>,  <p, p> ]]
+
+    Returns
+    -------
+    Twiss
+        A named tuple containing the computed Twiss parameters.
+
+    Raises
+    ------
+    AssertionError
+        If the input matrix is not of shape (2,2).
+    """
+    assert sigma_mat.shape == (2, 2), f"Bad shape: {sigma_mat.shape}. Expected (2,2)"
+
+    emit = np.sqrt(np.linalg.det(sigma_mat))
+    alpha = -sigma_mat[0, 1] / emit
+    beta = sigma_mat[0, 0] / emit
+
+    return Twiss(alpha=alpha, beta=beta, emit=emit)
+
+
+def sigma_from_twiss(
+    twiss: typing.Optional[Twiss] = None,
+    alpha: typing.Optional[float] = None,
+    beta: typing.Optional[float] = None,
+    emit: typing.Optional[float] = None,
+    gamma: typing.Optional[float] = None,
+) -> np.ndarray:
+    """
+    Compute the 2x2 sigma (covariance) matrix from Twiss parameters.
+
+    Parameters
+    ----------
+    twiss : Twiss, optional
+        A named tuple containing the Twiss parameters alpha, beta, and emit.
+    alpha : float, optional
+        The alpha Twiss parameter (only required if `twiss` is not provided).
+    beta : float, optional
+        The beta Twiss parameter (only required if `twiss` is not provided).
+    emit : float, optional
+        The emittance parameter (only required if `twiss` is not provided).
+    gamma : float, optional
+        The gamma Twiss parameter. If not provided, it is computed as `(1 + alpha**2) / beta`.
+
+    Returns
+    -------
+    np.ndarray
+        A 2x2 covariance matrix computed as:
+
+        [[ beta * emit, -alpha * emit],
+         [-alpha * emit,  gamma * emit]]
+
+    Raises
+    ------
+    ValueError
+        If neither `twiss` nor the required separate parameters (`alpha`, `beta`, `emit`) are provided.
+    """
+    if twiss is not None:
+        alpha, beta, emit = twiss.alpha, twiss.beta, twiss.emit
+        gamma = twiss.gamma
+    elif alpha is not None and beta is not None and emit is not None:
+        gamma = gamma if gamma is not None else (1 + alpha**2) / beta
+    else:
+        raise ValueError(
+            "Must provide either a Twiss object or explicit alpha, beta, and emit values."
+        )
+
+    sigma_mat = np.array([[beta * emit, -alpha * emit], [-alpha * emit, gamma * emit]])
+
+    return sigma_mat
 
 
 def norm_emit_calc(particle_group, planes=["x"]):

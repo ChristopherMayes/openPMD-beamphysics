@@ -1213,11 +1213,11 @@ class ParticleGroup:
         Parameters
         ----------
         pitch : float
-            Angle of rotation about y axis.
+            Angle of rotation about y axis (radians).
         yaw : float
-            Angle of rotation about the x axis.
+            Angle of rotation about the x axis (radians).
         tilt : float
-            Angle of rotation about the z axis.
+            Angle of rotation about the z axis (radians).
         """
         self.linear_point_transform(get_rotation_matrix(pitch, yaw, tilt))
 

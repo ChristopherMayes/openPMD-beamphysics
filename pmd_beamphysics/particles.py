@@ -36,6 +36,7 @@ from pmd_beamphysics.statistics import (
 )
 from pmd_beamphysics.units import c_light, parse_bunching_str, pg_units
 from pmd_beamphysics.writers import pmd_init, write_pmd_bunch
+from .utils import get_rotation_matrix
 
 # -----------------------------------------
 # Classes
@@ -1204,6 +1205,21 @@ class ParticleGroup:
         self.px, self.py, self.pz = np.linalg.solve(
             trn.T, np.vstack((self.px, self.py, self.pz))
         )
+
+    def rotate(self, pitch: float, yaw: float, tilt: float) -> None:
+        """
+        Rotate the beam according according to the angles yaw, pitch, and tilt.
+
+        Parameters
+        ----------
+        pitch : float
+            Angle of rotation about y axis.
+        yaw : float
+            Angle of rotation about the x axis.
+        tilt : float
+            Angle of rotation about the z axis.
+        """
+        self.linear_point_transform(get_rotation_matrix(pitch, yaw, tilt))
 
 
 # -----------------------------------------

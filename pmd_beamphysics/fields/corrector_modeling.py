@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 from scipy.constants import mu_0 as u0
 from scipy.constants import pi
 
-from .fieldmesh import FieldMesh
+from .. import FieldMesh
 from ..utils import get_rotation_matrix
 
 

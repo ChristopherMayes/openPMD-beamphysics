@@ -1,19 +1,24 @@
-from pmd_beamphysics import ParticleGroup
-import pytest
-import numpy as np
 import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+
+from pmd_beamphysics import ParticleGroup
+from pmd_beamphysics.particles import single_particle
 
 P = ParticleGroup("docs/examples/data/bmad_particles.h5")
 
 
 ARRAY_KEYS = """
 x y z px py pz t status weight id
+z/c
 p energy kinetic_energy xp yp higher_order_energy
 r theta pr ptheta
 Lz
 gamma beta beta_x beta_y beta_z
 x_bar px_bar Jx Jy
-charge
+weight
 
 """.split()
 
@@ -34,6 +39,9 @@ def array_key(request):
     return request.param
 
 
+array_key2 = array_key
+
+
 @pytest.fixture(params=OPERATORS)
 def operator(request):
     return request.param
@@ -44,13 +52,9 @@ def test_operator(operator, array_key):
     P[key]
 
 
-# This is probably uneccessary:
-# @pytest.fixture(params=array_keys)
-# def array_key2(request):
-#     return request.param
-#
-# def test_cov(array_key, array_key2):
-#     P[f'cov_{array_key}__{array_key}']
+def test_cov_(array_key, array_key2):
+    key = f"cov_{array_key}__{array_key2}"
+    P[key]
 
 
 @pytest.fixture(params=SPECIAL_STATS)
@@ -85,3 +89,26 @@ def test_write_reload(tmp_path):
 
     P2.x += 1
     assert P != P2
+
+
+def test_fractional_split():
+    head, tail = P.fractional_split(0.5, "t")
+    head, core, tail = P.fractional_split((0.1, 0.9), "t")
+
+
+def test_plot_vs_z(array_key: str):
+    P.plot("z", array_key)
+    plt.show()
+
+
+@pytest.mark.filterwarnings("ignore:.*invalid value encountered in.*")
+@pytest.mark.filterwarnings("ignore:.*divide by zero.*")
+@pytest.mark.filterwarnings("ignore:.*Degrees of freedom.*")
+@pytest.mark.filterwarnings("ignore:.*The fit may be poorly conditioned.*")
+def test_plot_single_particle_vs_z(array_key: str):
+    # Single particle plots aren't particularly useful, so we're mainly testing
+    # for coverage and that this doesn't crash.  Filter out any warnings
+    # from this that complain about bad calculated values.
+    Ps = single_particle(pz=10e6)
+    Ps.plot("z", array_key)
+    plt.show()

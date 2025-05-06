@@ -1,6 +1,6 @@
-import numpy as np
 import os
 
+import numpy as np
 from scipy.constants import mu_0 as mu0
 
 

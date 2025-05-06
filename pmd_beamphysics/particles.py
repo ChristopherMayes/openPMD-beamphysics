@@ -1188,6 +1188,23 @@ class ParticleGroup:
         memloc = hex(id(self))
         return f"<ParticleGroup with {self.n_particle} particles at {memloc}>"
 
+    # Transformations
+    # ---------------
+    def linear_point_transform(self, trn: np.ndarray) -> None:
+        """
+        Perform the linear point transform [x', y', z'] = trn * [x, y, z]. The conjugate momenta are transformed corresondingly
+        as [px', py', pz'] = (trn^T)^{-1} * [px, py, pz].
+
+        Parameters
+        ----------
+        trn : np.ndarray
+            The 3x3 matrix describing the point transform with coordinates ordered as (x, y, z)
+        """
+        self.x, self.y, self.z = trn @ np.vstack((self.x, self.y, self.z))
+        self.px, self.py, self.pz = np.linalg.solve(
+            trn.T, np.vstack((self.px, self.py, self.pz))
+        )
+
 
 # -----------------------------------------
 # helper functions for ParticleGroup class

@@ -37,6 +37,7 @@ from .statistics import (
 )
 from .units import c_light, parse_bunching_str, pg_units
 from .writers import pmd_init, write_pmd_bunch
+from .utils import get_rotation_matrix
 
 # -----------------------------------------
 # Classes
@@ -1253,6 +1254,38 @@ class ParticleGroup:
     def __repr__(self):
         memloc = hex(id(self))
         return f"<ParticleGroup with {self.n_particle} particles at {memloc}>"
+
+    # Transformations
+    # ---------------
+    def linear_point_transform(self, trn: np.ndarray) -> None:
+        """
+        Perform the linear point transform [x', y', z'] = trn * [x, y, z]. The conjugate momenta are transformed corresondingly
+        as [px', py', pz'] = (trn^T)^{-1} * [px, py, pz].
+
+        Parameters
+        ----------
+        trn : np.ndarray
+            The 3x3 matrix describing the point transform with coordinates ordered as (x, y, z)
+        """
+        self.x, self.y, self.z = trn @ np.vstack((self.x, self.y, self.z))
+        self.px, self.py, self.pz = np.linalg.solve(
+            trn.T, np.vstack((self.px, self.py, self.pz))
+        )
+
+    def rotate(self, pitch: float, yaw: float, tilt: float) -> None:
+        """
+        Rotate the beam according according to the angles yaw, pitch, and tilt.
+
+        Parameters
+        ----------
+        pitch : float
+            Angle of rotation about y axis (radians).
+        yaw : float
+            Angle of rotation about the x axis (radians).
+        tilt : float
+            Angle of rotation about the z axis (radians).
+        """
+        self.linear_point_transform(get_rotation_matrix(pitch, yaw, tilt))
 
 
 # -----------------------------------------

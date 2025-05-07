@@ -1,6 +1,9 @@
 import numpy as np
 import pytest
 
+# Load the test fixture
+pytest_plugins = ("pmd_beamphysics.testing",)
+
 
 transform_test_cases = [
     # Test case 1: Identity matrix (no change)

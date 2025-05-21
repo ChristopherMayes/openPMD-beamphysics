@@ -336,6 +336,8 @@ class ParticleGroup:
 
     @id.setter
     def id(self, val):
+        if "id" not in self._settable_array_keys:
+            self._settable_array_keys.append("id")
         self._data["id"] = full_array(len(self), val)
 
     @property

@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 from scipy.constants import mu_0 as u0
 from scipy.constants import pi
 
-from pmd_beamphysics import FieldMesh
+from .. import FieldMesh
 
 
 def set_axes_equal(ax):

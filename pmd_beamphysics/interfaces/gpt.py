@@ -3,8 +3,8 @@ import subprocess
 
 import numpy as np
 
-from pmd_beamphysics.interfaces.superfish import fish_complex_to_real_fields
-from pmd_beamphysics.units import c_light, e_charge
+from ..units import c_light, e_charge
+from .superfish import fish_complex_to_real_fields
 
 
 def write_gpt(particle_group, outfile, asci2gdf_bin=None, verbose=False):

@@ -3,9 +3,12 @@ Simple units functionality for the openPMD beamphysics records.
 
 For more advanced units, use a package like Pint:
     https://pint.readthedocs.io/
-
-
 """
+
+from __future__ import annotations
+
+import re
+from typing import Optional, Sequence
 
 import numpy as np
 import scipy.constants
@@ -18,17 +21,47 @@ mu_0 = scipy.constants.mu_0  # Note that this is no longer 4pi*10^-7 !
 Z0 = np.pi * 119.9169832  # V^2/W exactly
 
 
+Limit = tuple[Optional[float], Optional[float]]
+Dimension = tuple[int, int, int, int, int, int, int]
+
+
 class pmd_unit:
     """
+    OpenPMD representation of a unit.
 
-    Params
-    ------
+    Parameters
+    ----------
+    unitSymbol : str
+        Native units name.
+    unitSI : float, optional
+        Conversion factor to the corresponding SI unit.  Defaults to 0.
+        If unspecified, `unitSymbol` must be a recognized symbol name.
+    unitDimension : str, or list of int, optional
+        Common name of dimensions or list of 7 SI Base Exponents.
+        Valid names include:
+        * "1"
+        * "length"
+        * "mass"
+        * "time"
+        * "current"
+        * "temperture"
+        * "mol"
+        * "luminous"
+        * "charge"
+        * "electric_field"
+        * "electric_potential"
+        * "magnetic_field"
+        * "velocity"
+        * "energy"
+        * "momentum"
 
-    unitSymbol: Native units name
-    unitSI:     Conversion factor to the the correspontign SI unit
-    unitDimension: SI Base Exponents
+        For a full list, see `pmd_beamphysics.units.DIMENSION`.
+
+    Notes
+    -----
 
     Base unit dimensions are defined as:
+
        Base dimension  | exponents.       | SI unit
        ---------------- -----------------   -------
        length          : (1,0,0,0,0,0,0)     m
@@ -39,88 +72,118 @@ class pmd_unit:
        mol             : (0,0,0,0,0,1,0)     mol
        luminous        : (0,0,0,0,0,0,1)     cd
 
-    Example:
-        pmd_unit('eV', 1.602176634e-19, (2, 1, -2, 0, 0, 0, 0))
-        defines that an eV is 1.602176634e-19 of base units m^2 kg/s^2, which is a Joule (J)
+    Examples
+    --------
 
-    If unitSI=0 (default), init with a known symbol:
-        pmd_unit('T')
-    returns:
-        pmd_unit('T', 1, (0, 1, -2, -1, 0, 0, 0))
+    Define that an eV is 1.602176634e-19 of base units m^2 kg/s^2, which is a Joule (J):
 
+    >>> pmd_unit('eV', 1.602176634e-19, (2, 1, -2, 0, 0, 0, 0))
 
-    Simple equalities are provided:
-        u1 == u2
-    Returns True if the params are all the same.
+    If unitSI=0 (default), `pmd_unit` may be initialized with a known symbol:
 
+    >>> pmd_unit('T')
+    pmd_unit('T', 1, (0, 1, -2, -1, 0, 0, 0))
+
+    Simple equalities are possible:
+
+    >>> pmd_unit("T") == pmd_unit("T")
+    True
+    >>> pmd_unit("eV") == pmd_unit("T")
+    False
     """
 
-    def __init__(self, unitSymbol="", unitSI=0, unitDimension=(0, 0, 0, 0, 0, 0, 0)):
+    def __init__(
+        self,
+        unitSymbol: str = "",
+        unitSI: int | float = 0,
+        unitDimension: str | Dimension | tuple[int, ...] = (0, 0, 0, 0, 0, 0, 0),
+    ):
         # Allow to return an internally known unit
         if unitSI == 0:
-            if unitSymbol in known_unit:
-                # Copy internals
-                u = known_unit[unitSymbol]
-                unitSI = u.unitSI
-                unitDimension = u.unitDimension
-            else:
-                raise ValueError(f"unknown unitSymbol: {unitSymbol}")
+            if unitSymbol not in known_unit:
+                raise ValueError(f"Unknown unitSymbol: {unitSymbol}")
+
+            # Copy internals
+            u = known_unit[unitSymbol]
+            unitSI = u.unitSI
+            unitDimension = u.unitDimension
 
         self._unitSymbol = unitSymbol
         self._unitSI = unitSI
         if isinstance(unitDimension, str):
-            self._unitDimension = DIMENSION[unitDimension]
+            self._unitDimension = dimension(unitDimension)
         else:
-            self._unitDimension = unitDimension
+            self._unitDimension = make_dimension(unitDimension)
+
+    def __hash__(self) -> int:
+        return hash((self.unitSymbol, self.unitSI, self.unitDimension))
 
     @property
-    def unitSymbol(self):
+    def unitSymbol(self) -> str:
         return self._unitSymbol
 
     @property
-    def unitSI(self):
+    def unitSI(self) -> float:
         return self._unitSI
 
     @property
-    def unitDimension(self):
+    def unitDimension(self) -> Dimension:
         return self._unitDimension
 
-    def __mul__(self, other):
+    def __mul__(self, other) -> pmd_unit:
         return multiply_units(self, other)
 
-    def __truediv__(self, other):
+    def __truediv__(self, other) -> pmd_unit:
         return divide_units(self, other)
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if isinstance(other, self.__class__):
             return self.__dict__ == other.__dict__
-        else:
-            return False
+        return False
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> bool:
         return not self.__eq__(other)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.unitSymbol
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"pmd_unit('{self.unitSymbol}', {self.unitSI}, {self.unitDimension})"
 
 
-def is_dimensionless(u):
+def is_dimensionless(u: pmd_unit) -> bool:
     """Checks if the unit is dimensionless"""
+    if not isinstance(u, pmd_unit):
+        raise ValueError("`u` is not a pmd_unit instance")
     return u.unitDimension == (0, 0, 0, 0, 0, 0, 0)
 
 
-def is_identity(u):
+def is_identity(u: pmd_unit) -> bool:
     """Checks if the unit is equivalent to 1"""
+    if not isinstance(u, pmd_unit):
+        raise ValueError("`u` is not a pmd_unit instance")
     return u.unitSI == 1 and u.unitDimension == (0, 0, 0, 0, 0, 0, 0)
 
 
-def multiply_units(u1, u2):
+def multiply_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
     """
-    Multiplies two pmd_unit symbols
+    Multiplies two pmd_unit symbols.
+
+    Parameters
+    ----------
+    u1 : pmd_unit
+    u2 : pmd_unit
+
+    Returns
+    -------
+    pmd_unit
+        The resulting unit after multiplication.
     """
+
+    if not isinstance(u1, pmd_unit):
+        raise ValueError("u1 is not a pmd_unit instance")
+    if not isinstance(u2, pmd_unit):
+        raise ValueError("u2 is not a pmd_unit instance")
 
     if is_identity(u1):
         return u2
@@ -141,10 +204,25 @@ def multiply_units(u1, u2):
     return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)
 
 
-def divide_units(u1, u2):
+def divide_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
     """
-    Divides two pmd_unit symbols : u1/u2
+    Divides two pmd_unit symbols: u1 / u2
+
+    Parameters
+    ----------
+    u1 : pmd_unit
+        The numerator unit.
+    u2 : pmd_unit
+        The denominator unit.
+
+    Returns
+    -------
+    pmd_unit
     """
+    if not isinstance(u1, pmd_unit):
+        raise ValueError("u1 is not a pmd_unit instance")
+    if not isinstance(u2, pmd_unit):
+        raise ValueError("u2 is not a pmd_unit instance")
 
     if is_identity(u2):
         return u1
@@ -157,30 +235,40 @@ def divide_units(u1, u2):
         symbol = s1 + "/" + s2
     d1 = u1.unitDimension
     d2 = u2.unitDimension
-    dim = tuple(a - b for a, b in zip(d1, d2))
+    dim = make_dimension(a - b for a, b in zip(d1, d2))
     unitSI = u1.unitSI / u2.unitSI
 
     return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)
 
 
-def sqrt_unit(u):
+def sqrt_unit(u: pmd_unit) -> pmd_unit:
     """
-    Returns the sqrt of a unit
+    Returns the square root of a unit.
+
+    Parameters
+    ----------
+    u : pmd_unit
+        The unit to take the square root of.
+
+    Returns
+    -------
+    pmd_unit
     """
-    u.unitDimension
+    if not isinstance(u, pmd_unit):
+        raise ValueError("`u` is not a pmd_unit instance")
 
     symbol = u.unitSymbol
     if symbol not in ["", "1"]:
         symbol = rf"\sqrt{{ {symbol} }}"
 
     unitSI = np.sqrt(u.unitSI)
-    dim = tuple(x / 2 for x in u.unitDimension)
+    dim = tuple(x // 2 for x in u.unitDimension)
 
     return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)
 
 
 # length mass time current temperature mol luminous
-DIMENSION = {
+DIMENSION: dict[str, Dimension] = {
     "1": (0, 0, 0, 0, 0, 0, 0),
     # Base units
     "length": (1, 0, 0, 0, 0, 0, 0),
@@ -200,21 +288,31 @@ DIMENSION = {
     "momentum": (1, 1, -1, 0, 0, 0, 0),
 }
 # Inverse
-DIMENSION_NAME = {v: k for k, v in DIMENSION.items()}
+DIMENSION_NAME: dict[Dimension, str] = {v: k for k, v in DIMENSION.items()}
 
 
-def dimension(name):
-    if name in DIMENSION:
+def make_dimension(dim: Sequence[int]) -> Dimension:
+    dim = tuple(int(d) for d in dim)
+    if len(dim) != 7:
+        raise ValueError("Dimensions must be 7 elements.")
+    return dim
+
+
+def dimension(name: str) -> Dimension | None:
+    try:
         return DIMENSION[name]
-    else:
-        return None
+    except KeyError:
+        options = ", ".join(DIMENSION)
+        raise ValueError(
+            f"Invalid unit dimension string: {name}. Valid options are: {options}"
+        )
 
 
-def dimension_name(dim_array):
-    return DIMENSION_NAME[tuple(dim_array)]
+def dimension_name(dim_array: Dimension) -> str:
+    return DIMENSION_NAME[make_dimension(dim_array)]
 
 
-SI_symbol = {
+SI_symbol: dict[str, str] = {
     "1": "1",
     "length": "m",
     "mass": "kg",
@@ -232,10 +330,10 @@ SI_symbol = {
     "magnetic_field": "T",
 }
 # Inverse
-SI_name = {v: k for k, v in SI_symbol.items()}
+SI_name: dict[str, str] = {v: k for k, v in SI_symbol.items()}
 
 # length mass time current temperature mol luminous
-known_unit = {
+known_unit: dict[str, pmd_unit] = {
     "1": pmd_unit("", 1, "1"),
     "degree": pmd_unit("degree", np.pi / 180, "1"),
     "rad": pmd_unit("rad", 1, "1"),
@@ -264,26 +362,31 @@ known_unit = {
 }
 
 
-def unit(symbol):
+def unit(symbol: str) -> pmd_unit:
     """
     Returns a pmd_unit from a known symbol.
 
-    * is allowed between two known symbols:
+    * and / are allowed between two known symbols.
     """
     if symbol in known_unit:
         return known_unit[symbol]
 
-    if "*" in symbol:
-        subunits = [known_unit[s] for s in symbol.split("*")]
-        # Require these to be in known units
-        assert len(subunits) == 2, "TODO: more complicated units"
-        return multiply_units(subunits[0], subunits[1])
+    if "*" in symbol or "/" in symbol:
+        parts = re.split(r"([*/])", symbol)
+        result = known_unit[parts[0]]
+        for op, part in zip(parts[1::2], parts[2::2]):
+            unit = known_unit[part]
+            if op == "*":
+                result = result * unit
+            elif op == "/":
+                result = result / unit
+        return result
 
     raise ValueError(f"Unknown unit symbol: {symbol}")
 
 
 # Dicts for prefixes
-PREFIX_FACTOR = {
+PREFIX_FACTOR: dict[str, float] = {
     "yocto-": 1e-24,
     "zepto-": 1e-21,
     "atto-": 1e-18,
@@ -306,9 +409,9 @@ PREFIX_FACTOR = {
     "yotta-": 1e24,
 }
 # Inverse
-PREFIX = dict((v, k) for k, v in PREFIX_FACTOR.items())
+PREFIX: dict[float, str] = dict((v, k) for k, v in PREFIX_FACTOR.items())
 
-SHORT_PREFIX_FACTOR = {
+SHORT_PREFIX_FACTOR: dict[str, float] = {
     "y": 1e-24,
     "z": 1e-21,
     "a": 1e-18,
@@ -332,22 +435,32 @@ SHORT_PREFIX_FACTOR = {
     "Y": 1e24,
 }
 # Inverse
-SHORT_PREFIX = dict((v, k) for k, v in SHORT_PREFIX_FACTOR.items())
+SHORT_PREFIX: dict[float, str] = dict((v, k) for k, v in SHORT_PREFIX_FACTOR.items())
 
 
 # Nice scaling
 
 
-def nice_scale_prefix(scale):
+def nice_scale_prefix(scale: float) -> tuple[float, str]:
     """
-    Returns a nice factor and a SI prefix string
+    Returns a nice factor and an SI prefix string.
 
-    Example:
-        scale = 2e-10
+    Parameters
+    ----------
+    scale : float
+        The scale to be converted into a nice factor and SI prefix.
 
-        f, u = nice_scale_prefix(scale)
+    Returns
+    -------
+    f : float
+        The nice factor corresponding to the scale.
+    u : str
+        The SI prefix string corresponding to the scale.
 
-
+    Examples
+    --------
+    >>> nice_scale_prefix(scale=2e-10)
+    (1e-12, 'p')
     """
 
     if scale == 0:
@@ -367,15 +480,29 @@ def nice_scale_prefix(scale):
     return f, SHORT_PREFIX[f]
 
 
-def nice_array(a):
+def nice_array(a: np.ndarray) -> tuple[np.ndarray, float, str]:
     """
-    Returns a scaled array, the scaling, and a unit prefix
+    Scale an input array and return the scaled array, the scaling factor, and the
+    corresponding unit prefix.
 
-    Example:
-        nice_array( np.array([2e-10, 3e-10]) )
-    Returns:
-        (array([200., 300.]), 1e-12, 'p')
+    Parameters
+    ----------
+    a : array-like, or float
+        Input array to be scaled.
 
+    Returns
+    -------
+    scaled_array : np.ndarray
+        The scaled array, of the same shape as `a`.
+    scaling : float
+        The scale factor applied to the input array.
+    prefix : str
+        The unit prefix corresponding to the scale factor (e.g., 'p' for pico).
+
+    Examples
+    --------
+    >>> nice_array(np.array([2e-10, 3e-10]))
+    (array([200., 300.]), 1e-12, 'p')
     """
     if np.isscalar(a):
         x = a
@@ -387,11 +514,10 @@ def nice_array(a):
         x = max(np.ptp(a), abs(np.mean(a)))  # Account for tiny spread
 
     fac, prefix = nice_scale_prefix(x)
-
     return a / fac, fac, prefix
 
 
-def plottable_array(x, nice=True, lim=None):
+def plottable_array(x: np.ndarray, nice: bool = True, lim: Limit | None = None):
     """
     Similar to nice_array, but also considers limits for plotting
 
@@ -411,6 +537,7 @@ def plottable_array(x, nice=True, lim=None):
     xmax : float
 
     """
+    x = np.asarray(x)
     if lim is not None:
         if lim[0] is None:
             xmin = x.min()

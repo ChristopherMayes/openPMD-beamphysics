@@ -5,7 +5,7 @@ import numpy as np
 from numpy import pi
 from scipy import fft
 
-from pmd_beamphysics.fields.expansion import spline_derivative_array
+from ..fields.expansion import spline_derivative_array
 
 c_light = 299792458.0
 

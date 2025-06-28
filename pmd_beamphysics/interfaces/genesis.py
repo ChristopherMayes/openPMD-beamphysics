@@ -127,7 +127,7 @@ def write_genesis2_beam_file(fname, beam_columns, verbose=False):
     size = len(beam_columns[names[0]])
     header = f"""? VERSION=1.0
 ? SIZE={size}
-? COLUMNS {' '.join([n.upper() for n in names])}"""
+? COLUMNS {" ".join([n.upper() for n in names])}"""
 
     dat = np.array([beam_columns[name] for name in names]).T
 

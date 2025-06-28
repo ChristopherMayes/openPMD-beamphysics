@@ -96,7 +96,7 @@ def drift_wavefront_advanced(w: Wavefront, z, Rcurv=2):
 
     x_mesh, y_mesh, _ = np.meshgrid(w.xvec, w.yvec, w.zvec, indexing="ij")
 
-    curv = np.exp(-1j * pi * (x_mesh**2 + y_mesh**2) / w.wavelength / Rcurv)
+    curv = np.exp(-1j * np.pi * (x_mesh**2 + y_mesh**2) / w.wavelength / Rcurv)
 
     w = replace(w)
     w.Ex = w.Ex * curv if w.Ex is not None else None
@@ -108,13 +108,13 @@ def drift_wavefront_advanced(w: Wavefront, z, Rcurv=2):
     w = drift_wavefront(w, z_eff)
 
     print("effective propagation distance: ", z_eff, "scaling factor: ", M)
-    Fr = M * np.exp(
-        1j
+    Fr = np.exp(
+        -1j
         * np.pi
-        / z_eff
+        / z
         / w.wavelength
-        * (1.0 / M - 1)
-        * ((M * x_mesh) ** 2 + (M * y_mesh) ** 2)
+        * (1 - M)
+        * ((x_mesh / M) ** 2 + (y_mesh / M) ** 2)
     )
 
     w.Ex = w.Ex / Fr if w.Ex is not None else None

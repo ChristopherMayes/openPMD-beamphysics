@@ -117,8 +117,8 @@ def drift_wavefront_advanced(w: Wavefront, z, Rcurv=2):
         * ((x_mesh / M) ** 2 + (y_mesh / M) ** 2)
     )
 
-    w.Ex = w.Ex / Fr if w.Ex is not None else None
-    w.Ey = w.Ey / Fr if w.Ey is not None else None
+    w.Ex = w.Ex / Fr * M if w.Ex is not None else None
+    w.Ey = w.Ey / Fr * M if w.Ey is not None else None
     w.dx = w.dx / M
     w.dy = w.dy / M
 

@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 from scipy import stats as scipy_stats
 
@@ -587,3 +589,26 @@ def bunching(z: np.ndarray, wavelength: float, weight: np.ndarray = None) -> com
     k = 2 * np.pi / wavelength
     f = np.exp(1j * k * z)
     return np.sum(weight * f) / np.sum(weight)
+
+
+def mean_calc(x: np.ndarray, weight: np.ndarray) -> float:
+    """
+    Calculate the weighted mean.
+    """
+    P = weight / np.sum(weight)
+    return np.sum(x * P)
+
+
+def mean_variance_calc(x: np.ndarray, weight: np.ndarray) -> Tuple[float, float]:
+    """
+    Calculate the weighted mean and variance.
+
+    """
+    P = weight / np.sum(weight)
+    mean = np.sum(x * P)
+    variance = np.sum((x - mean) ** 2 * P)
+    return mean, variance
+
+
+def standard_deviation_calc(x: np.ndarray, weight: np.ndarray) -> float:
+    return np.sqrt(mean_variance_calc(x, weight)[1])

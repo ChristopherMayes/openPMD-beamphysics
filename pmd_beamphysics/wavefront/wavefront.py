@@ -562,33 +562,35 @@ class Wavefront(WavefrontBase):
     Principles
     ----------
 
-    The code should be as simple as possible,
-    with standard physics definitions and units for common symbols.
+    - The code should be as simple as possible, with standard physics definitions
+      and units for common symbols.
 
-    Prefer explicit properties with equations directly in the functions.
+    - Prefer explicit properties with equations directly in the functions.
 
-    real space mesh spacing in meters
-    k space mesh spacing in rad/meter,
-    and are defined by real spacings and the shape of the 3d array
+    - Real-space mesh spacing is in meters; k-space mesh spacing is in rad/meter,
+      both defined by the grid shape and spacings (dx, dy, dz).
 
-    Any other units can be simply converted from these from:
-    c = omega/k
-    E = hbar*omega = hbar*k*c
-    etc.
+    - Only one representation for the fields is stored at a time (either real or k-space).
+      The user can check with `.in_kspace`, `.in_rspace`, or `.spatial_domain`.
 
-    Only one representation for fields is stored: real space or k-space.
-    The user can check with:
-    .in_kspace
-    .in_rspace
-    or just look at .spatial_domain
+    - Fourier transforms have multiple conventions. This implementation uses `norm='ortho'`
+      to ensure that the total field energy (i.e., sum |E|^2) is preserved between
+      real and k-space representations (Plancherel's theorem).
 
-    Fourier transforms have various conventions. Because of this, we cannot know
-    the meaning of the field data in k-space without knowing the convention to convert
-    to real-space.
+    - The head of the laser pulse is at `max(z)`. The pulse propagates in the +z direction.
+      Avoid referring to time coordinates `t = ±z/c` to prevent confusion about
+      the direction of time and the head/tail of the pulse.
 
-    Use norm='ortho' in FFTs so that sum |E|^2 is the same value in both representations
+    - The fields can be padded as needed. No other metadata (spacing, axes) must be adjusted.
 
-    The fields can be padded directly as needed. No other data (spacing) needs to be changed.
+    - Other physical quantities can be derived from the basic spatial and spectral variables
+      using standard relations such as:
+
+        c = omega / k
+        E = hbar * omega = hbar * k * c
+
+      These can be used to convert between spatial, temporal, and energy units as needed.
+
 
     """
 
@@ -660,16 +662,39 @@ class Wavefront(WavefrontBase):
         """
         Fluence in the z direction:
 
-        F(x,y) = ϵ0/2  ∫∫∫ |E(x,y,z)|^2 dz
+        F(x,y) = ϵ0/2  ∫ |E(x,y,z)|^2 dz
         """
         return self.dz * np.sum(self.intensity, axis=2) / c  # J / m^2
 
-    # @property
-    # def marginal_intensity_x(self):
-    #    """
-    #    Marginal distribution of intensity along x (integrate over y, z) in W
-    #    """
-    #    return self.I.sum(axis=(1, 2)) * self.dy * self.dz
+    @property
+    def fluence_profile_x(self):
+        """
+        1D fluence profile along x, integrated over y and z (J/m).
+
+        F_x(x) = ϵ0/2  ∫∫ |E(x,y,z)|^2 dy dz
+        """
+
+        return np.sum(self.intensity, axis=(1, 2)) * self.dy * self.dz / c  # J/m
+
+    @property
+    def fluence_profile_y(self):
+        """
+        1D fluence profile along y, integrated over x and z (J/m).
+
+        F_y(y) = ϵ0/2  ∫∫ |E(x,y,z)|^2 dx dz
+        """
+
+        return np.sum(self.intensity, axis=(0, 2)) * self.dx * self.dz / c  # J/m
+
+    @property
+    def power(self):
+        """
+        Longitudinal power profile along z (W).
+
+        P(z) = ∫∫ I(x, y, z) dx dy
+             = ∫∫ (c ϵ0 / 2) |E(x, y, z)|² dx dy
+        """
+        return np.sum(self.intensity, axis=(0, 1)) * self.dx * self.dy  # W
 
     # Representations
     def to_kspace(self, backend=np):

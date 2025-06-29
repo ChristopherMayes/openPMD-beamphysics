@@ -2,7 +2,7 @@ from abc import ABC
 from enum import Enum
 from dataclasses import dataclass, replace
 from copy import deepcopy
-from typing import Union
+from typing import Union, ClassVar
 
 from math import pi
 import numpy as np
@@ -314,8 +314,8 @@ class WavefrontK(WavefrontBase):
 
     wavelength: float = 1  # m
 
-    spatial_domain = SpatialDomain.K
-    axis_labels = ("kx", "ky", "kz")
+    spatial_domain: ClassVar[SpatialDomain] = SpatialDomain.K
+    axis_labels: ClassVar[tuple[str, str, str]] = ("kx", "ky", "kz")
 
     # Everything else is computed on the  fly
 
@@ -603,8 +603,8 @@ class Wavefront(WavefrontBase):
 
     wavelength: float = 1  # m
 
-    spatial_domain = SpatialDomain.R
-    axis_labels = ("x", "y", "z")
+    spatial_domain: ClassVar[SpatialDomain] = SpatialDomain.R
+    axis_labels: ClassVar[tuple[str, str, str]] = ("x", "y", "z")
 
     # Everything else is computed on the  fly
 
@@ -674,7 +674,9 @@ class Wavefront(WavefrontBase):
         F_x(x) = ϵ0/2  ∫∫ |E(x,y,z)|^2 dy dz
         """
 
-        return np.sum(self.intensity, axis=(1, 2)) * self.dy * self.dz / c  # J/m
+        return (
+            np.sum(self.intensity, axis=_axis_for_sum["x"]) * self.dy * self.dz / c
+        )  # J/m
 
     @property
     def fluence_profile_y(self):
@@ -684,7 +686,9 @@ class Wavefront(WavefrontBase):
         F_y(y) = ϵ0/2  ∫∫ |E(x,y,z)|^2 dx dz
         """
 
-        return np.sum(self.intensity, axis=(0, 2)) * self.dx * self.dz / c  # J/m
+        return (
+            np.sum(self.intensity, axis=_axis_for_sum["y"]) * self.dx * self.dz / c
+        )  # J/m
 
     @property
     def power(self):
@@ -694,7 +698,7 @@ class Wavefront(WavefrontBase):
         P(z) = ∫∫ I(x, y, z) dx dy
              = ∫∫ (c ϵ0 / 2) |E(x, y, z)|² dx dy
         """
-        return np.sum(self.intensity, axis=(0, 1)) * self.dx * self.dy  # W
+        return np.sum(self.intensity, axis=_axis_for_sum["z"]) * self.dx * self.dy  # W
 
     # Representations
     def to_kspace(self, backend=np):

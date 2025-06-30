@@ -2,7 +2,19 @@ import numpy as np
 
 
 def Ry(angle):
-    """Defines a roation in around +y direction"""
+    """
+    The 3D rotation matrix around the y axis.
+
+    Parameters
+    ----------
+    angle : float
+        Angle of rotation, radians
+
+    Returns
+    -------
+    np.ndarray
+        The 3x3 rotation matrix
+    """
 
     C = np.cos(angle)
     S = np.sin(angle)
@@ -12,7 +24,19 @@ def Ry(angle):
 
 
 def Rx(angle):
-    """Defines a roation around +x direction"""
+    """
+    The 3D rotation matrix around the x axis.
+
+    Parameters
+    ----------
+    angle : float
+        Angle of rotation, radians
+
+    Returns
+    -------
+    np.ndarray
+        The 3x3 rotation matrix
+    """
 
     C = np.cos(angle)
     S = np.sin(angle)
@@ -21,7 +45,19 @@ def Rx(angle):
 
 
 def Rz(angle):
-    """Defines a roation arounx +z direction"""
+    """
+    The 3D rotation matrix around the z axis.
+
+    Parameters
+    ----------
+    angle : float
+        Angle of rotation, radians
+
+    Returns
+    -------
+    np.ndarray
+        The 3x3 rotation matrix
+    """
 
     C = np.cos(angle)
     S = np.sin(angle)
@@ -29,18 +65,27 @@ def Rz(angle):
     return np.array([[C, -S, 0], [S, C, 0], [0, 0, 1]])
 
 
-def get_rotation_matrix(pitch, yaw, tilt):
-    """Defines a general 3d rotation in terms of the orientation angles theta, phi, psi"""
+def get_rotation_matrix(
+    y_rot: float = 0.0, x_rot: float = 0.0, z_rot: float = 0.0
+) -> np.ndarray:
+    """
+    Returns a general rotation matrix by performing a rotation around the z axis, then around the x axis, and finally around y.
 
-    if pitch is None:
-        pitch = 0
-    if yaw is None:
-        yaw = 0
-    if tilt is None:
-        tilt = 0
+    Parameters
+    ----------
+    y_rot : float, optional
+        Rotation around the y axis, radians
+    x_rot : float, optional
+        Rotation around the x axis, radians
+    z_rot : float, optional
+        Rotation around the z axis, radians
 
-    ry = Ry(pitch)
-    rx = Rx(yaw)
-    rz = Rz(tilt)
-
+    Returns
+    -------
+    np.ndarray
+        The 3x3 rotation matrix
+    """
+    ry = Ry(y_rot)
+    rx = Rx(x_rot)
+    rz = Rz(z_rot)
     return np.matmul(ry, np.matmul(rx, rz))

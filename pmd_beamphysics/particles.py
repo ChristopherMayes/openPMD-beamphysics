@@ -2,7 +2,7 @@ import functools
 import os
 import pathlib
 from copy import deepcopy
-from typing import Union
+from typing import Union, Sequence
 
 import numpy as np
 from h5py import File
@@ -1257,20 +1257,47 @@ class ParticleGroup:
 
     # Transformations
     # ---------------
-    def linear_point_transform(self, trn: np.ndarray) -> None:
+    def linear_point_transform(
+        self, mat3: Union[np.ndarray, Sequence[Sequence[float]]]
+    ) -> None:
         """
-        Perform the linear point transform [x', y', z'] = trn * [x, y, z]. The conjugate momenta are transformed corresondingly
-        as [px', py', pz'] = (trn^T)^{-1} * [px, py, pz].
+        Applies a linear transformation to the particle's spatial coordinates and
+        their conjugate momenta.
+
+        The spatial coordinates (x, y, z) are transformed using:
+            [x', y', z'] = mat3 @ [x, y, z]
+
+        The conjugate momenta (px, py, pz) are transformed using:
+            [px', py', pz'] = inv(mat3.T) @ [px, py, pz]
 
         Parameters
         ----------
-        trn : np.ndarray
-            The 3x3 matrix describing the point transform with coordinates ordered as (x, y, z)
+        mat3 : array-like of shape (3, 3)
+            A 3x3 transformation matrix. Must be convertible to a NumPy array.
+            Coordinates must be ordered as (x, y, z).
+
+        Raises
+        ------
+        ValueError
+            If `mat3` is not a 3x3 matrix.
+        LinAlgError
+            If the transformation matrix is singular (i.e., not invertible).
+
+        Notes
+        -----
+        This method modifies the object in-place.
         """
-        self.x, self.y, self.z = trn @ np.vstack((self.x, self.y, self.z))
-        self.px, self.py, self.pz = np.linalg.solve(
-            trn.T, np.vstack((self.px, self.py, self.pz))
-        )
+        mat3 = np.asarray(mat3, dtype=float)
+        if mat3.shape != (3, 3):
+            raise ValueError("mat3 must be a 3x3 matrix.")
+
+        # Stack spatial coordinates and apply the transformation
+        pos = np.vstack((self.x, self.y, self.z))
+        self.x, self.y, self.z = mat3 @ pos
+
+        # Stack momenta and apply the inverse-transpose transformation
+        mom = np.vstack((self.px, self.py, self.pz))
+        self.px, self.py, self.pz = np.linalg.solve(mat3.T, mom)
 
     def rotate(self, pitch: float, yaw: float, tilt: float) -> None:
         """

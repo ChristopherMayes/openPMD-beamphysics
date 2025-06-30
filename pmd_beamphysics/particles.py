@@ -1299,20 +1299,26 @@ class ParticleGroup:
         mom = np.vstack((self.px, self.py, self.pz))
         self.px, self.py, self.pz = np.linalg.solve(mat3.T, mom)
 
-    def rotate(self, pitch: float, yaw: float, tilt: float) -> None:
+    def rotate(
+        self, y_rot: float = 0.0, x_rot: float = 0.0, z_rot: float = 0.0
+    ) -> None:
         """
-        Rotate the beam according according to the angles yaw, pitch, and tilt.
+        Rotate the beam by the specified angles first around the z axis, then the x axis, finally around the y axis.
 
         Parameters
         ----------
-        pitch : float
-            Angle of rotation about y axis (radians).
-        yaw : float
-            Angle of rotation about the x axis (radians).
-        tilt : float
-            Angle of rotation about the z axis (radians).
+        y_rot : float, optional
+            Rotation around the y axis, radians
+        x_rot : float, optional
+            Rotation around the x axis, radians
+        z_rot : float, optional
+            Rotation around the z axis, radians
+
+        Notes
+        -----
+        This method modifies the object in-place.
         """
-        self.linear_point_transform(get_rotation_matrix(pitch, yaw, tilt))
+        self.linear_point_transform(get_rotation_matrix(y_rot, x_rot, z_rot))
 
 
 # -----------------------------------------

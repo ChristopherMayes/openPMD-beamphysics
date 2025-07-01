@@ -73,7 +73,7 @@ _ROTATION_FUNCS = {
 
 
 def get_rotation_matrix(
-    x_rot: float = 0.0, y_rot: float = 0.0, z_rot: float = 0.0, order: str = "zxy"
+    *, x_rot: float = 0.0, y_rot: float = 0.0, z_rot: float = 0.0, order: str = "zxy"
 ) -> np.ndarray:
     """
     Constructs a 3D rotation matrix by applying intrinsic rotations in the specified order.

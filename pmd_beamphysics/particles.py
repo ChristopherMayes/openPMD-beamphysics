@@ -1301,7 +1301,7 @@ class ParticleGroup:
 
     def rotate(
         self,
-        *args,
+        *,
         x_rot: float = 0.0,
         y_rot: float = 0.0,
         z_rot: float = 0.0,

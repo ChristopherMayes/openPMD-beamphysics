@@ -489,6 +489,19 @@ def density_and_slice_plot(
 # Fields
 
 
+def _symmetrize_data(data, sign=1, axis=0):
+    """
+    Symmetrizes a given array along a specified axis.
+
+    This function creates a symmetric version of the input data by flipping it along
+    the specified axis and concatenating the flipped data with the original data.
+    The flipped data is multiplied by the specified `sign` value. The axis value
+    corresponding to the center (e.g., r=0) is included only once.
+    """
+    flipped_data = np.flip(data, axis=axis)[:-1] * sign
+    return np.concatenate((flipped_data, data), axis=axis)
+
+
 def plot_fieldmesh_cylindrical_2d(
     fm,
     component=None,
@@ -497,6 +510,11 @@ def plot_fieldmesh_cylindrical_2d(
     aspect="auto",
     cmap=None,
     return_figure=False,
+    stream=False,
+    mirror=None,
+    density=1,
+    linewidth=1,
+    arrowsize=1,
     **kwargs,
 ):
     """
@@ -506,6 +524,9 @@ def plot_fieldmesh_cylindrical_2d(
     """
 
     assert fm.geometry == "cylindrical"
+
+    if mirror not in (None, "r"):
+        raise ValueError("mirror must be None or 'r'")
 
     if component is None:
         if fm.is_pure_magnetic:
@@ -528,26 +549,68 @@ def plot_fieldmesh_cylindrical_2d(
     xmax, _, zmax = fm.maxs
 
     # plt.imshow on [r, z] will put z on the horizontal axis.
-    extent = [zmin, zmax, xmin, xmax]
 
-    xlabel = "z (m)"
-    ylabel = "r (m)"
+    xlabel = r"$z$ (m)"
+    ylabel = r"$r$ (m)"
 
     dat = fm[component][:, 0, :]
     dat = np.real_if_close(dat)
 
+    if mirror == "r":
+        if xmin != 0:
+            raise ValueError("mirror='r' only available when r=0 is in the data")
+        if component in ("Br", "Er"):
+            sign = -1
+        else:
+            sign = 1
+
+        xmin = -xmax
+        dat = _symmetrize_data(dat, sign)
+
     dmin = dat.min()
     dmax = dat.max()
+    extent = [zmin, zmax, xmin, xmax]
 
     ax.set_aspect(aspect)
-    # Need to flip for image
-    ax.imshow(np.flipud(dat), extent=extent, cmap=cmap, aspect=aspect)
+
+    if stream:
+        if component not in ("E", "B"):
+            raise ValueError(f"{component} for stream plot must be 'E' or 'B' ")
+
+        fx = np.real(fm[component + "z"][:, 0, :])
+        fy = np.real(fm[component + "r"][:, 0, :])
+        x = fm.coord_vec("z")
+        y = fm.coord_vec("r")
+
+        if mirror == "r":
+            y = _symmetrize_data(y, sign=-1)
+            fx = _symmetrize_data(fx, sign=1)
+            fy = _symmetrize_data(fy, sign=-1)
+
+        ax.streamplot(
+            x,
+            y,
+            fx,
+            fy,
+            color=dat,
+            cmap=cmap,
+            density=density,
+            linewidth=linewidth,
+            arrowsize=arrowsize,
+        )
+
+        ax.set_xlim(x.min(), x.max())
+        ax.set_ylim(y.min(), y.max())
+
+    else:
+        # Need to flip for image
+        ax.imshow(dat, extent=extent, cmap=cmap, aspect=aspect, origin="lower")
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 
     # Add legend
-    llabel = f"{component} ({unit.unitSymbol})"
+    llabel = mathlabel(component, units=unit)
 
     norm = matplotlib.colors.Normalize(vmin=dmin, vmax=dmax)
     fig.colorbar(

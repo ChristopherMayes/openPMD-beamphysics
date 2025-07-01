@@ -322,9 +322,6 @@ def make_solenoid_fieldmesh(
     >>> print(field_mesh)
     """
 
-    if L is None:
-        raise ValueError("L must be specified")
-
     if (nI is None and B0 is None) or (nI is not None and B0 is not None):
         raise ValueError(
             "Must specify exactly one of `nI` or `B0`, not both or neither."

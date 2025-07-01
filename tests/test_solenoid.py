@@ -1,8 +1,19 @@
-from pmd_beamphysics.fields.solenoid import C_full, cel
 import numpy as np
+import pytest
+
+from pmd_beamphysics.fields.solenoid import C_full, cel
 
 
-def test_cel_vs_c_full():
+@pytest.mark.parametrize(
+    ("kc", "p", "c", "s", "mathematica"),
+    [
+        pytest.param(0.5, 1.0, 1.0, 0.5, 1.5262092342121871, id="kc0.5"),
+        pytest.param(0.8, 0.9, 1.2, -0.3, 0.7192092915373303, id="kc0.8"),
+        pytest.param(0.3, 0.5, 2.0, 0.7, 4.371297871647941, id="kc0.3"),
+        pytest.param(0.0, 1.0, 1.0, 0.0, 1.0, id="edge-case"),
+    ],
+)
+def test_cel_vs_c_full(kc: float, p: float, c: float, s: float, mathematica: float):
     r"""
     Compare with Mathematica:
 
@@ -19,29 +30,17 @@ def test_cel_vs_c_full():
 
     """
 
-    test_cases = [
-        {"kc": 0.5, "p": 1.0, "c": 1.0, "s": 0.5, "mma": 1.5262092342121871},
-        {"kc": 0.8, "p": 0.9, "c": 1.2, "s": -0.3, "mma": 0.7192092915373303},
-        {"kc": 0.3, "p": 0.5, "c": 2.0, "s": 0.7, "mma": 4.371297871647941},
-        {"kc": 0.0, "p": 1.0, "c": 1.0, "s": 0.0, "mma": 1.0},  # Edge case
-    ]
+    cel_result = cel(kc, p, c, s)
+    c_full_result = C_full(kc, p, c, s)
+    difference = abs(cel_result - c_full_result)
 
-    print("Testing cel vs C_full:")
-    for i, params in enumerate(test_cases):
-        kc, p, c, s = params["kc"], params["p"], params["c"], params["s"]
-        cel_result = cel(kc, p, c, s)
-        c_full_result = C_full(kc, p, c, s)
-        difference = abs(cel_result - c_full_result)
+    print(
+        f"Test case: kc={kc}, p={p}, c={c}, s={s}\n"
+        f"  cel result: {cel_result}\n"
+        f"  C_full result: {c_full_result}\n"
+        f"  Mathematica: {mathematica}\n"
+        f"  Difference: {difference}\n"
+    )
 
-        mathematica = params["mma"]
-
-        print(
-            f"Test case {i + 1}: kc={kc}, p={p}, c={c}, s={s}\n"
-            f"  cel result: {cel_result}\n"
-            f"  C_full result: {c_full_result}\n"
-            f"  Mathematica: {mathematica}\n"
-            f"  Difference: {difference}\n"
-        )
-
-        assert np.isclose(cel_result, c_full_result)
-        assert np.isclose(mathematica, c_full_result)
+    assert np.isclose(cel_result, c_full_result)
+    assert np.isclose(mathematica, c_full_result)

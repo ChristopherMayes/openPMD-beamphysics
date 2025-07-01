@@ -261,6 +261,7 @@ def compute_Br_Bz(
 
 def make_solenoid_fieldmesh(
     *,
+    L: float,
     rmin: float = 0,
     rmax: float = 0.01,
     zmin: float = -0.2,
@@ -268,7 +269,6 @@ def make_solenoid_fieldmesh(
     nr: int = 20,
     nz: int = 40,
     radius: float = 0.1,
-    L: Optional[float] = None,
     nI: Optional[float] = None,
     B0: Optional[float] = None,
 ):
@@ -287,6 +287,8 @@ def make_solenoid_fieldmesh(
 
     Parameters
     ----------
+    L : float
+        Length of the solenoid (in meters).
     rmin : float, optional
         The minimum radial coordinate of the field mesh (in meters). Default is 0.
     rmax : float, optional
@@ -296,21 +298,18 @@ def make_solenoid_fieldmesh(
     zmax : float, optional
         The maximum axial coordinate of the field mesh (in meters). Default is 0.2.
     nr : int, optional
-        The number of points in the radial direction for the mesh. Default is 100.
+        The number of points in the radial direction for the mesh. Default is 20.
     nz : int, optional
-        The number of points in the axial direction for the mesh. Default is 200.
+        The number of points in the axial direction for the mesh. Default is 40.
     radius : float, optional
-        The inner radius of the solenoid (in meters). Default is 0.1.
-    L : float or None, optional
-        The half length of the solenoid (in meters). Default is None.
+        Radius of the solenoid windings (in meters) at which the current loops reside.
+        Default is 0.1.
     nI : float or None, optional
-        The product of the number of turns per unit length (n) and current (I) in amperes.
-        This determines the current density of the solenoid.
-        Default is None.
+        The product of the number of turns per unit length (n) and the current (I), (in amperes per meter).
+        Must be specified if `B0` is not. Exactly one of `nI` or `B0` must be provided.
     B0 : float or None, optional
-        Peak on-axis magnetic field in T
-        This can be used instead of nI to scale the field.
-        Default is None.
+        Peak on-axis magnetic field (in Tesla). Must be specified if `nI` is not.
+        Exactly one of `nI` or `B0` must be provided.
 
     Returns
     -------
@@ -319,20 +318,20 @@ def make_solenoid_fieldmesh(
 
     Examples
     --------
-    >>> field_mesh = make_solenoid_fieldmesh(rmin=0, rmax=0.02, zmin=-0.3, zmax=0.3, nr=150, nz=300, a=0.05, b=0.15, nI=2.0)
+    >>> field_mesh = make_solenoid_fieldmesh(L=.1, B0=1, zmin=-.2, zmax=.2, rmax=.01, radius=0.1)
     >>> print(field_mesh)
     """
 
-    if nI is None and B0 is not None:
-        if L is None:
-            raise ValueError("L must be specified to calculate nI")
+    if L is None:
+        raise ValueError("L must be specified")
+
+    if (nI is None and B0 is None) or (nI is not None and B0 is not None):
+        raise ValueError(
+            "Must specify exactly one of `nI` or `B0`, not both or neither."
+        )
+
+    if nI is None:
         nI = B0 * np.hypot(radius, L / 2) / (mu_0 * L / 2)
-    elif nI is None and B0 is None:
-        B0 = 1
-    elif nI is not None and B0 is None:
-        pass
-    else:
-        raise ValueError("Cannot set nI and B0. Choose one")
 
     # Form coordinate mesh
     rs = np.linspace(rmin, rmax, nr)

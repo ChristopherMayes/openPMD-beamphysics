@@ -374,7 +374,7 @@ def make_solenoid_fieldmesh(
     return FieldMesh(data=data)
 
 
-def _fit_ideal_solenoid_model(z: np.ndarray, radius: float, L: float) -> np.ndarray:
+def ideal_solenoid_onaxis_field(z: np.ndarray, radius: float, L: float) -> np.ndarray:
     """
     Computes the normalized magnetic field on the solenoid's axis.
 
@@ -442,7 +442,9 @@ def fit_ideal_solenoid(
     z_data = z0 - z0[np.argmax(Bz_data)]  # Shift z so maximum is at z=0
 
     # Fit the data to the model
-    popt, pcov = curve_fit(_fit_ideal_solenoid_model, z_data, Bz_data, p0=[radius0, L0])
+    popt, pcov = curve_fit(
+        ideal_solenoid_onaxis_field, z_data, Bz_data, p0=[radius0, L0]
+    )
 
     # Extract fitted parameters
     radius_fit, L_fit = popt

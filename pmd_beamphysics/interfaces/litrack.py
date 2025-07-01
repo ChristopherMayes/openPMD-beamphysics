@@ -1,6 +1,6 @@
 import numpy as np
 
-from pmd_beamphysics.units import c_light
+from ..units import c_light
 
 
 def write_litrack(particle_group, outfile="litrack.zd", p0c=None, verbose=False):
@@ -47,7 +47,7 @@ def write_litrack(particle_group, outfile="litrack.zd", p0c=None, verbose=False)
 % Created using the openPMD-beamphysics Python package
 % https://github.com/ChristopherMayes/openPMD-beamphysics
 %
-% species: {P['species']}
+% species: {P["species"]}
 % n_particle: {n}
 % total charge: {P.charge} (C)
 % reference momentum p0: {p0c} (eV/c)

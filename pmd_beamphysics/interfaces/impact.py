@@ -5,7 +5,7 @@ import numpy as np
 from numpy import pi
 from scipy import fft
 
-from pmd_beamphysics.fields.expansion import spline_derivative_array
+from ..fields.expansion import spline_derivative_array
 
 c_light = 299792458.0
 
@@ -34,7 +34,7 @@ def parse_impact_particles(
 
     """
 
-    dtype = {"names": names, "formats": 6 * [np.float]}
+    dtype = {"names": names, "formats": 6 * [float]}
     pdat = np.loadtxt(
         filePath, skiprows=skiprows, dtype=dtype, ndmin=1
     )  # to make sure that 1 particle is parsed the same as many.

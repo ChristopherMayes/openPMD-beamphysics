@@ -1,11 +1,12 @@
-from scipy.special import ellipk, ellipe
+from typing import Optional
+
 import numpy as np
-from pmd_beamphysics.units import mu_0
-from pmd_beamphysics import FieldMesh
-
-from scipy.optimize import curve_fit
-
 from scipy.integrate import quad
+from scipy.optimize import curve_fit
+from scipy.special import ellipe, ellipk
+
+from pmd_beamphysics import FieldMesh
+from pmd_beamphysics.units import mu_0
 
 
 def C_full(kc: float, p: float, c: float, s: float) -> float:
@@ -261,15 +262,15 @@ def compute_Br_Bz(
 def make_solenoid_fieldmesh(
     *,
     rmin: float = 0,
-    rmax: float = None,
-    zmin: float = None,
+    rmax: float = 0.01,
+    zmin: float = -0.2,
     zmax: float = 0.2,
     nr: int = 20,
     nz: int = 40,
-    radius: float = None,
-    L: float = None,
-    nI: float = None,
-    B0: float = None,
+    radius: float = 0.1,
+    L: Optional[float] = None,
+    nI: Optional[float] = None,
+    B0: Optional[float] = None,
 ):
     """
     Generates a 2D cylindrically symmetric ideal solenoid FieldMesh.
@@ -300,18 +301,16 @@ def make_solenoid_fieldmesh(
         The number of points in the axial direction for the mesh. Default is 200.
     radius : float, optional
         The inner radius of the solenoid (in meters). Default is 0.1.
-    L : float, optional
-        The half length of the solenoid (in meters). Default is 0.2.
-
-    nI : float, optional
+    L : float or None, optional
+        The half length of the solenoid (in meters). Default is None.
+    nI : float or None, optional
         The product of the number of turns per unit length (n) and current (I) in amperes.
         This determines the current density of the solenoid.
-        default: None
-
-    B0 : float, optional
+        Default is None.
+    B0 : float or None, optional
         Peak on-axis magnetic field in T
         This can be used instead of nI to scale the field.
-        default: None
+        Default is None.
 
     Returns
     -------
@@ -325,6 +324,8 @@ def make_solenoid_fieldmesh(
     """
 
     if nI is None and B0 is not None:
+        if L is None:
+            raise ValueError("L must be specified to calculate nI")
         nI = B0 * np.hypot(radius, L / 2) / (mu_0 * L / 2)
     elif nI is None and B0 is None:
         B0 = 1

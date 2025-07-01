@@ -66,17 +66,17 @@ def Rz(angle):
 
 
 def get_rotation_matrix(
-    y_rot: float = 0.0, x_rot: float = 0.0, z_rot: float = 0.0
+    *args, x_rot: float = 0.0, y_rot: float = 0.0, z_rot: float = 0.0
 ) -> np.ndarray:
     """
     Returns a general rotation matrix by performing a rotation around the z axis, then around the x axis, and finally around y.
 
     Parameters
     ----------
-    y_rot : float, optional
-        Rotation around the y axis, radians
     x_rot : float, optional
         Rotation around the x axis, radians
+    y_rot : float, optional
+        Rotation around the y axis, radians
     z_rot : float, optional
         Rotation around the z axis, radians
 

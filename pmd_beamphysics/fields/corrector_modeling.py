@@ -235,7 +235,7 @@ def bfield_from_thin_rectangular_coil(
         assert (
             rotation_matrix is None
         ), "Cannot specify the rotation matrix and rotation angles at the same time"
-        rotation_matrix = get_rotation_matrix(pitch, yaw, tilt)
+        rotation_matrix = get_rotation_matrix(y_rot=pitch, x_rot=yaw, z_rot=tilt)
 
     # print(rotation_matrix)
 
@@ -570,7 +570,7 @@ def bfield_from_thin_wire_arc(
         assert (
             rotation_matrix is None
         ), "Cannot specify the rotation matrix and rotation angles at the same time"
-        rotation_matrix = get_rotation_matrix(pitch, yaw, tilt)
+        rotation_matrix = get_rotation_matrix(y_rot=pitch, x_rot=yaw, z_rot=tilt)
 
     if rotation_matrix is not None:
         for ii, p in enumerate(ps):
@@ -684,7 +684,7 @@ def bfield_from_thin_saddle_coil(
         assert (
             rotation_matrix is None
         ), "Cannot specify the rotation matrix and rotation angles at the same time"
-        rotation_matrix = get_rotation_matrix(pitch, yaw, tilt)
+        rotation_matrix = get_rotation_matrix(y_rot=pitch, x_rot=yaw, z_rot=tilt)
 
     # print(rotation_matrix)
 

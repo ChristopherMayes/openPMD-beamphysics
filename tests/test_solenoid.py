@@ -47,16 +47,13 @@ def test_cel_vs_c_full(kc: float, p: float, c: float, s: float, mathematica: flo
 
 
 @pytest.mark.parametrize(
-    ("nI", "B0", "L"),
+    ("nI", "B0"),
     [
-        pytest.param(None, 1.0, 0.4, id="only_B0_with_L"),
-        pytest.param(None, None, None, id="neither_nI_nor_B0_defaults"),
-        pytest.param(None, None, 0.4, id="neither_nI_nor_B0_with_L"),
-        pytest.param(2000.0, None, None, id="only_nI"),
-        pytest.param(2000.0, None, 0.4, id="only_nI_with_L"),
+        pytest.param(None, 1.0, id="only_B0"),
+        pytest.param(2000.0, None, id="only_nI"),
     ],
 )
-def test_make_solenoid_fieldmesh_valid_scenarios(nI, B0, L):
+def test_make_solenoid_fieldmesh_valid_scenarios(nI, B0):
     """Test valid combinations of nI and B0 parameters."""
 
     params = {
@@ -69,7 +66,7 @@ def test_make_solenoid_fieldmesh_valid_scenarios(nI, B0, L):
         "radius": 0.1,
         "nI": nI,
         "B0": B0,
-        "L": L,
+        "L": 0.4,
     }
 
     print("Calling make_solenoid_fieldmesh with:", params)
@@ -87,39 +84,11 @@ def test_make_solenoid_fieldmesh_valid_scenarios(nI, B0, L):
     assert Bz.shape == (10, 1, 20)  # (nr, 1, nz)
 
 
-@pytest.mark.parametrize(
-    ("nI", "B0", "L", "expected_error"),
-    [
-        pytest.param(
-            None, 1.0, None, "L must be specified to calculate nI", id="B0_without_L"
-        ),
-        pytest.param(
-            2000.0,
-            1.0,
-            None,
-            "Cannot set nI and B0. Choose one",
-            id="nI_and_B0_without_L",
-        ),
-        pytest.param(
-            2000.0, 1.0, 0.4, "Cannot set nI and B0. Choose one", id="nI_and_B0_with_L"
-        ),
-    ],
-)
-def test_make_solenoid_fieldmesh_error_scenarios(nI, B0, L, expected_error):
-    """Test combinations of nI and B0 parameters that should raise errors."""
+def test_make_solenoid_fieldmesh_error_both():
+    with pytest.raises(ValueError, match="Must specify exactly one of.*"):
+        make_solenoid_fieldmesh(L=0.4, nI=2000.0, B0=1.0)
 
-    params = {
-        "rmin": 0,
-        "rmax": 0.01,
-        "zmin": -0.2,
-        "zmax": 0.2,
-        "nr": 10,  # Reduced for faster testing
-        "nz": 20,  # Reduced for faster testing
-        "radius": 0.1,
-        "nI": nI,
-        "B0": B0,
-        "L": L,
-    }
 
-    with pytest.raises(ValueError, match=expected_error):
-        make_solenoid_fieldmesh(**params)
+def test_make_solenoid_fieldmesh_error_neither():
+    with pytest.raises(ValueError, match="Must specify exactly one of.*"):
+        make_solenoid_fieldmesh(L=0.4)

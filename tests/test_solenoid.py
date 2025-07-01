@@ -49,14 +49,11 @@ def test_cel_vs_c_full(kc: float, p: float, c: float, s: float, mathematica: flo
 @pytest.mark.parametrize(
     ("nI", "B0", "L"),
     [
-        #  Only B0 provided (with L)
-        (None, 1.0, 0.4),
-        #  Neither nI nor B0 provided (B0 defaults to 1)
-        (None, None, None),
-        (None, None, 0.4),  # L can be provided but not required
-        #  Only nI provided
-        (2000.0, None, None),
-        (2000.0, None, 0.4),  # L can be provided but not required
+        pytest.param(None, 1.0, 0.4, id="only_B0_with_L"),
+        pytest.param(None, None, None, id="neither_nI_nor_B0_defaults"),
+        pytest.param(None, None, 0.4, id="neither_nI_nor_B0_with_L"),
+        pytest.param(2000.0, None, None, id="only_nI"),
+        pytest.param(2000.0, None, 0.4, id="only_nI_with_L"),
     ],
 )
 def test_make_solenoid_fieldmesh_valid_scenarios(nI, B0, L):
@@ -93,11 +90,19 @@ def test_make_solenoid_fieldmesh_valid_scenarios(nI, B0, L):
 @pytest.mark.parametrize(
     ("nI", "B0", "L", "expected_error"),
     [
-        # Only B0 provided (without L) - should raise ValueError
-        (None, 1.0, None, "L must be specified to calculate nI"),
-        # Both nI and B0 provided - should raise ValueError
-        (2000.0, 1.0, None, "Cannot set nI and B0. Choose one"),
-        (2000.0, 1.0, 0.4, "Cannot set nI and B0. Choose one"),
+        pytest.param(
+            None, 1.0, None, "L must be specified to calculate nI", id="B0_without_L"
+        ),
+        pytest.param(
+            2000.0,
+            1.0,
+            None,
+            "Cannot set nI and B0. Choose one",
+            id="nI_and_B0_without_L",
+        ),
+        pytest.param(
+            2000.0, 1.0, 0.4, "Cannot set nI and B0. Choose one", id="nI_and_B0_with_L"
+        ),
     ],
 )
 def test_make_solenoid_fieldmesh_error_scenarios(nI, B0, L, expected_error):

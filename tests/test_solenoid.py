@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from pmd_beamphysics.fields.solenoid import C_full, cel
+from pmd_beamphysics.fields.solenoid import C_full, cel, make_solenoid_fieldmesh
 
 
 @pytest.mark.parametrize(
@@ -42,5 +42,79 @@ def test_cel_vs_c_full(kc: float, p: float, c: float, s: float, mathematica: flo
         f"  Difference: {difference}\n"
     )
 
-    assert np.isclose(cel_result, c_full_result)
-    assert np.isclose(mathematica, c_full_result)
+    np.testing.assert_allclose(cel_result, c_full_result)
+    np.testing.assert_allclose(mathematica, c_full_result)
+
+
+@pytest.mark.parametrize(
+    ("nI", "B0", "L"),
+    [
+        #  Only B0 provided (with L)
+        (None, 1.0, 0.4),
+        #  Neither nI nor B0 provided (B0 defaults to 1)
+        (None, None, None),
+        (None, None, 0.4),  # L can be provided but not required
+        #  Only nI provided
+        (2000.0, None, None),
+        (2000.0, None, 0.4),  # L can be provided but not required
+    ],
+)
+def test_make_solenoid_fieldmesh_valid_scenarios(nI, B0, L):
+    """Test valid combinations of nI and B0 parameters."""
+
+    params = {
+        "rmin": 0,
+        "rmax": 0.01,
+        "zmin": -0.2,
+        "zmax": 0.2,
+        "nr": 10,
+        "nz": 20,
+        "radius": 0.1,
+        "nI": nI,
+        "B0": B0,
+        "L": L,
+    }
+
+    print("Calling make_solenoid_fieldmesh with:", params)
+    field_mesh = make_solenoid_fieldmesh(**params)
+
+    assert field_mesh is not None
+    assert hasattr(field_mesh, "data")
+    assert "components" in field_mesh.data
+    assert "magneticField/r" in field_mesh.data["components"]
+    assert "magneticField/z" in field_mesh.data["components"]
+
+    Br = field_mesh.data["components"]["magneticField/r"]
+    Bz = field_mesh.data["components"]["magneticField/z"]
+    assert Br.shape == (10, 1, 20)  # (nr, 1, nz)
+    assert Bz.shape == (10, 1, 20)  # (nr, 1, nz)
+
+
+@pytest.mark.parametrize(
+    ("nI", "B0", "L", "expected_error"),
+    [
+        # Only B0 provided (without L) - should raise ValueError
+        (None, 1.0, None, "L must be specified to calculate nI"),
+        # Both nI and B0 provided - should raise ValueError
+        (2000.0, 1.0, None, "Cannot set nI and B0. Choose one"),
+        (2000.0, 1.0, 0.4, "Cannot set nI and B0. Choose one"),
+    ],
+)
+def test_make_solenoid_fieldmesh_error_scenarios(nI, B0, L, expected_error):
+    """Test combinations of nI and B0 parameters that should raise errors."""
+
+    params = {
+        "rmin": 0,
+        "rmax": 0.01,
+        "zmin": -0.2,
+        "zmax": 0.2,
+        "nr": 10,  # Reduced for faster testing
+        "nz": 20,  # Reduced for faster testing
+        "radius": 0.1,
+        "nI": nI,
+        "B0": B0,
+        "L": L,
+    }
+
+    with pytest.raises(ValueError, match=expected_error):
+        make_solenoid_fieldmesh(**params)

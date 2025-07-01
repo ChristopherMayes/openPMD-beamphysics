@@ -1300,7 +1300,12 @@ class ParticleGroup:
         self.px, self.py, self.pz = np.linalg.solve(mat3.T, mom)
 
     def rotate(
-        self, *args, x_rot: float = 0.0, y_rot: float = 0.0, z_rot: float = 0.0
+        self,
+        *args,
+        x_rot: float = 0.0,
+        y_rot: float = 0.0,
+        z_rot: float = 0.0,
+        order: str = "zxy",
     ) -> None:
         """
         Rotate the beam by the specified angles first around the z axis, then the x axis, finally around the y axis.
@@ -1313,13 +1318,16 @@ class ParticleGroup:
             Rotation around the y axis, radians
         z_rot : float, optional
             Rotation around the z axis, radians
+        order : str
+            A 3-character string specifying the rotation order (e.g., 'zxy', 'zyx').
+            Each character must be one of 'x', 'y', or 'z'.
 
         Notes
         -----
         This method modifies the object in-place.
         """
         self.linear_point_transform(
-            get_rotation_matrix(x_rot=x_rot, y_rot=y_rot, z_rot=z_rot)
+            get_rotation_matrix(x_rot=x_rot, y_rot=y_rot, z_rot=z_rot, order=order)
         )
 
 

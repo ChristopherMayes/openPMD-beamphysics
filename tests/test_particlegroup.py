@@ -1,7 +1,11 @@
-from pmd_beamphysics import ParticleGroup
-import pytest
-import numpy as np
 import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+
+from pmd_beamphysics import ParticleGroup
+from pmd_beamphysics.particles import single_particle
 
 P = ParticleGroup("docs/examples/data/bmad_particles.h5")
 
@@ -90,3 +94,21 @@ def test_write_reload(tmp_path):
 def test_fractional_split():
     head, tail = P.fractional_split(0.5, "t")
     head, core, tail = P.fractional_split((0.1, 0.9), "t")
+
+
+def test_plot_vs_z(array_key: str):
+    P.plot("z", array_key)
+    plt.show()
+
+
+@pytest.mark.filterwarnings("ignore:.*invalid value encountered in.*")
+@pytest.mark.filterwarnings("ignore:.*divide by zero.*")
+@pytest.mark.filterwarnings("ignore:.*Degrees of freedom.*")
+@pytest.mark.filterwarnings("ignore:.*The fit may be poorly conditioned.*")
+def test_plot_single_particle_vs_z(array_key: str):
+    # Single particle plots aren't particularly useful, so we're mainly testing
+    # for coverage and that this doesn't crash.  Filter out any warnings
+    # from this that complain about bad calculated values.
+    Ps = single_particle(pz=10e6)
+    Ps.plot("z", array_key)
+    plt.show()

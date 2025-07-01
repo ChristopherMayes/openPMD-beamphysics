@@ -3,8 +3,8 @@ import os
 import numpy as np
 from h5py import File, Group
 
-from pmd_beamphysics.statistics import twiss_calc
-from pmd_beamphysics.units import c_light, mec2, unit, write_unit_h5
+from ..statistics import twiss_calc
+from ..units import c_light, mec2, unit, write_unit_h5
 
 # Genesis 1.3
 # -------------
@@ -127,7 +127,7 @@ def write_genesis2_beam_file(fname, beam_columns, verbose=False):
     size = len(beam_columns[names[0]])
     header = f"""? VERSION=1.0
 ? SIZE={size}
-? COLUMNS {' '.join([n.upper() for n in names])}"""
+? COLUMNS {" ".join([n.upper() for n in names])}"""
 
     dat = np.array([beam_columns[name] for name in names]).T
 

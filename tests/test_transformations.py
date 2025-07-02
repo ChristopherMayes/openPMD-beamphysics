@@ -2,7 +2,8 @@ import numpy as np
 import pytest
 
 from pmd_beamphysics import ParticleGroup
-
+from pmd_beamphysics.utils import get_rotation_matrix
+from pmd_beamphysics.testing import assert_pg_close
 
 # Load the test fixture
 pytest_plugins = ("pmd_beamphysics.testing",)
@@ -70,6 +71,45 @@ def test_point_transform(test_beam, transform_matrix, name):
             atol=1e-9,
             err_msg=f"Coordinate {coord} not recovered after inverse transform ({name})",
         )
+
+
+def test_rotate_x(test_beam, theta=1.2345):
+    # Setup beams
+    pg_test = test_beam
+    pg_ref = pg_test.copy()
+
+    # Transform using method under test and reference method (rotation matrices)
+    pg_test.rotate_x(theta)
+    pg_ref.linear_point_transform(get_rotation_matrix(x_rot=theta))
+
+    # Check against each other
+    assert_pg_close(pg_test, pg_ref)
+
+
+def test_rotate_y(test_beam, theta=1.2345):
+    # Setup beams
+    pg_test = test_beam
+    pg_ref = pg_test.copy()
+
+    # Transform using method under test and reference method (rotation matrices)
+    pg_test.rotate_y(theta)
+    pg_ref.linear_point_transform(get_rotation_matrix(y_rot=theta))
+
+    # Check against each other
+    assert_pg_close(pg_test, pg_ref)
+
+
+def test_rotate_z(test_beam, theta=1.2345):
+    # Setup beams
+    pg_test = test_beam
+    pg_ref = pg_test.copy()
+
+    # Transform using method under test and reference method (rotation matrices)
+    pg_test.rotate_z(theta)
+    pg_ref.linear_point_transform(get_rotation_matrix(z_rot=theta))
+
+    # Check against each other
+    assert_pg_close(pg_test, pg_ref)
 
 
 @pytest.mark.parametrize(

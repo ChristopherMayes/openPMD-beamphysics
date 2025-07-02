@@ -286,9 +286,11 @@ class ParticleGroup:
             species=species,
         )
         if t_or_z == "t":
-            data["t"] = samp[:4]
+            data["t"] = samp[:, 4]
+            data["z"] = np.zeros(n_particle)
         elif t_or_z == "z":
-            data["z"] = samp[:4]
+            data["t"] = np.zeros(n_particle)
+            data["z"] = samp[:, 4]
         else:
             raise ValueError(f"t_or_z must be either `t` or `z`. Got: {t_or_z}")
         return ParticleGroup(data=data)

@@ -1363,41 +1363,6 @@ class ParticleGroup:
         if mat3.shape != (3, 3):
             raise ValueError("mat3 must be a 3x3 matrix.")
 
-        # Stack spatial coordinates and apply the transformation
-        pos = np.vstack((self.x, self.y, self.z))
-        self.x, self.y, self.z = mat3 @ pos
-
-        # Stack momenta and apply the inverse-transpose transformation
-        mom = np.vstack((self.px, self.py, self.pz))
-        self.px, self.py, self.pz = np.linalg.solve(mat3.T, mom)
-
-    def linear_point_transform_v1(
-        self, mat3: Union[np.ndarray, Sequence[Sequence[float]]]
-    ) -> None:
-        return self.linear_point_transform(mat3)
-
-    def linear_point_transform_v2(
-        self, mat3: Union[np.ndarray, Sequence[Sequence[float]]]
-    ) -> None:
-        mat3 = np.asarray(mat3, dtype=float)
-        if mat3.shape != (3, 3):
-            raise ValueError("mat3 must be a 3x3 matrix.")
-
-        # Stack spatial coordinates and apply the transformation
-        pos = np.vstack((self.x, self.y, self.z))
-        self.x, self.y, self.z = mat3 @ pos
-
-        # Stack momenta and apply the inverse-transpose transformation
-        mom = np.vstack((self.px, self.py, self.pz))
-        self.px, self.py, self.pz = np.linalg.inv(mat3.T) @ mom
-
-    def linear_point_transform_v3(
-        self, mat3: Union[np.ndarray, Sequence[Sequence[float]]]
-    ) -> None:
-        mat3 = np.asarray(mat3, dtype=float)
-        if mat3.shape != (3, 3):
-            raise ValueError("mat3 must be a 3x3 matrix.")
-
         # Grab original coordinates
         x, y, z = self.x, self.y, self.z
         px, py, pz = self.px, self.py, self.pz

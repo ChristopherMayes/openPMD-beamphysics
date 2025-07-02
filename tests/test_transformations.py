@@ -170,11 +170,7 @@ def test_rotate_method_calls_with_mock(test_beam):
 
 @pytest.mark.parametrize(
     "fn",
-    [
-        "linear_point_transform_v1",
-        "linear_point_transform_v2",
-        "linear_point_transform_v3",
-    ],
+    ["linear_point_transform"],
 )
 def test_point_transformation_performance(fn, benchmark):
     pg = ParticleGroup.from_random_normal(100_000)

@@ -182,6 +182,21 @@ def test_from_random_normal_default(t_or_z):
     assert np.all(pg.status == 1)
     assert np.all(pg.weight == 1)
 
+    # Check the mean
+    measured_means = np.array(
+        [
+            pg.avg("x") / pg.std("x"),
+            pg.avg("px") / pg.std("px"),
+            pg.avg("y") / pg.std("y"),
+            pg.avg("py") / pg.std("py"),
+            pg.avg(t_or_z) / pg.std(t_or_z),
+            pg.avg("pz"),
+        ]
+    )
+    mean = np.zeros_like(measured_means)
+    mean[5] = 1e6
+    np.testing.assert_allclose(measured_means, mean, rtol=1e-2, atol=1e-2)
+
 
 @pytest.mark.filterwarnings("ignore:.*invalid value encountered in.*")
 @pytest.mark.filterwarnings("ignore:.*divide by zero.*")

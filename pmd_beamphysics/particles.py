@@ -266,8 +266,8 @@ class ParticleGroup:
             cov = np.zeros(6)
             cov[0] = cov[2] = 100e-6**2
             cov[1] = cov[3] = 10e3**2
-            cov[5] = 1e-3**2
-            cov[6] = 1e2**2
+            cov[4] = 1e-3**2
+            cov[5] = 1e2**2
         if len(cov.shape) == 1:
             cov = np.diag(cov)
 

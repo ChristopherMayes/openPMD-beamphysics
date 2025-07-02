@@ -121,7 +121,7 @@ def test_from_random_normal(t_or_z):
         ]
     )
 
-    # Test with z coordinates (default)
+    # Test
     np.random.seed(42)
     pg = ParticleGroup.from_random_normal(
         n_particle, mean=mean, cov=cov, species="electron", t_or_z=t_or_z
@@ -162,6 +162,25 @@ def test_from_random_normal(t_or_z):
         rtol=3e-1,
         atol=1e-3,
     )
+
+
+@pytest.mark.parametrize("t_or_z", ["t", "z"])
+def test_from_random_normal_default(t_or_z):
+    """Test ParticleGroup.from_random_normal with default parameters"""
+    n_particle = 500_000
+
+    # Test with z coordinates (default)
+    np.random.seed(42)
+    pg = ParticleGroup.from_random_normal(n_particle, t_or_z=t_or_z)
+
+    # Basic properties
+    assert len(pg) == n_particle
+    assert pg.species == "electron"
+    assert pg.n_particle == n_particle
+
+    # Check that all particles have status = 1 and weight = 1
+    assert np.all(pg.status == 1)
+    assert np.all(pg.weight == 1)
 
 
 @pytest.mark.filterwarnings("ignore:.*invalid value encountered in.*")

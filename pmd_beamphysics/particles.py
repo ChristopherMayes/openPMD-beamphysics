@@ -227,8 +227,8 @@ class ParticleGroup:
     def from_random_normal(
         cls,
         n_particle: int,
-        mean: np.ndarray | None = None,
-        cov: np.ndarray | None = None,
+        mean: Union[np.ndarray, None] = None,
+        cov: Union[np.ndarray, None] = None,
         species: str = "electron",
         t_or_z: Literal["t", "z"] = "z",
     ) -> "ParticleGroup":

@@ -1445,6 +1445,57 @@ class ParticleGroup:
             get_rotation_matrix(x_rot=x_rot, y_rot=y_rot, z_rot=z_rot, order=order)
         )
 
+    def rotate_x(self, theta: float) -> None:
+        """
+        Rotate the object about the x-axis by angle `theta` (radians).
+        Affects y–z coordinates and py–pz momenta.
+        """
+        c = np.cos(theta)
+        s = np.sin(theta)
+
+        y, z = self.y, self.z
+        py, pz = self.py, self.pz
+
+        self.y = c * y - s * z
+        self.z = s * y + c * z
+
+        self.py = c * py - s * pz
+        self.pz = s * py + c * pz
+
+    def rotate_y(self, theta: float) -> None:
+        """
+        Rotate the object about the y-axis by angle `theta` (radians).
+        Affects z–x coordinates and pz–px momenta.
+        """
+        c = np.cos(theta)
+        s = np.sin(theta)
+
+        z, x = self.z, self.x
+        pz, px = self.pz, self.px
+
+        self.z = c * z - s * x
+        self.x = s * z + c * x
+
+        self.pz = c * pz - s * px
+        self.px = s * pz + c * px
+
+    def rotate_z(self, theta: float) -> None:
+        """
+        Rotate the object about the z-axis by angle `theta` (radians).
+        Affects x–y coordinates and px–py momenta.
+        """
+        c = np.cos(theta)
+        s = np.sin(theta)
+
+        x, y = self.x, self.y
+        px, py = self.px, self.py
+
+        self.x = c * x - s * y
+        self.y = s * x + c * y
+
+        self.px = c * px - s * py
+        self.py = s * px + c * py
+
 
 # -----------------------------------------
 # helper functions for ParticleGroup class

@@ -1441,6 +1441,12 @@ class ParticleGroup:
         -----
         This method modifies the object in-place.
         """
+        if (x_rot == 0.0) and (y_rot == 0.0):
+            return self.rotate_z(z_rot)
+        if (x_rot == 0.0) and (z_rot == 0.0):
+            return self.rotate_y(y_rot)
+        if (z_rot == 0.0) and (y_rot == 0.0):
+            return self.rotate_x(x_rot)
         self.linear_point_transform(
             get_rotation_matrix(x_rot=x_rot, y_rot=y_rot, z_rot=z_rot, order=order)
         )

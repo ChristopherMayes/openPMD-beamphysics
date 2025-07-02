@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from unittest.mock import Mock
 
 from pmd_beamphysics import ParticleGroup
 from pmd_beamphysics.utils import get_rotation_matrix
@@ -110,6 +111,61 @@ def test_rotate_z(test_beam, theta=1.2345):
 
     # Check against each other
     assert_pg_close(pg_test, pg_ref)
+
+
+def test_rotate_method_calls_with_mock(test_beam):
+    """Test that the correct single-axis methods are called using vanilla pytest mocks."""
+    # Mock the single-axis rotation methods
+    test_beam.rotate_x = Mock()
+    test_beam.rotate_y = Mock()
+    test_beam.rotate_z = Mock()
+    test_beam.linear_point_transform = Mock()
+
+    # Test z-only rotation
+    test_beam.rotate(x_rot=0.0, y_rot=0.0, z_rot=1.5)
+    test_beam.rotate_z.assert_called_once_with(1.5)
+    test_beam.rotate_x.assert_not_called()
+    test_beam.rotate_y.assert_not_called()
+    test_beam.linear_point_transform.assert_not_called()
+
+    # Reset mocks
+    test_beam.rotate_x.reset_mock()
+    test_beam.rotate_y.reset_mock()
+    test_beam.rotate_z.reset_mock()
+    test_beam.linear_point_transform.reset_mock()
+
+    # Test y-only rotation
+    test_beam.rotate(x_rot=0.0, y_rot=1.5, z_rot=0.0)
+    test_beam.rotate_y.assert_called_once_with(1.5)
+    test_beam.rotate_x.assert_not_called()
+    test_beam.rotate_z.assert_not_called()
+    test_beam.linear_point_transform.assert_not_called()
+
+    # Reset mocks
+    test_beam.rotate_x.reset_mock()
+    test_beam.rotate_y.reset_mock()
+    test_beam.rotate_z.reset_mock()
+    test_beam.linear_point_transform.reset_mock()
+
+    # Test x-only rotation
+    test_beam.rotate(x_rot=1.5, y_rot=0.0, z_rot=0.0)
+    test_beam.rotate_x.assert_called_once_with(1.5)
+    test_beam.rotate_y.assert_not_called()
+    test_beam.rotate_z.assert_not_called()
+    test_beam.linear_point_transform.assert_not_called()
+
+    # Reset mocks
+    test_beam.rotate_x.reset_mock()
+    test_beam.rotate_y.reset_mock()
+    test_beam.rotate_z.reset_mock()
+    test_beam.linear_point_transform.reset_mock()
+
+    # Test general case (should not call single-axis methods)
+    test_beam.rotate(x_rot=1.0, y_rot=1.0, z_rot=1.0)
+    test_beam.rotate_x.assert_not_called()
+    test_beam.rotate_y.assert_not_called()
+    test_beam.rotate_z.assert_not_called()
+    test_beam.linear_point_transform.assert_called_once()
 
 
 @pytest.mark.parametrize(

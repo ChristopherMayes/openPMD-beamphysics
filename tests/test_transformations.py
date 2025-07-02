@@ -73,7 +73,12 @@ def test_point_transform(test_beam, transform_matrix, name):
 
 
 @pytest.mark.parametrize(
-    "fn", ["linear_point_transform_v1", "linear_point_transform_v2"]
+    "fn",
+    [
+        "linear_point_transform_v1",
+        "linear_point_transform_v2",
+        "linear_point_transform_v3",
+    ],
 )
 def test_point_transformation_performance(fn, benchmark):
     pg = ParticleGroup.from_random_normal(100_000)

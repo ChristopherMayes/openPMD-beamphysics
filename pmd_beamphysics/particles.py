@@ -1391,6 +1391,29 @@ class ParticleGroup:
         mom = np.vstack((self.px, self.py, self.pz))
         self.px, self.py, self.pz = np.linalg.inv(mat3.T) @ mom
 
+    def linear_point_transform_v3(
+        self, mat3: Union[np.ndarray, Sequence[Sequence[float]]]
+    ) -> None:
+        mat3 = np.asarray(mat3, dtype=float)
+        if mat3.shape != (3, 3):
+            raise ValueError("mat3 must be a 3x3 matrix.")
+
+        # Grab original coordinates
+        x, y, z = self.x, self.y, self.z
+        px, py, pz = self.px, self.py, self.pz
+
+        # Transform spatial coordinates: [x', y', z'] = mat3 @ [x, y, z]
+        self.x = mat3[0, 0] * x + mat3[0, 1] * y + mat3[0, 2] * z
+        self.y = mat3[1, 0] * x + mat3[1, 1] * y + mat3[1, 2] * z
+        self.z = mat3[2, 0] * x + mat3[2, 1] * y + mat3[2, 2] * z
+
+        # Transform momenta using inverse-transpose: [px', py', pz'] = inv(mat3.T) @ [px, py, pz]
+        # Calculate inverse-transpose matrix elements
+        inv_mat3_T = np.linalg.inv(mat3.T)
+        self.px = inv_mat3_T[0, 0] * px + inv_mat3_T[0, 1] * py + inv_mat3_T[0, 2] * pz
+        self.py = inv_mat3_T[1, 0] * px + inv_mat3_T[1, 1] * py + inv_mat3_T[1, 2] * pz
+        self.pz = inv_mat3_T[2, 0] * px + inv_mat3_T[2, 1] * py + inv_mat3_T[2, 2] * pz
+
     def rotate(
         self,
         *,

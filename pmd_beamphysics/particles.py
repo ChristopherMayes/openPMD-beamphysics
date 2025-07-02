@@ -293,7 +293,7 @@ class ParticleGroup:
             data["z"] = samp[:, 4]
         else:
             raise ValueError(f"t_or_z must be either `t` or `z`. Got: {t_or_z}")
-        return ParticleGroup(data=data)
+        return cls(data=data)
 
     # -------------------------------------------------
     # Access to intrinsic coordinates

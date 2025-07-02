@@ -1,6 +1,9 @@
 import numpy as np
 import pytest
 
+from pmd_beamphysics import ParticleGroup
+
+
 # Load the test fixture
 pytest_plugins = ("pmd_beamphysics.testing",)
 
@@ -67,3 +70,12 @@ def test_point_transform(test_beam, transform_matrix, name):
             atol=1e-9,
             err_msg=f"Coordinate {coord} not recovered after inverse transform ({name})",
         )
+
+
+@pytest.mark.parametrize(
+    "fn", ["linear_point_transform_v1", "linear_point_transform_v2"]
+)
+def test_point_transformation_performance(fn, benchmark):
+    pg = ParticleGroup.from_random_normal(100_000)
+    trn = transform_test_cases[-1][0]
+    benchmark(getattr(pg, fn), trn)

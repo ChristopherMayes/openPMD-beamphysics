@@ -11,6 +11,7 @@ dependencies:
   - python-dateutil
   # Developer
   - pytest
+  - pytest-benchmark
   - pytest-cov
   - jupyterlab>=3
   - pygments

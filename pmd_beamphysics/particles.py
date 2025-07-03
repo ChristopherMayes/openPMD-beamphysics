@@ -2,7 +2,7 @@ import functools
 import os
 import pathlib
 from copy import deepcopy
-from typing import Union
+from typing import Union, Sequence
 
 import numpy as np
 from h5py import File
@@ -37,6 +37,7 @@ from .statistics import (
 )
 from .units import c_light, parse_bunching_str, pg_units
 from .writers import pmd_init, write_pmd_bunch
+from .utils import get_rotation_matrix
 
 # -----------------------------------------
 # Classes
@@ -1255,6 +1256,146 @@ class ParticleGroup:
     def __repr__(self):
         memloc = hex(id(self))
         return f"<ParticleGroup with {self.n_particle} particles at {memloc}>"
+
+    # Transformations
+    # ---------------
+    def linear_point_transform(
+        self, mat3: Union[np.ndarray, Sequence[Sequence[float]]]
+    ) -> None:
+        """
+        Applies a linear transformation to the particle's spatial coordinates and
+        their conjugate momenta.
+
+        The spatial coordinates (x, y, z) are transformed using:
+            [x', y', z'] = mat3 @ [x, y, z]
+
+        The conjugate momenta (px, py, pz) are transformed using:
+            [px', py', pz'] = inv(mat3.T) @ [px, py, pz]
+
+        Parameters
+        ----------
+        mat3 : array-like of shape (3, 3)
+            A 3x3 transformation matrix. Must be convertible to a NumPy array.
+            Coordinates must be ordered as (x, y, z).
+
+        Raises
+        ------
+        ValueError
+            If `mat3` is not a 3x3 matrix.
+        LinAlgError
+            If the transformation matrix is singular (i.e., not invertible).
+
+        Notes
+        -----
+        This method modifies the object in-place.
+        """
+        mat3 = np.asarray(mat3, dtype=float)
+        if mat3.shape != (3, 3):
+            raise ValueError("mat3 must be a 3x3 matrix.")
+
+        # Grab original coordinates
+        x, y, z = self.x, self.y, self.z
+        px, py, pz = self.px, self.py, self.pz
+
+        # Transform spatial coordinates: [x', y', z'] = mat3 @ [x, y, z]
+        self.x = mat3[0, 0] * x + mat3[0, 1] * y + mat3[0, 2] * z
+        self.y = mat3[1, 0] * x + mat3[1, 1] * y + mat3[1, 2] * z
+        self.z = mat3[2, 0] * x + mat3[2, 1] * y + mat3[2, 2] * z
+
+        # Transform momenta using inverse-transpose: [px', py', pz'] = inv(mat3.T) @ [px, py, pz]
+        # Calculate inverse-transpose matrix elements
+        inv_mat3_T = np.linalg.inv(mat3.T)
+        self.px = inv_mat3_T[0, 0] * px + inv_mat3_T[0, 1] * py + inv_mat3_T[0, 2] * pz
+        self.py = inv_mat3_T[1, 0] * px + inv_mat3_T[1, 1] * py + inv_mat3_T[1, 2] * pz
+        self.pz = inv_mat3_T[2, 0] * px + inv_mat3_T[2, 1] * py + inv_mat3_T[2, 2] * pz
+
+    def rotate(
+        self,
+        *,
+        x_rot: float = 0.0,
+        y_rot: float = 0.0,
+        z_rot: float = 0.0,
+        order: str = "zxy",
+    ) -> None:
+        """
+        Rotate the beam by the specified angles first around the z axis, then the x axis, finally around the y axis.
+
+        Parameters
+        ----------
+        x_rot : float, optional
+            Rotation around the x axis, radians
+        y_rot : float, optional
+            Rotation around the y axis, radians
+        z_rot : float, optional
+            Rotation around the z axis, radians
+        order : str
+            A 3-character string specifying the rotation order (e.g., 'zxy', 'zyx').
+            Each character must be one of 'x', 'y', or 'z'.
+
+        Notes
+        -----
+        This method modifies the object in-place.
+        """
+        if (x_rot == 0.0) and (y_rot == 0.0):
+            return self.rotate_z(z_rot)
+        if (x_rot == 0.0) and (z_rot == 0.0):
+            return self.rotate_y(y_rot)
+        if (z_rot == 0.0) and (y_rot == 0.0):
+            return self.rotate_x(x_rot)
+        self.linear_point_transform(
+            get_rotation_matrix(x_rot=x_rot, y_rot=y_rot, z_rot=z_rot, order=order)
+        )
+
+    def rotate_x(self, theta: float) -> None:
+        """
+        Rotate the object about the x-axis by angle `theta` (radians).
+        Affects y–z coordinates and py–pz momenta.
+        """
+        c = np.cos(theta)
+        s = np.sin(theta)
+
+        y, z = self.y, self.z
+        py, pz = self.py, self.pz
+
+        self.y = c * y - s * z
+        self.z = s * y + c * z
+
+        self.py = c * py - s * pz
+        self.pz = s * py + c * pz
+
+    def rotate_y(self, theta: float) -> None:
+        """
+        Rotate the object about the y-axis by angle `theta` (radians).
+        Affects z–x coordinates and pz–px momenta.
+        """
+        c = np.cos(theta)
+        s = np.sin(theta)
+
+        z, x = self.z, self.x
+        pz, px = self.pz, self.px
+
+        self.z = c * z - s * x
+        self.x = s * z + c * x
+
+        self.pz = c * pz - s * px
+        self.px = s * pz + c * px
+
+    def rotate_z(self, theta: float) -> None:
+        """
+        Rotate the object about the z-axis by angle `theta` (radians).
+        Affects x–y coordinates and px–py momenta.
+        """
+        c = np.cos(theta)
+        s = np.sin(theta)
+
+        x, y = self.x, self.y
+        px, py = self.px, self.py
+
+        self.x = c * x - s * y
+        self.y = s * x + c * y
+
+        self.px = c * px - s * py
+        self.py = s * px + c * py
 
 
 # -----------------------------------------

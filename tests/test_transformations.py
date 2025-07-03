@@ -2,9 +2,8 @@ import numpy as np
 import pytest
 from unittest.mock import Mock
 
-from pmd_beamphysics import ParticleGroup
 from pmd_beamphysics.utils import get_rotation_matrix
-from pmd_beamphysics.testing import assert_pg_close
+from pmd_beamphysics.testing import assert_pg_close, pg_from_random_normal
 
 # Load the test fixture
 pytest_plugins = ("pmd_beamphysics.testing",)
@@ -173,6 +172,6 @@ def test_rotate_method_calls_with_mock(test_beam):
     ["linear_point_transform"],
 )
 def test_point_transformation_performance(fn, benchmark):
-    pg = ParticleGroup.from_random_normal(100_000)
+    pg = pg_from_random_normal(100_000)
     trn = transform_test_cases[-1][0]
     benchmark(getattr(pg, fn), trn)

@@ -1380,9 +1380,9 @@ class ParticleGroup:
         theta : float
             Angle of rotation, radians
         center_y : float
-            Center of rotation, x coordinate. Default to zero
+            Center of rotation, y coordinate. Default to zero
         center_z : float
-            Center of rotation, x coordinate. Default to zero
+            Center of rotation, z coordinate. Default to zero
         """
         # Shift beam
         self.y = self.y - center_y
@@ -1421,7 +1421,7 @@ class ParticleGroup:
         center_x : float
             Center of rotation, x coordinate. Default to zero
         center_z : float
-            Center of rotation, x coordinate. Default to zero
+            Center of rotation, z coordinate. Default to zero
         """
         # Shift beam
         self.x = self.x - center_x
@@ -1460,7 +1460,7 @@ class ParticleGroup:
         center_x : float
             Center of rotation, x coordinate. Default to zero
         center_y : float
-            Center of rotation, x coordinate. Default to zero
+            Center of rotation, y coordinate. Default to zero
         """
         # Shift beam
         self.x = self.x - center_x

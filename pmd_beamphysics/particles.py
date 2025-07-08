@@ -1392,6 +1392,12 @@ class ParticleGroup:
         center_z : Union[float, None]
             Center of rotation, x coordinate. Default to beam centroid
         """
+        # Default to beam centroid for rotation axis
+        if center_y is None:
+            center_y = self.avg("y")
+        if center_z is None:
+            center_z = self.avg("z")
+
         # Shift beam
         self.y = self.y - center_y
         self.z = self.z - center_z
@@ -1431,6 +1437,12 @@ class ParticleGroup:
         center_z : Union[float, None]
             Center of rotation, x coordinate. Default to beam centroid
         """
+        # Default to beam centroid for rotation axis
+        if center_x is None:
+            center_x = self.avg("x")
+        if center_z is None:
+            center_z = self.avg("z")
+
         # Shift beam
         self.x = self.x - center_x
         self.z = self.z - center_z
@@ -1470,6 +1482,12 @@ class ParticleGroup:
         center_y : Union[float, None]
             Center of rotation, x coordinate. Default to beam centroid
         """
+        # Default to beam centroid for rotation axis
+        if center_x is None:
+            center_x = self.avg("x")
+        if center_y is None:
+            center_y = self.avg("y")
+
         # Shift beam
         self.x = self.x - center_x
         self.y = self.y - center_y

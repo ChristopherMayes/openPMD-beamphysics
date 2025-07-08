@@ -76,6 +76,9 @@ def test_point_transform(test_beam, transform_matrix, name):
 def test_rotate_x(test_beam, theta=1.2345):
     # Setup beams
     pg_test = test_beam
+    pg_test.x = pg_test.x - pg_test.avg("x")
+    pg_test.y = pg_test.y - pg_test.avg("y")
+    pg_test.z = pg_test.z - pg_test.avg("z")
     pg_ref = pg_test.copy()
 
     # Transform using method under test and reference method (rotation matrices)
@@ -89,6 +92,9 @@ def test_rotate_x(test_beam, theta=1.2345):
 def test_rotate_y(test_beam, theta=1.2345):
     # Setup beams
     pg_test = test_beam
+    pg_test.x = pg_test.x - pg_test.avg("x")
+    pg_test.y = pg_test.y - pg_test.avg("y")
+    pg_test.z = pg_test.z - pg_test.avg("z")
     pg_ref = pg_test.copy()
 
     # Transform using method under test and reference method (rotation matrices)
@@ -102,6 +108,9 @@ def test_rotate_y(test_beam, theta=1.2345):
 def test_rotate_z(test_beam, theta=1.2345):
     # Setup beams
     pg_test = test_beam
+    pg_test.x = pg_test.x - pg_test.avg("x")
+    pg_test.y = pg_test.y - pg_test.avg("y")
+    pg_test.z = pg_test.z - pg_test.avg("z")
     pg_ref = pg_test.copy()
 
     # Transform using method under test and reference method (rotation matrices)
@@ -122,7 +131,9 @@ def test_rotate_method_calls_with_mock(test_beam):
 
     # Test z-only rotation
     test_beam.rotate(x_rot=0.0, y_rot=0.0, z_rot=1.5)
-    test_beam.rotate_z.assert_called_once_with(1.5)
+    test_beam.rotate_z.assert_called_once_with(
+        1.5, center_x=test_beam.avg("x"), center_y=test_beam.avg("y")
+    )
     test_beam.rotate_x.assert_not_called()
     test_beam.rotate_y.assert_not_called()
     test_beam.linear_point_transform.assert_not_called()
@@ -135,7 +146,9 @@ def test_rotate_method_calls_with_mock(test_beam):
 
     # Test y-only rotation
     test_beam.rotate(x_rot=0.0, y_rot=1.5, z_rot=0.0)
-    test_beam.rotate_y.assert_called_once_with(1.5)
+    test_beam.rotate_y.assert_called_once_with(
+        1.5, center_x=test_beam.avg("x"), center_z=test_beam.avg("z")
+    )
     test_beam.rotate_x.assert_not_called()
     test_beam.rotate_z.assert_not_called()
     test_beam.linear_point_transform.assert_not_called()
@@ -148,7 +161,9 @@ def test_rotate_method_calls_with_mock(test_beam):
 
     # Test x-only rotation
     test_beam.rotate(x_rot=1.5, y_rot=0.0, z_rot=0.0)
-    test_beam.rotate_x.assert_called_once_with(1.5)
+    test_beam.rotate_x.assert_called_once_with(
+        1.5, center_z=test_beam.avg("z"), center_y=test_beam.avg("y")
+    )
     test_beam.rotate_y.assert_not_called()
     test_beam.rotate_z.assert_not_called()
     test_beam.linear_point_transform.assert_not_called()
@@ -175,3 +190,67 @@ def test_point_transformation_performance(fn, benchmark):
     pg = pg_from_random_normal(100_000)
     trn = transform_test_cases[-1][0]
     benchmark(getattr(pg, fn), trn)
+
+
+def test_rotate_with_custom_center_single_axis(test_beam):
+    """Test that rotate() properly passes center coordinates to single-axis methods"""
+    # Mock the single-axis rotation methods
+    test_beam.rotate_x = Mock()
+    test_beam.rotate_y = Mock()
+    test_beam.rotate_z = Mock()
+
+    # Test z-only rotation with custom center
+    test_beam.rotate(x_rot=0.0, y_rot=0.0, z_rot=1.5, center_x=2.0, center_y=3.0)
+    test_beam.rotate_z.assert_called_once_with(1.5, center_x=2.0, center_y=3.0)
+
+    # Reset mocks
+    test_beam.rotate_x.reset_mock()
+    test_beam.rotate_y.reset_mock()
+    test_beam.rotate_z.reset_mock()
+
+    # Test y-only rotation with custom center
+    test_beam.rotate(x_rot=0.0, y_rot=1.5, z_rot=0.0, center_x=1.0, center_z=-2.0)
+    test_beam.rotate_y.assert_called_once_with(1.5, center_x=1.0, center_z=-2.0)
+
+    # Reset mocks
+    test_beam.rotate_x.reset_mock()
+    test_beam.rotate_y.reset_mock()
+    test_beam.rotate_z.reset_mock()
+
+    # Test x-only rotation with custom center
+    test_beam.rotate(x_rot=1.5, y_rot=0.0, z_rot=0.0, center_y=-1.0, center_z=4.0)
+    test_beam.rotate_x.assert_called_once_with(1.5, center_y=-1.0, center_z=4.0)
+
+
+def test_rotate_with_custom_center_general_case(test_beam):
+    """Test rotate() with custom center for general 3D rotation"""
+    x_rot, y_rot, z_rot = 0.5, 0.3, 0.8
+    center_x, center_y, center_z = 1.2, -0.8, 2.5
+
+    # Setup beams
+    pg_test = test_beam.copy()
+    pg_ref = test_beam.copy()
+
+    # Apply rotation with custom center
+    pg_test.rotate(
+        x_rot=x_rot,
+        y_rot=y_rot,
+        z_rot=z_rot,
+        center_x=center_x,
+        center_y=center_y,
+        center_z=center_z,
+    )
+
+    # Reference: manually shift, rotate, shift back
+    pg_ref.x = pg_ref.x - center_x
+    pg_ref.y = pg_ref.y - center_y
+    pg_ref.z = pg_ref.z - center_z
+    pg_ref.linear_point_transform(
+        get_rotation_matrix(x_rot=x_rot, y_rot=y_rot, z_rot=z_rot)
+    )
+    pg_ref.x = pg_ref.x + center_x
+    pg_ref.y = pg_ref.y + center_y
+    pg_ref.z = pg_ref.z + center_z
+
+    # Check results match
+    assert_pg_close(pg_test, pg_ref)

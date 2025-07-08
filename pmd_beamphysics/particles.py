@@ -1229,7 +1229,6 @@ class ParticleGroup:
         """
         return join_particle_groups(self, other)
 
-    #
     def __contains__(self, item):
         """Checks internal data"""
         return True if item in self._data else False
@@ -1314,9 +1313,12 @@ class ParticleGroup:
         y_rot: float = 0.0,
         z_rot: float = 0.0,
         order: str = "zxy",
+        center_x: Union[float, None] = None,
+        center_y: Union[float, None] = None,
+        center_z: Union[float, None] = None,
     ) -> None:
         """
-        Rotate the beam by the specified angles first around the z axis, then the x axis, finally around the y axis.
+        Rotate the beam inplace by the specified angles first around the z axis, then the x axis, finally around the y axis.
 
         Parameters
         ----------
@@ -1329,26 +1331,71 @@ class ParticleGroup:
         order : str
             A 3-character string specifying the rotation order (e.g., 'zxy', 'zyx').
             Each character must be one of 'x', 'y', or 'z'.
+        center_x : Union[float, None]
+            Center of rotation, x coordinate. Default to beam centroid
+        center_y : Union[float, None]
+            Center of rotation, x coordinate. Default to beam centroid
+        center_z : Union[float, None]
+            Center of rotation, x coordinate. Default to beam centroid
 
         Notes
         -----
         This method modifies the object in-place.
         """
+        # Default to beam centroid for rotation axis
+        if center_x is None:
+            center_x = self.avg("x")
+        if center_y is None:
+            center_y = self.avg("y")
+        if center_z is None:
+            center_z = self.avg("z")
+
+        # Special case transformations
         if (x_rot == 0.0) and (y_rot == 0.0):
-            return self.rotate_z(z_rot)
+            return self.rotate_z(z_rot, center_x=center_x, center_y=center_y)
         if (x_rot == 0.0) and (z_rot == 0.0):
-            return self.rotate_y(y_rot)
+            return self.rotate_y(y_rot, center_x=center_x, center_z=center_z)
         if (z_rot == 0.0) and (y_rot == 0.0):
-            return self.rotate_x(x_rot)
+            return self.rotate_x(x_rot, center_y=center_y, center_z=center_z)
+
+        # Shift beam
+        self.x = self.x - center_x
+        self.y = self.y - center_y
+        self.z = self.z - center_z
+
+        # Perform rotation
         self.linear_point_transform(
             get_rotation_matrix(x_rot=x_rot, y_rot=y_rot, z_rot=z_rot, order=order)
         )
 
-    def rotate_x(self, theta: float) -> None:
+        # Shift back
+        self.x = self.x + center_x
+        self.y = self.y + center_y
+        self.z = self.z + center_z
+
+    def rotate_x(
+        self,
+        theta: float,
+        center_y: Union[float, None] = None,
+        center_z: Union[float, None] = None,
+    ) -> None:
         """
         Rotate the object about the x-axis by angle `theta` (radians).
         Affects y–z coordinates and py–pz momenta.
+
+        Parameters
+        ----------
+        theta : float
+            Angle of rotation, radians
+        center_y : Union[float, None]
+            Center of rotation, x coordinate. Default to beam centroid
+        center_z : Union[float, None]
+            Center of rotation, x coordinate. Default to beam centroid
         """
+        # Shift beam
+        self.y = self.y - center_y
+        self.z = self.z - center_z
+
         c = np.cos(theta)
         s = np.sin(theta)
 
@@ -1361,11 +1408,33 @@ class ParticleGroup:
         self.py = c * py - s * pz
         self.pz = s * py + c * pz
 
-    def rotate_y(self, theta: float) -> None:
+        # Shift back
+        self.y = self.y + center_y
+        self.z = self.z + center_z
+
+    def rotate_y(
+        self,
+        theta: float,
+        center_x: Union[float, None] = None,
+        center_z: Union[float, None] = None,
+    ) -> None:
         """
         Rotate the object about the y-axis by angle `theta` (radians).
         Affects z–x coordinates and pz–px momenta.
+
+        Parameters
+        ----------
+        theta : float
+            Angle of rotation, radians
+        center_x : Union[float, None]
+            Center of rotation, x coordinate. Default to beam centroid
+        center_z : Union[float, None]
+            Center of rotation, x coordinate. Default to beam centroid
         """
+        # Shift beam
+        self.x = self.x - center_x
+        self.z = self.z - center_z
+
         c = np.cos(theta)
         s = np.sin(theta)
 
@@ -1378,11 +1447,33 @@ class ParticleGroup:
         self.pz = c * pz - s * px
         self.px = s * pz + c * px
 
-    def rotate_z(self, theta: float) -> None:
+        # Shift beam
+        self.x = self.x + center_x
+        self.z = self.z + center_z
+
+    def rotate_z(
+        self,
+        theta: float,
+        center_x: Union[float, None] = None,
+        center_y: Union[float, None] = None,
+    ) -> None:
         """
         Rotate the object about the z-axis by angle `theta` (radians).
         Affects x–y coordinates and px–py momenta.
+
+        Parameters
+        ----------
+        theta : float
+            Angle of rotation, radians
+        center_x : Union[float, None]
+            Center of rotation, x coordinate. Default to beam centroid
+        center_y : Union[float, None]
+            Center of rotation, x coordinate. Default to beam centroid
         """
+        # Shift beam
+        self.x = self.x - center_x
+        self.y = self.y - center_y
+
         c = np.cos(theta)
         s = np.sin(theta)
 
@@ -1394,6 +1485,10 @@ class ParticleGroup:
 
         self.px = c * px - s * py
         self.py = s * px + c * py
+
+        # Shift beam
+        self.x = self.x + center_x
+        self.y = self.y + center_y
 
 
 # -----------------------------------------

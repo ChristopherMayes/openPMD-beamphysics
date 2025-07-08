@@ -1313,9 +1313,9 @@ class ParticleGroup:
         y_rot: float = 0.0,
         z_rot: float = 0.0,
         order: str = "zxy",
-        center_x: Union[float, None] = None,
-        center_y: Union[float, None] = None,
-        center_z: Union[float, None] = None,
+        center_x: float = 0.0,
+        center_y: float = 0.0,
+        center_z: float = 0.0,
     ) -> None:
         """
         Rotate the beam inplace by the specified angles first around the z axis, then the x axis, finally around the y axis.
@@ -1331,25 +1331,17 @@ class ParticleGroup:
         order : str
             A 3-character string specifying the rotation order (e.g., 'zxy', 'zyx').
             Each character must be one of 'x', 'y', or 'z'.
-        center_x : Union[float, None]
-            Center of rotation, x coordinate. Default to beam centroid
-        center_y : Union[float, None]
-            Center of rotation, x coordinate. Default to beam centroid
-        center_z : Union[float, None]
-            Center of rotation, x coordinate. Default to beam centroid
+        center_x : float
+            Center of rotation, x coordinate. Default to zero
+        center_y : float
+            Center of rotation, x coordinate. Default to zero
+        center_z : float
+            Center of rotation, x coordinate. Default to zero
 
         Notes
         -----
         This method modifies the object in-place.
         """
-        # Default to beam centroid for rotation axis
-        if center_x is None:
-            center_x = self.avg("x")
-        if center_y is None:
-            center_y = self.avg("y")
-        if center_z is None:
-            center_z = self.avg("z")
-
         # Special case transformations
         if (x_rot == 0.0) and (y_rot == 0.0):
             return self.rotate_z(z_rot, center_x=center_x, center_y=center_y)
@@ -1376,8 +1368,8 @@ class ParticleGroup:
     def rotate_x(
         self,
         theta: float,
-        center_y: Union[float, None] = None,
-        center_z: Union[float, None] = None,
+        center_y: float = 0.0,
+        center_z: float = 0.0,
     ) -> None:
         """
         Rotate the object about the x-axis by angle `theta` (radians).
@@ -1387,17 +1379,11 @@ class ParticleGroup:
         ----------
         theta : float
             Angle of rotation, radians
-        center_y : Union[float, None]
-            Center of rotation, x coordinate. Default to beam centroid
-        center_z : Union[float, None]
-            Center of rotation, x coordinate. Default to beam centroid
+        center_y : float
+            Center of rotation, x coordinate. Default to zero
+        center_z : float
+            Center of rotation, x coordinate. Default to zero
         """
-        # Default to beam centroid for rotation axis
-        if center_y is None:
-            center_y = self.avg("y")
-        if center_z is None:
-            center_z = self.avg("z")
-
         # Shift beam
         self.y = self.y - center_y
         self.z = self.z - center_z
@@ -1421,8 +1407,8 @@ class ParticleGroup:
     def rotate_y(
         self,
         theta: float,
-        center_x: Union[float, None] = None,
-        center_z: Union[float, None] = None,
+        center_x: float = 0.0,
+        center_z: float = 0.0,
     ) -> None:
         """
         Rotate the object about the y-axis by angle `theta` (radians).
@@ -1432,17 +1418,11 @@ class ParticleGroup:
         ----------
         theta : float
             Angle of rotation, radians
-        center_x : Union[float, None]
-            Center of rotation, x coordinate. Default to beam centroid
-        center_z : Union[float, None]
-            Center of rotation, x coordinate. Default to beam centroid
+        center_x : float
+            Center of rotation, x coordinate. Default to zero
+        center_z : float
+            Center of rotation, x coordinate. Default to zero
         """
-        # Default to beam centroid for rotation axis
-        if center_x is None:
-            center_x = self.avg("x")
-        if center_z is None:
-            center_z = self.avg("z")
-
         # Shift beam
         self.x = self.x - center_x
         self.z = self.z - center_z
@@ -1466,8 +1446,8 @@ class ParticleGroup:
     def rotate_z(
         self,
         theta: float,
-        center_x: Union[float, None] = None,
-        center_y: Union[float, None] = None,
+        center_x: float = 0.0,
+        center_y: float = 0.0,
     ) -> None:
         """
         Rotate the object about the z-axis by angle `theta` (radians).
@@ -1477,17 +1457,11 @@ class ParticleGroup:
         ----------
         theta : float
             Angle of rotation, radians
-        center_x : Union[float, None]
-            Center of rotation, x coordinate. Default to beam centroid
-        center_y : Union[float, None]
-            Center of rotation, x coordinate. Default to beam centroid
+        center_x : float
+            Center of rotation, x coordinate. Default to zero
+        center_y : float
+            Center of rotation, x coordinate. Default to zero
         """
-        # Default to beam centroid for rotation axis
-        if center_x is None:
-            center_x = self.avg("x")
-        if center_y is None:
-            center_y = self.avg("y")
-
         # Shift beam
         self.x = self.x - center_x
         self.y = self.y - center_y

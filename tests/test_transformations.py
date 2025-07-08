@@ -76,9 +76,6 @@ def test_point_transform(test_beam, transform_matrix, name):
 def test_rotate_x(test_beam, theta=1.2345):
     # Setup beams
     pg_test = test_beam
-    pg_test.x = pg_test.x - pg_test.avg("x")
-    pg_test.y = pg_test.y - pg_test.avg("y")
-    pg_test.z = pg_test.z - pg_test.avg("z")
     pg_ref = pg_test.copy()
 
     # Transform using method under test and reference method (rotation matrices)
@@ -92,9 +89,6 @@ def test_rotate_x(test_beam, theta=1.2345):
 def test_rotate_y(test_beam, theta=1.2345):
     # Setup beams
     pg_test = test_beam
-    pg_test.x = pg_test.x - pg_test.avg("x")
-    pg_test.y = pg_test.y - pg_test.avg("y")
-    pg_test.z = pg_test.z - pg_test.avg("z")
     pg_ref = pg_test.copy()
 
     # Transform using method under test and reference method (rotation matrices)
@@ -108,9 +102,6 @@ def test_rotate_y(test_beam, theta=1.2345):
 def test_rotate_z(test_beam, theta=1.2345):
     # Setup beams
     pg_test = test_beam
-    pg_test.x = pg_test.x - pg_test.avg("x")
-    pg_test.y = pg_test.y - pg_test.avg("y")
-    pg_test.z = pg_test.z - pg_test.avg("z")
     pg_ref = pg_test.copy()
 
     # Transform using method under test and reference method (rotation matrices)
@@ -131,9 +122,7 @@ def test_rotate_method_calls_with_mock(test_beam):
 
     # Test z-only rotation
     test_beam.rotate(x_rot=0.0, y_rot=0.0, z_rot=1.5)
-    test_beam.rotate_z.assert_called_once_with(
-        1.5, center_x=test_beam.avg("x"), center_y=test_beam.avg("y")
-    )
+    test_beam.rotate_z.assert_called_once_with(1.5, center_x=0.0, center_y=0.0)
     test_beam.rotate_x.assert_not_called()
     test_beam.rotate_y.assert_not_called()
     test_beam.linear_point_transform.assert_not_called()
@@ -146,9 +135,7 @@ def test_rotate_method_calls_with_mock(test_beam):
 
     # Test y-only rotation
     test_beam.rotate(x_rot=0.0, y_rot=1.5, z_rot=0.0)
-    test_beam.rotate_y.assert_called_once_with(
-        1.5, center_x=test_beam.avg("x"), center_z=test_beam.avg("z")
-    )
+    test_beam.rotate_y.assert_called_once_with(1.5, center_x=0.0, center_z=0.0)
     test_beam.rotate_x.assert_not_called()
     test_beam.rotate_z.assert_not_called()
     test_beam.linear_point_transform.assert_not_called()
@@ -161,9 +148,7 @@ def test_rotate_method_calls_with_mock(test_beam):
 
     # Test x-only rotation
     test_beam.rotate(x_rot=1.5, y_rot=0.0, z_rot=0.0)
-    test_beam.rotate_x.assert_called_once_with(
-        1.5, center_z=test_beam.avg("z"), center_y=test_beam.avg("y")
-    )
+    test_beam.rotate_x.assert_called_once_with(1.5, center_z=0.0, center_y=0.0)
     test_beam.rotate_y.assert_not_called()
     test_beam.rotate_z.assert_not_called()
     test_beam.linear_point_transform.assert_not_called()

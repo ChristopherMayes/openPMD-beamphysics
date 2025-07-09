@@ -122,7 +122,7 @@ def test_rotate_method_calls_with_mock(test_beam):
 
     # Test z-only rotation
     test_beam.rotate(x_rot=0.0, y_rot=0.0, z_rot=1.5)
-    test_beam.rotate_z.assert_called_once_with(1.5, center_x=0.0, center_y=0.0)
+    test_beam.rotate_z.assert_called_once_with(1.5, xc=0.0, yc=0.0)
     test_beam.rotate_x.assert_not_called()
     test_beam.rotate_y.assert_not_called()
     test_beam.linear_point_transform.assert_not_called()
@@ -135,7 +135,7 @@ def test_rotate_method_calls_with_mock(test_beam):
 
     # Test y-only rotation
     test_beam.rotate(x_rot=0.0, y_rot=1.5, z_rot=0.0)
-    test_beam.rotate_y.assert_called_once_with(1.5, center_x=0.0, center_z=0.0)
+    test_beam.rotate_y.assert_called_once_with(1.5, xc=0.0, zc=0.0)
     test_beam.rotate_x.assert_not_called()
     test_beam.rotate_z.assert_not_called()
     test_beam.linear_point_transform.assert_not_called()
@@ -148,7 +148,7 @@ def test_rotate_method_calls_with_mock(test_beam):
 
     # Test x-only rotation
     test_beam.rotate(x_rot=1.5, y_rot=0.0, z_rot=0.0)
-    test_beam.rotate_x.assert_called_once_with(1.5, center_z=0.0, center_y=0.0)
+    test_beam.rotate_x.assert_called_once_with(1.5, zc=0.0, yc=0.0)
     test_beam.rotate_y.assert_not_called()
     test_beam.rotate_z.assert_not_called()
     test_beam.linear_point_transform.assert_not_called()
@@ -185,8 +185,8 @@ def test_rotate_with_custom_center_single_axis(test_beam):
     test_beam.rotate_z = Mock()
 
     # Test z-only rotation with custom center
-    test_beam.rotate(x_rot=0.0, y_rot=0.0, z_rot=1.5, center_x=2.0, center_y=3.0)
-    test_beam.rotate_z.assert_called_once_with(1.5, center_x=2.0, center_y=3.0)
+    test_beam.rotate(x_rot=0.0, y_rot=0.0, z_rot=1.5, xc=2.0, yc=3.0)
+    test_beam.rotate_z.assert_called_once_with(1.5, xc=2.0, yc=3.0)
 
     # Reset mocks
     test_beam.rotate_x.reset_mock()
@@ -194,8 +194,8 @@ def test_rotate_with_custom_center_single_axis(test_beam):
     test_beam.rotate_z.reset_mock()
 
     # Test y-only rotation with custom center
-    test_beam.rotate(x_rot=0.0, y_rot=1.5, z_rot=0.0, center_x=1.0, center_z=-2.0)
-    test_beam.rotate_y.assert_called_once_with(1.5, center_x=1.0, center_z=-2.0)
+    test_beam.rotate(x_rot=0.0, y_rot=1.5, z_rot=0.0, xc=1.0, zc=-2.0)
+    test_beam.rotate_y.assert_called_once_with(1.5, xc=1.0, zc=-2.0)
 
     # Reset mocks
     test_beam.rotate_x.reset_mock()
@@ -203,14 +203,14 @@ def test_rotate_with_custom_center_single_axis(test_beam):
     test_beam.rotate_z.reset_mock()
 
     # Test x-only rotation with custom center
-    test_beam.rotate(x_rot=1.5, y_rot=0.0, z_rot=0.0, center_y=-1.0, center_z=4.0)
-    test_beam.rotate_x.assert_called_once_with(1.5, center_y=-1.0, center_z=4.0)
+    test_beam.rotate(x_rot=1.5, y_rot=0.0, z_rot=0.0, yc=-1.0, zc=4.0)
+    test_beam.rotate_x.assert_called_once_with(1.5, yc=-1.0, zc=4.0)
 
 
 def test_rotate_with_custom_center_general_case(test_beam):
     """Test rotate() with custom center for general 3D rotation"""
     x_rot, y_rot, z_rot = 0.5, 0.3, 0.8
-    center_x, center_y, center_z = 1.2, -0.8, 2.5
+    xc, yc, zc = 1.2, -0.8, 2.5
 
     # Setup beams
     pg_test = test_beam.copy()
@@ -221,21 +221,21 @@ def test_rotate_with_custom_center_general_case(test_beam):
         x_rot=x_rot,
         y_rot=y_rot,
         z_rot=z_rot,
-        center_x=center_x,
-        center_y=center_y,
-        center_z=center_z,
+        xc=xc,
+        yc=yc,
+        zc=zc,
     )
 
     # Reference: manually shift, rotate, shift back
-    pg_ref.x = pg_ref.x - center_x
-    pg_ref.y = pg_ref.y - center_y
-    pg_ref.z = pg_ref.z - center_z
+    pg_ref.x = pg_ref.x - xc
+    pg_ref.y = pg_ref.y - yc
+    pg_ref.z = pg_ref.z - zc
     pg_ref.linear_point_transform(
         get_rotation_matrix(x_rot=x_rot, y_rot=y_rot, z_rot=z_rot)
     )
-    pg_ref.x = pg_ref.x + center_x
-    pg_ref.y = pg_ref.y + center_y
-    pg_ref.z = pg_ref.z + center_z
+    pg_ref.x = pg_ref.x + xc
+    pg_ref.y = pg_ref.y + yc
+    pg_ref.z = pg_ref.z + zc
 
     # Check results match
     assert_pg_close(pg_test, pg_ref)

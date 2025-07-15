@@ -726,7 +726,7 @@ class ParticleGroup:
         dt = np.ptp(self.t)  # ptp 'peak to peak' is max - min
         if dt == 0:
             # must be in t coordinates. Calc with
-            dt = self.z.ptp() / (self.avg("beta_z") * c_light)
+            dt = np.ptp(self.z) / (self.avg("beta_z") * c_light)
         return self.charge / dt
 
     def bunching(self, wavelength):

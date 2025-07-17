@@ -100,6 +100,7 @@ class pseudomode:
     Single Bmad short range wakefield pseudomode parameters
     """
 
+    __slots__ = ("A", "d", "k", "phi")
     A: float
     d: float
     k: float
@@ -121,7 +122,7 @@ class pseudomode:
         fig, ax = plt.subplots()
         ax.plot(zlist * 1e6, Wz * 1e-12)
         ax.set_xlabel(r"$-z$ (µm)")
-        ax.set_ylabel(r"$W_z$ (V/pC)")
+        ax.set_ylabel(r"$W_z$ (V/pC/m)")
 
 
 def apply_sr_wake(
@@ -200,23 +201,37 @@ def apply_sr_wake(
 @dataclass
 class ResistiveWallWakefield:
     """
-    Trailing longitudinal wakefield from a charged particlein a conducting pipe
+    Trailing longitudinal wakefield from a charged particle in a conducting pipe.
 
     Single oscillator fit according to Bane & Stupakov SLAC-PUB-10707 (2004)
+    https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
 
+    Specify physical parameters directly (recommended), or use the `from_material` constructor
+    for convenience presets.
     """
 
     radius: float
-    material: str = "Cu"
+    conductivity: float
+    relaxation_time: float
     geometry: str = "round"
+
+    # Internal material database
+    MATERIALS = {
+        "Cu": {"conductivity": 6.5e7, "relaxation_time": 27e-15},
+        "Al": {"conductivity": 4.2e7, "relaxation_time": 7.5e-15},
+        "SS": {"conductivity": 1.5e6, "relaxation_time": 8e-15},
+    }
 
     def __post_init__(self):
         if not isinstance(self.radius, (int, float)) or self.radius <= 0:
             raise ValueError(f"radius must be a positive number, got {self.radius}")
 
-        if self.material not in CONDUCTIVITY:
+        if self.conductivity <= 0:
+            raise ValueError(f"conductivity must be positive, got {self.conductivity}")
+
+        if self.relaxation_time <= 0:
             raise ValueError(
-                f"Unsupported material: {self.material}. Must be one of: {list(CONDUCTIVITY)}"
+                f"relaxation_time must be positive, got {self.relaxation_time}"
             )
 
         if self.geometry not in ("round", "flat"):
@@ -224,13 +239,57 @@ class ResistiveWallWakefield:
                 f"Unsupported geometry: {self.geometry}. Must be 'round' or 'flat'"
             )
 
-    @property
-    def conductivity(self):
-        return CONDUCTIVITY[self.material]
+    @classmethod
+    def from_material(cls, material: str, radius: float, geometry: str = "round"):
+        """
+        Create a ResistiveWallWakefield from a known material preset.
 
-    @property
-    def relaxation_time(self):
-        return RELAXATION_TIME[self.material]
+        Parameters
+        ----------
+        material : str
+            Material name. Must be one of: Cu, Al, SS
+        radius : float
+            Pipe radius [m]
+        geometry : str
+            Geometry type: 'round' or 'flat'
+        """
+        if material not in cls.MATERIALS:
+            raise ValueError(
+                f"Unknown material {material!r}. Available: {list(cls.MATERIALS)}"
+            )
+
+        props = cls.MATERIALS[material]
+        return cls(
+            radius=radius,
+            conductivity=props["conductivity"],
+            relaxation_time=props["relaxation_time"],
+            geometry=geometry,
+        )
+
+    def material_from_properties(self, tol=0.01):
+        """
+        Attempt to identify the material based on conductivity and relaxation time.
+
+        Parameters
+        ----------
+        tol : float, optional
+            Relative tolerance for matching, default is 1% (0.01)
+
+        Returns
+        -------
+        material : str or None
+            Name of the matched material, or None if no match is found.
+        """
+        from math import isclose
+
+        for name, props in self.MATERIALS.items():
+            cond_match = isclose(self.conductivity, props["conductivity"], rel_tol=tol)
+            tau_match = isclose(
+                self.relaxation_time, props["relaxation_time"], rel_tol=tol
+            )
+            if cond_match and tau_match:
+                return name
+        return None
 
     @property
     def Gamma(self):
@@ -268,7 +327,7 @@ class ResistiveWallWakefield:
         """
         s = f"""! AC Resistive wall wakefield
 ! Adapted from SLAC-PUB-10707
-!    Material        : {self.material}
+!    Material        : {self.material_from_properties()}
 !    Conductivity    : {self.conductivity} Ohm^-1 m^-1
 !    Relaxation time : {self.relaxation_time} s
 !    Geometry        : {self.geometry}
@@ -322,7 +381,7 @@ class ResistiveWallWakefield:
         out[~mask] = self.pseudomode(z[~mask])
         return out
 
-    def convolve(self, density, dz, offset=0):
+    def convolve_density(self, density, dz, offset=0):
         """
 
         Parameters

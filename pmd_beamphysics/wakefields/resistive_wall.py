@@ -17,63 +17,102 @@ RELAXATION_TIME = {"Cu": 27e-15, "Al": 7.5e-15, "SS": 8e-15}
 
 
 # AC wake Fitting Formula Polynomial coefficients
-krs0cRound = (
-    1.81620118662482,
-    0.29540336833708,
-    -1.23728482888772,
-    1.05410903517018,
-    -0.38606826800684,
-    0.05234403145974,
+# found by fitting digitized plots in SLAC-PUB-10707 Fig. 14
+_krs0_round_poly = np.poly1d(
+    [
+        -0.03432181,
+        0.30787769,
+        -1.1017812,
+        1.98421548,
+        -1.79215353,
+        0.42197608,
+        1.81248274,
+    ]
 )
 
-krs0cFlat = (
-    1.29832152141677,
-    0.18173822141741,
-    -0.62770698511448,
-    0.47383850057072,
-    -0.15947258626548,
-    0.02034464240245,
+_krs0_flat_poly = np.poly1d(
+    [
+        -0.00820164,
+        0.08196954,
+        -0.33410072,
+        0.70455758,
+        -0.76928545,
+        0.21623914,
+        1.2976896,
+    ]
 )
 
-QrcRound = (1.09524274851589, 2.40729067134909, 0.06574992723432, -0.04766884506469)
+_Qr_round_poly = np.poly1d(
+    [
+        0.04435072,
+        -0.39683778,
+        1.41363674,
+        -2.52751228,
+        2.19131144,
+        1.64830007,
+        1.14151479,
+    ]
+)
 
-QrcFlat = (1.02903443223445, 1.33341005467949, -0.16585375059715, 0.00075548123372)
-
-
-def poly(data, x):
-    v = 0
-    for i in range(len(data)):
-        v += data[i] * x**i
-    return v
-
-
-def krs0Round(G):
-    return poly(krs0cRound, G)
-
-
-def krs0Flat(G):
-    return poly(krs0cFlat, G)
-
-
-def QrRound(G):
-    return poly(QrcRound, G)
-
-
-def QrFlat(G):
-    return poly(QrcFlat, G)
+_Qr_flat_poly = np.poly1d(
+    [
+        0.02054322,
+        -0.1863843,
+        0.67249006,
+        -1.19170403,
+        0.86545076,
+        0.96306531,
+        1.04673215,
+    ]
+)
 
 
-def z0f(radius, conductivity):
+def krs0_round(G):
+    """
+    k_r*s_0 from SLAC-PUB-10707 Fig. 14 for round geometry
+    This is from a polynomial fit of the digitized data
+    """
+    return _krs0_round_poly(G)
+
+
+def krs0_flat(G):
+    """
+    k_r*s_0 from SLAC-PUB-10707 Fig. 14 for flat geometry
+    This is from a polynomial fit of the digitized data
+    """
+    return _krs0_flat_poly(G)
+
+
+def Qr_round(G):
+    """
+    Qr from SLAC-PUB-10707 Fig. 14 for round geometry
+    This is from a polynomial fit of the digitized data
+    """
+    return _Qr_round_poly(G)
+
+
+def Qr_flat(G):
+    """
+    Qr from SLAC-PUB-10707 Fig. 14 for flat geometry
+    This is from a polynomial fit of the digitized data
+    """
+    return _Qr_flat_poly(G)
+
+
+def s0f(radius, conductivity):
+    """
+    Characteristic distance from SLAC-PUB-10707 Eq. 5
+    """
     val = 2 * radius**2 / (Z0 * conductivity)
     return val ** (1 / 3.0)
 
 
 def Gammaf(relaxation_time, radius, conductivity):
-    return c_light * relaxation_time / z0f(radius, conductivity)
+    """
+    dimensionless relaxation time Γ = cτ/s0
+    """
 
-
-def prefactor(radius):
-    return 1 / (4 * np.pi * epsilon_0) * 4 / radius**2
+    return c_light * relaxation_time / s0f(radius, conductivity)
 
 
 # Bmad strings formatting
@@ -107,10 +146,7 @@ class pseudomode:
     phi: float
 
     def to_bmad(self, type="longitudinal", transverse_dependence="none"):
-        x = type + " = {"
-        x += f"{self.A}, {self.d}, {self.k}, {self.phi/(2*np.pi)}, "
-        x += transverse_dependence
-        return "  " + x + "},\n"
+        return f"{type} = {{{self.A}, {self.d}, {self.k}, {self.phi/(2*np.pi)}, {transverse_dependence}}}"
 
     def __call__(self, z):
         return self.A * np.exp(self.d * z) * np.sin(self.k * z + self.phi)
@@ -298,24 +334,24 @@ class ResistiveWallWakefield:
     @property
     def Qr(self):
         if self.geometry == "round":
-            return QrRound(self.Gamma)
+            return Qr_round(self.Gamma)
         if self.geometry == "flat":
-            return QrFlat(self.Gamma)
+            return Qr_flat(self.Gamma)
         else:
             raise NotImplementedError(f"{self.geometry=}")
 
     @property
     def kr(self):
         if self.geometry == "round":
-            return krs0Round(self.Gamma) / self.z0
+            return krs0_round(self.Gamma) / self.s0
         if self.geometry == "flat":
-            return krs0Flat(self.Gamma) / self.z0
+            return krs0_flat(self.Gamma) / self.s0
         else:
             raise NotImplementedError(f"{self.geometry=}")
 
     @property
-    def z0(self):
-        return z0f(self.radius, self.conductivity)
+    def s0(self):
+        return s0f(self.radius, self.conductivity)
 
     def to_bmad(self, z_max=100):
         """
@@ -338,12 +374,12 @@ class ResistiveWallWakefield:
         elif self.geometry == "flat":
             s += f"!    full gap        : {2*self.radius} m\n"
 
-        s += f"! characteristic z0  : {self.z0}  m\n"
+        s += f"! characteristic s0  : {self.s0}  m\n"
         s += f"!    Gamma           : {self.Gamma} \n"
         s += "! sr_wake =  \n"
 
         s += bmad_sr_wake_header()
-        s += self.pseudomode.to_bmad()
+        s += self.pseudomode.to_bmad() + ","
         s += bmad_sr_wake_footer(z_max=z_max)
 
         return s
@@ -353,13 +389,14 @@ class ResistiveWallWakefield:
         """
         Single pseudomode representing this wakefield
         """
-        if self.geometry == "round":
-            factor = 1
-        elif self.geometry == "flat":
-            factor = np.pi**2 / 16
+
+        A = 1 / (4 * np.pi * epsilon_0) * 4 / self.radius**2
+        if self.geometry == "flat":
+            A *= np.pi**2 / 16
+
         d = self.kr / (2 * self.Qr)
 
-        return pseudomode(factor * prefactor(self.radius), d, self.kr, np.pi / 2)
+        return pseudomode(A, d, self.kr, np.pi / 2)
 
     def plot(self, zmax=None):
         if zmax is None:

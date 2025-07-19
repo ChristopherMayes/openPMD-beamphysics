@@ -123,7 +123,7 @@ def str_bool(x):
         return "F"
 
 
-def bmad_sr_wake_header(z_scale=1.0, amp_scale=1.0, scale_with_length=False):
+def bmad_sr_wake_header(z_scale=1.0, amp_scale=1.0, scale_with_length=True):
     x = "{"
     x += f"z_scale = {z_scale}, amp_scale = {amp_scale}, scale_with_length = {str_bool(scale_with_length)},\n"
     return x

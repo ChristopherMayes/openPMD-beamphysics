@@ -63,9 +63,15 @@ def get_vec(x):
     sx = set(x)
     nx = len(sx)
     xlist = np.array(sorted(list(sx)))
-    dx = np.diff(xlist)
-    assert np.allclose(dx, dx[0])
-    dx = dx[0]
+    if nx == 1:
+        dx = 0
+    elif nx > 1:
+        dx = np.diff(xlist)
+        assert np.allclose(dx, dx[0])
+        dx = dx[0]
+    else:
+        raise ValueError("Length of x vector was < 1!")
+
     return min(x), max(x), dx, nx
 
 

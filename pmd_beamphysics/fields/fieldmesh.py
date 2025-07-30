@@ -472,13 +472,76 @@ class FieldMesh:
     def plot(
         self,
         component=None,
-        time=None,
-        axes=None,
+        *,
+        # time=None,
         cmap=None,
-        return_figure=False,
         nice=True,
+        stream=False,
+        mirror=None,
+        density=2,
+        linewidth=1,
+        arrowsize=1,
+        axes=None,
+        return_figure=False,
         **kwargs,
     ):
+        """
+        Plots the specified component of the data, with various customization options for appearance and behavior.
+
+        Parameters
+        ----------
+        component : str, optional
+            The component of the data to be plotted (e.g., 'Ex', 'B'). If None, defaults to
+            'B' for pure magetic fields, otherwise 'E'
+        cmap : str or matplotlib.colors.Colormap, optional
+            The colormap to use for the plot. Defaults to a default colormap if not provided.
+        stream : bool, optional
+            If True, adds streamlines to the plot (useful for vector field visualization). Defaults to False.
+        mirror : str, optional
+            'r' symmetrizes the data in the r plane.
+            Only for cylindrical plots with r = 0 on the edge of the data
+            Defaults to None.
+        density : float, optional
+            The density of streamlines when `stream=True`. Higher values result in more streamlines. Defaults to 1.
+        linewidth : float, optional
+            The line width for streamlines. Defaults to 1.
+        arrowsize : float, optional
+            The size of arrows for streamlines when `stream=True`. Defaults to 1.
+        axes : matplotlib.axes.Axes, optional
+            A matplotlib Axes object on which to draw the plot. If None, a new figure and axes will be created.
+        return_figure : bool, optional
+            If True, returns the matplotlib Figure object. Defaults to False.
+        **kwargs : dict
+            Additional keyword arguments passed to the underlying plotting functions.
+
+        Returns
+        -------
+        matplotlib.figure.Figure or None
+            Returns the matplotlib Figure object if `return_figure=True`. Otherwise, the function does not return a value.
+
+        Notes
+        -----
+        - If `axes` is provided, the plot will be drawn on the given axes.
+        - Symmetrizing the data is useful for visualizing symmetric datasets, but it modifies the data displayed.
+        - The `stream` parameter is intended for vector field visualization and works best with continuous data.
+
+        Examples
+        --------
+        Plot a single component with a specific colormap:
+        >>> obj.plot(component='x', cmap='viridis')
+
+        Plot with streamlines and return the figure:
+        >>> fig = obj.plot(stream=True, return_figure=True)
+
+        Symmetrize the data before plotting:
+        >>> obj.plot(symmetrize=True)
+
+        Customize the appearance of streamlines:
+        >>> obj.plot(stream=True, density=2, linewidth=0.5, arrowsize=2)
+        """
+
+        time = None  # not yet implemented
+
         if self.geometry == "cylindrical":
             return plot_fieldmesh_cylindrical_2d(
                 self,
@@ -487,6 +550,11 @@ class FieldMesh:
                 axes=axes,
                 return_figure=return_figure,
                 cmap=cmap,
+                stream=stream,
+                mirror=mirror,
+                density=density,
+                linewidth=linewidth,
+                arrowsize=arrowsize,
                 **kwargs,
             )
         elif self.geometry == "rectangular":

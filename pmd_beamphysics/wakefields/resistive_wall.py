@@ -9,13 +9,6 @@ from scipy.signal import fftconvolve
 epsilon_0 = 1 / (mu_0 * c_light**2)
 Z0 = mu_0 * c_light  # Ohm
 
-
-# Conductivities (1/Ohm*1/meter)
-CONDUCTIVITY = {"Cu": 6.5e7, "Al": 4.2e7, "SS": 1.5e6}
-# Relaxation times (s)
-RELAXATION_TIME = {"Cu": 27e-15, "Al": 7.5e-15, "SS": 8e-15}
-
-
 # AC wake Fitting Formula Polynomial coefficients
 # found by fitting digitized plots in SLAC-PUB-10707 Fig. 14
 _krs0_round_poly = np.poly1d(
@@ -137,6 +130,9 @@ def bmad_sr_wake_footer(z_max=1.0):
 class pseudomode:
     """
     Single Bmad short range wakefield pseudomode parameters
+
+    W(z) = A * exp(d * z) * sin(k * z + phi)
+
     """
 
     __slots__ = ("A", "d", "k", "phi")
@@ -160,78 +156,73 @@ class pseudomode:
         ax.set_xlabel(r"$-z$ (µm)")
         ax.set_ylabel(r"$W_z$ (V/pC/m)")
 
+    def particle_kicks(
+        self,
+        z: np.ndarray,
+        weight: np.ndarray,
+        include_self_kick: bool = True,
+    ) -> np.ndarray:
+        """
+        Compute short-range wakefield energy kicks per unit length
 
-def apply_sr_wake(
-    z: np.ndarray,
-    weight: np.ndarray,
-    mode,
-    include_self_kick: bool = True,
-) -> np.ndarray:
-    """
-    Compute short-range wakefield energy kicks using a single pseudomode.
+        Internally the particles will be sorted.
+        This should take negligible time compared with the algorithm.
 
-    Wakefield is defined as:
-        W(z) = A * exp(d * z) * sin(k * z + phi)
+        Parameters
+        ----------
+        z : ndarray of shape (N,)
+            Particle positions [m], sorted from tail to head (increasing).
+        weight : ndarray of shape (N,)
+            Particle charges [C].
+        include_self_kick : bool, optional
+            If True, applies the ½ A q sin(φ) self-kick. Default is True.
 
-    Parameters
-    ----------
-    z : ndarray of shape (N,)
-        Particle positions [m], sorted from tail to head (increasing).
-    weight : ndarray of shape (N,)
-        Particle charges [C].
-    mode : pseudomode
-        Object with attributes:
-            A   : float, amplitude [V/C/m]
-            d   : float, damping coefficient [1/m]
-            k   : float, wave number [1/m]
-            phi : float, phase offset [rad]
-    include_self_kick : bool, optional
-        If True, applies the ½ A q sin(φ) self-kick. Default is True.
+        Returns
+        -------
+        delta_E : ndarray of shape (N,)
+            Wake-induced energy kick per unit length at each particle [eV/m].
+        """
 
-    Returns
-    -------
-    delta_E : ndarray of shape (N,)
-        Wake-induced energy change per particle [eV/m].
-    """
-    z = np.asarray(z)
-    weight = np.asarray(weight)
+        z = np.asarray(z)
+        weight = np.asarray(weight)
 
-    if z.shape != weight.shape:
-        raise ValueError(
-            f"Mismatched shapes: z.shape={z.shape}, weight.shape={weight.shape}"
-        )
-    if z.ndim != 1:
-        raise ValueError("z and weight must be 1D arrays")
-    if not np.all(np.diff(z) > 0):
-        raise ValueError("z must be sorted from tail to head (increasing)")
+        if z.shape != weight.shape:
+            raise ValueError(
+                f"Mismatched shapes: z.shape={z.shape}, weight.shape={weight.shape}"
+            )
+        if z.ndim != 1:
+            raise ValueError("z and weight must be 1D arrays")
 
-    N = len(z)
-    delta_E = np.zeros(N)
+        # Sort
+        ix = z.argsort()
+        z = z[ix]
+        weight = weight[ix]
 
-    A = mode.A
-    d = mode.d
-    k = mode.k
-    phi = mode.phi
+        N = len(z)
+        delta_E = np.zeros(N)
 
-    s = d + 1j * k
-    c = A * np.exp(1j * phi)
+        s = self.d + 1j * self.k
+        c = self.A * np.exp(1j * self.phi)
 
-    b = 0.0 + 0.0j  # complex accumulator
+        b = 0.0 + 0.0j  # complex accumulator
 
-    for i in range(N - 1, -1, -1):
-        zi = z[i]
-        qi = abs(weight[i])
+        for i in range(N - 1, -1, -1):
+            zi = z[i]
+            qi = abs(weight[i])
 
-        # Wake from trailing particles
-        delta_E[i] -= np.imag(c * np.exp(s * zi) * b)
+            # Wake from trailing particles
+            delta_E[i] -= np.imag(c * np.exp(s * zi) * b)
 
-        # Accumulate this particle's contribution
-        b += qi * np.exp(-s * zi)
+            # Accumulate this particle's contribution
+            b += qi * np.exp(-s * zi)
 
-    if include_self_kick:
-        delta_E -= 0.5 * A * weight * np.sin(phi)
+        if include_self_kick:
+            delta_E -= 0.5 * self.A * weight * np.sin(self.phi)
 
-    return delta_E
+        # Return kicks in the original particle order
+        kicks = np.empty_like(delta_E)
+        kicks[ix] = delta_E
+        return kicks
 
 
 @dataclass
@@ -243,7 +234,9 @@ class ResistiveWallWakefield:
     https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
 
     Specify physical parameters directly (recommended), or use the `from_material` constructor
-    for convenience presets.
+    for convenience presets. Note that conductivities vary with temperature,
+    and that relaxation times are not well-known.
+
     """
 
     radius: float
@@ -251,11 +244,15 @@ class ResistiveWallWakefield:
     relaxation_time: float
     geometry: str = "round"
 
-    # Internal material database
+    # Internal material database (SI units)
+    # Note conductivtity_SI = conductivtity_CGS / ( Z0 *c / (4*pi))
     MATERIALS = {
-        "Cu": {"conductivity": 6.5e7, "relaxation_time": 27e-15},
-        "Al": {"conductivity": 4.2e7, "relaxation_time": 7.5e-15},
-        "SS": {"conductivity": 1.5e6, "relaxation_time": 8e-15},
+        "copper-slac-pub-10707": {"conductivity": 6.5e7, "relaxation_time": 27e-15},
+        "copper-genesis4": {"conductivity": 5.813e7, "relaxation_time": 27e-15},
+        "aluminum-genesis4": {"conductivity": 3.571e7, "relaxation_time": 8e-15},
+        "aluminum-slac-pub-10707": {"conductivity": 4.2e7, "relaxation_time": 8e-15},
+        "aluminum-alloy-6061-t6-20C": {"conductivity": 2.5e7, "relaxation_time": 8e-15},
+        "aluminum-alloy-6063-t6-20C": {"conductivity": 3.0e7, "relaxation_time": 8e-15},
     }
 
     def __post_init__(self):
@@ -283,7 +280,7 @@ class ResistiveWallWakefield:
         Parameters
         ----------
         material : str
-            Material name. Must be one of: Cu, Al, SS
+            Material name. Must be in list(ResistiveWallWakefield.MATERIALS)
         radius : float
             Pipe radius [m]
         geometry : str
@@ -353,7 +350,7 @@ class ResistiveWallWakefield:
     def s0(self):
         return s0f(self.radius, self.conductivity)
 
-    def to_bmad(self, z_max=100):
+    def to_bmad(self, file=None, z_max=100):
         """
 
         Parameters
@@ -374,13 +371,17 @@ class ResistiveWallWakefield:
         elif self.geometry == "flat":
             s += f"!    full gap        : {2*self.radius} m\n"
 
-        s += f"! characteristic s0  : {self.s0}  m\n"
-        s += f"!    Gamma           : {self.Gamma} \n"
+        s += f"!    s₀              : {self.s0}  m\n"
+        s += f"!    Γ               : {self.Gamma} \n"
         s += "! sr_wake =  \n"
 
         s += bmad_sr_wake_header()
         s += self.pseudomode.to_bmad() + ","
         s += bmad_sr_wake_footer(z_max=z_max)
+
+        if file is not None:
+            with open(file, "w") as f:
+                f.write(s)
 
         return s
 

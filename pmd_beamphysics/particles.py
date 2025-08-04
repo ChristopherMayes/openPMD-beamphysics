@@ -23,7 +23,7 @@ from .interfaces.litrack import write_litrack
 from .interfaces.lucretia import write_lucretia
 from .interfaces.opal import write_opal
 from .interfaces.simion import write_simion
-from .plot import density_plot, marginal_plot, slice_plot
+from .plot import density_plot, marginal_plot, slice_plot, wakefield_plot
 from .readers import particle_array, particle_paths
 from .species import charge_of, mass_of
 from .statistics import (
@@ -36,6 +36,7 @@ from .statistics import (
     slice_statistics,
 )
 from .units import c_light, parse_bunching_str, pg_units
+from .wakefields import ResistiveWallWakefield
 from .writers import pmd_init, write_pmd_bunch
 from .utils import get_rotation_matrix
 
@@ -1142,6 +1143,76 @@ class ParticleGroup:
 
         if return_figure:
             return fig
+
+    def wakefield_plot(
+        self,
+        wake: ResistiveWallWakefield,
+        key=None,
+        nice=True,
+        ax=None,
+        xlim=None,
+        ylim=None,
+        tex=True,
+        bins=None,
+        **kwargs,
+    ):
+        """
+        Plot the longitudinal wakefield kick along with its density.
+
+        This function overlays the computed wakefield kicks (in eV/m) as a scatter plot on
+        the primary y-axis, and the corresponding particle density as a histogram on a
+        secondary y-axis. The independent variable is chosen automatically based on the
+        coordinate system or specified explicitly with `xkey`.
+
+        Parameters
+        ----------
+        wake : ResistiveWallWakefield
+            An object that provides the method `wake.particle_kicks(particle_group)` returning
+            longitudinal wakefield kicks in eV/m.
+
+        key : str, optional
+            Key to use as the independent variable. If None, defaults to 'delta_z/c' or 'delta_t'
+            depending on `particle_group.in_t_coordinates`.
+
+        nice : bool, default=True
+            If True, applies unit-aware scaling using SI prefixes (e.g., mm, ns).
+
+        ax : matplotlib.axes.Axes, optional
+            An existing Axes to plot into. If None, a new figure and axes are created.
+
+        xlim : tuple of float, optional
+            Limits to apply to the x-axis, in native units.
+
+        ylim : tuple of float, optional
+            Limits to apply to the y-axis (wakefield kick), in native units.
+
+        tex : bool, default=True
+            Whether to use TeX-style math formatting for labels.
+
+        bins : int or str, optional
+            Number of bins to use for the density histogram.
+
+        kwargs : dict
+            Additional keyword arguments passed to `plt.subplots()` if a new axis is created.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The matplotlib figure containing the plot.
+        """
+
+        wakefield_plot(
+            self,
+            wake,
+            key=key,
+            nice=nice,
+            ax=ax,
+            xlim=xlim,
+            ylim=ylim,
+            tex=tex,
+            bins=bins,
+            **kwargs,
+        )
 
     # New constructors
     def split(self, n_chunks=100, key="z"):

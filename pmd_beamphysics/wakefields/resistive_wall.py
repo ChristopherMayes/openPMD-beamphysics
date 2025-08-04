@@ -116,26 +116,45 @@ def str_bool(x):
         return "F"
 
 
-def bmad_sr_wake_header(z_scale=1.0, amp_scale=1.0, scale_with_length=True):
-    x = "{"
-    x += f"z_scale = {z_scale}, amp_scale = {amp_scale}, scale_with_length = {str_bool(scale_with_length)},\n"
-    return x
-
-
-def bmad_sr_wake_footer(z_max=1.0):
-    return "  z_max = " + str(z_max) + "}\n"
-
-
-@dataclass
+@dataclass(slots=True)
 class pseudomode:
     """
-    Single Bmad short range wakefield pseudomode parameters
+    Single-mode analytic representation of a short-range wakefield.
 
-    W(z) = A * exp(d * z) * sin(k * z + phi)
+    Models the longitudinal wakefield as a damped sinusoid:
+        W(z) = A * exp(d * z) * sin(k * z + φ)
 
+    This form is used to approximate short-range wakefields such as the resistive wall wake,
+    and can be evaluated directly, plotted, or exported in Bmad format.
+
+    Parameters
+    ----------
+    A : float
+        Amplitude coefficient [V/C/m].
+    d : float
+        Exponential decay rate [1/m]. Typically negative.
+    k : float
+        Oscillation wavenumber [1/m].
+    phi : float
+        Phase offset [rad].
+
+    Methods
+    -------
+    __call__(z)
+        Evaluate W(z) for an array of z values.
+    plot(zmax=..., zmin=..., n=...)
+        Plot the pseudomode over a range of z values.
+    to_bmad(type="longitudinal", transverse_dependence="none")
+        Format pseudomode parameters as a Bmad-compatible string.
+    particle_kicks(z, weight, include_self_kick=True)
+        Compute energy kicks per unit length on a particle distribution.
+
+    Notes
+    -----
+    - Wakefields are defined for z ≤ 0 (i.e., trailing the source particle).
+    - This is a mathematical abstraction used to model physical wakefields.
     """
 
-    __slots__ = ("A", "d", "k", "phi")
     A: float
     d: float
     k: float
@@ -196,6 +215,7 @@ class pseudomode:
         # Sort
         ix = z.argsort()
         z = z[ix]
+        z -= z.max()  # Offset to avoid numerical problems
         weight = weight[ix]
 
         N = len(z)
@@ -228,15 +248,33 @@ class pseudomode:
 @dataclass
 class ResistiveWallWakefield:
     """
-    Trailing longitudinal wakefield from a charged particle in a conducting pipe.
+    Analytic short-range resistive wall wakefield model based on SLAC-PUB-10707 (Bane & Stupakov, 2004).
 
-    Single oscillator fit according to Bane & Stupakov SLAC-PUB-10707 (2004)
+    Models the longitudinal wakefield trailing a charged particle moving through a
+    conducting pipe, using a single damped sinusoidal pseudomode fit.
+
+    Parameters
+    ----------
+    radius : float
+        Radius of the beam pipe [m]. For flat geometry, this is half the gap.
+    conductivity : float
+        Electrical conductivity of the wall material [S/m].
+    relaxation_time : float
+        Drude-model relaxation time of the conductor [s].
+    geometry : str, optional
+        Geometry of the beam pipe: either 'round' or 'flat'. Default is 'round'.
+
+    Notes
+    -----
+    - The model uses polynomial fits for k_r * s₀ and Q_r as functions of Γ = c * τ / s₀,
+      based on digitized data from SLAC-PUB-10707 Fig. 14.
+    - Wakefield output supports evaluation, convolution, and export in Bmad format.
+    - Materials with known conductivity and τ values are available via `from_material()`.
+
+    References
+    ----------
+    Bane & Stupakov, SLAC-PUB-10707 (2004)
     https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
-
-    Specify physical parameters directly (recommended), or use the `from_material` constructor
-    for convenience presets. Note that conductivities vary with temperature,
-    and that relaxation times are not well-known.
-
     """
 
     radius: float
@@ -326,10 +364,31 @@ class ResistiveWallWakefield:
 
     @property
     def Gamma(self):
+        """
+        Dimensionless relaxation time Γ = c * τ / s₀.
+
+        Describes the relative importance of material dispersion in the resistive wall model,
+        where:
+            τ   = relaxation time [s],
+            c   = speed of light [m/s],
+            s₀  = characteristic length scale [m].
+
+        Used as the input variable for polynomial fits to Q_r and k_r * s₀ from SLAC-PUB-10707.
+        """
         return Gammaf(self.relaxation_time, self.radius, self.conductivity)
 
     @property
     def Qr(self):
+        """
+        Dimensionless quality factor Q_r of the wakefield pseudomode.
+
+        Obtained from a polynomial fit to SLAC-PUB-10707 Fig. 14 (bottom left) as a function of Γ.
+
+        Depends on geometry:
+            - 'round' or 'flat'
+
+        Q_r characterizes the damping rate of the oscillatory pseudomode.
+        """
         if self.geometry == "round":
             return Qr_round(self.Gamma)
         if self.geometry == "flat":
@@ -339,6 +398,20 @@ class ResistiveWallWakefield:
 
     @property
     def kr(self):
+        """
+        Real-valued wave number k_r of the wakefield pseudomode [1/m].
+
+        Computed from:
+            k_r = (k_r * s₀) / s₀
+
+        where (k_r * s₀) is a dimensionless polynomial fit from SLAC-PUB-10707 Fig. 14 (top left).
+
+        Depends on geometry:
+            - 'round' or 'flat'
+
+        k_r sets the frequency of oscillation of the short-range wakefield.
+        """
+
         if self.geometry == "round":
             return krs0_round(self.Gamma) / self.s0
         if self.geometry == "flat":
@@ -348,9 +421,24 @@ class ResistiveWallWakefield:
 
     @property
     def s0(self):
+        """
+        Characteristic length scale s₀ of the resistive wall wakefield [m].
+
+        Defined by SLAC-PUB-10707 Eq. (5) as:
+            s₀ = (2 * a² / (Z₀ * σ))^(1/3)
+
+        where:
+            a   = pipe radius [m],
+            σ   = conductivity [S/m],
+            Z₀  = vacuum impedance [Ω].
+
+        s₀ sets the scale of the wakefield decay length and frequency.
+        """
         return s0f(self.radius, self.conductivity)
 
-    def to_bmad(self, file=None, z_max=100):
+    def to_bmad(
+        self, file=None, z_max=100, amp_scale=1, scale_with_length=True, z_scale=1
+    ):
         """
 
         Parameters
@@ -361,7 +449,7 @@ class ResistiveWallWakefield:
         s = f"""! AC Resistive wall wakefield
 ! Adapted from SLAC-PUB-10707
 !    Material        : {self.material_from_properties()}
-!    Conductivity    : {self.conductivity} Ohm^-1 m^-1
+!    Conductivity    : {self.conductivity} (Ωm)⁻¹
 !    Relaxation time : {self.relaxation_time} s
 !    Geometry        : {self.geometry}
 """
@@ -375,9 +463,8 @@ class ResistiveWallWakefield:
         s += f"!    Γ               : {self.Gamma} \n"
         s += "! sr_wake =  \n"
 
-        s += bmad_sr_wake_header()
-        s += self.pseudomode.to_bmad() + ","
-        s += bmad_sr_wake_footer(z_max=z_max)
+        s += f"{{{z_scale=}, {amp_scale=}, {scale_with_length=}, {z_max=},\n"
+        s += self.pseudomode.to_bmad() + "}\n"
 
         if file is not None:
             with open(file, "w") as f:
@@ -400,6 +487,23 @@ class ResistiveWallWakefield:
         return pseudomode(A, d, self.kr, np.pi / 2)
 
     def plot(self, zmax=None):
+        """
+        Plot the resistive wall wakefield pseudomode W(z).
+
+        The wake is plotted from z = 0 (source particle) to a specified negative trailing distance.
+
+        Parameters
+        ----------
+        zmax : float, optional
+            Maximum trailing distance [m] to plot.
+            If not provided, defaults to 10 decay lengths:  zmax = 10 * (2 * Q_r / k_r)
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated matplotlib figure.
+        """
+
         if zmax is None:
             zmax = 1 / (self.kr / (2 * self.Qr)) * 10
 
@@ -418,6 +522,73 @@ class ResistiveWallWakefield:
         out[mask] = 0
         out[~mask] = self.pseudomode(z[~mask])
         return out
+
+    def particle_kicks(
+        self,
+        particle_group,
+        include_self_kick: bool = True,
+    ) -> np.ndarray:
+        """
+        Compute wakefield-induced longitudinal momentum kicks for a ParticleGroup.
+
+        Parameters
+        ----------
+        particle_group : ParticleGroup
+            The particle group to evaluate kicks for.
+        include_self_kick : bool, optional
+            Whether to include the ½ A q sin(φ) self-kick term. Default is True.
+
+        Returns
+        -------
+        np.ndarray
+            Array of longitudinal momentum kicks per unit length [eV/m], shape (N,).
+        """
+        if particle_group.in_t_coordinates:
+            z = np.asarray(particle_group.z)
+        else:
+            z = -c_light * np.asarray(particle_group.t)
+
+        weight = np.asarray(particle_group.weight)
+        return self.pseudomode.particle_kicks(
+            z, weight, include_self_kick=include_self_kick
+        )
+
+    def apply_to_particles(
+        self,
+        particle_group,
+        length: float,
+        inplace: bool = False,
+        include_self_kick: bool = True,
+    ):
+        """
+        Apply the wakefield momentum kicks to a ParticleGroup.
+
+        This modifies the pz component based on computed kicks and the specified length.
+
+        Parameters
+        ----------
+        particle_group : ParticleGroup
+            The particle group to apply the wakefield to.
+        length : float
+            Length over which the wakefield acts [m].
+        inplace : bool, optional
+            If True, modifies the ParticleGroup in place. If False, returns a modified copy. Default is False.
+        include_self_kick : bool, optional
+            Whether to include the ½ A q sin(φ) self-kick term. Default is True.
+
+        Returns
+        -------
+        ParticleGroup or None
+            The modified ParticleGroup if `inplace=False`, otherwise None.
+        """
+        if not inplace:
+            particle_group = particle_group.copy()
+
+        kicks = self.particle_kicks(particle_group, include_self_kick=include_self_kick)
+        particle_group.pz += kicks * length
+
+        if not inplace:
+            return particle_group
 
     def convolve_density(self, density, dz, offset=0):
         """

@@ -1,10 +1,14 @@
 """ """
 
 from copy import copy
+from typing import Optional, Tuple, Union
 
+import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
-import numpy as np
+
+from matplotlib.figure import Figure
+from matplotlib.axes import Axes
 from matplotlib.gridspec import GridSpec
 
 # For field legends
@@ -171,47 +175,93 @@ def slice_plot(
 
 
 def density_plot(
-    particle_group, key="x", bins=None, *, xlim=None, tex=True, nice=True, **kwargs
-):
+    particle_group,
+    key: str = "x",
+    bins: Optional[Union[int, str]] = None,
+    *,
+    xlim: Optional[Tuple[float, float]] = None,
+    tex: bool = True,
+    nice: bool = True,
+    ax: Optional[Axes] = None,
+    color="grey",
+    alpha=1,
+    **kwargs,
+) -> Figure:
     """
     1D density plot. Also see: marginal_plot
 
     Example:
-
         density_plot(P, 'x', bins=100)
 
-    """
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+        The object to plot.
 
-    if not bins:
+    key : str, default = 'x'
+        Which quantity to plot.
+
+    bins : int or str, optional
+        Number of bins or binning strategy for histogram.
+
+    xlim : tuple of float, optional
+        Manual x-axis limits.
+
+    tex : bool, default = True
+        Use LaTeX for labels.
+
+    nice : bool, default = True
+        Use nice unit scaling.
+
+    ax : matplotlib.axes.Axes, optional
+        Axis to plot into. If None, creates a new figure.
+
+    kwargs : dict
+        Additional arguments passed to `plt.subplots()` if creating new axis.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The created or parent figure.
+    """
+    if bins is None:
         n = len(particle_group)
         bins = int(n / 100)
 
-    # Scale to nice units and get the factor, unit prefix
     x, f1, p1, xmin, xmax = plottable_array(particle_group[key], nice=nice, lim=xlim)
     w = particle_group["weight"]
     u1 = particle_group.units(key).unitSymbol
     ux = p1 + u1
 
-    # mathtext label
     labelx = mathlabel(key, units=ux, tex=tex)
 
-    fig, ax = plt.subplots(**kwargs)
+    if ax is None:
+        fig, ax = plt.subplots(**kwargs)
+    else:
+        fig = ax.get_figure()
 
     hist, bin_edges = np.histogram(x, bins=bins, weights=w)
     hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
     hist_width = np.diff(bin_edges)
-    hist_y, hist_f, hist_prefix = nice_array(hist / hist_width)
-    ax.bar(hist_x, hist_y, hist_width, color="grey")
-    # Special label for C/s = A
+    hist_y, hist_f, hist_prefix, _, _ = plottable_array(hist / hist_width, nice=nice)
+
+    ax.bar(hist_x, hist_y, hist_width, color=color, alpha=alpha)
+
     if u1 == "s":
         _, hist_prefix = nice_scale_prefix(hist_f / f1)
-        ax.set_ylabel(f"{hist_prefix}A")
+        ax.set_ylabel(f" density ({hist_prefix}A)")
     else:
         ax.set_ylabel(f"{hist_prefix}C/{ux}")
 
-    ax.set_xlabel(labelx)
+    if hasattr(ax, "get_shared_x_axes") and ax.get_shared_x_axes().joined(
+        ax, ax.figure.axes[0]
+    ):
+        ax.figure.axes[0].set_xlabel(labelx)
+    else:
+        ax.set_xlabel(labelx)
 
-    # Limits
+    # ax.set_xlabel(labelx)
+
     if xlim:
         ax.set_xlim(xmin / f1, xmax / f1)
 
@@ -940,3 +990,106 @@ def plot_fieldmesh_rectangular_2d(
         orientation="vertical",
         label=llabel,
     )
+
+
+def wakefield_plot(
+    particle_group,
+    wake,
+    key: Optional[str] = None,
+    nice: bool = True,
+    ax: Optional[Axes] = None,
+    xlim: Optional[Tuple[float, float]] = None,
+    ylim: Optional[Tuple[float, float]] = None,
+    tex: bool = True,
+    bins: Optional[Union[int, str]] = None,
+    **kwargs,
+) -> Figure:
+    """
+    Plot the longitudinal wakefield kick over a particle bunch, along with its density.
+
+    This function overlays the computed wakefield kicks (in eV/m) as a scatter plot on
+    the primary y-axis, and the corresponding particle density as a histogram on a
+    secondary y-axis. The independent variable is chosen automatically based on the
+    coordinate system or specified explicitly with `key`.
+
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+        The particle distribution to which the wakefield is applied. Must support
+        weighted access and slicing over a coordinate key (e.g., 'delta_t', 'delta_z/c').
+
+    wake :
+        An object that provides the method `wake.particle_kicks(particle_group)` returning
+        longitudinal wakefield kicks in eV/m.
+
+    key : str, optional
+        Key to use as the independent variable. If None, defaults to 'delta_z/c' or 'delta_t'
+        depending on `particle_group.in_t_coordinates`.
+
+    nice : bool, default=True
+        If True, applies unit-aware scaling using SI prefixes (e.g., mm, ns).
+
+    ax : matplotlib.axes.Axes, optional
+        An existing Axes to plot into. If None, a new figure and axes are created.
+
+    xlim : tuple of float, optional
+        Limits to apply to the x-axis, in native units.
+
+    ylim : tuple of float, optional
+        Limits to apply to the y-axis (wakefield kick), in native units.
+
+    tex : bool, default=True
+        Whether to use TeX-style math formatting for labels.
+
+    bins : int or str, optional
+        Number of bins to use for the density histogram.
+
+    kwargs : dict
+        Additional keyword arguments passed to `plt.subplots()` if a new axis is created.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The matplotlib figure containing the plot.
+    """
+    if key is not None:
+        key = key
+    elif particle_group.in_t_coordinates:
+        key = "delta_z/c"
+    else:
+        key = "delta_t"
+
+    if ax is None:
+        fig, ax = plt.subplots(**kwargs)
+    else:
+        fig = ax.get_figure()
+
+    # Plot density on twin axis
+    ax2 = ax.twinx()
+    density_plot(particle_group, key=key, ax=ax2, nice=nice, alpha=0.5, bins=bins)
+
+    # Wake kicks
+    x_raw = particle_group[key]
+    kicks = wake.particle_kicks(particle_group)
+
+    x, f1, p1, xmin, xmax = plottable_array(x_raw, nice=nice, lim=xlim)
+    y, f2, p2, ymin, ymax = plottable_array(kicks, nice=nice, lim=ylim)
+
+    ax.scatter(x, y, marker=".", color="black", s=0.5)
+
+    # Labels
+    ux = p1 + particle_group.units(key).unitSymbol
+    labelx = mathlabel(key, units=ux, tex=tex)
+    ax.set_xlabel(labelx)
+
+    uy = p2 + "eV/m"
+    labely = mathlabel("W_z", units=uy, tex=tex)
+    ax.set_ylabel(labely)
+
+    # Limits
+    if xlim:
+        ax.set_xlim(xmin / f1, xmax / f1)
+    if ylim:
+        ax.set_ylim(ymin / f2, ymax / f2)
+
+    return fig

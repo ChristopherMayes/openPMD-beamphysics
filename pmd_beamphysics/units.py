@@ -18,7 +18,9 @@ mpc2 = scipy.constants.value("proton mass energy equivalent in MeV") * 1e6
 c_light = scipy.constants.c
 e_charge = scipy.constants.e
 mu_0 = scipy.constants.mu_0  # Note that this is no longer 4pi*10^-7 !
-
+# Calculate these here for consistency. Note that they are not consisten from scipy.constants.
+epsilon_0 = 1 / (mu_0 * c_light**2)
+Z0 = mu_0 * c_light  # Ohm
 
 Limit = tuple[Optional[float], Optional[float]]
 Dimension = tuple[int, int, int, int, int, int, int]

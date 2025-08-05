@@ -20,6 +20,8 @@ nav:
           - examples/fields/field_conversion.ipynb
           - examples/fields/corrector_modeling.ipynb
           - examples/fields/solenoid_modeling.ipynb
+      - Wakefields:
+          - examples/wakefields/resistive_wall_wakefield.ipynb
       - Utilities:
           - examples/units.ipynb
           - examples/labels.ipynb

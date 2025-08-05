@@ -2,12 +2,8 @@ from dataclasses import dataclass
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ..units import mu_0, c_light
+from ..units import c_light, epsilon_0, Z0
 from scipy.signal import fftconvolve
-
-# Calculate these here for consistency
-epsilon_0 = 1 / (mu_0 * c_light**2)
-Z0 = mu_0 * c_light  # Ohm
 
 # AC wake Fitting Formula Polynomial coefficients
 # found by fitting digitized plots in SLAC-PUB-10707 Fig. 14
@@ -106,14 +102,6 @@ def Gammaf(relaxation_time, radius, conductivity):
     """
 
     return c_light * relaxation_time / s0f(radius, conductivity)
-
-
-# Bmad strings formatting
-def str_bool(x):
-    if x:
-        return "T"
-    else:
-        return "F"
 
 
 @dataclass(slots=True)
@@ -270,11 +258,15 @@ class ResistiveWallWakefield:
       based on digitized data from SLAC-PUB-10707 Fig. 14.
     - Wakefield output supports evaluation, convolution, and export in Bmad format.
     - Materials with known conductivity and τ values are available via `from_material()`.
+    - Relaxation times for materials have a large uncertainty in this model. See Bane, Stupakov, Tu (2006).
 
     References
     ----------
     Bane & Stupakov, SLAC-PUB-10707 (2004)
     https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
+
+    Bane, Stupakov, Tu, Proceedings of EPAC 2006, Edinburgh, Scotland THPCH073 (2006)
+    https://accelconf.web.cern.ch/e06/PAPERS/THPCH073.PDF
     """
 
     radius: float
@@ -478,6 +470,7 @@ class ResistiveWallWakefield:
         Single pseudomode representing this wakefield
         """
 
+        # Conversion from cgs units
         A = 1 / (4 * np.pi * epsilon_0) * 4 / self.radius**2
         if self.geometry == "flat":
             A *= np.pi**2 / 16

@@ -22,7 +22,6 @@ https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
 from dataclasses import dataclass
 import numpy as np
 import matplotlib.pyplot as plt
-import functools
 
 from ..units import c_light, epsilon_0, Z0
 from scipy.signal import fftconvolve
@@ -497,7 +496,6 @@ class ResistiveWallWakefield:
         return s
 
     @property
-    @functools.lru_cache
     def pseudomode(self):
         """
         Single pseudomode representing this wakefield (cached)

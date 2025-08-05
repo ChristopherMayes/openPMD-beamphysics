@@ -1,6 +1,28 @@
+"""
+Resistive wall wakefield implementation.
+
+This module provides an analytical model for short-range resistive wall wakefields
+in accelerator beam pipes, based on the approach described in SLAC-PUB-10707.
+It supports both round and flat geometries and includes effects of AC conductivity
+through material relaxation times.
+
+Classes
+-------
+pseudomode
+    Single-mode analytic representation of a short-range wakefield
+ResistiveWallWakefield
+    Complete wakefield model with geometry and material properties
+
+References
+----------
+Bane & Stupakov, SLAC-PUB-10707 (2004)
+https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
+"""
+
 from dataclasses import dataclass
 import numpy as np
 import matplotlib.pyplot as plt
+import functools
 
 from ..units import c_light, epsilon_0, Z0
 from scipy.signal import fftconvolve
@@ -56,10 +78,20 @@ _Qr_flat_poly = np.poly1d(
 )
 
 
-def krs0_round(G):
+def krs0_round(G: float) -> float:
     """
     k_r*s_0 from SLAC-PUB-10707 Fig. 14 for round geometry
     This is from a polynomial fit of the digitized data
+
+    Parameters
+    ----------
+    G : float
+        Dimensionless relaxation time Γ
+
+    Returns
+    -------
+    float
+        Dimensionless product k_r*s_0
     """
     return _krs0_round_poly(G)
 
@@ -216,7 +248,7 @@ class pseudomode:
 
         for i in range(N - 1, -1, -1):
             zi = z[i]
-            qi = abs(weight[i])
+            qi = weight[i]
 
             # Wake from trailing particles
             delta_E[i] -= np.imag(c * np.exp(s * zi) * b)
@@ -465,9 +497,10 @@ class ResistiveWallWakefield:
         return s
 
     @property
+    @functools.lru_cache
     def pseudomode(self):
         """
-        Single pseudomode representing this wakefield
+        Single pseudomode representing this wakefield (cached)
         """
 
         # Conversion from cgs units

@@ -443,6 +443,55 @@ PARFILE_SLICE_FIELDS = ("x", "px", "y", "py", "gamma", "theta", "current")
 ParfileSliceData = namedtuple("RawSliceData", PARFILE_SLICE_FIELDS)
 
 
+# Known scalars
+_parfile_scalar_datasets = [
+    "beamletsize",
+    "one4one",
+    "refposition",
+    "slicecount",
+    "slicelength",
+    "slicespacing",
+]
+
+_parfile_skip_groups = [
+    "Meta",
+]
+
+
+def genesis4_parfile_scalars(h5):
+    """
+    Extract useful scalars and slice names from a Genesis4 .par file
+    """
+    # Allow for opening a file
+    if isinstance(h5, (str, Path)):
+        assert os.path.exists(h5), f"File does not exist: {h5}"
+        h5 = File(h5, "r")
+
+    params = {}
+    for k in _parfile_scalar_datasets:
+        if k not in h5 or h5[k].shape != (1,):
+            raise ValueError(
+                f"Expected scalar dataset '{k}' with shape (1,), got shape {h5[k].shape}"
+            )
+        params[k] = h5[k][0]
+
+    return params
+
+
+def genesis4_parfile_slice_groups(h5):
+    """
+    Extract useful scalars and slice names from a Genesis4 .par file
+    """
+    # Allow for opening a file
+    if isinstance(h5, (str, Path)):
+        assert os.path.exists(h5), f"File does not exist: {h5}"
+        h5 = File(h5, "r")
+
+    return sorted(
+        g for g in h5 if g not in _parfile_scalar_datasets + _parfile_skip_groups
+    )
+
+
 def load_parfile_slice_data(group):
     """
     Returns ParfileSliceData with Genesis4's named fields in a slice group.
@@ -542,7 +591,6 @@ def genesis4_par_to_data(
     - Transverse momenta px and py are scaled by mec² to convert to eV/c.
 
     """
-
     # Allow for opening a file
     if isinstance(h5, (str, Path)):
         assert os.path.exists(h5), f"File does not exist: {h5}"
@@ -551,30 +599,8 @@ def genesis4_par_to_data(
     if species != "electron":
         raise ValueError("Only electrons supported for Genesis4")
 
-    # Scalar arrays.
-    # TODO: use refposition?
-    scalars = [
-        "beamletsize",
-        "one4one",
-        "refposition",
-        "slicecount",
-        "slicelength",
-        "slicespacing",
-    ]
-    skip = [
-        "Meta",
-    ]
-
-    params = {}
-    # units = {}
-    for k in scalars:
-        if k not in h5 or h5[k].shape != (1,):
-            raise ValueError(
-                f"Expected scalar dataset '{k}' with shape (1,), got shape {h5[k].shape}"
-            )
-        params[k] = h5[k][0]
-        # if "unit" in h5[k].attrs:
-        #    units[k] = h5[k].attrs["unit"].decode("utf-8")
+    # Extract scalar parameters
+    params = genesis4_parfile_scalars(h5)
 
     # Useful local variables
     ds_slice = params["slicelength"]  # single slice length
@@ -591,7 +617,7 @@ def genesis4_par_to_data(
     weights = []
 
     if slices is None:
-        snames = sorted(g for g in h5 if g not in scalars + skip)
+        snames = genesis4_parfile_slice_groups(h5)
 
     else:
         snames = [f"slice{ix:06}" for ix in slices]

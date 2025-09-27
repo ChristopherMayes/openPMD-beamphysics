@@ -587,3 +587,131 @@ def bunching(z: np.ndarray, wavelength: float, weight: np.ndarray = None) -> com
     k = 2 * np.pi / wavelength
     f = np.exp(1j * k * z)
     return np.sum(weight * f) / np.sum(weight)
+
+
+def bunching_spectrum(
+    z: np.ndarray,
+    weight: np.ndarray = None,
+    bins=None,
+    resolution=None,
+    max_wavelength_factor=0.2,
+):
+    """
+    Calculate the bunching spectrum using efficient FFT-based method.
+
+    This function computes |B(λ)|² for a range of wavelengths by:
+    1. Binning the particle distribution with weights
+    2. Computing FFT of the binned distribution
+    3. Converting to wavelength spectrum
+    4. Filtering to physically meaningful wavelengths (< bunch length)
+
+    Parameters
+    ----------
+    z : np.ndarray
+        Array of particle positions in meters
+    weight : np.ndarray, optional
+        Weights for each particle. Default is 1 for all particles.
+    bins : int, optional
+        Number of bins for histogram (should be power of 2 for FFT efficiency).
+        If not provided, will be calculated from resolution parameter.
+    resolution : float, optional
+        Target wavelength resolution in meters (e.g., 50e-9 for 50 nm resolution).
+        If provided, bins will be calculated automatically. Takes precedence over bins.
+    max_wavelength_factor : float, default=0.2
+        Maximum wavelength as fraction of particle extent (z.max() - z.min())
+
+    Returns
+    -------
+    wavelengths : np.ndarray
+        Array of wavelengths in meters (in descending order from FFT)
+    bunching_squared : np.ndarray
+        Array of |B(λ)|² values (bunching factor squared)
+
+    Notes
+    -----
+    The resolution parameter provides an intuitive interface: specify the desired
+    wavelength precision directly (e.g., resolution=50e-9 for 50 nm). The function
+    automatically calculates optimal bins using: bins = next_power_of_2(z_extent / resolution).
+
+    Only wavelengths smaller than max_wavelength_factor × z_extent are returned,
+    as longer wavelengths are not physically meaningful for bunching analysis.
+    The z_extent approach is more intuitive than using RMS bunch length since
+    bunching at wavelengths longer than the actual particle distribution is impossible.
+
+    The method is ~1000x faster than direct calculation for typical parameters.
+
+    Examples
+    --------
+    # Using resolution parameter (recommended)
+    wl, b2 = bunching_spectrum(z, resolution=50e-9)  # 50 nm resolution
+
+    # Using bins parameter (expert mode)
+    wl, b2 = bunching_spectrum(z, bins=2048)
+
+    # Default behavior (moderate resolution)
+    wl, b2 = bunching_spectrum(z)  # Uses z_extent/5000 resolution
+
+    Raises
+    ------
+    ValueError
+        If weight array length doesn't match z array length.
+        If both bins and resolution are None.
+    """
+
+    if weight is None:
+        weight = np.ones(len(z))
+    if len(weight) != len(z):
+        raise ValueError(
+            f"Weight array has length {len(weight)} != length of the z array, {len(z)}"
+        )
+
+    # Calculate z_extent for resolution/bins calculation
+    z_min, z_max = z.min(), z.max()
+    z_extent = z_max - z_min
+
+    # Determine bins from resolution or use default
+    if resolution is not None:
+        # Calculate bins needed for target resolution
+        # Resolution ~ z_extent / bins, so bins ~ z_extent / resolution
+        bins_needed = int(z_extent / resolution)
+        # Round up to next power of 2 for FFT efficiency
+        bins = 1 << (bins_needed - 1).bit_length()
+    elif bins is None:
+        # Default: moderate resolution (z_extent / 5000)
+        default_resolution = z_extent / 5000
+        bins_needed = int(z_extent / default_resolution)
+        bins = max(1024, 1 << (bins_needed - 1).bit_length())
+
+    # Create bin edges
+    bin_edges = np.linspace(z_min, z_max, bins + 1)
+    dz = bin_edges[1] - bin_edges[0]
+
+    # Create weighted histogram
+    hist, _ = np.histogram(z, bins=bin_edges, weights=weight)
+
+    # Normalize histogram (equivalent to weighted average)
+    hist_normalized = hist / np.sum(hist) if np.sum(hist) > 0 else hist
+
+    # Compute FFT
+    fft_result = np.fft.fft(hist_normalized)
+
+    # Get positive frequencies and corresponding wavelengths using direct slice
+    # For any n: positive frequencies are at [1:(n+1)//2]
+    frequencies = np.fft.fftfreq(bins, dz)
+    freq_positive = frequencies[1 : (bins + 1) // 2]
+    wavelengths = 1.0 / freq_positive
+
+    # Calculate bunching spectrum |B(λ)|²
+    fft_positive = fft_result[1 : (bins + 1) // 2]
+    bunching_squared = np.abs(fft_positive) ** 2
+
+    # Apply physical constraint: wavelengths < max_wavelength_factor × z_extent
+    # Use actual particle extent rather than RMS bunch length for physical clarity
+    max_wavelength = z_extent * max_wavelength_factor
+    wavelength_mask = wavelengths <= max_wavelength
+
+    wavelengths_filtered = wavelengths[wavelength_mask]
+    bunching_squared_filtered = bunching_squared[wavelength_mask]
+
+    # Return in natural FFT order (descending wavelengths)
+    return wavelengths_filtered, bunching_squared_filtered

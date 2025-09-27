@@ -593,17 +593,18 @@ def bunching_spectrum(
     z: np.ndarray,
     weight: np.ndarray = None,
     bins=None,
-    resolution=None,
-    max_wavelength_factor=0.2,
+    max_wavenumber=None,
+    max_bins=8192,
+    zero_pad_factor=1,
 ):
     """
     Calculate the bunching spectrum using efficient FFT-based method.
 
-    This function computes |B(λ)|² for a range of wavelengths by:
+    This function computes |B(k)|² for a range of wavenumbers by:
     1. Binning the particle distribution with weights
     2. Computing FFT of the binned distribution
-    3. Converting to wavelength spectrum
-    4. Filtering to physically meaningful wavelengths (< bunch length)
+    3. Converting frequencies to wavenumbers k = 2πf
+    4. Filtering to physically meaningful wavenumbers
 
     Parameters
     ----------
@@ -613,49 +614,65 @@ def bunching_spectrum(
         Weights for each particle. Default is 1 for all particles.
     bins : int, optional
         Number of bins for histogram (should be power of 2 for FFT efficiency).
-        If not provided, will be calculated from resolution parameter.
-    resolution : float, optional
-        Target wavelength resolution in meters (e.g., 50e-9 for 50 nm resolution).
-        If provided, bins will be calculated automatically. Takes precedence over bins.
-    max_wavelength_factor : float, default=0.2
-        Maximum wavelength as fraction of particle extent (z.max() - z.min())
+        If not provided, will be calculated from max_wavenumber parameter.
+    max_wavenumber : float, optional
+        Maximum wavenumber of interest in rad/m (e.g., 2π/50e-9 for 50 nm wavelength).
+        This determines the number of bins needed: bins ≈ max_wavenumber × z_extent / π.
+        More physically meaningful than wavelength-based parameters since FFT
+        produces linearly-spaced wavenumbers.
+    max_bins : int, default=8192
+        Maximum number of bins to use (limits computation time and memory).
+        Actual bins may be less if max_wavenumber doesn't require this many.
+    zero_pad_factor : int, default=1
+        Zero-padding factor to increase frequency resolution. The histogram will be
+        zero-padded to zero_pad_factor × bins length before FFT. This interpolates
+        between frequency bins, providing finer wavenumber resolution without changing
+        the fundamental frequency spacing. Values > 1 give smoother spectra.
 
     Returns
     -------
-    wavelengths : np.ndarray
-        Array of wavelengths in meters (in descending order from FFT)
+    wavenumbers : np.ndarray
+        Array of wavenumbers in rad/m (in ascending order, natural FFT order)
     bunching_squared : np.ndarray
-        Array of |B(λ)|² values (bunching factor squared)
+        Array of |B(k)|² values (bunching factor squared)
 
     Notes
     -----
-    The resolution parameter provides an intuitive interface: specify the desired
-    wavelength precision directly (e.g., resolution=50e-9 for 50 nm). The function
-    automatically calculates optimal bins using: bins = next_power_of_2(z_extent / resolution).
+    FFT-based bunching spectrum analysis works naturally in wavenumber space:
 
-    Only wavelengths smaller than max_wavelength_factor × z_extent are returned,
-    as longer wavelengths are not physically meaningful for bunching analysis.
-    The z_extent approach is more intuitive than using RMS bunch length since
-    bunching at wavelengths longer than the actual particle distribution is impossible.
+    1. **Linear wavenumber spacing**: FFT produces linearly-spaced wavenumbers,
+       making the output more natural than wavelength conversion.
 
-    The method is ~1000x faster than direct calculation for typical parameters.
+    2. **Wavenumber resolution**: Constant Δk = 2π/z_extent across all k.
+
+    3. **Physical range**: All positive wavenumbers from the FFT are returned,
+       giving the complete spectrum from k_min = 2π/z_extent to k_max ≈ π/dz.
+
+    The max_wavenumber parameter sets the required bin count via:
+    bins = next_power_of_2(max_wavenumber × z_extent / π), capped at max_bins.
 
     Examples
     --------
-    # Using resolution parameter (recommended)
-    wl, b2 = bunching_spectrum(z, resolution=50e-9)  # 50 nm resolution
+    # Specify maximum wavenumber of interest (recommended)
+    k, b2 = bunching_spectrum(z, max_wavenumber=2π/50e-9)  # Up to 50 nm wavelength
 
-    # Using bins parameter (expert mode)
-    wl, b2 = bunching_spectrum(z, bins=2048)
+    # Control computational cost
+    k, b2 = bunching_spectrum(z, max_wavenumber=2π/20e-9, max_bins=4096)
+
+    # Use zero-padding for smoother spectra (4x interpolation)
+    k, b2 = bunching_spectrum(z, zero_pad_factor=4)
+
+    # Expert mode: specify bins directly with zero-padding
+    k, b2 = bunching_spectrum(z, bins=2048, zero_pad_factor=2)
 
     # Default behavior (moderate resolution)
-    wl, b2 = bunching_spectrum(z)  # Uses z_extent/5000 resolution
+    k, b2 = bunching_spectrum(z)  # max_wavenumber ≈ 2π × 5000 / z_extent
 
     Raises
     ------
     ValueError
         If weight array length doesn't match z array length.
-        If both bins and resolution are None.
+        If zero_pad_factor is not an integer >= 1.
     """
 
     if weight is None:
@@ -664,23 +681,32 @@ def bunching_spectrum(
         raise ValueError(
             f"Weight array has length {len(weight)} != length of the z array, {len(z)}"
         )
+    if zero_pad_factor < 1 or not isinstance(zero_pad_factor, int):
+        raise ValueError("zero_pad_factor must be an integer >= 1")
 
-    # Calculate z_extent for resolution/bins calculation
+    # Calculate z_extent for bins calculation
     z_min, z_max = z.min(), z.max()
     z_extent = z_max - z_min
 
-    # Determine bins from resolution or use default
-    if resolution is not None:
-        # Calculate bins needed for target resolution
-        # Resolution ~ z_extent / bins, so bins ~ z_extent / resolution
-        bins_needed = int(z_extent / resolution)
+    # Determine bins from max_wavenumber or use default
+    if bins is not None:
+        # User specified bins directly - use as is
+        pass
+    elif max_wavenumber is not None:
+        # Calculate bins needed to resolve max_wavenumber
+        # Maximum resolvable k ≈ π / dz = π × bins / z_extent
+        # So: bins ≈ max_wavenumber × z_extent / π
+        bins_needed = int(max_wavenumber * z_extent / np.pi)
         # Round up to next power of 2 for FFT efficiency
         bins = 1 << (bins_needed - 1).bit_length()
-    elif bins is None:
-        # Default: moderate resolution (z_extent / 5000)
-        default_resolution = z_extent / 5000
-        bins_needed = int(z_extent / default_resolution)
-        bins = max(1024, 1 << (bins_needed - 1).bit_length())
+        # Cap at max_bins
+        bins = min(bins, max_bins)
+    else:
+        # Default: moderate resolution (max_k corresponding to z_extent/5000 wavelength)
+        default_min_wavelength = z_extent / 5000
+        default_max_k = 2 * np.pi / default_min_wavelength
+        bins_needed = int(default_max_k * z_extent / np.pi)
+        bins = min(max(1024, 1 << (bins_needed - 1).bit_length()), max_bins)
 
     # Create bin edges
     bin_edges = np.linspace(z_min, z_max, bins + 1)
@@ -692,26 +718,28 @@ def bunching_spectrum(
     # Normalize histogram (equivalent to weighted average)
     hist_normalized = hist / np.sum(hist) if np.sum(hist) > 0 else hist
 
-    # Compute FFT
-    fft_result = np.fft.fft(hist_normalized)
+    # Apply zero-padding for finer frequency resolution
+    if zero_pad_factor > 1:
+        # Pad with zeros to zero_pad_factor * bins length
+        padded_length = zero_pad_factor * bins
+        hist_padded = np.zeros(padded_length)
+        hist_padded[:bins] = hist_normalized
+    else:
+        hist_padded = hist_normalized
+        padded_length = bins
 
-    # Get positive frequencies and corresponding wavelengths using direct slice
+    # Compute FFT (on potentially zero-padded array)
+    fft_result = np.fft.fft(hist_padded)
+
+    # Get positive frequencies and convert to wavenumbers
     # For any n: positive frequencies are at [1:(n+1)//2]
-    frequencies = np.fft.fftfreq(bins, dz)
-    freq_positive = frequencies[1 : (bins + 1) // 2]
-    wavelengths = 1.0 / freq_positive
+    frequencies = np.fft.fftfreq(padded_length, dz)
+    freq_positive = frequencies[1 : (padded_length + 1) // 2]
+    wavenumbers = 2 * np.pi * freq_positive  # k = 2πf
 
-    # Calculate bunching spectrum |B(λ)|²
-    fft_positive = fft_result[1 : (bins + 1) // 2]
+    # Calculate bunching spectrum |B(k)|²
+    fft_positive = fft_result[1 : (padded_length + 1) // 2]
     bunching_squared = np.abs(fft_positive) ** 2
 
-    # Apply physical constraint: wavelengths < max_wavelength_factor × z_extent
-    # Use actual particle extent rather than RMS bunch length for physical clarity
-    max_wavelength = z_extent * max_wavelength_factor
-    wavelength_mask = wavelengths <= max_wavelength
-
-    wavelengths_filtered = wavelengths[wavelength_mask]
-    bunching_squared_filtered = bunching_squared[wavelength_mask]
-
-    # Return in natural FFT order (descending wavelengths)
-    return wavelengths_filtered, bunching_squared_filtered
+    # Return all wavenumbers in natural FFT order (ascending wavenumbers)
+    return wavenumbers, bunching_squared

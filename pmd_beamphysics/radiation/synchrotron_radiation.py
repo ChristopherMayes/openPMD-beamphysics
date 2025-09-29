@@ -9,7 +9,6 @@ Functions:
 - S_fast: High-performance optimized version
 - S_benchmarking: Performance comparison
 
-Author: Developed through optimization analysis
 """
 
 import numpy as np
@@ -17,10 +16,28 @@ from scipy import integrate, special
 from scipy.special import gamma
 import time
 
+# Pre-computed coefficients for small-ξ expansion
+# Computed once at module import for optimal performance
+# From Mathematica: Series[S[ξ], {ξ, 0, 10}] where S[ξ] = (9√3/8π) × ξ × ∫_{ξ}^{∞} K_{5/3}(t) dt
+_GAMMA_2_3 = gamma(2 / 3)
+_GAMMA_NEG1_3 = gamma(-1 / 3)
+
+# Pre-computed exact coefficients from Mathematica expansion
+_C1_3 = (9 * np.sqrt(3) * _GAMMA_2_3) / (4 * 2 ** (1 / 3) * np.pi)
+_C1 = -9 / 8
+_C7_3 = (27 * np.sqrt(3) * _GAMMA_2_3) / (64 * 2 ** (1 / 3) * np.pi)
+_C11_3 = 729 / (1280 * 2 ** (2 / 3) * _GAMMA_NEG1_3)
+_C13_3 = (81 * np.sqrt(3) * _GAMMA_2_3) / (1280 * 2 ** (1 / 3) * np.pi)
+_C17_3 = 2187 / (71680 * 2 ** (2 / 3) * _GAMMA_NEG1_3)
+_C19_3 = (81 * np.sqrt(3) * _GAMMA_2_3) / (32768 * 2 ** (1 / 3) * np.pi)
+_C23_3 = 6561 / (9011200 * 2 ** (2 / 3) * _GAMMA_NEG1_3)
+_C25_3 = (243 * np.sqrt(3) * _GAMMA_2_3) / (5046272 * 2 ** (1 / 3) * np.pi)
+_C29_3 = 6561 / (656015360 * 2 ** (2 / 3) * _GAMMA_NEG1_3)
+
 
 def S_exact(xi):
     """
-    Reference synchrotron S function using scipy integration.
+    Reference synchrotron radiation spectrum S function using scipy integration.
 
     S(ξ) = (9√3/8π) × ξ × ∫_{ξ}^{∞} K_{5/3}(t) dt
 
@@ -135,30 +152,19 @@ def S_fast(xi):
     if np.any(small_mask):
         xi_small = xi_arr[small_mask]
 
-        # Exact coefficients from Mathematica Series[S[ξ], {ξ, 0, 10}]
-        # Command: Series[S[ξ], {ξ, 0, 10}] where S[ξ] = (9√3/8π) × ξ × ∫_{ξ}^{∞} K_{5/3}(t) dt
-        c1_3 = (9 * np.sqrt(3) * gamma(2 / 3)) / (4 * 2 ** (1 / 3) * np.pi)
-        c1 = -9 / 8
-        c7_3 = (27 * np.sqrt(3) * gamma(2 / 3)) / (64 * 2 ** (1 / 3) * np.pi)
-        c11_3 = 729 / (1280 * 2 ** (2 / 3) * gamma(-1 / 3))
-        c13_3 = (81 * np.sqrt(3) * gamma(2 / 3)) / (1280 * 2 ** (1 / 3) * np.pi)
-        c17_3 = 2187 / (71680 * 2 ** (2 / 3) * gamma(-1 / 3))
-        c19_3 = (81 * np.sqrt(3) * gamma(2 / 3)) / (32768 * 2 ** (1 / 3) * np.pi)
-        c23_3 = 6561 / (9011200 * 2 ** (2 / 3) * gamma(-1 / 3))
-        c25_3 = (243 * np.sqrt(3) * gamma(2 / 3)) / (5046272 * 2 ** (1 / 3) * np.pi)
-        c29_3 = 6561 / (656015360 * 2 ** (2 / 3) * gamma(-1 / 3))
-
+        # Use pre-computed coefficients (computed once at module import)
+        # Eliminates 8 redundant gamma function calls per invocation
         result[small_mask] = (
-            c1_3 * xi_small ** (1 / 3)
-            + c1 * xi_small
-            + c7_3 * xi_small ** (7 / 3)
-            + c11_3 * xi_small ** (11 / 3)
-            + c13_3 * xi_small ** (13 / 3)
-            + c17_3 * xi_small ** (17 / 3)
-            + c19_3 * xi_small ** (19 / 3)
-            + c23_3 * xi_small ** (23 / 3)
-            + c25_3 * xi_small ** (25 / 3)
-            + c29_3 * xi_small ** (29 / 3)
+            _C1_3 * xi_small ** (1 / 3)
+            + _C1 * xi_small
+            + _C7_3 * xi_small ** (7 / 3)
+            + _C11_3 * xi_small ** (11 / 3)
+            + _C13_3 * xi_small ** (13 / 3)
+            + _C17_3 * xi_small ** (17 / 3)
+            + _C19_3 * xi_small ** (19 / 3)
+            + _C23_3 * xi_small ** (23 / 3)
+            + _C25_3 * xi_small ** (25 / 3)
+            + _C29_3 * xi_small ** (29 / 3)
         )
 
     # Intermediate region: Mathematica MiniMax rational approximation (0.7 ≤ ξ ≤ 6.8)

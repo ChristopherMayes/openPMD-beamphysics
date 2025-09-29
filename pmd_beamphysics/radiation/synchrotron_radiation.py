@@ -339,3 +339,177 @@ def S_benchmarking(xi_range=None, show_plot=True):
         "max_error": np.max(rel_error),
         "speedups": speedups,
     }
+
+
+def test_synchrotron_integral_properties():
+    """
+    Test fundamental integral properties of synchrotron S function.
+
+    Tests:
+    - ∫₀^∞ S(ξ) dξ = 1 (normalization condition)
+    - ∫₀¹ S(ξ) dξ = 1/2 (half-integral condition)
+    """
+    # Test normalization: ∫₀^∞ S(ξ) dξ = 1
+    integral_exact, _ = integrate.quad(S_exact, 0, np.inf, epsrel=1e-8)
+    integral_fast, _ = integrate.quad(S_fast, 0, np.inf, epsrel=1e-8)
+
+    assert (
+        abs(integral_exact - 1.0) < 1e-6
+    ), f"S_exact normalization failed: {integral_exact}"
+    assert (
+        abs(integral_fast - 1.0) < 1e-6
+    ), f"S_fast normalization failed: {integral_fast}"
+
+    # Test half-integral: ∫₀¹ S(ξ) dξ = 1/2
+    half_integral_exact, _ = integrate.quad(S_exact, 0, 1, epsrel=1e-8)
+    half_integral_fast, _ = integrate.quad(S_fast, 0, 1, epsrel=1e-8)
+
+    assert (
+        abs(half_integral_exact - 0.5) < 1e-5
+    ), f"S_exact half-integral failed: {half_integral_exact}"
+    assert (
+        abs(half_integral_fast - 0.5) < 1e-5
+    ), f"S_fast half-integral failed: {half_integral_fast}"
+
+    # Test consistency between implementations
+    assert (
+        abs(integral_exact - integral_fast) < 1e-6
+    ), "Implementations inconsistent for full integral"
+    assert (
+        abs(half_integral_exact - half_integral_fast) < 1e-6
+    ), "Implementations inconsistent for half integral"
+
+
+def test_synchrotron_accuracy_by_region():
+    """Test accuracy of S_fast vs S_exact across different approximation regions."""
+
+    # Small-ξ region (< 0.7): Power series - should be very accurate
+    xi_small = np.logspace(-3, np.log10(0.69), 20)
+    exact_small = S_exact(xi_small)
+    fast_small = S_fast(xi_small)
+    rel_errors_small = np.abs(fast_small - exact_small) / exact_small * 100
+
+    assert np.all(
+        rel_errors_small < 0.001
+    ), f"Small-ξ accuracy failed: max error {np.max(rel_errors_small):.6f}%"
+
+    # Intermediate region (0.7-6.8): MiniMax - should be machine precision
+    xi_inter = np.linspace(0.7, 6.8, 20)
+    exact_inter = S_exact(xi_inter)
+    fast_inter = S_fast(xi_inter)
+    rel_errors_inter = np.abs(fast_inter - exact_inter) / exact_inter * 100
+
+    assert np.all(
+        rel_errors_inter < 0.001
+    ), f"Intermediate accuracy failed: max error {np.max(rel_errors_inter):.6f}%"
+
+    # Large-ξ region (> 6.8): Asymptotic - allow larger tolerance
+    xi_large = np.logspace(np.log10(6.81), 2, 20)
+    exact_large = S_exact(xi_large)
+    fast_large = S_fast(xi_large)
+    rel_errors_large = np.abs(fast_large - exact_large) / exact_large * 100
+
+    assert np.all(
+        rel_errors_large < 0.1
+    ), f"Large-ξ accuracy failed: max error {np.max(rel_errors_large):.6f}%"
+
+
+def test_synchrotron_boundary_conditions():
+    """Test behavior at region boundaries and edge cases."""
+
+    # Test region boundaries where we know S_fast should work well
+    xi_boundary1 = 0.01  # Small-ξ to intermediate region boundary
+    xi_boundary2 = 8.0  # Intermediate to large-ξ region boundary
+
+    s_small_region = S_fast(xi_boundary1)
+    s_large_region = S_fast(xi_boundary2)
+
+    assert (
+        s_small_region > 0
+    ), f"S should be positive at small region boundary: {s_small_region}"
+    assert (
+        s_large_region > 0
+    ), f"S should be positive at large region boundary: {s_large_region}"
+
+    # Test that S_fast approaches 0 as ξ approaches 0 from above
+    xi_tiny = 1e-6
+    s_tiny = S_fast(xi_tiny)
+    assert s_tiny > 0 and s_tiny < 0.1, f"S should be small positive near 0: {s_tiny}"
+
+    # Test boundary points
+    boundary_points = [0.7, 6.8]  # Region transitions
+    for xi in boundary_points:
+        exact_val = S_exact(xi)
+        fast_val = S_fast(xi)
+        rel_error = abs(fast_val - exact_val) / exact_val * 100
+        assert (
+            rel_error < 0.1
+        ), f"Boundary condition failed at ξ={xi}: {rel_error:.4f}% error"
+
+    # Test mixed region array
+    mixed_xi = np.array([0.1, 0.7, 1.0, 6.8, 10.0])
+    exact_mixed = S_exact(mixed_xi)
+    fast_mixed = S_fast(mixed_xi)
+    mixed_errors = np.abs(fast_mixed - exact_mixed) / exact_mixed * 100
+
+    assert np.all(
+        mixed_errors < 0.1
+    ), f"Mixed array test failed: max error {np.max(mixed_errors):.4f}%"
+
+
+def test_synchrotron_performance():
+    """Test that S_fast provides expected performance improvements."""
+
+    # Test performance scaling with array size
+    sizes_and_targets = [(10, 5), (100, 50), (1000, 200)]  # (size, min_speedup)
+
+    for size, target_speedup in sizes_and_targets:
+        xi_test = np.logspace(-1, 1, size)
+
+        # Time S_exact (5 runs for stability)
+        times_exact = []
+        for _ in range(5):
+            start = time.perf_counter()
+            S_exact(xi_test)
+            times_exact.append(time.perf_counter() - start)
+        mean_exact = np.mean(times_exact)
+
+        # Time S_fast (5 runs for stability)
+        times_fast = []
+        for _ in range(5):
+            start = time.perf_counter()
+            S_fast(xi_test)
+            times_fast.append(time.perf_counter() - start)
+        mean_fast = np.mean(times_fast)
+
+        speedup = mean_exact / mean_fast
+        assert (
+            speedup >= target_speedup
+        ), f"Performance target not met for size {size}: {speedup:.1f}x < {target_speedup}x"
+
+
+def test_synchrotron_mathematical_properties():
+    """Test additional mathematical properties of the S function."""
+
+    # Test monotonicity: S(ξ) should decrease for large ξ
+    xi_large = np.linspace(10, 100, 10)
+    s_vals = S_fast(xi_large)
+
+    # Should be monotonically decreasing
+    assert np.all(
+        np.diff(s_vals) < 0
+    ), "S(ξ) should be monotonically decreasing for large ξ"
+
+    # Test asymptotic behavior: S(ξ) ~ exp(-ξ) for very large ξ
+    xi_very_large = np.array([20, 40, 60])
+    s_vals_large = S_fast(xi_very_large)
+    exp_vals = np.exp(-xi_very_large)
+
+    # The ratio S(ξ)/exp(-ξ) should be roughly constant for very large ξ
+    ratios = s_vals_large / exp_vals
+    ratio_variation = np.std(ratios) / np.mean(ratios)
+
+    # Allow some variation but should be relatively stable
+    assert (
+        ratio_variation < 0.5
+    ), f"Asymptotic behavior test failed: ratio variation {ratio_variation:.3f}"

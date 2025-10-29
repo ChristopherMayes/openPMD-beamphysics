@@ -8,7 +8,7 @@ from math import pi
 import numpy as np
 from numpy.fft import fftfreq, fftshift, ifftshift, ifftn
 
-from scipy.constants import epsilon_0, c
+from scipy.constants import epsilon_0, c, e, hbar
 
 import h5py
 import pathlib
@@ -402,6 +402,33 @@ class WavefrontK(WavefrontBase):
 
         return np.sum(self.spectral_energy_density) * self.dkx * self.dky * self.dkz
 
+    # TODO: reconsider photon units
+    @property
+    def photon_energy(self) -> float:
+        """
+        Central photon energy in eV
+        """
+        return self.k0 * hbar * c / e
+
+    @property
+    def photon_energy_vec(self) -> np.ndarray:
+        """
+        Photon energy axis from kz in eV
+        """
+        return (self.kzvec + self.k0) * hbar * c / e
+
+    @property
+    def photon_energy_spectrum(self) -> np.ndarray:
+        """
+        Photon energy spectrum dU/dE in J/eV
+
+        dU/dE = (ε0/2) ∫∫ |Ẽ|² dkx dky  / (ħc/e)
+        """
+        u_kz_J_m = (
+            np.sum(self.spectral_energy_density, axis=(0, 1)) * self.dkx * self.dky
+        )  # J·m
+        return u_kz_J_m / (hbar * c / e)  # → J/eV
+
     @property
     def spectral_fluence(self):
         """
@@ -480,6 +507,18 @@ class WavefrontK(WavefrontBase):
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
+
+    def plot_photon_spectral_energy_density(self, xlim=None, ax=None):
+        x = self.photon_energy_vec  # eV
+        y = self.photon_energy_spectrum  # J/eV
+
+        if ax is None:
+            _, ax = plt.subplots()
+        ax.plot(x, y * 1e6, color="purple")
+        ax.set_xlabel("photon energy (eV)")
+        ax.set_ylabel("photon spectral energy density (µJ/eV)")
+        ax.set_ylim(0, None)
+        ax.set_xlim(xlim)
 
     # Statistics
 
@@ -591,6 +630,7 @@ class Wavefront(WavefrontBase):
 
       These can be used to convert between spatial, temporal, and energy units as needed.
 
+    - Photon related calculations/properties use eV for energy
 
     """
 

@@ -462,7 +462,7 @@ class WavefrontK(WavefrontBase):
         """
         return self.intensity_x + self.intensity_y
 
-    def plot(self, cmap="inferno", logscale=False):
+    def plot_spectral_intensity(self, cmap="inferno", logscale=False):
         """
         Simple projected intensity plot
 

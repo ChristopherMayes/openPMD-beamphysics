@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
 from pmd_beamphysics.statistics import mean_calc, mean_variance_calc
-from pmd_beamphysics.plot import plot_2d_density_with_marginals
+from pmd_beamphysics.plot import plot_1d_density, plot_2d_density_with_marginals
 from pmd_beamphysics.units import Z0
 from pmd_beamphysics.interfaces.genesis import (
     wavefront_write_genesis4,
@@ -199,7 +199,7 @@ class WavefrontBase(ABC):
 
     @property
     def kzvec(self):
-        return 2 * pi * ifftshift(fftfreq(self.nz, d=self.dz))
+        return 2 * pi * fftshift(fftfreq(self.nz, d=self.dz))
 
     @property
     def kzmin(self):
@@ -794,7 +794,35 @@ class Wavefront(WavefrontBase):
             wavelength=self.wavelength,
         )
 
-    def plot(self, cmap="inferno", logscale=False):
+    def plot_power(
+        self,
+        ax=None,
+        ylim=(0, None),
+        xlim=None,
+        nice=True,
+        log_scale_y=False,
+        show_cdf=False,
+    ):
+        x = self.zvec / c
+        y = self.power
+
+        data = {"z/c": x, "power": y}
+
+        return plot_1d_density(
+            "z/c",
+            "power",
+            data=data,
+            xlim=xlim,
+            ylim=ylim,
+            ax=ax,
+            auto_label=True,
+            show_cdf=show_cdf,
+            log_scale_y=log_scale_y,
+            plot_style={"color": "purple"},
+            kind="bar",
+        )
+
+    def plot_fluence(self, cmap="inferno", logscale=False):
         """
         Simple fluence plot
 

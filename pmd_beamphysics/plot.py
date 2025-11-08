@@ -884,6 +884,7 @@ def plot_fieldmesh_rectangular_2d(
 def plot_1d_density(
     x: Union[str, np.ndarray],
     y: Union[str, np.ndarray],
+    x_name: str = "",
     y_name: Optional[str] = None,
     x_units: Optional[str] = None,
     y_units: Optional[str] = None,

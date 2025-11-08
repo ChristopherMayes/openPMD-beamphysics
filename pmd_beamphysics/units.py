@@ -8,6 +8,7 @@ For more advanced units, use a package like Pint:
 from __future__ import annotations
 
 import re
+import warnings
 from typing import Optional, Sequence
 
 import numpy as np
@@ -25,6 +26,10 @@ Z0 = mu_0 * c_light  # Omh = V^2/W
 Limit = tuple[Optional[float], Optional[float]]
 Dimension = tuple[int, int, int, int, int, int, int]
 
+# Module-level dict that will be populated after NAMED_UNITS is created
+# This avoids the globals() check chicken-and-egg problem
+known_unit: dict[str, "pmd_unit"] = {}
+
 
 class pmd_unit:
     """
@@ -33,7 +38,8 @@ class pmd_unit:
     Parameters
     ----------
     unitSymbol : str
-        Native units name.
+        Native units name. Can be a simple symbol (e.g., 'eV', 'm') or a
+        compound expression using * and / operators (e.g., 'eV/c', 'kg*m/s').
     unitSI : float, optional
         Conversion factor to the corresponding SI unit.  Defaults to 0.
         If unspecified, `unitSymbol` must be a recognized symbol name.
@@ -85,6 +91,19 @@ class pmd_unit:
     >>> pmd_unit('T')
     pmd_unit('T', 1, (0, 1, -2, -1, 0, 0, 0))
 
+    Compound units can be created using * and / operators in the symbol string:
+
+    >>> pmd_unit('eV/c')
+    pmd_unit('eV/c', 5.344286295439521e-28, (1, 1, -1, 0, 0, 0, 0))
+
+    >>> pmd_unit('kg*m/s')
+    pmd_unit('kg*m/s', 1, (1, 1, -1, 0, 0, 0, 0))
+
+    Alternatively, use the `from_symbol` class method for explicit symbol lookup:
+
+    >>> pmd_unit.from_symbol('A*s')
+    pmd_unit('A*s', 1, (0, 0, 1, 1, 0, 0, 0))
+
     Simple equalities are possible:
 
     >>> pmd_unit("T") == pmd_unit("T")
@@ -99,22 +118,92 @@ class pmd_unit:
         unitSI: int | float = 0,
         unitDimension: str | Dimension | tuple[int, ...] = (0, 0, 0, 0, 0, 0, 0),
     ):
-        # Allow to return an internally known unit
-        if unitSI == 0:
-            if unitSymbol not in known_unit:
-                raise ValueError(f"Unknown unitSymbol: {unitSymbol}")
-
-            # Copy internals
-            u = known_unit[unitSymbol]
-            unitSI = u.unitSI
-            unitDimension = u.unitDimension
-
-        self._unitSymbol = unitSymbol
-        self._unitSI = unitSI
-        if isinstance(unitDimension, str):
-            self._unitDimension = dimension(unitDimension)
+        # If unitSI is provided explicitly, use it directly
+        if unitSI != 0:
+            self._unitSymbol = unitSymbol
+            self._unitSI = unitSI
+            if isinstance(unitDimension, str):
+                self._unitDimension = dimension(unitDimension)
+            else:
+                self._unitDimension = make_dimension(unitDimension)
         else:
-            self._unitDimension = make_dimension(unitDimension)
+            # unitSI == 0: try to lookup/parse the symbol
+            # Check if known_unit dict has been populated (it won't during NAMED_UNITS construction)
+            if not known_unit:
+                # During NAMED_UNITS construction - just use what's provided
+                self._unitSymbol = unitSymbol
+                self._unitSI = unitSI
+                if isinstance(unitDimension, str):
+                    self._unitDimension = dimension(unitDimension)
+                else:
+                    self._unitDimension = make_dimension(unitDimension)
+            else:
+                # known_unit exists - delegate to from_symbol for lookup/parsing
+                u = self.from_symbol(unitSymbol)
+                self._unitSymbol = u._unitSymbol
+                self._unitSI = u._unitSI
+                self._unitDimension = u._unitDimension
+
+    @classmethod
+    def from_symbol(cls, unitSymbol: str) -> pmd_unit:
+        """
+        Create a pmd_unit from a symbol string, with automatic lookup and parsing.
+
+        This method handles:
+        - Simple known units (e.g., 'eV', 'm', 'T')
+        - Compound expressions with operators (e.g., 'eV/c', 'kg*m/s')
+
+        Parameters
+        ----------
+        unitSymbol : str
+            The unit symbol to look up or parse.
+
+        Returns
+        -------
+        pmd_unit
+            The resulting unit object.
+
+        Raises
+        ------
+        ValueError
+            If the symbol is not found in known_unit dict or cannot be parsed.
+        """
+        # Check if known_unit dict has been populated
+        if not known_unit:
+            raise ValueError(
+                f"Cannot lookup unitSymbol '{unitSymbol}': known_unit dict not yet initialized. "
+                "Use pmd_unit(unitSymbol, unitSI, unitDimension) with explicit parameters instead."
+            )
+
+        # known_unit exists - check if it's already a known unit (priority)
+        if unitSymbol in known_unit:
+            # Copy internals from known unit
+            u = known_unit[unitSymbol]
+            return cls(unitSymbol, unitSI=u.unitSI, unitDimension=u.unitDimension)
+
+        # Not in known_unit - try operator parsing (e.g., "A*s", "kg*m/s")
+        if "*" in unitSymbol or "/" in unitSymbol:
+            parts = re.split(r"([*/])", unitSymbol)
+            if parts[0] not in known_unit:
+                raise ValueError(f"Unknown unitSymbol: {parts[0]}")
+
+            result = known_unit[parts[0]]
+            for op, part in zip(parts[1::2], parts[2::2]):
+                if part not in known_unit:
+                    raise ValueError(f"Unknown unitSymbol: {part}")
+                unit_obj = known_unit[part]
+                if op == "*":
+                    result = result * unit_obj
+                elif op == "/":
+                    result = result / unit_obj
+
+            # Return computed result
+            return cls(
+                unitSymbol, unitSI=result.unitSI, unitDimension=result.unitDimension
+            )
+
+        # Not found anywhere
+        raise ValueError(f"Unknown unitSymbol: {unitSymbol}")
 
     def __hash__(self) -> int:
         return hash((self.unitSymbol, self.unitSI, self.unitDimension))
@@ -150,6 +239,35 @@ class pmd_unit:
 
     def __repr__(self) -> str:
         return f"pmd_unit('{self.unitSymbol}', {self.unitSI}, {self.unitDimension})"
+
+    def simplify(self, named_units=None) -> pmd_unit:
+        """
+        Tries to simply a unit by searching from a list of named units
+        for the same unitDimension and unitSI.
+        """
+
+        # Use default
+        if named_units is None:
+            named_units = NAMED_UNITS
+
+        unitDimension = self.unitDimension
+        unitSI = self.unitSI
+
+        # find any dimensional matches
+        matches = [u0 for u0 in named_units if unitDimension == u0.unitDimension]
+        # Look for exact unit
+        for match in matches:
+            factor = unitSI / match.unitSI
+            if factor == 1:
+                return match
+            if factor in SHORT_PREFIX:
+                p = SHORT_PREFIX[factor]
+                return pmd_unit(
+                    p + match.unitSymbol, factor * match.unitSI, match.unitDimension
+                )
+
+        # No match, cannot simplify
+        return self
 
 
 def is_dimensionless(u: pmd_unit) -> bool:
@@ -327,40 +445,53 @@ SI_symbol: dict[str, str] = {
     "electric_potential": "V",
     "velocity": "m/s",
     "energy": "J",
+    "power": "W",
     "momentum": "kg*m/s",
     "magnetic_field": "T",
 }
 # Inverse
 SI_name: dict[str, str] = {v: k for k, v in SI_symbol.items()}
 
-# length mass time current temperature mol luminous
-known_unit: dict[str, pmd_unit] = {
-    "1": pmd_unit("", 1, "1"),
-    "degree": pmd_unit("degree", np.pi / 180, "1"),
-    "rad": pmd_unit("rad", 1, "1"),
-    "m": pmd_unit("m", 1, "length"),
-    "kg": pmd_unit("kg", 1, "mass"),
-    "g": pmd_unit("g", 0.001, "mass"),
-    "s": pmd_unit("s", 1, "time"),
-    "A": pmd_unit("A", 1, "current"),
-    "K": pmd_unit("K", 1, "temperture"),
-    "mol": pmd_unit("mol", 1, "mol"),
-    "cd": pmd_unit("cd", 1, "luminous"),
-    "C": pmd_unit("C", 1, "charge"),
-    "charge_num": pmd_unit("charge #", 1, "charge"),
-    "V/m": pmd_unit("V/m", 1, "electric_field"),
-    "V": pmd_unit("V", 1, "electric_potential"),
-    "c_light": pmd_unit("vel/c", c_light, "velocity"),
-    "m/s": pmd_unit("m/s", 1, "velocity"),
-    "eV": pmd_unit("eV", e_charge, "energy"),
-    "J": pmd_unit("J", 1, "energy"),
-    "eV/c": pmd_unit("eV/c", e_charge / c_light, "momentum"),
-    "eV/m": pmd_unit("eV/m", e_charge, (1, 1, -2, 0, 0, 0, 0)),
-    "W": pmd_unit("W", 1, (2, 1, -3, 0, 0, 0, 0)),
-    "W/rad^2": pmd_unit("W/rad^2", 1, (2, 1, -3, 0, 0, 0, 0)),
-    "W/m^2": pmd_unit("W/m^2", 1, (0, 1, -3, 0, 0, 0, 0)),
-    "T": pmd_unit("T", 1, "magnetic_field"),
-}
+# List of named units
+NAMED_UNITS = [
+    pmd_unit("", 1, "1"),
+    pmd_unit("degree", np.pi / 180, "1"),
+    pmd_unit("rad", 1, "1"),
+    pmd_unit("m", 1, "length"),
+    pmd_unit("kg", 1, "mass"),
+    pmd_unit("g", 0.001, "mass"),
+    pmd_unit("s", 1, "time"),
+    pmd_unit("A", 1, "current"),
+    pmd_unit("K", 1, "temperture"),
+    pmd_unit("mol", 1, "mol"),
+    pmd_unit("cd", 1, "luminous"),
+    pmd_unit("C", 1, "charge"),
+    pmd_unit("charge #", 1, "charge"),
+    pmd_unit("V/m", 1, "electric_field"),
+    pmd_unit("V", 1, "electric_potential"),
+    pmd_unit("vel/c", c_light, "velocity"),
+    pmd_unit("m/s", 1, "velocity"),
+    pmd_unit("eV", e_charge, "energy"),
+    pmd_unit("J", 1, "energy"),
+    pmd_unit("eV/c", e_charge / c_light, "momentum"),
+    pmd_unit("eV/m", e_charge, (1, 1, -2, 0, 0, 0, 0)),
+    pmd_unit("J/m", 1, (1, 1, -2, 0, 0, 0, 0)),
+    pmd_unit("W", 1, (2, 1, -3, 0, 0, 0, 0)),
+    pmd_unit("W/rad^2", 1, (2, 1, -3, 0, 0, 0, 0)),
+    pmd_unit("W/m^2", 1, (0, 1, -3, 0, 0, 0, 0)),
+    pmd_unit("T", 1, "magnetic_field"),
+]
+
+# Populate the module-level known_unit dict
+known_unit.update({u.unitSymbol: u for u in NAMED_UNITS})
+# Add inconsistent legacy keys
+known_unit.update(
+    {
+        "1": pmd_unit("", 1, "1"),
+        "charge_num": pmd_unit("charge #", 1, "charge"),
+        "c_light": pmd_unit("vel/c", c_light, "velocity"),
+    }
+)
 
 
 def unit(symbol: str) -> pmd_unit:
@@ -368,22 +499,27 @@ def unit(symbol: str) -> pmd_unit:
     Returns a pmd_unit from a known symbol.
 
     * and / are allowed between two known symbols.
+
+    .. deprecated::
+        Use `pmd_unit(symbol)` directly instead. The `unit()` function is
+        deprecated and will be removed in a future version.
+
+    Examples
+    --------
+    Old style (deprecated):
+
+        >>> unit("eV/c")
+
+    New style (preferred):
+
+        >>> pmd_unit("eV/c")
     """
-    if symbol in known_unit:
-        return known_unit[symbol]
-
-    if "*" in symbol or "/" in symbol:
-        parts = re.split(r"([*/])", symbol)
-        result = known_unit[parts[0]]
-        for op, part in zip(parts[1::2], parts[2::2]):
-            unit = known_unit[part]
-            if op == "*":
-                result = result * unit
-            elif op == "/":
-                result = result / unit
-        return result
-
-    raise ValueError(f"Unknown unit symbol: {symbol}")
+    warnings.warn(
+        "unit() is deprecated. Use pmd_unit() directly instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return pmd_unit(symbol)
 
 
 # Dicts for prefixes
@@ -589,6 +725,8 @@ for k in ["charge", "species_charge", "weight"]:
     PARTICLEGROUP_UNITS[k] = unit("C")
 for k in ["average_current"]:
     PARTICLEGROUP_UNITS[k] = unit("A")
+for k in ["power"]:
+    PARTICLEGROUP_UNITS[k] = unit("W")
 for k in ["norm_emit_x", "norm_emit_y"]:
     PARTICLEGROUP_UNITS[k] = unit("m")
 for k in ["norm_emit_4d"]:

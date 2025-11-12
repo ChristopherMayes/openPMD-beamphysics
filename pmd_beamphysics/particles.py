@@ -978,16 +978,53 @@ class ParticleGroup:
         return write_opal(self, filePath, verbose=verbose, dist_type=dist_type)
 
     # openPMD
-    def write(self, h5, name=None):
+    def write(self, h5, name=None) -> None:
         """
-        Writes to an open h5 handle, or new file if h5 is a str.
+        Write particle data to an HDF5 file or group in openPMD format.
 
+        Parameters
+        ----------
+        h5 : str or pathlib.Path or h5py.File or h5py.Group
+            Target for writing:
+            - str or pathlib.Path: path to a new HDF5 file to be created (opened in mode "w").
+              Environment variables in path strings are expanded (via
+              os.path.expandvars) before file creation.
+            - h5py.File: an already opened file handle; a new "particles" group is created.
+            - h5py.Group: an existing group; assumed to be an appropriate location to write data.
+                This is for advanced users who know what they are doing.
+                Any other object is treated as a group-like handle compatible with `write_pmd_bunch`.
+        name : str, optional
+            Name for the subgroup/bunch written inside the "particles" group (or provided group).
+            If None, `write_pmd_bunch` will write directly to the "particles" group.
+
+        Returns
+        -------
+        None
+
+        Examples
+        --------
+        Write to a new file:
+        >>> P.write("beam.h5")
+
+        Write to an already opened file:
+        >>> import h5py
+        >>> with h5py.File("beam.h5", "w") as f:
+        ...     P.write(f)
+
+        Write into an existing group and name the bunch:
+        >>> import h5py
+        >>> with h5py.File("beam.h5", "w") as f:
+        ...     grp = f["particles"]
+        ...     particles.write(grp, name="bunch1")
         """
         if isinstance(h5, (str, pathlib.Path)):
             fname = os.path.expandvars(h5)
             g = File(fname, "w")
             pmd_init(g, basePath="/", particlesPath="particles")
             g = g.create_group("particles")
+        elif isinstance(h5, File):
+            pmd_init(h5, basePath="/", particlesPath="particles")
+            g = h5.create_group("particles")
         else:
             g = h5
 

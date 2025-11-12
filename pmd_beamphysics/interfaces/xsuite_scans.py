@@ -20,7 +20,7 @@ License: BSD-3-Clause
 
 import h5py
 import numpy as np
-from typing import Dict, List, Optional, Union, Tuple, Callable
+from typing import Dict, List, Optional, Union, Tuple, Callable, Any
 from pathlib import Path
 from datetime import datetime
 
@@ -31,6 +31,10 @@ __all__ = [
     'create_scan_manifest',
     'load_scan',
     'find_threshold',
+    'update_scan_point',
+    'get_scan_status',
+    'print_scan_status',
+    'load_scan_results',
 ]
 
 
@@ -331,7 +335,7 @@ class ScanManifest:
 
 
 # ============================================================================
-# Utility Functions
+# Utility Functions (exported for __init__.py)
 # ============================================================================
 
 def create_scan_manifest(
@@ -362,6 +366,105 @@ def create_scan_manifest(
     """
     # Implementation TODO
     raise NotImplementedError("To be implemented in Phase 2")
+
+
+def update_scan_point(
+    manifest: Union[str, h5py.File],
+    point_index: int,
+    results: Dict[str, Any]
+):
+    """
+    Update results for a scan point in the manifest.
+    
+    Parameters
+    ----------
+    manifest : str or h5py.File
+        Manifest file path
+    point_index : int
+        Index of scan point to update
+    results : dict
+        Results dictionary
+        
+    Note
+    ----
+    This is a placeholder. Full implementation pending.
+    """
+    raise NotImplementedError(
+        "update_scan_point is not yet implemented. "
+        "This function will be added in Phase 2."
+    )
+
+
+def get_scan_status(manifest: Union[str, h5py.File]) -> Dict[str, Any]:
+    """
+    Get status of parameter scan.
+    
+    Parameters
+    ----------
+    manifest : str or h5py.File
+        Manifest file path
+        
+    Returns
+    -------
+    dict
+        Status information
+        
+    Note
+    ----
+    This is a placeholder. Full implementation pending.
+    """
+    raise NotImplementedError(
+        "get_scan_status is not yet implemented. "
+        "This function will be added in Phase 2."
+    )
+
+
+def print_scan_status(manifest: Union[str, h5py.File]):
+    """
+    Print formatted scan status.
+    
+    Parameters
+    ----------
+    manifest : str or h5py.File
+        Manifest file path
+        
+    Note
+    ----
+    This is a placeholder. Full implementation pending.
+    """
+    raise NotImplementedError(
+        "print_scan_status is not yet implemented. "
+        "This function will be added in Phase 2."
+    )
+
+
+def load_scan_results(
+    manifest: Union[str, h5py.File],
+    result_names: Optional[List[str]] = None
+) -> Dict[str, np.ndarray]:
+    """
+    Load results from completed scan.
+    
+    Parameters
+    ----------
+    manifest : str or h5py.File
+        Manifest file path
+    result_names : list of str, optional
+        Names of results to load
+        
+    Returns
+    -------
+    dict
+        Results arrays
+        
+    Note
+    ----
+    This is a placeholder. Full implementation pending.
+    """
+    raise NotImplementedError(
+        "load_scan_results is not yet implemented. "
+        "This function will be added in Phase 2."
+    )
 
 
 def load_scan(filename: Union[str, Path]) -> ScanManifest:

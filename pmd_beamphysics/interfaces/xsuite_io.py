@@ -1,358 +1,605 @@
 """
-XSuite I/O Module for openPMD-beamphysics
+XSuite I/O utilities for openPMD-beamphysics.
 
-This module provides utilities for reading and writing XSuite OpenPMD files.
-
-Functions:
-    Machine Parameters:
-        - read_machine_parameters(filename, mode=None)
-        - write_machine_parameters(params, filename)
-        - convert_json_parameters(json_file, h5_file)
-    
-    Collective Effects:
-        - read_wake_potential(filename)
-        - write_wake_potential(wake, filename)
-        - read_impedance(filename)
-        - write_impedance(impedance, filename)
-    
-    Particle Distributions:
-        - read_particles(filename)
-        - write_particles(particles, filename, metadata=None)
-    
-    Lattice:
-        - read_lattice(filename)
-        - write_lattice(line, filename)
-    
-    Validation:
-        - validate_input_file(filename)
-        - validate_output_file(filename)
-
-Author: XSuite Collaboration
-License: BSD-3-Clause
+This module provides functions to read and write XSuite data in openPMD format.
 """
 
 import h5py
 import numpy as np
-from typing import Dict, List, Optional, Union, Tuple
-from pathlib import Path
-
-__all__ = [
-    'read_machine_parameters',
-    'write_machine_parameters',
-    'convert_json_parameters',
-    'read_wake_potential',
-    'write_wake_potential',
-    'read_impedance',
-    'write_impedance',
-    'read_particles',
-    'write_particles',
-    'read_lattice',
-    'write_lattice',
-    'validate_input_file',
-    'validate_output_file',
-]
+from typing import Dict, Any, Optional, List, Union
 
 
-# ============================================================================
-# Machine Parameters
-# ============================================================================
-
-def read_machine_parameters(
-    filename: Union[str, Path],
-    mode: Optional[str] = None
-) -> Dict:
-    """
-    Read machine parameters from OpenPMD file.
-    
-    Args:
-        filename: Path to parameters HDF5 file
-        mode: Operation mode to extract (e.g., 'z', 'w', 'zh', 'ttbar')
-              If None, returns all modes
-    
-    Returns:
-        Dictionary containing machine parameters
-        
-    Example:
-        >>> params = read_machine_parameters('fcc_ee_params.h5', mode='z')
-        >>> print(params['beam_energy'])  # 45.6e9 eV
-        >>> print(params['particles_per_bunch'])  # 2.5e10
-    """
-    # Implementation TODO
-    raise NotImplementedError("To be implemented in Phase 2")
+class XSuiteIOError(Exception):
+    """Custom exception for XSuite I/O errors."""
+    pass
 
 
 def write_machine_parameters(
-    params: Dict,
-    filename: Union[str, Path]
+    h5_file: Union[str, h5py.File],
+    params: Dict[str, Any],
+    base_path: str = "/machineParameters/"
 ) -> None:
     """
-    Write machine parameters to OpenPMD file.
+    Write machine parameters to HDF5 file in openPMD format.
     
-    Args:
-        params: Dictionary of machine parameters
-        filename: Output HDF5 file path
+    Parameters
+    ----------
+    h5_file : str or h5py.File
+        HDF5 file path or open file object
+    params : dict
+        Dictionary of machine parameters
+    base_path : str
+        Base path in HDF5 file for machine parameters
         
-    Example:
-        >>> params = {
-        ...     'circumference': 90.658e3,  # m
-        ...     'beam_energy': {'z': 45.6e9, 'w': 80e9},  # eV
-        ...     'particles_per_bunch': {'z': 2.5e10, 'w': 2.5e10}
-        ... }
-        >>> write_machine_parameters(params, 'params.h5')
+    Examples
+    --------
+    >>> params = {
+    ...     'energy': 182.5e9,  # eV
+    ...     'circumference': 97750.0,  # m
+    ...     'harmonic_number': 132500,
+    ...     'particles_per_bunch': 1.7e11
+    ... }
+    >>> write_machine_parameters('output.h5', params)
     """
-    # Implementation TODO
-    raise NotImplementedError("To be implemented in Phase 2")
-
-
-def convert_json_parameters(
-    json_file: Union[str, Path],
-    h5_file: Union[str, Path]
-) -> None:
-    """
-    Convert JSON parameter file to OpenPMD HDF5 format.
+    should_close = False
+    if isinstance(h5_file, str):
+        h5_file = h5py.File(h5_file, 'a')
+        should_close = True
     
-    Args:
-        json_file: Input JSON file path
-        h5_file: Output HDF5 file path
+    try:
+        # Create group if it doesn't exist
+        if base_path not in h5_file:
+            grp = h5_file.create_group(base_path)
+        else:
+            grp = h5_file[base_path]
         
-    Example:
-        >>> convert_json_parameters('fcc_ee_params.json', 'fcc_ee_params.h5')
-    """
-    # Implementation TODO
-    # Will use the convert_params_to_openpmd.py script logic
-    raise NotImplementedError("To be implemented in Phase 2")
-
-
-# ============================================================================
-# Collective Effects - Wake Potentials
-# ============================================================================
-
-def read_wake_potential(filename: Union[str, Path]) -> Dict:
-    """
-    Read wake potential from OpenPMD file.
-    
-    Args:
-        filename: Path to wake potential HDF5 file
-        
-    Returns:
-        Dictionary with keys:
-            - 'component': 'longitudinal', 'dipolar_x', etc.
-            - 'source_position': array of source positions [m]
-            - 'wake_table': array of wake values [V/C or V/C/m]
-            - 'geometry': dict of geometry parameters
-            - 'provenance': dict of generation metadata
+        # Write each parameter as attribute
+        for key, value in params.items():
+            grp.attrs[key] = value
             
-    Example:
-        >>> wake = read_wake_potential('resistive_wall.h5')
-        >>> plt.plot(wake['source_position'], wake['wake_table'])
+    finally:
+        if should_close:
+            h5_file.close()
+
+
+def read_machine_parameters(
+    h5_file: Union[str, h5py.File],
+    base_path: str = "/machineParameters/"
+) -> Dict[str, Any]:
     """
-    # Implementation TODO
-    raise NotImplementedError("To be implemented in Phase 2")
+    Read machine parameters from HDF5 file.
+    
+    Parameters
+    ----------
+    h5_file : str or h5py.File
+        HDF5 file path or open file object
+    base_path : str
+        Base path in HDF5 file for machine parameters
+        
+    Returns
+    -------
+    dict
+        Dictionary of machine parameters
+        
+    Examples
+    --------
+    >>> params = read_machine_parameters('output.h5')
+    >>> print(params['energy'])
+    182500000000.0
+    """
+    should_close = False
+    if isinstance(h5_file, str):
+        h5_file = h5py.File(h5_file, 'r')
+        should_close = True
+    
+    try:
+        if base_path not in h5_file:
+            raise XSuiteIOError(f"Path {base_path} not found in HDF5 file")
+        
+        grp = h5_file[base_path]
+        params = dict(grp.attrs)
+        
+        return params
+        
+    finally:
+        if should_close:
+            h5_file.close()
 
 
-def write_wake_potential(
-    wake: Dict,
-    filename: Union[str, Path]
+def write_wake_table(
+    h5_file: Union[str, h5py.File],
+    z: np.ndarray,
+    wake: np.ndarray,
+    component: str = "longitudinal",
+    base_path: str = "/wakeData/",
+    metadata: Optional[Dict[str, Any]] = None
 ) -> None:
     """
-    Write wake potential to OpenPMD file.
+    Write wake potential table to HDF5 file.
     
-    Args:
-        wake: Dictionary containing wake data (see read_wake_potential)
-        filename: Output HDF5 file path
+    Parameters
+    ----------
+    h5_file : str or h5py.File
+        HDF5 file path or open file object
+    z : np.ndarray
+        Distance behind particle (m)
+    wake : np.ndarray
+        Wake potential values (V/C for longitudinal, V/C/m for transverse)
+    component : str
+        Wake component: 'longitudinal', 'dipole_x', 'dipole_y', 'quadrupole'
+    base_path : str
+        Base path in HDF5 file for wake data
+    metadata : dict, optional
+        Additional metadata (source, date, etc.)
         
-    Example:
-        >>> wake = {
-        ...     'component': 'longitudinal',
-        ...     'source_position': s_array,  # m
-        ...     'wake_table': W_array,  # V/C
-        ...     'geometry': {
-        ...         'element_type': 'resistive_wall',
-        ...         'material': 'copper',
-        ...         'radius': 0.018  # m
-        ...     }
-        ... }
-        >>> write_wake_potential(wake, 'wake.h5')
+    Examples
+    --------
+    >>> z = np.linspace(0, 1, 1000)  # m
+    >>> wake = np.exp(-z/0.1) * 1e6  # V/C
+    >>> write_wake_table('wakes.h5', z, wake, component='longitudinal')
     """
-    # Implementation TODO
-    raise NotImplementedError("To be implemented in Phase 2")
-
-
-# ============================================================================
-# Collective Effects - Impedances
-# ============================================================================
-
-def read_impedance(filename: Union[str, Path]) -> Dict:
-    """
-    Read impedance model from OpenPMD file.
+    should_close = False
+    if isinstance(h5_file, str):
+        h5_file = h5py.File(h5_file, 'a')
+        should_close = True
     
-    Args:
-        filename: Path to impedance HDF5 file
+    try:
+        # Create wake data group
+        wake_path = f"{base_path}{component}/"
+        if wake_path in h5_file:
+            del h5_file[wake_path]
         
-    Returns:
-        Dictionary with impedance data (table or resonator model)
+        grp = h5_file.create_group(wake_path)
         
-    Example:
-        >>> imp = read_impedance('broadband.h5')
-        >>> if imp['representation'] == 'table':
-        ...     plt.plot(imp['frequency'], imp['impedance_real'])
+        # Write data
+        grp.create_dataset('z', data=z)
+        grp.create_dataset('wake', data=wake)
+        
+        # Add metadata
+        grp.attrs['component'] = component
+        grp.attrs['z_unit'] = 'm'
+        
+        if component == 'longitudinal':
+            grp.attrs['wake_unit'] = 'V/C'
+        else:
+            grp.attrs['wake_unit'] = 'V/C/m'
+        
+        if metadata:
+            for key, value in metadata.items():
+                grp.attrs[key] = value
+                
+    finally:
+        if should_close:
+            h5_file.close()
+
+
+def read_wake_table(
+    h5_file: Union[str, h5py.File],
+    component: str = "longitudinal",
+    base_path: str = "/wakeData/"
+) -> tuple:
     """
-    # Implementation TODO
-    raise NotImplementedError("To be implemented in Phase 2")
+    Read wake potential table from HDF5 file.
+    
+    Parameters
+    ----------
+    h5_file : str or h5py.File
+        HDF5 file path or open file object
+    component : str
+        Wake component to read
+    base_path : str
+        Base path in HDF5 file for wake data
+        
+    Returns
+    -------
+    z : np.ndarray
+        Distance behind particle (m)
+    wake : np.ndarray
+        Wake potential values
+    metadata : dict
+        Metadata attributes
+        
+    Examples
+    --------
+    >>> z, wake, metadata = read_wake_table('wakes.h5', component='longitudinal')
+    >>> print(f"Wake length: {z.max():.3f} m")
+    """
+    should_close = False
+    if isinstance(h5_file, str):
+        h5_file = h5py.File(h5_file, 'r')
+        should_close = True
+    
+    try:
+        wake_path = f"{base_path}{component}/"
+        if wake_path not in h5_file:
+            raise XSuiteIOError(f"Wake component {component} not found at {wake_path}")
+        
+        grp = h5_file[wake_path]
+        
+        z = grp['z'][:]
+        wake = grp['wake'][:]
+        metadata = dict(grp.attrs)
+        
+        return z, wake, metadata
+        
+    finally:
+        if should_close:
+            h5_file.close()
 
 
-def write_impedance(
-    impedance: Dict,
-    filename: Union[str, Path]
+def write_impedance_table(
+    h5_file: Union[str, h5py.File],
+    frequency: np.ndarray,
+    real_impedance: np.ndarray,
+    imag_impedance: np.ndarray,
+    plane: str = "longitudinal",
+    base_path: str = "/impedanceData/",
+    metadata: Optional[Dict[str, Any]] = None
 ) -> None:
     """
-    Write impedance model to OpenPMD file.
+    Write impedance table to HDF5 file.
     
-    Args:
-        impedance: Dictionary containing impedance data
-        filename: Output HDF5 file path
+    Parameters
+    ----------
+    h5_file : str or h5py.File
+        HDF5 file path or open file object
+    frequency : np.ndarray
+        Frequency array (Hz)
+    real_impedance : np.ndarray
+        Real part of impedance (Ohm)
+    imag_impedance : np.ndarray
+        Imaginary part of impedance (Ohm)
+    plane : str
+        Impedance plane: 'longitudinal', 'x', 'y'
+    base_path : str
+        Base path in HDF5 file
+    metadata : dict, optional
+        Additional metadata
     """
-    # Implementation TODO
-    raise NotImplementedError("To be implemented in Phase 2")
-
-
-# ============================================================================
-# Particle Distributions
-# ============================================================================
-
-def read_particles(filename: Union[str, Path]) -> 'ParticleGroup':
-    """
-    Read particle distribution from OpenPMD file.
+    should_close = False
+    if isinstance(h5_file, str):
+        h5_file = h5py.File(h5_file, 'a')
+        should_close = True
     
-    Args:
-        filename: Path to particle HDF5 file
+    try:
+        imp_path = f"{base_path}{plane}/"
+        if imp_path in h5_file:
+            del h5_file[imp_path]
         
-    Returns:
-        ParticleGroup object from pmd_beamphysics
+        grp = h5_file.create_group(imp_path)
         
-    Example:
-        >>> from pmd_beamphysics.interfaces import xsuite_io
-        >>> particles = xsuite_io.read_particles('initial_dist.h5')
-        >>> print(particles['mean_x'], particles['sigma_x'])
-    """
-    # Implementation TODO
-    # Will use pmd_beamphysics.ParticleGroup
-    from pmd_beamphysics import ParticleGroup
-    raise NotImplementedError("To be implemented in Phase 2")
+        # Write data
+        grp.create_dataset('frequency', data=frequency)
+        grp.create_dataset('real', data=real_impedance)
+        grp.create_dataset('imag', data=imag_impedance)
+        
+        # Add metadata
+        grp.attrs['plane'] = plane
+        grp.attrs['frequency_unit'] = 'Hz'
+        grp.attrs['impedance_unit'] = 'Ohm'
+        
+        if metadata:
+            for key, value in metadata.items():
+                grp.attrs[key] = value
+                
+    finally:
+        if should_close:
+            h5_file.close()
 
 
-def write_particles(
-    particles,
-    filename: Union[str, Path],
-    metadata: Optional[Dict] = None
-) -> None:
+def read_impedance_table(
+    h5_file: Union[str, h5py.File],
+    plane: str = "longitudinal",
+    base_path: str = "/impedanceData/"
+) -> tuple:
     """
-    Write particle distribution to OpenPMD file.
+    Read impedance table from HDF5 file.
     
-    Args:
-        particles: ParticleGroup or XSuite Particles object
-        filename: Output HDF5 file path
-        metadata: Optional metadata dict
+    Parameters
+    ----------
+    h5_file : str or h5py.File
+        HDF5 file path or open file object
+    plane : str
+        Impedance plane to read
+    base_path : str
+        Base path in HDF5 file
         
-    Example:
-        >>> write_particles(particles, 'output.h5', 
-        ...                 metadata={'species': 'electron', 
-        ...                           'method': 'matched'})
+    Returns
+    -------
+    frequency : np.ndarray
+        Frequency array (Hz)
+    real_impedance : np.ndarray
+        Real part of impedance
+    imag_impedance : np.ndarray
+        Imaginary part of impedance
+    metadata : dict
+        Metadata attributes
     """
-    # Implementation TODO
-    raise NotImplementedError("To be implemented in Phase 2")
-
-
-# ============================================================================
-# Lattice
-# ============================================================================
-
-def read_lattice(filename: Union[str, Path]) -> Dict:
-    """
-    Read lattice/line from OpenPMD file.
+    should_close = False
+    if isinstance(h5_file, str):
+        h5_file = h5py.File(h5_file, 'r')
+        should_close = True
     
-    Args:
-        filename: Path to lattice HDF5 file
+    try:
+        imp_path = f"{base_path}{plane}/"
+        if imp_path not in h5_file:
+            raise XSuiteIOError(f"Impedance plane {plane} not found at {imp_path}")
         
-    Returns:
-        Dictionary with lattice data
-    """
-    # Implementation TODO
-    raise NotImplementedError("To be implemented in Phase 2")
+        grp = h5_file[imp_path]
+        
+        frequency = grp['frequency'][:]
+        real_impedance = grp['real'][:]
+        imag_impedance = grp['imag'][:]
+        metadata = dict(grp.attrs)
+        
+        return frequency, real_impedance, imag_impedance, metadata
+        
+    finally:
+        if should_close:
+            h5_file.close()
 
 
-def write_lattice(
-    line,
-    filename: Union[str, Path]
-) -> None:
+def validate_xsuite_file(h5_file: Union[str, h5py.File]) -> Dict[str, bool]:
     """
-    Write XSuite Line to OpenPMD file.
+    Validate XSuite openPMD file structure.
     
-    Args:
-        line: XSuite Line object
-        filename: Output HDF5 file path
+    Parameters
+    ----------
+    h5_file : str or h5py.File
+        HDF5 file path or open file object
+        
+    Returns
+    -------
+    dict
+        Validation results with boolean flags
+        
+    Examples
+    --------
+    >>> validation = validate_xsuite_file('output.h5')
+    >>> if validation['has_machine_params']:
+    ...     print("Machine parameters found")
     """
-    # Implementation TODO
-    raise NotImplementedError("To be implemented in Phase 2")
-
-
-# ============================================================================
-# Validation
-# ============================================================================
-
-def validate_input_file(filename: Union[str, Path]) -> bool:
-    """
-    Validate XSuite input file for OpenPMD compliance.
+    should_close = False
+    if isinstance(h5_file, str):
+        h5_file = h5py.File(h5_file, 'r')
+        should_close = True
     
-    Args:
-        filename: Path to HDF5 file to validate
+    try:
+        validation = {
+            'has_machine_params': '/machineParameters/' in h5_file,
+            'has_wake_data': '/wakeData/' in h5_file,
+            'has_impedance_data': '/impedanceData/' in h5_file,
+            'has_particle_data': False,
+            'is_valid_openpmd': False
+        }
         
-    Returns:
-        True if valid, raises exception otherwise
+        # Check for particle data groups
+        for key in h5_file.keys():
+            if 'data' in key.lower():
+                validation['has_particle_data'] = True
+                break
         
-    Checks:
-        - OpenPMD root attributes present
-        - XSuite extension declared
-        - Required groups exist
-        - Units and dimensions specified correctly
+        # Check for openPMD required attributes
+        if 'openPMD' in h5_file.attrs:
+            validation['is_valid_openpmd'] = True
         
-    Example:
-        >>> validate_input_file('fcc_ee_params.h5')
-        True
-    """
-    # Implementation TODO
-    raise NotImplementedError("To be implemented in Phase 2")
+        return validation
+        
+    finally:
+        if should_close:
+            h5_file.close()
 
 
-def validate_output_file(filename: Union[str, Path]) -> bool:
+def list_components(
+    h5_file: Union[str, h5py.File],
+    data_type: str = "wake"
+) -> List[str]:
     """
-    Validate XSuite output file for OpenPMD compliance.
+    List available wake or impedance components in file.
     
-    Args:
-        filename: Path to HDF5 file to validate
+    Parameters
+    ----------
+    h5_file : str or h5py.File
+        HDF5 file path or open file object
+    data_type : str
+        Type of data: 'wake' or 'impedance'
         
-    Returns:
-        True if valid, raises exception otherwise
+    Returns
+    -------
+    list
+        List of available components/planes
+        
+    Examples
+    --------
+    >>> components = list_components('wakes.h5', data_type='wake')
+    >>> print(components)
+    ['longitudinal', 'dipole_x', 'dipole_y']
     """
-    # Implementation TODO
-    raise NotImplementedError("To be implemented in Phase 2")
+    should_close = False
+    if isinstance(h5_file, str):
+        h5_file = h5py.File(h5_file, 'r')
+        should_close = True
+    
+    try:
+        if data_type == "wake":
+            base_path = "/wakeData/"
+        elif data_type == "impedance":
+            base_path = "/impedanceData/"
+        else:
+            raise ValueError(f"Unknown data_type: {data_type}")
+        
+        if base_path not in h5_file:
+            return []
+        
+        grp = h5_file[base_path]
+        components = list(grp.keys())
+        
+        return components
+        
+    finally:
+        if should_close:
+            h5_file.close()
 
 
-# ============================================================================
-# Helper Functions
-# ============================================================================
-
-def _compute_checksum(filename: Union[str, Path]) -> str:
-    """Compute SHA256 checksum of file."""
+def compute_file_checksum(h5_file: Union[str, h5py.File], algorithm: str = "md5") -> str:
+    """
+    Compute checksum of HDF5 file for data integrity verification.
+    
+    Parameters
+    ----------
+    h5_file : str or h5py.File
+        HDF5 file path
+    algorithm : str
+        Hash algorithm: 'md5', 'sha1', 'sha256'
+        
+    Returns
+    -------
+    str
+        Hexadecimal checksum string
+        
+    Examples
+    --------
+    >>> checksum = compute_file_checksum('output.h5', algorithm='sha256')
+    >>> print(f"File checksum: {checksum}")
+    """
     import hashlib
-    sha256 = hashlib.sha256()
-    with open(filename, 'rb') as f:
-        for block in iter(lambda: f.read(4096), b''):
-            sha256.update(block)
-    return sha256.hexdigest()
+    
+    if not isinstance(h5_file, str):
+        raise ValueError("compute_file_checksum requires a file path string")
+    
+    # Select hash algorithm
+    if algorithm == "md5":
+        hasher = hashlib.md5()
+    elif algorithm == "sha1":
+        hasher = hashlib.sha1()
+    elif algorithm == "sha256":
+        hasher = hashlib.sha256()
+    else:
+        raise ValueError(f"Unknown algorithm: {algorithm}")
+    
+    # Read file in chunks and compute hash
+    with open(h5_file, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            hasher.update(chunk)
+    
+    return hasher.hexdigest()
 
 
-def _validate_units(dataset: h5py.Dataset) -> bool:
-    """Check if dataset has proper unit attributes."""
-    required = ['unitSI', 'unitDimension']
-    return all(attr in dataset.attrs for attr in required)
+# ============================================================================
+# Function Aliases for Compatibility with __init__.py
+# ============================================================================
+
+# Machine parameters
+load_machine_parameters = read_machine_parameters
+
+# Wake potentials  
+load_wake_potential = read_wake_table
+
+# Impedance
+load_impedance = read_impedance_table
+
+# Validation (alias)
+validate_openpmd_file = validate_xsuite_file
+
+
+# Particle I/O functions (stubs - to be implemented in future)
+def load_particles(h5_file: Union[str, h5py.File], iteration: int = 0, **kwargs):
+    """
+    Load particle data from HDF5 file.
+    
+    Parameters
+    ----------
+    h5_file : str or h5py.File
+        HDF5 file path or open file object
+    iteration : int
+        Iteration number to load
+    **kwargs
+        Additional parameters
+        
+    Returns
+    -------
+    particles : dict
+        Particle data dictionary
+        
+    Note
+    ----
+    This is a placeholder. Full implementation will be added in future updates.
+    For now, use the main ParticleGroup class from pmd_beamphysics.
+    """
+    raise NotImplementedError(
+        "load_particles is not yet implemented for XSuite I/O module. "
+        "This function will be added in future updates. "
+        "For now, please use the standard ParticleGroup interface."
+    )
+
+
+def save_particles(
+    h5_file: Union[str, h5py.File],
+    particles,
+    iteration: int = 0,
+    **kwargs
+):
+    """
+    Save particle data to HDF5 file in XSuite format.
+    
+    Parameters
+    ----------
+    h5_file : str or h5py.File
+        HDF5 file path or open file object
+    particles : dict or ParticleGroup
+        Particle data to save
+    iteration : int
+        Iteration number
+    **kwargs
+        Additional parameters
+        
+    Note
+    ----
+    This is a placeholder. Full implementation will be added in future updates.
+    For now, use the main ParticleGroup class from pmd_beamphysics.
+    """
+    raise NotImplementedError(
+        "save_particles is not yet implemented for XSuite I/O module. "
+        "This function will be added in future updates. "
+        "For now, please use the standard ParticleGroup interface."
+    )
+
+
+# ============================================================================
+# Function Aliases for Compatibility
+# ============================================================================
+# These aliases match the expected names in pmd_beamphysics/interfaces/__init__.py
+
+# Machine parameters
+load_machine_parameters = read_machine_parameters
+save_machine_parameters = write_machine_parameters
+
+# Wake potentials
+load_wake_potential = read_wake_table
+save_wake_potential = write_wake_table
+
+# Impedance
+load_impedance = read_impedance_table
+save_impedance = write_impedance_table
+
+# Particle functions (stubs for now - to be implemented)
+def load_particles(h5_file: Union[str, h5py.File], **kwargs):
+    """
+    Load particle data from HDF5 file.
+    
+    Note: This is a placeholder. Full implementation pending.
+    """
+    raise NotImplementedError("load_particles is not yet implemented for XSuite I/O. "
+                            "This function will be added in future updates.")
+
+def save_particles(h5_file: Union[str, h5py.File], particles, **kwargs):
+    """
+    Save particle data to HDF5 file.
+    
+    Note: This is a placeholder. Full implementation pending.
+    """
+    raise NotImplementedError("save_particles is not yet implemented for XSuite I/O. "
+                            "This function will be added in future updates.")
+
+# Alternative name for validation
+validate_file = validate_xsuite_file

@@ -19,13 +19,13 @@ pip install pytest h5py numpy
 
 ### Run All Tests
 ```bash
-pytest test_xsuite_io.py -v
+python -m pytest tests/tests_xsuite/test_xsuite_io.py -v --override-ini="addopts="
 ```
 
 ### Run Specific Test Class
 ```bash
 # Test only machine parameters
-python -m pytest tests/tests_xsuite/test_xsuite_io.py -v --override-ini="addopts="
+pytest test_xsuite_io.py::TestMachineParameters -v
 
 # Test only wake tables
 pytest test_xsuite_io.py::TestWakeTables -v

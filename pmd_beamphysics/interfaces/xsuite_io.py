@@ -7,6 +7,8 @@ This module provides functions to read and write XSuite data in openPMD format.
 import h5py
 import numpy as np
 from typing import Dict, Any, Optional, List, Union
+from datetime import datetime
+from pathlib import Path
 
 
 class XSuiteIOError(Exception):
@@ -17,7 +19,9 @@ class XSuiteIOError(Exception):
 def write_machine_parameters(
     h5_file: Union[str, h5py.File],
     params: Dict[str, Any],
-    base_path: str = "/machineParameters/"
+    base_path: str = "/machineParameters/",
+    author: str = "XSuite",
+    date: Optional[str] = None
 ) -> None:
     """
     Write machine parameters to HDF5 file in openPMD format.
@@ -30,6 +34,10 @@ def write_machine_parameters(
         Dictionary of machine parameters
     base_path : str
         Base path in HDF5 file for machine parameters
+    author : str
+        Author name for metadata
+    date : str, optional
+        Creation date in ISO 8601 format. If None, uses current date.
         
     Examples
     --------
@@ -39,7 +47,7 @@ def write_machine_parameters(
     ...     'harmonic_number': 132500,
     ...     'particles_per_bunch': 1.7e11
     ... }
-    >>> write_machine_parameters('output.h5', params)
+    >>> write_machine_parameters('output.h5', params, author='MyTeam')
     """
     should_close = False
     if isinstance(h5_file, str):
@@ -47,6 +55,28 @@ def write_machine_parameters(
         should_close = True
     
     try:
+        # Add openPMD compliance attributes to root if not present
+        if 'openPMD' not in h5_file.attrs:
+            h5_file.attrs['openPMD'] = '1.1.0'
+        if 'openPMDextension' not in h5_file.attrs:
+            h5_file.attrs['openPMDextension'] = 'beamPhysics'
+        if 'basePath' not in h5_file.attrs:
+            h5_file.attrs['basePath'] = '/xsuite/'
+        if 'meshesPath' not in h5_file.attrs:
+            h5_file.attrs['meshesPath'] = 'simulationData/'
+        if 'particlesPath' not in h5_file.attrs:
+            h5_file.attrs['particlesPath'] = 'particleData/'
+        if 'author' not in h5_file.attrs:
+            h5_file.attrs['author'] = author
+        if 'software' not in h5_file.attrs:
+            h5_file.attrs['software'] = 'xsuite_io'
+        if 'softwareVersion' not in h5_file.attrs:
+            h5_file.attrs['softwareVersion'] = '1.0'
+        if 'date' not in h5_file.attrs:
+            h5_file.attrs['date'] = date or datetime.now().isoformat() + 'Z'
+        if 'comment' not in h5_file.attrs:
+            h5_file.attrs['comment'] = 'FCC-ee booster machine parameters in openPMD format'
+        
         # Create group if it doesn't exist
         if base_path not in h5_file:
             grp = h5_file.create_group(base_path)
@@ -112,7 +142,9 @@ def write_wake_table(
     wake: np.ndarray,
     component: str = "longitudinal",
     base_path: str = "/wakeData/",
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None,
+    author: str = "XSuite",
+    date: Optional[str] = None
 ) -> None:
     """
     Write wake potential table to HDF5 file.
@@ -131,12 +163,16 @@ def write_wake_table(
         Base path in HDF5 file for wake data
     metadata : dict, optional
         Additional metadata (source, date, etc.)
+    author : str
+        Author name for metadata
+    date : str, optional
+        Creation date in ISO 8601 format. If None, uses current date.
         
     Examples
     --------
     >>> z = np.linspace(0, 1, 1000)  # m
     >>> wake = np.exp(-z/0.1) * 1e6  # V/C
-    >>> write_wake_table('wakes.h5', z, wake, component='longitudinal')
+    >>> write_wake_table('wakes.h5', z, wake, component='longitudinal', author='MyTeam')
     """
     should_close = False
     if isinstance(h5_file, str):
@@ -144,6 +180,28 @@ def write_wake_table(
         should_close = True
     
     try:
+        # Add openPMD compliance attributes to root if not present
+        if 'openPMD' not in h5_file.attrs:
+            h5_file.attrs['openPMD'] = '1.1.0'
+        if 'openPMDextension' not in h5_file.attrs:
+            h5_file.attrs['openPMDextension'] = 'beamPhysics'
+        if 'basePath' not in h5_file.attrs:
+            h5_file.attrs['basePath'] = '/xsuite/'
+        if 'meshesPath' not in h5_file.attrs:
+            h5_file.attrs['meshesPath'] = 'simulationData/'
+        if 'particlesPath' not in h5_file.attrs:
+            h5_file.attrs['particlesPath'] = 'particleData/'
+        if 'author' not in h5_file.attrs:
+            h5_file.attrs['author'] = author
+        if 'software' not in h5_file.attrs:
+            h5_file.attrs['software'] = 'xsuite_io'
+        if 'softwareVersion' not in h5_file.attrs:
+            h5_file.attrs['softwareVersion'] = '1.0'
+        if 'date' not in h5_file.attrs:
+            h5_file.attrs['date'] = date or datetime.now().isoformat() + 'Z'
+        if 'comment' not in h5_file.attrs:
+            h5_file.attrs['comment'] = 'FCC-ee booster wake potential functions in openPMD format'
+        
         # Create wake data group
         wake_path = f"{base_path}{component}/"
         if wake_path in h5_file:
@@ -234,7 +292,9 @@ def write_impedance_table(
     imag_impedance: np.ndarray,
     plane: str = "longitudinal",
     base_path: str = "/impedanceData/",
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None,
+    author: str = "XSuite",
+    date: Optional[str] = None
 ) -> None:
     """
     Write impedance table to HDF5 file.
@@ -255,6 +315,10 @@ def write_impedance_table(
         Base path in HDF5 file
     metadata : dict, optional
         Additional metadata
+    author : str
+        Author name for metadata
+    date : str, optional
+        Creation date in ISO 8601 format. If None, uses current date.
     """
     should_close = False
     if isinstance(h5_file, str):
@@ -262,6 +326,28 @@ def write_impedance_table(
         should_close = True
     
     try:
+        # Add openPMD compliance attributes to root if not present
+        if 'openPMD' not in h5_file.attrs:
+            h5_file.attrs['openPMD'] = '1.1.0'
+        if 'openPMDextension' not in h5_file.attrs:
+            h5_file.attrs['openPMDextension'] = 'beamPhysics'
+        if 'basePath' not in h5_file.attrs:
+            h5_file.attrs['basePath'] = '/xsuite/'
+        if 'meshesPath' not in h5_file.attrs:
+            h5_file.attrs['meshesPath'] = 'simulationData/'
+        if 'particlesPath' not in h5_file.attrs:
+            h5_file.attrs['particlesPath'] = 'particleData/'
+        if 'author' not in h5_file.attrs:
+            h5_file.attrs['author'] = author
+        if 'software' not in h5_file.attrs:
+            h5_file.attrs['software'] = 'xsuite_io'
+        if 'softwareVersion' not in h5_file.attrs:
+            h5_file.attrs['softwareVersion'] = '1.0'
+        if 'date' not in h5_file.attrs:
+            h5_file.attrs['date'] = date or datetime.now().isoformat() + 'Z'
+        if 'comment' not in h5_file.attrs:
+            h5_file.attrs['comment'] = 'FCC-ee booster longitudinal impedance in openPMD format'
+        
         imp_path = f"{base_path}{plane}/"
         if imp_path in h5_file:
             del h5_file[imp_path]

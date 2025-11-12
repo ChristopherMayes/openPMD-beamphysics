@@ -1,0 +1,16 @@
+{
+  "conversion_timestamp": "2025-11-12T18:33:53.985700",
+  "xsuite_input_dir": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_origin/simulation_inputs",
+  "output_dir": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_pmd",
+  "author": "FCC-ee Collective Effects Team",
+  "machine_parameters": {
+    "z": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_pmd/machine/machine_z.h5",
+    "w": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_pmd/machine/machine_w.h5",
+    "zh": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_pmd/machine/machine_zh.h5",
+    "ttbar": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_pmd/machine/machine_ttbar.h5"
+  },
+  "wake_potentials": {
+    "copper": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_pmd/wakes/wake_copper.h5"
+  },
+  "impedances": 2
+}

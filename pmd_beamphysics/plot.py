@@ -106,7 +106,7 @@ def slice_plot(
         x -= particle_group["mean_" + slice_key]
         slice_key = "delta_" + slice_key  # restore
 
-    x, f1, p1, xmin, xmax = plottable_array(x, nice=nice, lim=xlim)
+    x, f1, p1, xmin, xmax = plottable_array(x, nice=nice, lim=xlim, unit_symbol=particle_group.units(slice_key).unitSymbol)
     ux = p1 + str(particle_group.units(slice_key))
 
     # Y-axis
@@ -120,7 +120,7 @@ def slice_plot(
     ymin = max([slice_dat[k].min() for k in keys])
     ymax = max([slice_dat[k].max() for k in keys])
 
-    _, f2, p2, ymin, ymax = plottable_array(np.array([ymin, ymax]), nice=nice, lim=ylim)
+    _, f2, p2, ymin, ymax = plottable_array(np.array([ymin, ymax]), nice=nice, lim=ylim, unit_symbol=uy)
     uy = p2 + uy
 
     # Form Figure
@@ -139,7 +139,8 @@ def slice_plot(
         ax.legend()
 
     # Density on r.h.s
-    y2, _, prey2, _, _ = plottable_array(slice_dat[y2_key], nice=nice, lim=None)
+    y2_unit_symbol = f"C/{particle_group.units(x_key).unitSymbol}"
+    y2, _, prey2, _, _ = plottable_array(slice_dat[y2_key], nice=nice, lim=None, unit_symbol=y2_unit_symbol)
 
     # Convert to Amps if possible
     y2_units = f"C/{particle_group.units(x_key)}"
@@ -187,7 +188,7 @@ def density_plot(
         bins = int(n / 100)
 
     # Scale to nice units and get the factor, unit prefix
-    x, f1, p1, xmin, xmax = plottable_array(particle_group[key], nice=nice, lim=xlim)
+    x, f1, p1, xmin, xmax = plottable_array(particle_group[key], nice=nice, lim=xlim, unit_symbol=particle_group.units(key).unitSymbol)
     w = particle_group["weight"]
     u1 = particle_group.units(key).unitSymbol
     ux = p1 + u1
@@ -200,11 +201,13 @@ def density_plot(
     hist, bin_edges = np.histogram(x, bins=bins, weights=w)
     hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
     hist_width = np.diff(bin_edges)
-    hist_y, hist_f, hist_prefix = nice_array(hist / hist_width)
+    # Unit for histogram is charge per unit of x-axis
+    hist_unit = f"C/{ux}" if u1.unitSymbol != "s" else "A"
+    hist_y, hist_f, hist_prefix = nice_array(hist / hist_width, unit_symbol=hist_unit)
     ax.bar(hist_x, hist_y, hist_width, color="grey")
     # Special label for C/s = A
-    if u1 == "s":
-        _, hist_prefix = nice_scale_prefix(hist_f / f1)
+    if u1.unitSymbol == "s":
+        _, hist_prefix = nice_scale_prefix(hist_f / f1, unit_symbol="A")
         ax.set_ylabel(f"{hist_prefix}A")
     else:
         ax.set_ylabel(f"{hist_prefix}C/{ux}")
@@ -299,13 +302,12 @@ def marginal_plot(
                 ylim = tuple(sorted((0.9 * y0, 1.1 * y0)))
 
     # Form nice arrays
-    x, f1, p1, xmin, xmax = plottable_array(x, nice=nice, lim=xlim)
-    y, f2, p2, ymin, ymax = plottable_array(y, nice=nice, lim=ylim)
-
-    w = particle_group["weight"]
-
     u1 = particle_group.units(key1).unitSymbol
     u2 = particle_group.units(key2).unitSymbol
+    x, f1, p1, xmin, xmax = plottable_array(x, nice=nice, lim=xlim, unit_symbol=u1)
+    y, f2, p2, ymin, ymax = plottable_array(y, nice=nice, lim=ylim, unit_symbol=u2)
+
+    w = particle_group["weight"]
     ux = p1 + u1
     uy = p2 + u2
 
@@ -363,11 +365,12 @@ def marginal_plot(
     hist, bin_edges = np.histogram(x, bins=bins, weights=w)
     hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
     hist_width = np.diff(bin_edges)
-    hist_y, hist_f, hist_prefix = nice_array(hist / hist_width)
+    hist_unit = f"C/{ux}" if u1.unitSymbol != "s" else "A"
+    hist_y, hist_f, hist_prefix = nice_array(hist / hist_width, unit_symbol=hist_unit)
     ax_marg_x.bar(hist_x, hist_y, hist_width, color="gray")
     # Special label for C/s = A
-    if u1 == "s":
-        _, hist_prefix = nice_scale_prefix(hist_f / f1)
+    if u1.unitSymbol == "s":
+        _, hist_prefix = nice_scale_prefix(hist_f / f1, unit_symbol="A")
         ax_marg_x.set_ylabel(f"{hist_prefix}A")
     else:
         ax_marg_x.set_ylabel(f"{hist_prefix}" + mathlabel(f"C/{ux}"))  # Always use tex
@@ -379,7 +382,8 @@ def marginal_plot(
     hist, bin_edges = np.histogram(y, bins=bins, weights=w)
     hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
     hist_width = np.diff(bin_edges)
-    hist_y, hist_f, hist_prefix = nice_array(hist / hist_width)
+    hist_unit = f"C/{uy}" if u2.unitSymbol != "s" else "A"
+    hist_y, hist_f, hist_prefix = nice_array(hist / hist_width, unit_symbol=hist_unit)
     ax_marg_y.barh(hist_x, hist_y, hist_width, color="gray")
     ax_marg_y.set_xlabel(f"{hist_prefix}" + mathlabel(f"C/{uy}"))  # Always use tex
 
@@ -422,12 +426,11 @@ def density_and_slice_plot(
     """
 
     # Scale to nice units and get the factor, unit prefix
-    x, f1, p1, xmin, xmax = plottable_array(particle_group[key1])
-    y, f2, p2, ymin, ymax = plottable_array(particle_group[key2])
-    w = particle_group["weight"]
-
     u1 = particle_group.units(key1).unitSymbol
     u2 = particle_group.units(key2).unitSymbol
+    x, f1, p1, xmin, xmax = plottable_array(particle_group[key1], unit_symbol=u1)
+    y, f2, p2, ymin, ymax = plottable_array(particle_group[key2], unit_symbol=u2)
+    w = particle_group["weight"]
     ux = p1 + u1
     uy = p2 + u2
 
@@ -465,7 +468,7 @@ def density_and_slice_plot(
 
     max2 = max([np.ptp(slice_dat[k]) for k in stat_keys])
 
-    f3, p3 = nice_scale_prefix(max2)
+    f3, p3 = nice_scale_prefix(max2, unit_symbol=ulist[0])
 
     u2 = ulist[0]
     assert all([u == u2 for u in ulist])
@@ -889,7 +892,7 @@ def plot_fieldmesh_rectangular_2d(
         field_2d = interpolated_values.reshape(len(x), len(y))
 
     if nice:
-        field_2d, _, prefix = nice_array(field_2d)
+        field_2d, _, prefix = nice_array(field_2d, unit_symbol=unit.unitSymbol)
     else:
         prefix = ""
 

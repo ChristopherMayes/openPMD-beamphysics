@@ -128,7 +128,7 @@ def texlabel(key: str):
 
     if key.startswith("bunching"):
         wavelength = parse_bunching_str(key)
-        x, _, prefix = nice_array(wavelength)
+        x, _, prefix = nice_array(wavelength, unit_symbol='m')
         return rf"\mathrm{{bunching~at}}~{x:.1f}~\mathrm{{ {prefix}m }}"
 
     return rf"\mathrm{{ {key} }}"

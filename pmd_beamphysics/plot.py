@@ -202,11 +202,11 @@ def density_plot(
     hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
     hist_width = np.diff(bin_edges)
     # Unit for histogram is charge per unit of x-axis
-    hist_unit = f"C/{ux}" if u1.unitSymbol != "s" else "A"
+    hist_unit = f"C/{ux}" if u1 != "s" else "A"
     hist_y, hist_f, hist_prefix = nice_array(hist / hist_width, unit_symbol=hist_unit)
     ax.bar(hist_x, hist_y, hist_width, color="grey")
     # Special label for C/s = A
-    if u1.unitSymbol == "s":
+    if u1 == "s":
         _, hist_prefix = nice_scale_prefix(hist_f / f1, unit_symbol="A")
         ax.set_ylabel(f"{hist_prefix}A")
     else:
@@ -365,11 +365,11 @@ def marginal_plot(
     hist, bin_edges = np.histogram(x, bins=bins, weights=w)
     hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
     hist_width = np.diff(bin_edges)
-    hist_unit = f"C/{ux}" if u1.unitSymbol != "s" else "A"
+    hist_unit = f"C/{ux}" if u1 != "s" else "A"
     hist_y, hist_f, hist_prefix = nice_array(hist / hist_width, unit_symbol=hist_unit)
     ax_marg_x.bar(hist_x, hist_y, hist_width, color="gray")
     # Special label for C/s = A
-    if u1.unitSymbol == "s":
+    if u1 == "s":
         _, hist_prefix = nice_scale_prefix(hist_f / f1, unit_symbol="A")
         ax_marg_x.set_ylabel(f"{hist_prefix}A")
     else:
@@ -382,7 +382,7 @@ def marginal_plot(
     hist, bin_edges = np.histogram(y, bins=bins, weights=w)
     hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
     hist_width = np.diff(bin_edges)
-    hist_unit = f"C/{uy}" if u2.unitSymbol != "s" else "A"
+    hist_unit = f"C/{uy}" if u2 != "s" else "A"
     hist_y, hist_f, hist_prefix = nice_array(hist / hist_width, unit_symbol=hist_unit)
     ax_marg_y.barh(hist_x, hist_y, hist_width, color="gray")
     ax_marg_y.set_xlabel(f"{hist_prefix}" + mathlabel(f"C/{uy}"))  # Always use tex

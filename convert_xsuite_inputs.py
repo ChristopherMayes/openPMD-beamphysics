@@ -30,6 +30,7 @@ from pmd_beamphysics.interfaces.xsuite_conversion import (
     convert_machine_parameters,
     convert_wake_potential,
     convert_impedance,
+    convert_optics,
 )
 
 
@@ -226,6 +227,42 @@ def main():
     
     print(f"✅ Impedances: {converted_impedances} files converted\n")
     
+    # ========== CONVERT OPTICS ==========
+    print("🔄 Converting optics/lattice data...")
+    optics_dir = output_dir / "optics"
+    optics_dir.mkdir(exist_ok=True)
+    
+    optics_input_dir = xsuite_input / "optics"
+    converted_optics = {}
+    
+    if optics_input_dir.exists():
+        optics_files = sorted(optics_input_dir.glob("*.json"))
+        for optics_file in optics_files:
+            try:
+                # Use filename stem as optics identifier
+                optics_name = optics_file.stem
+                output_file = optics_dir / f"optics_{optics_name}.h5"
+                optics_info = convert_optics(
+                    str(optics_file),
+                    str(output_file),
+                    author=args.author,
+                )
+                converted_optics[optics_name] = {
+                    'path': str(output_file),
+                    'n_elements': optics_info.get('n_elements', 0),
+                    'total_length': optics_info.get('total_length', 0),
+                }
+                if args.verbose:
+                    print(f"  ✅ {optics_name}: {output_file.name}")
+            except Exception as e:
+                if args.verbose:
+                    print(f"  ❌ Error converting {optics_file.name}: {e}")
+    else:
+        if args.verbose:
+            print(f"  ⚠️  Optics directory not found: {optics_input_dir}")
+    
+    print(f"✅ Optics: {len(converted_optics)} files converted\n")
+    
     # ========== SUMMARY ==========
     print("=" * 70)
     print("📊 CONVERSION SUMMARY")
@@ -233,6 +270,7 @@ def main():
     print(f"Machine parameters:  {len(converted_energies):>3} energy points")
     print(f"Wake potentials:     {len(converted_wakes):>3} materials")
     print(f"Impedances:          {converted_impedances:>3} files")
+    print(f"Optics/Lattices:     {len(converted_optics):>3} files")
     print(f"Author:              {args.author}")
     print("=" * 70)
     print(f"Output directory: {output_dir}")
@@ -247,6 +285,7 @@ def main():
         "machine_parameters": converted_energies,
         "wake_potentials": converted_wakes,
         "impedances": converted_impedances,
+        "optics": converted_optics,
     }
     
     manifest_file = output_dir / "conversion_manifest.json"

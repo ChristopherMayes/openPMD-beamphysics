@@ -22,6 +22,7 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, List
 import warnings
+import h5py
 
 from . import xsuite_io
 
@@ -446,6 +447,125 @@ def convert_impedance(
 
 
 # ============================================================================
+# Optics/Lattice Conversion
+# ============================================================================
+
+def convert_optics(
+    json_path: str,
+    h5_output: str,
+    author: str = "XSuite",
+    date: str = None,
+    verbose: bool = True
+) -> Dict[str, Any]:
+    """
+    Convert XSuite optics/lattice JSON to openPMD HDF5 format.
+    
+    Stores the lattice definition (Line object) with metadata about
+    the accelerator configuration in openPMD HDF5 format.
+    
+    Parameters
+    ----------
+    json_path : str
+        Path to XSuite optics JSON file (Line definition)
+    h5_output : str
+        Output HDF5 file path
+    author : str
+        Author name for metadata. Default is "XSuite".
+    date : str, optional
+        Creation date in ISO 8601 format. If None, uses input file modification time.
+    verbose : bool, optional
+        Print conversion progress. Default is True.
+    
+    Returns
+    -------
+    dict
+        Dictionary with optics metadata and statistics
+        
+    Raises
+    ------
+    FileNotFoundError
+        If json_path does not exist
+    ValueError
+        If JSON structure is not recognized as XSuite lattice
+        
+    Examples
+    --------
+    >>> optics_info = convert_optics(
+    ...     'fccee_h_thick.json',
+    ...     'optics_h_thick.h5',
+    ...     author='FCC-ee Team'
+    ... )
+    >>> print(f"Lattice elements: {optics_info['n_elements']}")
+    Lattice elements: 5247
+    """
+    import os
+    from datetime import datetime
+    import json as json_module
+    
+    json_path = Path(json_path)
+    if not json_path.exists():
+        raise FileNotFoundError(f"Optics JSON not found: {json_path}")
+    
+    # Get creation date from file if not provided
+    if date is None:
+        mtime = os.path.getmtime(json_path)
+        date = datetime.fromtimestamp(mtime).isoformat() + 'Z'
+    
+    if verbose:
+        print(f"Loading optics from {json_path.name}...")
+    
+    # Load JSON
+    with open(json_path, 'r') as f:
+        optics_data = json_module.load(f)
+    
+    # Extract metadata
+    xtrack_version = optics_data.get('xtrack_version', 'unknown')
+    elements_dict = optics_data.get('elements', {})
+    n_elements = len(elements_dict)
+    
+    # Count different element types
+    element_types = {}
+    for element_name, element_info in elements_dict.items():
+        element_class = element_info.get('__class__', 'Unknown')
+        element_types[element_class] = element_types.get(element_class, 0) + 1
+    
+    # Calculate total length
+    total_length = 0.0
+    for element_name, element_info in elements_dict.items():
+        if 'length' in element_info:
+            total_length += element_info['length']
+    
+    # Extract lattice name from filename
+    lattice_name = json_path.stem
+    
+    # Create metadata dictionary
+    metadata = {
+        'lattice_name': lattice_name,
+        'n_elements': n_elements,
+        'total_length': total_length,
+        'xtrack_version': xtrack_version,
+    }
+    
+    # Add element type statistics
+    for elem_type, count in sorted(element_types.items()):
+        metadata[f'n_{elem_type.lower()}'] = count
+    
+    # Write to HDF5
+    xsuite_io.write_optics_data(h5_output, optics_data, metadata, author=author, date=date)
+    
+    if verbose:
+        print(f"  ✓ Loaded {n_elements} elements")
+        print(f"  ✓ Total length: {total_length:.3f} m")
+        print(f"  ✓ XSuite version: {xtrack_version}")
+        print(f"  ✓ Element types: {', '.join(f'{k}({v})' for k, v in sorted(element_types.items()))}")
+        print(f"  ✓ Author: {author}")
+        print(f"  ✓ Date: {date}")
+        print(f"  ✓ Wrote to {h5_output}")
+    
+    return metadata
+
+
+# ============================================================================
 # Synthetic Test Particle Generation
 # ============================================================================
 
@@ -601,6 +721,289 @@ def generate_test_particles(
 
 
 # ============================================================================
+# Bunch Data Conversion
+# ============================================================================
+
+def convert_bunch_initial(
+    json_path: str,
+    h5_output: str,
+    author: str = "XSuite",
+    date: str = None,
+    verbose: bool = True
+) -> Dict[str, Any]:
+    """
+    Convert bunch initial conditions (initial.json) to openPMD HDF5 format.
+    
+    Converts XSuite particle distribution data into openPMD compliant format,
+    storing particle coordinates, momenta, and other phase space variables.
+    
+    Parameters
+    ----------
+    json_path : str
+        Path to bunch/initial.json file
+    h5_output : str
+        Output HDF5 file path
+    author : str
+        Author name for metadata. Default is "XSuite".
+    date : str, optional
+        Creation date in ISO 8601 format. If None, uses input file modification time.
+    verbose : bool, optional
+        Print extraction progress. Default is True.
+    
+    Returns
+    -------
+    dict
+        Dictionary of bunch statistics (n_particles, coordinates, momenta)
+    """
+    import os
+    from datetime import datetime
+    
+    json_path = Path(json_path)
+    if not json_path.exists():
+        raise FileNotFoundError(f"Bunch initial JSON not found: {json_path}")
+    
+    # Get creation date from file if not provided
+    if date is None:
+        mtime = os.path.getmtime(json_path)
+        date = datetime.fromtimestamp(mtime).isoformat() + 'Z'
+    
+    if verbose:
+        print(f"Loading bunch initial data from {json_path.name}...")
+    
+    # Load JSON data
+    with open(json_path, 'r') as f:
+        bunch_data = json.load(f)
+    
+    # Extract particle coordinates and momenta
+    n_particles = len(bunch_data.get('x', []))
+    
+    if verbose:
+        print(f"  Particles: {n_particles}")
+    
+    # Create HDF5 file with openPMD structure
+    h5_output = Path(h5_output)
+    h5_output.parent.mkdir(parents=True, exist_ok=True)
+    
+    with h5py.File(str(h5_output), 'w') as f:
+        # Root attributes (openPMD standard)
+        f.attrs['openPMD'] = '1.1.0'
+        f.attrs['openPMDextension'] = 'beamPhysics'
+        f.attrs['basePath'] = '/xsuite/'
+        f.attrs['meshesPath'] = 'simulationData/'
+        f.attrs['particlesPath'] = 'particleData/'
+        
+        # Recommended metadata attributes
+        f.attrs['author'] = author
+        f.attrs['software'] = 'xsuite_io'
+        f.attrs['softwareVersion'] = '1.0'
+        f.attrs['date'] = date
+        f.attrs['comment'] = 'XSuite bunch initial conditions in openPMD format'
+        
+        # Create particle data group
+        bunch_group = f.create_group('/bunchData')
+        bunch_group.attrs['n_particles'] = n_particles
+        bunch_group.attrs['source_file'] = json_path.name
+        
+        # Store particle phase space coordinates
+        phase_space_vars = [
+            ('x', 'Horizontal position [m]'),
+            ('y', 'Vertical position [m]'),
+            ('px', 'Horizontal momentum [rad]'),
+            ('py', 'Vertical momentum [rad]'),
+            ('zeta', 'Longitudinal position [m]'),
+            ('delta', 'Relative momentum spread'),
+            ('ptau', 'Relative time'),
+        ]
+        
+        for var_name, var_desc in phase_space_vars:
+            if var_name in bunch_data:
+                data = np.array(bunch_data[var_name], dtype=np.float64)
+                dset = bunch_group.create_dataset(
+                    var_name,
+                    data=data,
+                    compression='gzip',
+                    compression_opts=4
+                )
+                dset.attrs['description'] = var_desc
+                if verbose and var_name in ['x', 'y', 'zeta']:
+                    print(f"  {var_name}: min={data.min():.6e}, max={data.max():.6e}, mean={data.mean():.6e}")
+        
+        # Store particle IDs and metadata
+        metadata_vars = [
+            'particle_id', 'at_element', 'at_turn', 'state',
+            'parent_particle_id', 'weight', 'charge_ratio',
+            'start_tracking_at_element'
+        ]
+        
+        for var_name in metadata_vars:
+            if var_name in bunch_data:
+                data = bunch_data[var_name]
+                if isinstance(data, (list, np.ndarray)):
+                    dtype = np.int64 if 'id' in var_name or 'state' in var_name or 'turn' in var_name or 'element' in var_name else np.float64
+                    dset = bunch_group.create_dataset(
+                        var_name,
+                        data=np.array(data, dtype=dtype),
+                        compression='gzip',
+                        compression_opts=4
+                    )
+    
+    if verbose:
+        print(f"✓ Bunch data converted to {h5_output.name}")
+    
+    return {
+        'n_particles': n_particles,
+        'source_file': json_path.name,
+        'output_file': str(h5_output)
+    }
+
+
+# ============================================================================
+# Electron Cloud Data Conversion
+# ============================================================================
+
+def convert_ecloud_config(
+    json_path: str,
+    h5_output: str,
+    author: str = "XSuite",
+    date: str = None,
+    verbose: bool = True
+) -> Dict[str, Any]:
+    """
+    Convert electron cloud configuration (eclouds.json) to openPMD HDF5 format.
+    
+    Converts XSuite ecloud element definitions into openPMD compliant format,
+    storing lattice positions and element properties.
+    
+    Parameters
+    ----------
+    json_path : str
+        Path to ecloud/eclouds.json file
+    h5_output : str
+        Output HDF5 file path
+    author : str
+        Author name for metadata. Default is "XSuite".
+    date : str, optional
+        Creation date in ISO 8601 format. If None, uses input file modification time.
+    verbose : bool, optional
+        Print extraction progress. Default is True.
+    
+    Returns
+    -------
+    dict
+        Dictionary of ecloud configuration statistics
+    """
+    import os
+    from datetime import datetime
+    
+    json_path = Path(json_path)
+    if not json_path.exists():
+        raise FileNotFoundError(f"Ecloud JSON not found: {json_path}")
+    
+    # Get creation date from file if not provided
+    if date is None:
+        mtime = os.path.getmtime(json_path)
+        date = datetime.fromtimestamp(mtime).isoformat() + 'Z'
+    
+    if verbose:
+        print(f"Loading ecloud configuration from {json_path.name}...")
+    
+    # Load JSON data
+    with open(json_path, 'r') as f:
+        ecloud_data = json.load(f)
+    
+    # Parse structure: sections (mb, mbc, mqd, etc.) with elements
+    sections = list(ecloud_data.keys())
+    total_elements = sum(len(section_data) for section_data in ecloud_data.values())
+    
+    if verbose:
+        print(f"  Sections: {sections}")
+        print(f"  Total elements: {total_elements}")
+    
+    # Create HDF5 file with openPMD structure
+    h5_output = Path(h5_output)
+    h5_output.parent.mkdir(parents=True, exist_ok=True)
+    
+    with h5py.File(str(h5_output), 'w') as f:
+        # Root attributes (openPMD standard)
+        f.attrs['openPMD'] = '1.1.0'
+        f.attrs['openPMDextension'] = 'beamPhysics'
+        f.attrs['basePath'] = '/xsuite/'
+        f.attrs['meshesPath'] = 'simulationData/'
+        f.attrs['particlesPath'] = 'particleData/'
+        
+        # Recommended metadata attributes
+        f.attrs['author'] = author
+        f.attrs['software'] = 'xsuite_io'
+        f.attrs['softwareVersion'] = '1.0'
+        f.attrs['date'] = date
+        f.attrs['comment'] = 'XSuite electron cloud configuration in openPMD format'
+        
+        # Create ecloud data group
+        ecloud_group = f.create_group('/ecloudData')
+        ecloud_group.attrs['n_sections'] = len(sections)
+        ecloud_group.attrs['n_elements'] = total_elements
+        ecloud_group.attrs['source_file'] = json_path.name
+        
+        # Store configuration for each section
+        for section_name, elements in ecloud_data.items():
+            section_group = ecloud_group.create_group(section_name)
+            section_group.attrs['n_elements'] = len(elements)
+            
+            # Extract data arrays for all elements
+            elem_names = []
+            lengths = []
+            positions = []
+            
+            for elem_name, elem_data in elements.items():
+                elem_names.append(elem_name)
+                lengths.append(elem_data.get('length', 0.0))
+                positions.append(elem_data.get('s', 0.0))
+            
+            # Store as datasets
+            if elem_names:
+                # Element names (as ASCII strings)
+                dt = h5py.string_dtype(encoding='ascii', length=max(len(n) for n in elem_names))
+                section_group.create_dataset(
+                    'element_names',
+                    data=np.array(elem_names, dtype=dt),
+                    compression='gzip'
+                )
+            
+            if lengths:
+                dset = section_group.create_dataset(
+                    'lengths',
+                    data=np.array(lengths, dtype=np.float64),
+                    compression='gzip'
+                )
+                dset.attrs['unit'] = 'm'
+                dset.attrs['description'] = 'Element lengths'
+            
+            if positions:
+                dset = section_group.create_dataset(
+                    'positions',
+                    data=np.array(positions, dtype=np.float64),
+                    compression='gzip'
+                )
+                dset.attrs['unit'] = 'm'
+                dset.attrs['description'] = 'Lattice positions'
+            
+            if verbose:
+                print(f"  {section_name}: {len(elements)} elements, "
+                      f"s_range: [{min(positions):.2f}, {max(positions):.2f}] m")
+    
+    if verbose:
+        print(f"✓ Ecloud configuration converted to {h5_output.name}")
+    
+    return {
+        'n_sections': len(sections),
+        'n_elements': total_elements,
+        'sections': sections,
+        'source_file': json_path.name,
+        'output_file': str(h5_output)
+    }
+
+
+# ============================================================================
 # Batch Conversion (All-in-One)
 # ============================================================================
 
@@ -662,6 +1065,8 @@ def convert_all_xsuite_data(
     result = {
         'wakes': {},
         'impedances': {},
+        'bunch': {},
+        'ecloud': {},
     }
     
     if verbose:
@@ -740,9 +1145,41 @@ def convert_all_xsuite_data(
     else:
         warnings.warn(f"Impedance directory not found: {imp_dir}")
     
-    # 4. Generate synthetic test particles
+    # 4. Convert bunch initial conditions
     if verbose:
-        print("\n[4/4] Generating synthetic test particles...")
+        print("\n[4/5] Converting bunch initial conditions...")
+    bunch_dir = input_dir / 'simulation_inputs' / 'bunch'
+    if bunch_dir.exists():
+        bunch_files = sorted(bunch_dir.glob('*.json'))
+        for bunch_file in bunch_files:
+            try:
+                bunch_h5 = output_dir / f'bunch_{bunch_file.stem}.h5'
+                bunch_stats = convert_bunch_initial(str(bunch_file), str(bunch_h5), verbose=verbose)
+                result['bunch'][bunch_file.stem] = str(bunch_h5)
+            except Exception as e:
+                warnings.warn(f"Failed to convert {bunch_file}: {e}")
+    else:
+        warnings.warn(f"Bunch directory not found: {bunch_dir}")
+    
+    # 5. Convert electron cloud configuration
+    if verbose:
+        print("\n[5/6] Converting electron cloud configuration...")
+    ecloud_dir = input_dir / 'simulation_inputs' / 'ecloud'
+    if ecloud_dir.exists():
+        ecloud_json_files = sorted(ecloud_dir.glob('*.json'))
+        for ecloud_file in ecloud_json_files:
+            try:
+                ecloud_h5 = output_dir / f'ecloud_{ecloud_file.stem}.h5'
+                ecloud_stats = convert_ecloud_config(str(ecloud_file), str(ecloud_h5), verbose=verbose)
+                result['ecloud'][ecloud_file.stem] = str(ecloud_h5)
+            except Exception as e:
+                warnings.warn(f"Failed to convert {ecloud_file}: {e}")
+    else:
+        warnings.warn(f"Ecloud directory not found: {ecloud_dir}")
+    
+    # 6. Generate synthetic test particles
+    if verbose:
+        print("\n[6/6] Generating synthetic test particles...")
     if params:
         test_particles_h5 = output_dir / 'test_particles_gaussian.h5'
         try:

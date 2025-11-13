@@ -1,5 +1,5 @@
 {
-  "conversion_timestamp": "2025-11-12T18:33:53.985700",
+  "conversion_timestamp": "2025-11-13T10:03:08.034120",
   "xsuite_input_dir": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_origin/simulation_inputs",
   "output_dir": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_pmd",
   "author": "FCC-ee Collective Effects Team",
@@ -12,5 +12,42 @@
   "wake_potentials": {
     "copper": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_pmd/wakes/wake_copper.h5"
   },
-  "impedances": 2
+  "impedances": 2,
+  "optics": {
+    "PA31_2023_02_09_10_23": {
+      "path": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_pmd/optics/optics_PA31_2023_02_09_10_23.h5",
+      "n_elements": 84802,
+      "total_length": 162838.91741662
+    },
+    "PA31_2024_07_08_10_22": {
+      "path": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_pmd/optics/optics_PA31_2024_07_08_10_22.h5",
+      "n_elements": 84802,
+      "total_length": 162838.91741662
+    },
+    "fccee_h_thick": {
+      "path": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_pmd/optics/optics_fccee_h_thick.h5",
+      "n_elements": 17858,
+      "total_length": 90658.41563652808
+    },
+    "fccee_h_thin": {
+      "path": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_pmd/optics/optics_fccee_h_thin.h5",
+      "n_elements": 123742,
+      "total_length": 90658.41563652808
+    },
+    "heb_ring_withcav": {
+      "path": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_pmd/optics/optics_heb_ring_withcav.h5",
+      "n_elements": 34804,
+      "total_length": 90658.74531910887
+    },
+    "line": {
+      "path": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_pmd/optics/optics_line.h5",
+      "n_elements": 36954,
+      "total_length": 705.5729651066541
+    },
+    "line_with_spacecharge_and_particle": {
+      "path": "/Users/aghribi/Documents/work_space/projects_active/FCCee/_development/openPMD-beamphysics/tests/tests_xsuite/xsuite_pmd/optics/optics_line_with_spacecharge_and_particle.h5",
+      "n_elements": 0,
+      "total_length": 0.0
+    }
+  }
 }

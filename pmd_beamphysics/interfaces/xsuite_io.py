@@ -6,7 +6,7 @@ This module provides functions to read and write XSuite data in openPMD format.
 
 import h5py
 import numpy as np
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List, Union, Tuple
 from datetime import datetime
 from pathlib import Path
 
@@ -649,6 +649,150 @@ def save_particles(
         "This function will be added in future updates. "
         "For now, please use the standard ParticleGroup interface."
     )
+
+
+# ============================================================================
+# Optics/Lattice I/O
+# ============================================================================
+
+def write_optics_data(
+    h5_file: Union[str, h5py.File],
+    optics_data: Dict[str, Any],
+    metadata: Optional[Dict[str, Any]] = None,
+    base_path: str = "/opticsData/",
+    author: str = "XSuite",
+    date: Optional[str] = None
+) -> None:
+    """
+    Write optics/lattice data to HDF5 file in openPMD format.
+    
+    Parameters
+    ----------
+    h5_file : str or h5py.File
+        HDF5 file path or open file object
+    optics_data : dict
+        Complete lattice definition (XSuite Line object as dict)
+    metadata : dict, optional
+        Lattice metadata (element counts, lengths, etc.)
+    base_path : str
+        Base path in HDF5 file for optics data
+    author : str
+        Author name for metadata
+    date : str, optional
+        Creation date in ISO 8601 format. If None, uses current date.
+    """
+    should_close = False
+    if isinstance(h5_file, str):
+        h5_file = h5py.File(h5_file, 'w')
+        should_close = True
+    
+    try:
+        # Add openPMD compliance attributes to root if not present
+        if 'openPMD' not in h5_file.attrs:
+            h5_file.attrs['openPMD'] = '1.1.0'
+        if 'openPMDextension' not in h5_file.attrs:
+            h5_file.attrs['openPMDextension'] = 'beamPhysics'
+        if 'basePath' not in h5_file.attrs:
+            h5_file.attrs['basePath'] = '/xsuite/'
+        if 'meshesPath' not in h5_file.attrs:
+            h5_file.attrs['meshesPath'] = 'simulationData/'
+        if 'particlesPath' not in h5_file.attrs:
+            h5_file.attrs['particlesPath'] = 'particleData/'
+        if 'author' not in h5_file.attrs:
+            h5_file.attrs['author'] = author
+        if 'software' not in h5_file.attrs:
+            h5_file.attrs['software'] = 'xsuite_io'
+        if 'softwareVersion' not in h5_file.attrs:
+            h5_file.attrs['softwareVersion'] = '1.0'
+        if 'date' not in h5_file.attrs:
+            h5_file.attrs['date'] = date or datetime.now().isoformat() + 'Z'
+        if 'comment' not in h5_file.attrs:
+            h5_file.attrs['comment'] = 'FCC-ee booster optics/lattice definition in openPMD format'
+        
+        # Create optics data group
+        if base_path not in h5_file:
+            grp = h5_file.create_group(base_path)
+        else:
+            grp = h5_file[base_path]
+        
+        # Store lattice metadata
+        if metadata:
+            for key, value in metadata.items():
+                try:
+                    grp.attrs[key] = value
+                except (TypeError, ValueError):
+                    # Skip non-serializable attributes
+                    pass
+        
+        # Store complete optics data as JSON string (for complex nested structures)
+        import json as json_module
+        optics_json = json_module.dumps(optics_data, indent=2)
+        grp.attrs['lattice_json_length'] = len(optics_json)
+        
+        # Store JSON in compressed text dataset (HDF5 strings have limitations)
+        json_dataset = grp.create_dataset(
+            'lattice_definition',
+            data=np.array(optics_json, dtype=h5py.string_dtype(encoding='utf-8'))
+        )
+        json_dataset.attrs['format'] = 'JSON'
+        json_dataset.attrs['description'] = 'Complete XSuite lattice definition'
+                
+    finally:
+        if should_close:
+            h5_file.close()
+
+
+def read_optics_data(
+    h5_file: Union[str, h5py.File],
+    base_path: str = "/opticsData/"
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Read optics/lattice data from HDF5 file.
+    
+    Parameters
+    ----------
+    h5_file : str or h5py.File
+        HDF5 file path or open file object
+    base_path : str
+        Base path in HDF5 file for optics data
+        
+    Returns
+    -------
+    optics_data : dict
+        Lattice definition
+    metadata : dict
+        Optics metadata (element counts, lengths, etc.)
+    """
+    import json as json_module
+    
+    should_close = False
+    if isinstance(h5_file, str):
+        h5_file = h5py.File(h5_file, 'r')
+        should_close = True
+    
+    try:
+        if base_path not in h5_file:
+            raise XSuiteIOError(f"Path {base_path} not found in HDF5 file")
+        
+        grp = h5_file[base_path]
+        
+        # Read metadata attributes
+        metadata = dict(grp.attrs)
+        
+        # Read lattice definition
+        if 'lattice_definition' in grp:
+            json_str = grp['lattice_definition'][()]
+            if isinstance(json_str, bytes):
+                json_str = json_str.decode('utf-8')
+            optics_data = json_module.loads(json_str)
+        else:
+            optics_data = {}
+        
+        return optics_data, metadata
+        
+    finally:
+        if should_close:
+            h5_file.close()
 
 
 # ============================================================================

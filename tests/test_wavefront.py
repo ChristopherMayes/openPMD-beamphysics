@@ -89,7 +89,7 @@ def test_gaussian_propagation():
 
     W2 = drift_wavefront(W0, zR)
 
-    W3 = drift_wavefront_advanced(W0, zR, Rcurv=10)
+    W3 = drift_wavefront_advanced(W0, zR, curvature=1 / 10)
 
     assert np.isclose(W1.sigma_x, np.sqrt(2) * W0.sigma_x)
 

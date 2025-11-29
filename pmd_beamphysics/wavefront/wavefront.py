@@ -24,6 +24,8 @@ from pmd_beamphysics.interfaces.genesis import (
     load_genesis4_fields,
 )
 
+from pmd_beamphysics.wavefront.propagators import drift_wavefront
+
 
 def fftfreq_max(n, d=1.0):
     """Return the maximum frequency in fftfreq for given n and d."""
@@ -75,6 +77,32 @@ class WavefrontBase(ABC):
     Convenience functions for standard domain values
     """
 
+    def __post_init__(self):
+        """
+        Validate inputs after dataclass initialization
+        """
+        # Validate field shapes match
+        if self.Ex is not None and self.Ey is not None:
+            if self.Ex.shape != self.Ey.shape:
+                raise ValueError(
+                    f"Ex shape {self.Ex.shape} != Ey shape {self.Ey.shape}"
+                )
+
+        # Validate at least one field exists
+        if self.Ex is None and self.Ey is None:
+            raise ValueError("At least one of Ex or Ey must be provided")
+
+        # Validate positive spacing
+        for attr in ["dx", "dy", "dz", "wavelength"]:
+            val = getattr(self, attr)
+            if val <= 0:
+                raise ValueError(f"{attr} must be positive, got {val}")
+
+        ## Validate field is complex
+        # for field, name in [(self.Ex, 'Ex'), (self.Ey, 'Ey')]:
+        #    if field is not None and not np.iscomplexobj(field):
+        #        raise TypeError(f"{name} must be complex dtype, got {field.dtype}")
+
     @property
     def shape(self):
         if self.Ex is None:
@@ -96,6 +124,13 @@ class WavefrontBase(ABC):
     @property
     def k0(self):
         return 2 * pi / self.wavelength
+
+    @property
+    def photon_energy(self) -> float:
+        """
+        Central photon energy in eV
+        """
+        return self.k0 * hbar * c / e
 
     @property
     def nx(self):
@@ -279,7 +314,11 @@ class WavefrontBase(ABC):
         P = np.sum(self.intensity, axis=axis)
         x = getattr(self, key + "vec")
         _, variance = mean_variance_calc(x, P)
+
         return np.sqrt(variance)
+
+    def drift(self, z, curvature=0):
+        return drift_wavefront(self, z, curvature=curvature)
 
     def pad(self, nx=(0, 0), ny=(0, 0), nz=(0, 0)):
         """
@@ -301,6 +340,84 @@ class WavefrontBase(ABC):
     def copy(self):
         """Returns a deep copy"""
         return deepcopy(self)
+
+    def _repr_pretty_(self, p, cycle):
+        """IPython/Jupyter pretty-print representation"""
+        if cycle:
+            p.text(f"{self.__class__.__name__}(...)")
+            return
+
+        def summarize_field(field, name):
+            if field is None:
+                return f"{name}: None"
+            return f"{name}: {field.shape}"
+
+        lines = [
+            f"{self.__class__.__name__}(",
+            f"  wavelength: {self.wavelength:.6e} m",
+            f"  shape: {self.shape}",
+            f"  spacing: dx={self.dx:.3e}, dy={self.dy:.3e}, dz={self.dz:.3e} m",
+            f"  {summarize_field(self.Ex, 'Ex')}",
+            f"  {summarize_field(self.Ey, 'Ey')}",
+            ")",
+        ]
+        p.text("\n".join(lines))
+
+    def _repr_html_(self):
+        """Rich HTML representation for Jupyter notebooks"""
+        # Determine which fields exist
+        fields = []
+        if self.Ex is not None:
+            fields.append("Ex")
+        if self.Ey is not None:
+            fields.append("Ey")
+        field_str = ", ".join(fields) if fields else "None"
+
+        # Add photon energy for easier reference
+        photon_energy_str = ""
+        if hasattr(self, "photon_energy"):
+            photon_energy_str = f"""
+                <tr>
+                    <td><b>photon energy</b></td>
+                    <td>{self.photon_energy:.6e} eV</td>
+                </tr>
+            """
+
+        fmt = ""
+
+        html = f"""
+        <div style="font-family: monospace; border: 1px solid #ccc; padding: 10px; max-width: 600px;">
+            <h4 style="margin-top: 0;">{self.__class__.__name__}</h4>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr style="background-color: #f0f0f0;">
+                    <td><b>wavelength</b></td>
+                    <td>{self.wavelength:{fmt}} m</td>
+                </tr>
+                {photon_energy_str}
+                <tr>
+                    <td><b>grid shape</b></td>
+                    <td>{self.shape}</td>
+                </tr>
+                <tr style="background-color: #f0f0f0;">
+                    <td><b>dx</b></td>
+                    <td>{self.dx:{fmt}} m</td>
+                </tr>
+                <tr>
+                    <td><b>dy</b></td>
+                    <td>{self.dy:{fmt}} m</td>
+                </tr>
+                <tr style="background-color: #f0f0f0;">
+                    <td><b>dz</b></td>
+                    <td>{self.dz:{fmt}} m</td>
+                </tr>
+                <tr>
+                    <td><b>fields</b></td>
+                    <td>{field_str}</td>
+                </tr>
+            </table>
+        </div>
+        """
+        return html
 
 
 @dataclass
@@ -350,6 +467,10 @@ class WavefrontK(WavefrontBase):
         """
         See Wavefront.to_kspace()
         """
+
+        if self.in_rspace:
+            return self
+
         # Normalized for the Plancherel theorem (see def energy)
         norm = (
             self.dx
@@ -402,14 +523,6 @@ class WavefrontK(WavefrontBase):
 
         return np.sum(self.spectral_energy_density) * self.dkx * self.dky * self.dkz
 
-    # TODO: reconsider photon units
-    @property
-    def photon_energy(self) -> float:
-        """
-        Central photon energy in eV
-        """
-        return self.k0 * hbar * c / e
-
     @property
     def photon_energy_vec(self) -> np.ndarray:
         """
@@ -423,6 +536,9 @@ class WavefrontK(WavefrontBase):
         Photon energy spectrum dU/dE in J/eV
 
         dU/dE = (ε0/2) ∫∫ |Ẽ|² dkx dky  / (ħc/e)
+
+
+        See .photon_energy_vec for the correspomnding photon energies in eV.
         """
         u_kz_J_m = (
             np.sum(self.spectral_energy_density, axis=(0, 1)) * self.dkx * self.dky
@@ -508,7 +624,7 @@ class WavefrontK(WavefrontBase):
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
 
-    def plot_photon_spectral_energy_density(self, xlim=None, ax=None):
+    def plot_photon_energy_spectrum(self, xlim=None, ax=None):
         x = self.photon_energy_vec  # eV
         y = self.photon_energy_spectrum  # J/eV
 
@@ -762,6 +878,9 @@ class Wavefront(WavefrontBase):
         Here  [...] is similar for y, z, etc. We use `norm='ortho'` to simplify the symmetry in the code.
 
         """
+
+        if self.in_kspace:
+            return self
 
         fftn = backend.fft.fftn
         fftshift = backend.fft.fftshift

@@ -3,10 +3,24 @@ from dataclasses import replace
 
 import numpy as np
 
-from pmd_beamphysics.wavefront.wavefront import Wavefront
+
+def drift_wavefront(w, z, backend=np, device="cpu", curvature=0):
+    """
+    Propagate a wavefront `w` by distance `z` in real space,
+    modifying each slice along the z-dimension.
+    """
+
+    if curvature == 0:
+        w2 = drift_wavefront_basic(w, z, backend=backend, device=device)
+    else:
+        w2 = drift_wavefront_advanced(
+            w, z, backend=backend, device=device, curvature=curvature
+        )
+
+    return w2
 
 
-def drift_wavefront(w: Wavefront, z, backend=np, device="cpu"):
+def drift_wavefront_basic(w, z, backend=np, device="cpu"):
     """
     Propagate a wavefront `w` by distance `z` in real space,
     modifying each slice along the z-dimension.
@@ -87,28 +101,29 @@ def drift_wavefront(w: Wavefront, z, backend=np, device="cpu"):
     return replace(w, Ex=Ex_drifted, Ey=Ey_drifted)
 
 
-def drift_wavefront_advanced(w: Wavefront, z, Rcurv=2):
+def drift_wavefront_advanced(w, z, backend=np, device="cpu", curvature=1):
     """
-    Work in progress
+    This adds a curvature correction to the basic drift propagator,
+    and resizes the grid spacing.
     """
     if z == 0:
         return w.copy()
 
-    x_mesh, y_mesh, _ = np.meshgrid(w.xvec, w.yvec, w.zvec, indexing="ij")
+    x_mesh, y_mesh, _ = backend.meshgrid(w.xvec, w.yvec, w.zvec, indexing="ij")
 
-    curv = np.exp(-1j * np.pi * (x_mesh**2 + y_mesh**2) / w.wavelength / Rcurv)
+    curv = np.exp(-1j * backend.pi * (x_mesh**2 + y_mesh**2) / w.wavelength * curvature)
 
     w = replace(w)
     w.Ex = w.Ex * curv if w.Ex is not None else None
     w.Ey = w.Ey * curv if w.Ey is not None else None
 
-    z_eff = Rcurv * z / (Rcurv + z)  # float
+    z_eff = z / (1 + curvature * z)  # float
     M = z_eff / z  # float
 
-    w = drift_wavefront(w, z_eff)
+    w = drift_wavefront_basic(w, z_eff, backend=backend, device=device)
 
-    print("effective propagation distance: ", z_eff, "scaling factor: ", M)
-    Fr = (1 / M) * np.exp(
+    # print("effective propagation distance: ", z_eff, "scaling factor: ", M)
+    Fr = (1 / M) * backend.exp(
         -1j
         * np.pi
         / z

@@ -8,12 +8,16 @@ TEXLABEL = {
     # 'mass',
     "higher_order_energy_spread": r"\sigma_{E_{(2)}}",
     "higher_order_energy": r"E_{(2)}",
+    "E": "E",
     "Ex": "E_x",
     "Ey": "E_y",
     "Ez": "E_z",
+    "Er": "E_r",
+    "B": "B",
     "Bx": "B_x",
     "By": "B_y",
     "Bz": "B_z",
+    "Br": "B_r",
     "Etheta": r"E_{\theta}",
     "Btheta": r"B_{\theta}",
     "px": "p_x",
@@ -99,19 +103,21 @@ def texlabel(key: str):
         return TEXLABEL[key]
 
     # Operators
-    for prefix in ["sigma_", "mean_", "min_", "max_", "ptp_", "delta_"]:
+    for prefix in ("sigma_", "mean_", "min_", "max_", "ptp_", "delta_", "abs_"):
         if key.startswith(prefix):
-            pre = prefix[:-1]
-            key0 = key[len(prefix) :]
+            key0 = key.removeprefix(prefix)
             tex0 = texlabel(key0)
+            prefix = prefix.removesuffix("_")
 
-            if pre in ["min", "max"]:
-                return f"\\{pre}({tex0})"
-            if pre == "sigma":
+            if prefix == "abs":
+                return rf"\left|{tex0}\right|"
+            if prefix in ("min", "max"):
+                return f"\\{prefix}({tex0})"
+            if prefix == "sigma":
                 return rf"\sigma_{{ {tex0} }}"
-            if pre == "delta":
+            if prefix == "delta":
                 return rf"{tex0} - \left<{tex0}\right>"
-            if pre == "mean":
+            if prefix == "mean":
                 return rf"\left<{tex0}\right>"
 
     if key.startswith("cov_"):

@@ -40,6 +40,9 @@ def add_gaussian(
         zR = n π w0^2 / λ
         Here we set n=1.
 
+        Note that this waist is twice the rms beamsize:
+        w0 = 2*sigma_x
+
 
 
     References

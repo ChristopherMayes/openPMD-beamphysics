@@ -81,9 +81,8 @@ class WavefrontBase(ABC):
     Ex: np.ndarray | None = None
     Ey: np.ndarray | None = None
 
-    wavelength: float = 1  # m
+    wavelength: float = 1.0  # m
     axis_labels: ClassVar[tuple[str, str, str]] = ("", "", "")
-    spatial_domain: ClassVar[SpatialDomain]
 
     def __post_init__(self):
         """
@@ -110,6 +109,10 @@ class WavefrontBase(ABC):
         # for field, name in [(self.Ex, 'Ex'), (self.Ey, 'Ey')]:
         #    if field is not None and not np.iscomplexobj(field):
         #        raise TypeError(f"{name} must be complex dtype, got {field.dtype}")
+
+    @property
+    @abstractmethod
+    def spatial_domain(self) -> SpatialDomain: ...
 
     @property
     @abstractmethod
@@ -448,14 +451,17 @@ class WavefrontK(WavefrontBase):
     Ex: np.ndarray | None = None  # V m^2
     Ey: np.ndarray | None = None  # V m^2
 
-    dkx: float = 1  # rad/m  # type: ignore[override]
-    dky: float = 1  # rad/m  # type: ignore[override]
-    dkz: float = 1  # rad/m  # type: ignore[override]
+    dkx: float = 1.0  # rad/m  # type: ignore[override]
+    dky: float = 1.0  # rad/m  # type: ignore[override]
+    dkz: float = 1.0  # rad/m  # type: ignore[override]
 
-    wavelength: float = 1  # m
+    wavelength: float = 1.0  # m
 
-    spatial_domain: ClassVar[SpatialDomain] = SpatialDomain.K
     axis_labels: ClassVar[tuple[str, str, str]] = ("kx", "ky", "kz")
+
+    @property
+    def spatial_domain(self) -> SpatialDomain:
+        return SpatialDomain.K
 
     # Everything else is computed on the  fly
 
@@ -486,14 +492,12 @@ class WavefrontK(WavefrontBase):
         """
         return 2 * pi / (self.nz * self.dkz)
 
-    def to_rspace(self) -> Wavefront:
+    def to_rspace(self, *, inplace: bool = False) -> Wavefront:
         """
         See Wavefront.to_kspace()
         """
-
-        if self.in_rspace:
-            assert isinstance(self, Wavefront)
-            return self
+        if inplace:
+            raise NotImplementedError("inplace not yet implemented")
 
         # Normalized for the Plancherel theorem (see def energy)
         norm = (
@@ -771,13 +775,16 @@ class Wavefront(WavefrontBase):
     Ex: np.ndarray | None = None  # V/m
     Ey: np.ndarray | None = None  # V/m
 
-    dx: float = 1  # m  # type: ignore[override]
-    dy: float = 1  # m  # type: ignore[override]
-    dz: float = 1  # m  # type: ignore[override]
-    wavelength: float = 1  # m
+    dx: float = 1.0  # m  # type: ignore[override]
+    dy: float = 1.0  # m  # type: ignore[override]
+    dz: float = 1.0  # m  # type: ignore[override]
+    wavelength: float = 1.0  # m
 
-    spatial_domain: ClassVar[SpatialDomain] = SpatialDomain.R
     axis_labels: ClassVar[tuple[str, str, str]] = ("x", "y", "z")
+
+    @property
+    def spatial_domain(self) -> SpatialDomain:
+        return SpatialDomain.R
 
     # Everything else is computed on the  fly
 
@@ -874,7 +881,7 @@ class Wavefront(WavefrontBase):
         return np.sum(self.intensity, axis=_axis_for_sum["z"]) * self.dx * self.dy  # W
 
     # Representations
-    def to_kspace(self, backend=np, inplace: bool = False) -> WavefrontK:
+    def to_kspace(self, backend=np, *, inplace: bool = False) -> WavefrontK:
         """
         Transform to k-space according to the Fourier transform convention:
 
@@ -898,10 +905,6 @@ class Wavefront(WavefrontBase):
 
         if inplace:
             raise NotImplementedError("inplace not yet implemented")
-
-        if self.in_kspace:
-            assert isinstance(self, WavefrontK)
-            return self
 
         fftn = backend.fft.fftn
         fftshift = backend.fft.fftshift

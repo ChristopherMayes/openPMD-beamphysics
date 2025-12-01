@@ -9,14 +9,14 @@ from pmd_beamphysics.units import Z0, c_light
 
 def add_gaussian(
     w: Wavefront,
-    z=0,
+    z=0.0,
     w0=None,
     zR=None,
     sigma_z=3e-6,
-    x0=0,
-    y0=0,
-    energy=1,
-    phase=0,
+    x0=0.0,
+    y0=0.0,
+    energy=1.0,
+    phase=0.0,
     polarization="x",
 ):
     """

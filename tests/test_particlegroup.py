@@ -1,5 +1,7 @@
 import os
+import pathlib
 
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -89,6 +91,15 @@ def test_write_reload(tmp_path):
 
     P2.x += 1
     assert P != P2
+
+
+def test_write_reload_h5(tmp_path: pathlib.Path):
+    h5file = tmp_path / "test.h5"
+    with h5py.File(h5file, "w") as fp:
+        P.write(fp)
+
+    P2 = ParticleGroup(h5file)
+    assert P == P2
 
 
 def test_fractional_split():

@@ -1,4 +1,5 @@
-from abc import ABC
+from __future__ import annotations
+from abc import ABC, abstractmethod
 from enum import Enum
 from dataclasses import dataclass, replace
 from copy import deepcopy
@@ -77,6 +78,12 @@ class WavefrontBase(ABC):
     Convenience functions for standard domain values
     """
 
+    Ex: np.ndarray | None = None
+    Ey: np.ndarray | None = None
+
+    wavelength: float = 1.0  # m
+    axis_labels: ClassVar[tuple[str, str, str]] = ("", "", "")
+
     def __post_init__(self):
         """
         Validate inputs after dataclass initialization
@@ -104,11 +111,44 @@ class WavefrontBase(ABC):
         #        raise TypeError(f"{name} must be complex dtype, got {field.dtype}")
 
     @property
+    @abstractmethod
+    def spatial_domain(self) -> SpatialDomain: ...
+
+    @property
+    @abstractmethod
+    def intensity(self) -> np.ndarray | float: ...
+
+    @property
+    @abstractmethod
+    def dkx(self) -> float: ...
+
+    @property
+    @abstractmethod
+    def dky(self) -> float: ...
+
+    @property
+    @abstractmethod
+    def dkz(self) -> float: ...
+
+    @property
+    @abstractmethod
+    def dx(self) -> float: ...
+
+    @property
+    @abstractmethod
+    def dy(self) -> float: ...
+
+    @property
+    @abstractmethod
+    def dz(self) -> float: ...
+
+    @property
     def shape(self):
         if self.Ex is None:
+            if self.Ey is None:
+                raise ValueError("Neither Ex nor Ey is set")
             return self.Ey.shape
-        else:
-            return self.Ex.shape
+        return self.Ex.shape
 
     def axis_index(self, key):
         """
@@ -191,14 +231,6 @@ class WavefrontBase(ABC):
 
     # kx
     @property
-    def dkx(self):
-        """
-        transverse wavevector components grid spacing in rad/m
-        dkx = 2π / (nx * dx)
-        """
-        return 2 * pi / (self.nx * self.dx)
-
-    @property
     def kxvec(self):
         return 2 * pi * fftshift(fftfreq(self.nx, d=self.dx))
 
@@ -211,9 +243,6 @@ class WavefrontBase(ABC):
         return 2 * pi * fftfreq_max(self.nx, self.dx)
 
     # ky
-    @property
-    def dky(self):
-        return 2 * pi / (self.ny * self.dy)
 
     @property
     def kyvec(self):
@@ -228,9 +257,6 @@ class WavefrontBase(ABC):
         return 2 * pi * fftfreq_max(self.ny, self.dy)
 
     # kz
-    @property
-    def dkz(self):
-        return 2 * pi / (self.nz * self.dz)
 
     @property
     def kzvec(self):
@@ -422,23 +448,26 @@ class WavefrontBase(ABC):
 
 @dataclass
 class WavefrontK(WavefrontBase):
-    Ex: np.ndarray = None  # V m^2
-    Ey: np.ndarray = None  # V m^2
+    Ex: np.ndarray | None = None  # V m^2
+    Ey: np.ndarray | None = None  # V m^2
 
-    dkx: float = 1  # rad/m
-    dky: float = 1  # rad/m
-    dkz: float = 1  # rad/m
+    dkx: float = 1.0  # rad/m  # type: ignore[override]
+    dky: float = 1.0  # rad/m  # type: ignore[override]
+    dkz: float = 1.0  # rad/m  # type: ignore[override]
 
-    wavelength: float = 1  # m
+    wavelength: float = 1.0  # m
 
-    spatial_domain: ClassVar[SpatialDomain] = SpatialDomain.K
     axis_labels: ClassVar[tuple[str, str, str]] = ("kx", "ky", "kz")
+
+    @property
+    def spatial_domain(self) -> SpatialDomain:
+        return SpatialDomain.K
 
     # Everything else is computed on the  fly
 
     # kx
     @property
-    def dx(self):
+    def dx(self) -> float:
         """
         grid spacing in m
         dx = 2π / (nx * dkx)
@@ -463,13 +492,12 @@ class WavefrontK(WavefrontBase):
         """
         return 2 * pi / (self.nz * self.dkz)
 
-    def to_rspace(self):
+    def to_rspace(self, *, inplace: bool = False) -> Wavefront:
         """
         See Wavefront.to_kspace()
         """
-
-        if self.in_rspace:
-            return self
+        if inplace:
+            raise NotImplementedError("inplace not yet implemented")
 
         # Normalized for the Plancherel theorem (see def energy)
         norm = (
@@ -571,7 +599,7 @@ class WavefrontK(WavefrontBase):
         return np.abs(self.Ey) ** 2 if self.Ey is not None else 0
 
     @property
-    def intensity(self):
+    def intensity(self) -> np.ndarray | float:
         """
         total field intensity in ??
         ~ (|Ẽx|^2 + |Ẽy|^2)
@@ -712,15 +740,8 @@ class WavefrontK(WavefrontBase):
 @dataclass
 class Wavefront(WavefrontBase):
     """
-
-
     Principles
     ----------
-
-    - The code should be as simple as possible, with standard physics definitions
-      and units for common symbols.
-
-    - Prefer explicit properties with equations directly in the functions.
 
     - Real-space mesh spacing is in meters; k-space mesh spacing is in rad/meter,
       both defined by the grid shape and spacings (dx, dy, dz).
@@ -736,7 +757,8 @@ class Wavefront(WavefrontBase):
       Avoid referring to time coordinates `t = ±z/c` to prevent confusion about
       the direction of time and the head/tail of the pulse.
 
-    - The fields can be padded as needed. No other metadata (spacing, axes) must be adjusted.
+    - You may pad the fields as needed, with or without the `.pad()` method. No
+      other metadata (spacing, axes) must be adjusted.
 
     - Other physical quantities can be derived from the basic spatial and spectral variables
       using standard relations such as:
@@ -750,22 +772,24 @@ class Wavefront(WavefrontBase):
 
     """
 
-    Ex: np.ndarray = None  # V/m
-    Ey: np.ndarray = None  # V/m
+    Ex: np.ndarray | None = None  # V/m
+    Ey: np.ndarray | None = None  # V/m
 
-    dx: float = 1  # m
-    dy: float = 1  # m
-    dz: float = 1  # m
+    dx: float = 1.0  # m  # type: ignore[override]
+    dy: float = 1.0  # m  # type: ignore[override]
+    dz: float = 1.0  # m  # type: ignore[override]
+    wavelength: float = 1.0  # m
 
-    wavelength: float = 1  # m
-
-    spatial_domain: ClassVar[SpatialDomain] = SpatialDomain.R
     axis_labels: ClassVar[tuple[str, str, str]] = ("x", "y", "z")
+
+    @property
+    def spatial_domain(self) -> SpatialDomain:
+        return SpatialDomain.R
 
     # Everything else is computed on the  fly
 
     @property
-    def intensity_x(self):
+    def intensity_x(self) -> np.ndarray | float:
         """
         x polarization field intensity in W/m^2
         Intensity = c ϵ0/2 |Ex|^2
@@ -773,7 +797,7 @@ class Wavefront(WavefrontBase):
         return c * epsilon_0 / 2 * np.abs(self.Ex) ** 2 if self.Ex is not None else 0
 
     @property
-    def intensity_y(self):
+    def intensity_y(self) -> np.ndarray | float:
         """
         y polarization field intensity in W/m^2
         Intensity = c ϵ0/2 |Ey|^2
@@ -781,7 +805,7 @@ class Wavefront(WavefrontBase):
         return c * epsilon_0 / 2 * np.abs(self.Ey) ** 2 if self.Ey is not None else 0
 
     @property
-    def intensity(self):
+    def intensity(self) -> np.ndarray | float:
         """
         total field intensity in W/m^2
         I = c ϵ0/2 (|Ex|^2 + |Ey|^2)
@@ -857,7 +881,7 @@ class Wavefront(WavefrontBase):
         return np.sum(self.intensity, axis=_axis_for_sum["z"]) * self.dx * self.dy  # W
 
     # Representations
-    def to_kspace(self, backend=np):
+    def to_kspace(self, backend=np, *, inplace: bool = False) -> WavefrontK:
         """
         Transform to k-space according to the Fourier transform convention:
 
@@ -879,8 +903,8 @@ class Wavefront(WavefrontBase):
 
         """
 
-        if self.in_kspace:
-            return self
+        if inplace:
+            raise NotImplementedError("inplace not yet implemented")
 
         fftn = backend.fft.fftn
         fftshift = backend.fft.fftshift
@@ -939,6 +963,7 @@ class Wavefront(WavefrontBase):
             log_scale_y=log_scale_y,
             plot_style={"color": "purple"},
             kind="bar",
+            nice=nice,
         )
 
     def plot_fluence(self, cmap="inferno", logscale=False):
@@ -983,6 +1008,9 @@ class Wavefront(WavefrontBase):
         """
         Simple fluence plot
 
+        Notes
+        -----
+        This is experimental.
         """
 
         # xlabel = r"$x$ (cm)"
@@ -1005,12 +1033,31 @@ class Wavefront(WavefrontBase):
             y_units="cm",
             z_name=r"$F$",
             z_units="J/cm$^2$",
+            cmap=cmap,
+            log_scale_marginals=logscale,
+            log_scale_z=logscale,
         )
 
         # if logscale:
         # Fmax = np.max(F)
         #    norm = LogNorm(vmin=Fmax / 1e6, vmax=Fmax)
         #    im.set_norm(norm)
+
+    @property
+    def dkx(self) -> float:
+        """
+        transverse wavevector components grid spacing in rad/m
+        dkx = 2π / (nx * dx)
+        """
+        return 2 * pi / (self.nx * self.dx)
+
+    @property
+    def dky(self):
+        return 2 * pi / (self.ny * self.dy)
+
+    @property
+    def dkz(self):
+        return 2 * pi / (self.nz * self.dz)
 
     # Statistics
 
@@ -1103,11 +1150,17 @@ class Wavefront(WavefrontBase):
 
         Ex = dfl * np.sqrt(2 * Z0) / dx
 
-        return cls(Ex=Ex, dx=dx, dy=dx, dz=dz, wavelength=wavelength)
+        return cls(
+            Ex=Ex,
+            dx=float(dx),
+            dy=float(dx),
+            dz=float(dz),
+            wavelength=float(wavelength),
+        )
 
     def write_genesis4(
         self,
-        file: Union[pathlib.Path, str, h5py.Group],
+        file: pathlib.Path | str | h5py.Group,
     ):
         """
         Write the Wavefront field data to a Genesis4-style HDF5 file.

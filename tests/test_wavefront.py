@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt
+import pytest
 from pmd_beamphysics.wavefront.wavefront import Wavefront
 
 from pmd_beamphysics.wavefront.gaussian import add_gaussian
@@ -8,6 +10,16 @@ from pmd_beamphysics.wavefront.propagators import (
 )
 
 import numpy as np
+
+
+def make_gaussian(wavelength: float = 1e-9):
+    return Wavefront(
+        Ex=np.zeros((101, 101, 51)),
+        dx=10e-6,
+        dy=10e-6,
+        dz=10e-6,
+        wavelength=wavelength,
+    )
 
 
 def test_gaussian_statistics():
@@ -25,6 +37,7 @@ def test_gaussian_statistics():
         dz=10e-6,
         wavelength=wavelength,
     )
+    assert W.in_rspace
     add_gaussian(W, z=0, x0=x0, y0=y0, w0=w0, energy=energy, sigma_z=sigma_z0)
 
     assert np.isclose(energy, W.energy)
@@ -42,6 +55,7 @@ def test_gaussian_statistics():
     assert np.isclose(sigma_z0, W.sigma_z)
 
     Wk = W.to_kspace()
+    assert Wk.in_kspace
 
     assert np.isclose(energy, Wk.energy)
 
@@ -62,7 +76,20 @@ def test_gaussian_statistics():
     )
 
     W2 = Wk.to_rspace()
+    assert W2.in_rspace
     assert np.isclose(energy, W2.energy)
+
+    # TODO: what should these be approximately?
+    W.kzmin
+    W.kzmax
+    Wk.mean_kx
+    Wk.mean_ky
+    Wk.mean_kz
+    Wk.sigma_kx
+    Wk.sigma_ky
+    Wk.sigma_kz
+    Wk.mean_thetax
+    Wk.mean_thetay
 
 
 def test_gaussian_propagation():
@@ -96,3 +123,105 @@ def test_gaussian_propagation():
     assert np.isclose(W1.sigma_x, W2.sigma_x)
 
     assert np.isclose(W1.sigma_x, W3.sigma_x)
+
+
+def test_gaussian_smoke():
+    W = make_gaussian()
+    assert W.in_rspace
+    W.fluence_profile_x
+    W.fluence_profile_y
+    W.power
+
+
+def test_gaussian_repr():
+    W = make_gaussian()
+    print("HTML repr:", W._repr_html_())
+
+    class Repr:
+        def text(self, lines):
+            return lines
+
+    print("Pretty repr:", W._repr_pretty_(Repr(), False))
+    print("Pretty repr (cycle):", W._repr_pretty_(Repr(), True))
+
+
+@pytest.mark.parametrize(
+    "logscale",
+    [
+        pytest.param(False, id="linear"),
+        pytest.param(
+            True, id="logscale", marks=[pytest.mark.xfail(reason="invalid vmin")]
+        ),
+    ],
+)
+def test_gaussian_plot_fluence(logscale: bool):
+    W = make_gaussian()
+    W.plot_fluence(logscale=logscale)
+    plt.show()
+
+
+@pytest.mark.filterwarnings("ignore:.*identical low and high.*:UserWarning")
+def test_gaussian_plot_power():
+    W = make_gaussian()
+    W.plot_power()
+    plt.show()
+
+
+def test_gaussian_plot2():
+    W = make_gaussian()
+    W.plot2()
+    plt.show()
+
+
+def test_gaussian_plot_spectral_intensity():
+    W = make_gaussian()
+    Wk = W.to_kspace()
+    Wk.plot_spectral_intensity()
+    plt.show()
+
+
+def test_gaussian_plot_photon_energy_spectrum():
+    W = make_gaussian()
+    Wk = W.to_kspace()
+    Wk.plot_photon_energy_spectrum()
+    plt.show()
+
+
+def test_gaussian_pad_scalar():
+    W = make_gaussian()
+
+    nx, ny, nz = 5, 5, 5
+    W1 = W.pad(nx, ny, nz)
+
+    assert W1.shape == (W.shape[0] + nx * 2, W.shape[1] + ny * 2, W.shape[2] + nz * 2)
+
+
+def test_gaussian_pad_asymmetric():
+    W = make_gaussian()
+
+    nx, ny, nz = (0, 5), (0, 5), (0, 5)
+    W1 = W.pad(nx, ny, nz)
+
+    assert W1.shape == (W.shape[0] + 5, W.shape[1] + 5, W.shape[2] + 5)
+
+
+def test_axis_index():
+    W = make_gaussian()
+
+    for ax in W.axis_labels:
+        W.axis_index(ax)
+
+
+def test_bad_init():
+    with pytest.raises(ValueError):
+        Wavefront(Ex=None, Ey=None)
+    with pytest.raises(ValueError):
+        Wavefront(Ex=np.arange(10), Ey=np.arange(11))
+    with pytest.raises(ValueError):
+        Wavefront(Ex=np.arange(10), dx=-1.0)
+    with pytest.raises(ValueError):
+        Wavefront(Ex=np.arange(10), dy=-1.0)
+    with pytest.raises(ValueError):
+        Wavefront(Ex=np.arange(10), dz=-1.0)
+    with pytest.raises(ValueError):
+        Wavefront(Ex=np.arange(10), wavelength=-1.0)

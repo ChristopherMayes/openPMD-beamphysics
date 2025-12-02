@@ -101,7 +101,7 @@ def drift_wavefront_basic(w, z, backend=np, device="cpu"):
     return replace(w, Ex=Ex_drifted, Ey=Ey_drifted)
 
 
-def drift_wavefront_advanced(w, z, backend=np, device="cpu", curvature=1):
+def drift_wavefront_advanced(w, z, backend=np, device="cpu", curvature=1.0):
     """
     This adds a curvature correction to the basic drift propagator,
     and resizes the grid spacing.

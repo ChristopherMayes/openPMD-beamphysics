@@ -8,12 +8,17 @@ from pmd_beamphysics.units import (
     nice_scale_prefix,
     plottable_array,
     pmd_unit,
-    unit,
+    unit as deprecated_unit,
 )
 
 
+def test_deprecated_unit():
+    with pytest.deprecated_call():
+        assert deprecated_unit("T") == pmd_unit("T")
+
+
 def test_smoke_properties() -> None:
-    u = unit("K")
+    u = pmd_unit("K")
     u.unitSymbol
     u.unitSI
     u.unitDimension
@@ -49,7 +54,7 @@ def test_multiply() -> None:
     ],
 )
 def test_unit(symbol: str, expected_unit: pmd_unit) -> None:
-    assert unit(symbol) == expected_unit
+    assert pmd_unit(symbol) == expected_unit
 
 
 @pytest.mark.parametrize(

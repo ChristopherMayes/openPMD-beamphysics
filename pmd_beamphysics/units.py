@@ -702,9 +702,9 @@ def plottable_array(x: np.ndarray, nice: bool = True, lim: Limit | None = None):
 
 PARTICLEGROUP_UNITS = {}
 for k in ["n_particle", "status", "id", "n_alive", "n_dead"]:
-    PARTICLEGROUP_UNITS[k] = unit("1")
+    PARTICLEGROUP_UNITS[k] = pmd_unit("1")
 for k in ["t", "z/c"]:
-    PARTICLEGROUP_UNITS[k] = unit("s")
+    PARTICLEGROUP_UNITS[k] = pmd_unit("s")
 for k in [
     "energy",
     "kinetic_energy",
@@ -712,43 +712,45 @@ for k in [
     "higher_order_energy_spread",
     "higher_order_energy",
 ]:
-    PARTICLEGROUP_UNITS[k] = unit("eV")
+    PARTICLEGROUP_UNITS[k] = pmd_unit("eV")
 for k in ["px", "py", "pz", "p", "pr", "ptheta"]:
-    PARTICLEGROUP_UNITS[k] = unit("eV/c")
+    PARTICLEGROUP_UNITS[k] = pmd_unit("eV/c")
 for k in ["x", "y", "z", "r", "Jx", "Jy"]:
-    PARTICLEGROUP_UNITS[k] = unit("m")
+    PARTICLEGROUP_UNITS[k] = pmd_unit("m")
 for k in ["beta", "beta_x", "beta_y", "beta_z", "gamma", "bunching"]:
-    PARTICLEGROUP_UNITS[k] = unit("1")
+    PARTICLEGROUP_UNITS[k] = pmd_unit("1")
 for k in ["theta", "bunching_phase"]:
-    PARTICLEGROUP_UNITS[k] = unit("rad")
+    PARTICLEGROUP_UNITS[k] = pmd_unit("rad")
 for k in ["charge", "species_charge", "weight"]:
-    PARTICLEGROUP_UNITS[k] = unit("C")
+    PARTICLEGROUP_UNITS[k] = pmd_unit("C")
 for k in ["average_current"]:
-    PARTICLEGROUP_UNITS[k] = unit("A")
+    PARTICLEGROUP_UNITS[k] = pmd_unit("A")
 for k in ["power"]:
-    PARTICLEGROUP_UNITS[k] = unit("W")
+    PARTICLEGROUP_UNITS[k] = pmd_unit("W")
 for k in ["norm_emit_x", "norm_emit_y"]:
-    PARTICLEGROUP_UNITS[k] = unit("m")
+    PARTICLEGROUP_UNITS[k] = pmd_unit("m")
 for k in ["norm_emit_4d"]:
-    PARTICLEGROUP_UNITS[k] = multiply_units(unit("m"), unit("m"))
+    PARTICLEGROUP_UNITS[k] = multiply_units(pmd_unit("m"), pmd_unit("m"))
 for k in ["Lz"]:
-    PARTICLEGROUP_UNITS[k] = multiply_units(unit("m"), unit("eV/c"))
+    PARTICLEGROUP_UNITS[k] = multiply_units(pmd_unit("m"), pmd_unit("eV/c"))
 for k in ["xp", "yp"]:
-    PARTICLEGROUP_UNITS[k] = unit("rad")
+    PARTICLEGROUP_UNITS[k] = pmd_unit("rad")
 for k in ["x_bar", "px_bar", "y_bar", "py_bar"]:
-    PARTICLEGROUP_UNITS[k] = sqrt_unit(unit("m"))
+    PARTICLEGROUP_UNITS[k] = sqrt_unit(pmd_unit("m"))
 for component in ["", "x", "y", "z", "theta", "r"]:
-    PARTICLEGROUP_UNITS[f"E{component}"] = unit("V/m")
-    PARTICLEGROUP_UNITS[f"B{component}"] = unit("T")
+    PARTICLEGROUP_UNITS[f"E{component}"] = pmd_unit("V/m")
+    PARTICLEGROUP_UNITS[f"B{component}"] = pmd_unit("T")
 
 # Twiss
 for plane in ("x", "y"):
     for k in ("alpha", "etap"):
-        PARTICLEGROUP_UNITS[f"twiss_{k}_{plane}"] = unit("1")
+        PARTICLEGROUP_UNITS[f"twiss_{k}_{plane}"] = pmd_unit("1")
     for k in ("beta", "eta", "emit", "norm_emit"):
-        PARTICLEGROUP_UNITS[f"twiss_{k}_{plane}"] = unit("m")
+        PARTICLEGROUP_UNITS[f"twiss_{k}_{plane}"] = pmd_unit("m")
     for k in ("gamma",):
-        PARTICLEGROUP_UNITS[f"twiss_{k}_{plane}"] = divide_units(unit("1"), unit("m"))
+        PARTICLEGROUP_UNITS[f"twiss_{k}_{plane}"] = divide_units(
+            pmd_unit("1"), pmd_unit("m")
+        )
 
 
 def pg_units(key):
@@ -776,13 +778,13 @@ def pg_units(key):
 
     # Fields
     if key.startswith("electricField"):
-        return unit("V/m")
+        return pmd_unit("V/m")
     if key.startswith("magneticField"):
-        return unit("T")
+        return pmd_unit("T")
     if key.startswith("bunching_phase"):
-        return unit("rad")
+        return pmd_unit("rad")
     if key.startswith("bunching"):
-        return unit("1")
+        return pmd_unit("1")
 
     raise ValueError(f"No known unit for: {key}")
 
@@ -888,7 +890,7 @@ def read_dataset_and_unit_h5(h5, expected_unit=None, convert=True):
 
     if isinstance(expected_unit, str):
         # Try to get unit
-        expected_unit = unit(expected_unit)
+        expected_unit = pmd_unit(expected_unit)
 
     # Check dimensions
     du = divide_units(u, expected_unit)

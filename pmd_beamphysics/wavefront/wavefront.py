@@ -448,6 +448,74 @@ class WavefrontBase(ABC):
 
 @dataclass
 class WavefrontK(WavefrontBase):
+    """
+    K-space (Fourier) representation of electromagnetic wavefront fields.
+
+    This class represents electromagnetic fields in k-space (spatial frequency domain)
+    for spectral analysis and propagation. It stores complex electric field Fourier
+    components Ẽx and Ẽy on a 3D reciprocal-space grid with uniform spacing.
+
+    The Fourier transform convention follows:
+    Ẽ(kx,ky,kz) = (2π)^(-3/2) ∫∫∫ E(x,y,z) exp(-i·k·r) dx dy dz
+
+    Parameters
+    ----------
+    Ex : np.ndarray, optional
+        x-polarized electric field Fourier component in V·m², shape (nx, ny, nz)
+    Ey : np.ndarray, optional
+        y-polarized electric field Fourier component in V·m², shape (nx, ny, nz)
+    dkx : float, default=1.0
+        Grid spacing in kx direction (rad/m)
+    dky : float, default=1.0
+        Grid spacing in ky direction (rad/m)
+    dkz : float, default=1.0
+        Grid spacing in kz direction (rad/m)
+    wavelength : float, default=1.0
+        Central wavelength (m)
+
+    Attributes
+    ----------
+    spatial_domain : SpatialDomain
+        Always returns SpatialDomain.K (k-space)
+    intensity : np.ndarray
+        Spectral intensity |Ẽ|² (arbitrary units)
+    spectral_energy_density : np.ndarray
+        Spectral energy density ε₀/2 |Ẽ|² in J·m³
+    energy : float
+        Total energy ε₀/2 ∫∫∫ |Ẽ|² dkx dky dkz in J
+    spectral_fluence : np.ndarray
+        K-space fluence F(kx,ky) = ε₀/2 ∫ |Ẽ|² dkz in J·m²
+    photon_energy_vec : np.ndarray
+        Photon energy axis from kz in eV
+    photon_energy_spectrum : np.ndarray
+        Photon spectral energy density dU/dE in J/eV
+    k0 : float
+        Central wavenumber 2π/λ in rad/m
+    photon_energy : float
+        Central photon energy ℏck₀ in eV
+
+    Methods
+    -------
+    to_rspace()
+        Transform to real-space representation (Wavefront)
+    plot_spectral_intensity(cmap, logscale)
+        Plot angular spectrum intensity F(θx, θy)
+    plot_photon_energy_spectrum(xlim, ax)
+        Plot photon energy spectrum dU/dE
+    pad(nx, ny, nz)
+        Zero-pad the field arrays
+
+    Notes
+    -----
+    - At least one of Ex or Ey must be provided
+    - All spacing parameters (dkx, dky, dkz, wavelength) must be positive
+    - Field arrays must be complex dtype
+    - The spectral energy density ε₀/2|Ẽ|² preserves total energy with real space
+    - Derived real-space grid spacing: dx = 2π/(nx·dkx)
+    - Angular coordinates: θx = kx/k₀, θy = ky/k₀
+    - Statistical moments (mean, sigma) are intensity-weighted in k-space
+    """
+
     Ex: np.ndarray | None = None  # V m^2
     Ey: np.ndarray | None = None  # V m^2
 
@@ -740,35 +808,75 @@ class WavefrontK(WavefrontBase):
 @dataclass
 class Wavefront(WavefrontBase):
     """
-    Principles
+    Real-space representation of electromagnetic wavefront fields.
+
+    This class represents electromagnetic fields in real space (position domain) for
+    optical wavefront propagation and analysis. It stores complex electric field
+    components Ex and Ey on a 3D Cartesian grid with uniform spacing.
+
+    The wavefront propagates in the +z direction, with the pulse head at max(z).
+    Field intensities, energies, and other derived quantities follow standard
+    electromagnetic definitions using SI units.
+
+    Parameters
     ----------
+    Ex : np.ndarray, optional
+        x-polarized electric field component in V/m, shape (nx, ny, nz)
+    Ey : np.ndarray, optional
+        y-polarized electric field component in V/m, shape (nx, ny, nz)
+    dx : float, default=1.0
+        Grid spacing in x direction (m)
+    dy : float, default=1.0
+        Grid spacing in y direction (m)
+    dz : float, default=1.0
+        Grid spacing in z direction (m)
+    wavelength : float, default=1.0
+        Central wavelength (m)
 
-    - Real-space mesh spacing is in meters; k-space mesh spacing is in rad/meter,
-      both defined by the grid shape and spacings (dx, dy, dz).
+    Attributes
+    ----------
+    spatial_domain : SpatialDomain
+        Always returns SpatialDomain.R (real space)
+    intensity : np.ndarray
+        Total field intensity c ε₀/2 (|Ex|² + |Ey|²) in W/m²
+    energy : float
+        Total field energy ε₀/2 ∫∫∫ |E|² dx dy dz in J
+    fluence : np.ndarray
+        Fluence F(x,y) = ε₀/2 ∫ |E(x,y,z)|² dz in J/m²
+    power : np.ndarray
+        Power profile P(z) = ∫∫ I(x,y,z) dx dy in W
+    k0 : float
+        Central wavenumber 2π/λ in rad/m
+    photon_energy : float
+        Central photon energy ℏck₀ in eV
 
-    - Only one representation for the fields is stored at a time (either real or k-space).
-      The user can check with `.in_kspace`, `.in_rspace`, or `.spatial_domain`.
+    Methods
+    -------
+    to_kspace()
+        Transform to k-space representation (WavefrontK)
+    drift(z, curvature=0)
+        Propagate wavefront by distance z in free space
+    pad(nx, ny, nz)
+        Zero-pad the field arrays
+    estimate_curvature(axis, polarization, ...)
+        Estimate wavefront radius of curvature
+    plot_power()
+        Plot longitudinal power profile
+    plot_fluence()
+        Plot transverse fluence distribution
+    from_genesis4(file)
+        Create Wavefront from Genesis4 HDF5 field file
+    write_genesis4(file)
+        Write Wavefront to Genesis4 HDF5 format
 
-    - Fourier transforms have multiple conventions. This implementation uses `norm='ortho'`
-      to ensure that the total field energy (i.e., sum |E|^2) is preserved between
-      real and k-space representations (Plancherel's theorem).
-
-    - The head of the laser pulse is at `max(z)`. The pulse propagates in the +z direction.
-      Avoid referring to time coordinates `t = ±z/c` to prevent confusion about
-      the direction of time and the head/tail of the pulse.
-
-    - You may pad the fields as needed, with or without the `.pad()` method. No
-      other metadata (spacing, axes) must be adjusted.
-
-    - Other physical quantities can be derived from the basic spatial and spectral variables
-      using standard relations such as:
-
-        c = omega / k
-        E = hbar * omega = hbar * k * c
-
-      These can be used to convert between spatial, temporal, and energy units as needed.
-
-    - Photon related calculations/properties use eV for energy
+    Notes
+    -----
+    - At least one of Ex or Ey must be provided
+    - All spacing parameters (dx, dy, dz, wavelength) must be positive
+    - Field arrays must be complex dtype
+    - Fourier transforms use norm='ortho' to preserve Plancherel's theorem:
+      ∫∫∫ |E(x,y,z)|² dx dy dz = ∫∫∫ |Ẽ(kx,ky,kz)|² dkx dky dkz
+    - Statistical moments (mean, sigma) are intensity-weighted
 
     """
 

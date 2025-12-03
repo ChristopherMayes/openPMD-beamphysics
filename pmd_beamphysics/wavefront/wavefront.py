@@ -1192,3 +1192,91 @@ class Wavefront(WavefrontBase):
             wavefront_write_genesis4(self, h5)
 
         raise ValueError(type(file))  # type: ignore[unreachable]
+
+    def estimate_curvature(
+        self,
+        axis="x",
+        polarization=None,
+        ix=None,
+        iy=None,
+        iz=None,
+        plot=False,
+        cutoff=1e-4,
+    ):
+        """
+        Estimates the wavefront curvature by looking at the phase across an axis.
+
+        phase = k r^2 / 2 R + phi0
+
+        curvature = 1/R
+        """
+        w = self
+
+        if polarization is None:
+            polarization = "x" if w.Ex is not None else "y"
+        field = getattr(w, "E" + polarization)
+
+        if iz is None:
+            iz = np.sum(np.abs(field) ** 2, axis=(0, 1)).argmax()
+
+        field_xy = field[:, :, iz]
+        field_xy2 = np.abs(field_xy) ** 2
+
+        if axis == "x":
+            if iy is None:
+                iy = np.sum(field_xy2, axis=1).argmax()
+
+            if ix is not None:
+                raise ValueError(f"{ix=} must be None when requesting axis='x'")
+
+            weights = field_xy2[:, iy]
+
+            phase = np.unwrap(np.angle(field_xy[:, iy]))
+
+        elif axis == "y":
+            if ix is None:
+                ix = np.sum(field_xy2, axis=0).argmax()
+
+            if iy is not None:
+                raise ValueError(f"{iy=} must be None when requesting axis='y'")
+
+            weights = field_xy2[ix, :]
+
+            phase = np.unwrap(np.angle(field_xy[ix, :]))
+        else:
+            raise ValueError(f"{axis=} must be 'x' or 'y'")
+
+        x = getattr(w, axis + "vec")
+        y = phase - phase.min()
+
+        weights = weights / weights.max()
+        mask = weights > cutoff
+
+        x = x[mask]
+        y = y[mask]
+        weights = weights[mask]
+
+        a, b, c = np.polyfit(x, y, 2, w=weights)
+
+        # curvature = 1/R = a λ / π
+
+        curvature = a * w.wavelength / np.pi
+
+        if plot:
+            fig, ax = plt.subplots()
+            norm = 360 / (2 * np.pi)
+            ax.plot(x, y * norm)
+            label = f"curvature_{axis} = {curvature:0.6f} 1/m \n radius_{axis} = {1/curvature:0.1f} m"
+            ax.plot(x, (a * x**2 + b * x + c) * norm, "--", label=label)
+            ax.set_xlabel(f"{axis} (m)")
+
+            ax.set_ylabel("phase (deg)")
+            # ax.set_ylim(0, None)
+            ax.legend()
+
+            ax2 = ax.twinx()
+            ax2.fill_between(x, 0, weights / weights.max(), alpha=0.5, color="purple")
+            ax2.set_ylim(0, 2)
+            ax2.set_ylabel("weight")
+
+        return curvature

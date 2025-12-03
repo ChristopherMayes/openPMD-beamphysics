@@ -1195,26 +1195,52 @@ class Wavefront(WavefrontBase):
 
     def estimate_curvature(
         self,
-        axis="x",
-        polarization=None,
-        ix=None,
-        iy=None,
-        iz=None,
-        plot=False,
-        cutoff=1e-4,
-    ):
+        axis: str = "x",
+        polarization: str | None = None,
+        ix: int | None = None,
+        iy: int | None = None,
+        iz: int | None = None,
+        plot: bool = False,
+        cutoff: float = 1e-4,
+    ) -> float | tuple[float, plt.Figure]:
         """
         Estimates the wavefront curvature by looking at the phase across an axis.
 
-        phase = k r^2 / 2 R + phi0
+        The method fits a parabola to the unwrapped phase: phase = k r^2 / 2R + phi0
+        where R is the radius of curvature and k is the wavenumber.
 
-        curvature = 1/R
+        Parameters
+        ----------
+        axis : str, default='x'
+            Axis along which to estimate curvature ('x' or 'y')
+        polarization : str, optional
+            Polarization to analyze ('x' or 'y'). If None, uses first available.
+        ix, iy, iz : int, optional
+            Indices for slicing. iz defaults to peak intensity slice.
+        plot : bool, default=False
+            Whether to create a diagnostic plot
+        cutoff : float, default=1e-4
+            Relative intensity cutoff for data selection
+
+        Returns
+        -------
+        float
+            Curvature in 1/m.
+
+        Raises
+        ------
+        ValueError
+            If insufficient data points or invalid parameters
         """
         w = self
 
         if polarization is None:
             polarization = "x" if w.Ex is not None else "y"
         field = getattr(w, "E" + polarization)
+        if field is None:
+            raise ValueError(
+                f"E{polarization} field is None, cannot use polarization='{polarization}'"
+            )
 
         if iz is None:
             iz = np.sum(np.abs(field) ** 2, axis=(0, 1)).argmax()
@@ -1256,6 +1282,11 @@ class Wavefront(WavefrontBase):
         y = y[mask]
         weights = weights[mask]
 
+        if len(x) < 3:
+            raise ValueError(
+                f"Insufficient points ({len(x)}) after cutoff filtering for polynomial fit"
+            )
+
         a, b, c = np.polyfit(x, y, 2, w=weights)
 
         # curvature = 1/R = a λ / π
@@ -1266,7 +1297,9 @@ class Wavefront(WavefrontBase):
             fig, ax = plt.subplots()
             norm = 360 / (2 * np.pi)
             ax.plot(x, y * norm)
-            label = f"curvature_{axis} = {curvature:0.6f} 1/m \n radius_{axis} = {1/curvature:0.1f} m"
+
+            radius = 1 / curvature if abs(curvature) > 1e-10 else np.inf
+            label = f"curvature_{axis} = {curvature:0.6f} 1/m \n radius_{axis} = {radius:0.1f} m"
             ax.plot(x, (a * x**2 + b * x + c) * norm, "--", label=label)
             ax.set_xlabel(f"{axis} (m)")
 

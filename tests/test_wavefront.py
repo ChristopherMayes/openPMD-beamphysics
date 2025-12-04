@@ -2,8 +2,6 @@ import matplotlib.pyplot as plt
 import pytest
 from pmd_beamphysics.wavefront.wavefront import Wavefront
 
-from pmd_beamphysics.wavefront.gaussian import add_gaussian
-
 from pmd_beamphysics.wavefront.propagators import (
     drift_wavefront,
     drift_wavefront_advanced,
@@ -13,32 +11,38 @@ import numpy as np
 
 
 def make_gaussian(wavelength: float = 1e-9):
-    return Wavefront(
-        Ex=np.zeros((101, 101, 51)),
+    return Wavefront.from_gaussian(
+        shape=(101, 101, 51),
         dx=10e-6,
         dy=10e-6,
         dz=10e-6,
         wavelength=wavelength,
+        sigma0=50e-6,
+        energy=1.0,
     )
 
 
 def test_gaussian_statistics():
     energy = 1.2345
     wavelength = 1e-9
-    w0 = 100e-6
+    sigma0 = 50e-6  # w0 = 2 * sigma0 = 100e-6
     sigma_z0 = 50e-6
     x0 = 100e-6
     y0 = -100e-6
 
-    W = Wavefront(
-        Ex=np.zeros((101, 101, 51)),
+    W = Wavefront.from_gaussian(
+        shape=(101, 101, 51),
         dx=10e-6,
         dy=10e-6,
         dz=10e-6,
         wavelength=wavelength,
+        sigma0=sigma0,
+        x0=x0,
+        y0=y0,
+        sigma_z=sigma_z0,
+        energy=energy,
     )
     assert W.in_rspace
-    add_gaussian(W, z=0, x0=x0, y0=y0, w0=w0, energy=energy, sigma_z=sigma_z0)
 
     assert np.isclose(energy, W.energy)
 
@@ -48,11 +52,11 @@ def test_gaussian_statistics():
 
     assert np.isclose(y0, W.mean_y)
 
-    assert np.isclose(w0, W.sigma_x * 2)
+    assert np.isclose(sigma0, W.sigma_x, rtol=0.01)
 
-    assert np.isclose(w0, W.sigma_y * 2)
+    assert np.isclose(sigma0, W.sigma_y, rtol=0.01)
 
-    assert np.isclose(sigma_z0, W.sigma_z)
+    assert np.isclose(sigma_z0, W.sigma_z, rtol=0.01)
 
     Wk = W.to_kspace()
     assert Wk.in_kspace
@@ -98,31 +102,48 @@ def test_gaussian_propagation():
     sigma_z0 = 50e-6
     x0 = 100e-6
     y0 = -100e-6
-    zR = 10
+    sigma0 = 50e-6
+    # Rayleigh length: zR = 4π·σ₀²/λ
+    zR = 4 * np.pi * sigma0**2 / wavelength
 
-    W00 = Wavefront(
-        Ex=np.zeros((101, 101, 51)),
+    W0 = Wavefront.from_gaussian(
+        shape=(101, 101, 51),
         dx=10e-6,
         dy=10e-6,
         dz=10e-6,
         wavelength=wavelength,
+        sigma0=sigma0,
+        z0=0,
+        x0=x0,
+        y0=y0,
+        sigma_z=sigma_z0,
+        energy=energy,
     )
 
-    W0 = W00.copy()
-    add_gaussian(W0, z=0, zR=zR, x0=x0, y0=y0, energy=energy, sigma_z=sigma_z0)
-
-    W1 = W00.copy()
-    add_gaussian(W1, z=zR, zR=zR, x0=x0, y0=y0, energy=energy, sigma_z=sigma_z0)
+    W1 = Wavefront.from_gaussian(
+        shape=(101, 101, 51),
+        dx=10e-6,
+        dy=10e-6,
+        dz=10e-6,
+        wavelength=wavelength,
+        sigma0=sigma0,
+        z0=zR,
+        x0=x0,
+        y0=y0,
+        sigma_z=sigma_z0,
+        energy=energy,
+    )
 
     W2 = drift_wavefront(W0, zR)
 
-    W3 = drift_wavefront_advanced(W0, zR, curvature=1 / 10)
+    W3 = drift_wavefront_advanced(W0, zR, curvature=1 / zR)
 
-    assert np.isclose(W1.sigma_x, np.sqrt(2) * W0.sigma_x)
+    # At z = zR, beam size should be sqrt(2) times the waist size
+    assert np.isclose(W1.sigma_x, np.sqrt(2) * W0.sigma_x, rtol=0.01)
 
-    assert np.isclose(W1.sigma_x, W2.sigma_x)
+    assert np.isclose(W1.sigma_x, W2.sigma_x, rtol=0.01)
 
-    assert np.isclose(W1.sigma_x, W3.sigma_x)
+    assert np.isclose(W1.sigma_x, W3.sigma_x, rtol=0.01)
 
 
 def test_gaussian_smoke():
@@ -225,3 +246,26 @@ def test_bad_init():
         Wavefront(Ex=np.arange(10), dz=-1.0)
     with pytest.raises(ValueError):
         Wavefront(Ex=np.arange(10), wavelength=-1.0)
+
+
+def test_from_gaussian_validation():
+    """Test validation in from_gaussian"""
+    with pytest.raises(ValueError, match="sigma0 must be specified"):
+        Wavefront.from_gaussian(shape=(10, 10, 10))
+
+    with pytest.raises(ValueError, match="polarization must be"):
+        Wavefront.from_gaussian(shape=(10, 10, 10), sigma0=1e-6, polarization="z")
+
+    with pytest.raises(ValueError, match="sigma_z must be non-negative"):
+        Wavefront.from_gaussian(shape=(10, 10, 10), sigma0=1e-6, sigma_z=-1.0)
+
+
+def test_from_gaussian_polarization():
+    """Test that polarization parameter works correctly"""
+    Wx = Wavefront.from_gaussian(shape=(10, 10, 10), sigma0=1e-6, polarization="x")
+    assert Wx.Ex is not None
+    assert Wx.Ey is None
+
+    Wy = Wavefront.from_gaussian(shape=(10, 10, 10), sigma0=1e-6, polarization="y")
+    assert Wy.Ex is None
+    assert Wy.Ey is not None

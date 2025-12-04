@@ -363,6 +363,154 @@ class WavefrontBase(ABC):
 
         return replace(self, Ex=Ex, Ey=Ey)
 
+    def crop(self, nx=(0, 0), ny=(0, 0), nz=(0, 0)):
+        """
+        Crop the field arrays by removing elements from edges.
+
+        Parameters
+        ----------
+        nx : int or tuple of (int, int), default=(0, 0)
+            Number of elements to remove from (start, end) of first axis.
+            If a single int, removes symmetrically from both sides.
+        ny : int or tuple of (int, int), default=(0, 0)
+            Number of elements to remove from (start, end) of second axis.
+            If a single int, removes symmetrically from both sides.
+        nz : int or tuple of (int, int), default=(0, 0)
+            Number of elements to remove from (start, end) of third axis.
+            If a single int, removes symmetrically from both sides.
+
+        Returns
+        -------
+        Wavefront or WavefrontK
+            New wavefront with cropped field arrays.
+
+        Raises
+        ------
+        ValueError
+            If crop amounts exceed array dimensions.
+        """
+        nx = (nx, nx) if np.isscalar(nx) else nx
+        ny = (ny, ny) if np.isscalar(ny) else ny
+        nz = (nz, nz) if np.isscalar(nz) else nz
+
+        # Calculate slice indices
+        x_start = nx[0]
+        x_end = self.shape[0] - nx[1] if nx[1] > 0 else None
+        y_start = ny[0]
+        y_end = self.shape[1] - ny[1] if ny[1] > 0 else None
+        z_start = nz[0]
+        z_end = self.shape[2] - nz[1] if nz[1] > 0 else None
+
+        # Validate crop amounts
+        if nx[0] + nx[1] >= self.shape[0]:
+            raise ValueError(
+                f"Crop in x ({nx}) exceeds array dimension ({self.shape[0]})"
+            )
+        if ny[0] + ny[1] >= self.shape[1]:
+            raise ValueError(
+                f"Crop in y ({ny}) exceeds array dimension ({self.shape[1]})"
+            )
+        if nz[0] + nz[1] >= self.shape[2]:
+            raise ValueError(
+                f"Crop in z ({nz}) exceeds array dimension ({self.shape[2]})"
+            )
+
+        Ex = (
+            self.Ex[x_start:x_end, y_start:y_end, z_start:z_end]
+            if self.Ex is not None
+            else None
+        )
+        Ey = (
+            self.Ey[x_start:x_end, y_start:y_end, z_start:z_end]
+            if self.Ey is not None
+            else None
+        )
+
+        return replace(self, Ex=Ex, Ey=Ey)
+
+    def auto_crop(self, threshold: float = 1e-6, apply: bool = True):
+        """
+        Determine symmetric crop values based on intensity profile thresholds.
+
+        Analyzes the 1D intensity projections along each axis to find
+        regions where the signal falls below a relative threshold, then
+        computes symmetric crop amounts for each axis.
+
+        Parameters
+        ----------
+        threshold : float, default=1e-6
+            Relative threshold (fraction of maximum) below which data
+            is considered negligible and can be cropped.
+        apply : bool, default=True
+            If True, apply the crop and return the cropped wavefront.
+            If False, return only the crop amounts as a dictionary.
+
+        Returns
+        -------
+        Wavefront, WavefrontK, or dict
+            If apply=True: New wavefront with cropped field arrays.
+            If apply=False: Dictionary with keys 'nx', 'ny', 'nz' containing
+            the symmetric crop amounts for each axis.
+
+        Examples
+        --------
+        >>> # Get crop amounts without applying
+        >>> crop_info = w.auto_crop(threshold=1e-4, apply=False)
+        >>> print(crop_info)  # {'nx': 10, 'ny': 8, 'nz': 5}
+
+        >>> # Apply auto-crop directly
+        >>> w_cropped = w.auto_crop(threshold=1e-4)
+
+        >>> # Manual two-step process
+        >>> crop_info = w.auto_crop(threshold=1e-4, apply=False)
+        >>> w_cropped = w.crop(**crop_info)
+        """
+
+        def find_symmetric_crop(profile: np.ndarray, threshold: float) -> int:
+            """Find symmetric crop amount for a 1D profile."""
+            if profile.size == 0:
+                return 0
+
+            max_val = np.max(profile)
+            if max_val == 0:
+                return 0
+
+            # Normalize and find where signal is above threshold
+            normalized = profile / max_val
+            above_threshold = normalized > threshold
+
+            if not np.any(above_threshold):
+                return 0
+
+            # Find first and last indices above threshold
+            indices = np.where(above_threshold)[0]
+            first_idx = indices[0]
+            last_idx = indices[-1]
+
+            # Calculate symmetric crop (use minimum of both sides)
+            crop_start = first_idx
+            crop_end = len(profile) - 1 - last_idx
+
+            return min(crop_start, crop_end)
+
+        # Get 1D intensity projections along each axis
+        intensity = self.intensity
+        profile_x = np.sum(intensity, axis=_axis_for_sum[self.axis_labels[0]])
+        profile_y = np.sum(intensity, axis=_axis_for_sum[self.axis_labels[1]])
+        profile_z = np.sum(intensity, axis=_axis_for_sum[self.axis_labels[2]])
+
+        # Analyze each axis
+        nx = find_symmetric_crop(profile_x, threshold)
+        ny = find_symmetric_crop(profile_y, threshold)
+        nz = find_symmetric_crop(profile_z, threshold)
+
+        crop_amounts = {"nx": nx, "ny": ny, "nz": nz}
+
+        if apply:
+            return self.crop(**crop_amounts)
+        else:
+            return crop_amounts
+
     def copy(self):
         """Returns a deep copy"""
         return deepcopy(self)
@@ -504,6 +652,10 @@ class WavefrontK(WavefrontBase):
         Plot photon energy spectrum dU/dE
     pad(nx, ny, nz)
         Zero-pad the field arrays
+    crop(nx, ny, nz)
+        Crop the field arrays by removing elements from edges
+    auto_crop(threshold, apply)
+        Determine and optionally apply symmetric crop based on intensity thresholds
 
     Notes
     -----
@@ -858,6 +1010,10 @@ class Wavefront(WavefrontBase):
         Propagate wavefront by distance z in free space
     pad(nx, ny, nz)
         Zero-pad the field arrays
+    crop(nx, ny, nz)
+        Crop the field arrays by removing elements from edges
+    auto_crop(threshold, apply)
+        Determine and optionally apply symmetric crop based on intensity thresholds
     estimate_curvature(axis, polarization, ...)
         Estimate wavefront radius of curvature
     plot_power()

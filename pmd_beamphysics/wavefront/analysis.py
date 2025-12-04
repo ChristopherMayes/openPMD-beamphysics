@@ -78,10 +78,12 @@ def fit_m2(
         sigma2_fit = sigma_squared(z_fit, *popt)
 
         fig, ax = plt.subplots(figsize=(8, 5))
-        ax.scatter(z, sigma2 * 1e12, label="Data", color="blue", marker="o")
-        ax.plot(z_fit, sigma2_fit * 1e12, label="Fit", color="red")
+        ax.scatter(
+            z, np.array(beam_sizes) * 1e6, label="Data", color="blue", marker="o"
+        )
+        ax.plot(z_fit, np.sqrt(sigma2_fit) * 1e6, label="Fit", color="red")
         ax.set_xlabel("z (m)")
-        ax.set_ylabel(r"$\sigma^2$ (µm²)")
+        ax.set_ylabel(r"$\sigma$ (µm)")
         ax.set_title(
             rf"$M^2$ Fit: $\sigma_0$ = {sigma0_fit*1e6:.2f} µm, "
             rf"$z_0$ = {z0_fit:.3f} m, $M^2$ = {M2_fit:.3f}, "

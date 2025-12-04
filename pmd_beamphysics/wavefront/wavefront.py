@@ -1431,6 +1431,8 @@ class Wavefront(WavefrontBase):
         dz: float = 1.0,
         wavelength: float = 1.0,
         sigma0: float | None = None,
+        z0: float = 0.0,
+        x0: float = 0.0,
         y0: float = 0.0,
         sigma_z: float | None = None,
         energy: float = 1.0,

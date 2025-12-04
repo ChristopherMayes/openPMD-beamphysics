@@ -1533,10 +1533,10 @@ class Wavefront(WavefrontBase):
         k = 2 * pi / wavelength
 
         # Complex beam parameter at position z0 from waist
-        q = z0 + 1j * zR  # noqa: F821
+        q = z0 + 1j * zR
 
         # Transverse Gaussian beam profile
-        uxy = (1 / q) * np.exp(-0.5j * k * ((X - x0) ** 2 + (Y - y0) ** 2) / q)  # noqa: F821
+        uxy = (1 / q) * np.exp(-0.5j * k * ((X - x0) ** 2 + (Y - y0) ** 2) / q)
 
         # Analytic integral of |u_xy|² over transverse plane
         integral_uxy_squared = pi / (k * zR)

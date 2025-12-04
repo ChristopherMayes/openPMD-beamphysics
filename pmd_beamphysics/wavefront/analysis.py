@@ -44,7 +44,7 @@ def fit_m2(
         - 'sigma0': RMS beam waist size (m)
         - 'z0': waist position (m)
         - 'M2': beam quality factor
-        - 'zR': Rayleigh range (m)
+        - 'zR': Rayleigh range z_R = 4π σ₀² / (M² λ) (m)
         - 'pcov': covariance matrix (if return_covariance=True)
     """
 

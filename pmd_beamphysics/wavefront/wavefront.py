@@ -19,7 +19,7 @@ from matplotlib.colors import LogNorm
 
 from pmd_beamphysics.statistics import mean_calc, mean_variance_calc
 from pmd_beamphysics.plot import plot_1d_density, plot_2d_density_with_marginals
-from pmd_beamphysics.units import Z0
+from pmd_beamphysics.units import Z0, c_light
 from pmd_beamphysics.interfaces.genesis import (
     wavefront_write_genesis4,
     load_genesis4_fields,
@@ -1421,3 +1421,146 @@ class Wavefront(WavefrontBase):
             ax2.set_ylabel("weight")
 
         return curvature
+
+    @classmethod
+    def from_gaussian(
+        cls,
+        shape: tuple[int, int, int],
+        dx: float = 1.0,
+        dy: float = 1.0,
+        dz: float = 1.0,
+        wavelength: float = 1.0,
+        sigma0: float | None = None,
+        y0: float = 0.0,
+        sigma_z: float | None = None,
+        energy: float = 1.0,
+        phase: float = 0.0,
+        polarization: str = "x",
+    ) -> "Wavefront":
+        """
+        Create a Wavefront with a Gaussian beam.
+
+        Parameters
+        ----------
+        shape : tuple[int, int, int]
+            Grid shape (nx, ny, nz)
+        dx : float, default=1.0
+            Grid spacing in x direction (m)
+        dy : float, default=1.0
+            Grid spacing in y direction (m)
+        dz : float, default=1.0
+            Grid spacing in z direction (m)
+        wavelength : float, default=1.0
+            Central wavelength (m)
+        sigma0 : float, optional
+            RMS transverse beam size at the waist in meters (round beam).
+            Related to waist size w0 via: w0 = 2·σ₀
+            Related to Rayleigh length via: z_R = 4π·σ₀² / λ = π·w0² / λ
+        z0 : float, default=0.0
+            Distance from waist position (m)
+        x0 : float, default=0.0
+            Beam center position in x (m)
+        y0 : float, default=0.0
+            Beam center position in y (m)
+        sigma_z : float or None, default=None
+            Longitudinal Gaussian width (m). If None, use constant longitudinal profile.
+        energy : float, default=1.0
+            Total beam energy in Joules
+        phase : float, default=0.0
+            Global phase offset (radians)
+        polarization : str, default='x'
+            Polarization direction ('x' or 'y')
+
+        Returns
+        -------
+        Wavefront
+            New Wavefront instance with Gaussian beam
+
+        Raises
+        ------
+        ValueError
+            If sigma0 is not specified
+            If polarization is not 'x' or 'y'
+            If sigma_z is negative
+
+        Notes
+        -----
+        The Gaussian beam uses the complex beam parameter formalism:
+
+        q(z) = z + i·z_R  where z_R = 4π·σ₀² / λ = π·w0² / λ
+
+        u_xy(x,y,z) = (1/q) · exp(-i·k·(x² + y²)/(2q))
+
+        For sigma_z > 0:
+            u_z(z) = exp(-z²/(4σ_z²)) / √(√(2π)·σ_z)
+        For sigma_z = None:
+            u_z(z) = 1  (constant profile, normalized over grid)
+
+        The field is normalized such that:
+        ∫∫∫ |u|² dx dy dz = energy / (2·Z₀·c)
+
+        The relationship between sigma0 and common Gaussian beam parameters:
+        - Waist size (1/e² intensity radius): w0 = 2·σ₀
+        - Rayleigh length: z_R = π·w0²/λ = 4π·σ₀²/λ
+
+        References
+        ----------
+        - Wikipedia: Gaussian beam, Complex beam parameter
+        - Siegman "Lasers" 1986, Chapter 16.3
+        """
+        if sigma0 is None:
+            raise ValueError("sigma0 must be specified")
+
+        if polarization not in ("x", "y"):
+            raise ValueError(f"polarization must be 'x' or 'y', got '{polarization}'")
+
+        if sigma_z is not None and sigma_z < 0:
+            raise ValueError(f"sigma_z must be non-negative or None, got {sigma_z}")
+
+        # Convert sigma0 to Rayleigh length: z_R = π·w0²/λ = 4π·σ₀²/λ where w0 = 2·σ₀
+        zR = 4 * pi * sigma0**2 / wavelength
+
+        # Create coordinate vectors
+        nx, ny, nz = shape
+        xvec = np.linspace(-((nx - 1) * dx) / 2, ((nx - 1) * dx) / 2, nx)
+        yvec = np.linspace(-((ny - 1) * dy) / 2, ((ny - 1) * dy) / 2, ny)
+        zvec = np.linspace(-((nz - 1) * dz) / 2, ((nz - 1) * dz) / 2, nz)
+
+        X, Y, Z = np.meshgrid(xvec, yvec, zvec, indexing="ij")
+
+        k = 2 * pi / wavelength
+
+        # Complex beam parameter at position z0 from waist
+        q = z0 + 1j * zR  # noqa: F821
+
+        # Transverse Gaussian beam profile
+        uxy = (1 / q) * np.exp(-0.5j * k * ((X - x0) ** 2 + (Y - y0) ** 2) / q)  # noqa: F821
+
+        # Analytic integral of |u_xy|² over transverse plane
+        integral_uxy_squared = pi / (k * zR)
+
+        # Longitudinal profile
+        if sigma_z is None or sigma_z == 0:
+            # Constant longitudinal profile
+            uz = np.ones_like(Z)
+        else:
+            # Gaussian longitudinal profile (square root of Gaussian in intensity)
+            uz = np.sqrt(1 / np.sqrt(2 * pi) / sigma_z) * np.exp(
+                -(Z**2) / (4 * sigma_z**2)
+            )
+
+        # Combined field, normalized by transverse integral
+        u = uxy * uz / np.sqrt(integral_uxy_squared)
+
+        # Exact normalization over the discrete grid
+        integral2 = np.sum(np.abs(u) ** 2) * dx * dy * dz
+        u = u / np.sqrt(integral2)
+
+        # Scale for desired energy using c_light for consistency
+        u = u * np.sqrt(energy * 2 * Z0 * c_light) * np.exp(1j * phase)
+
+        # Create wavefront with appropriate polarization
+        if polarization == "x":
+            return cls(Ex=u, dx=dx, dy=dy, dz=dz, wavelength=wavelength)
+        else:
+            return cls(Ey=u, dx=dx, dy=dy, dz=dz, wavelength=wavelength)

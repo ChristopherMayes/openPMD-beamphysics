@@ -462,7 +462,7 @@ NAMED_UNITS = [
     pmd_unit("g", 0.001, "mass"),
     pmd_unit("s", 1, "time"),
     pmd_unit("A", 1, "current"),
-    pmd_unit("K", 1, "temperture"),
+    pmd_unit("K", 1, "temperature"),
     pmd_unit("mol", 1, "mol"),
     pmd_unit("cd", 1, "luminous"),
     pmd_unit("C", 1, "charge"),

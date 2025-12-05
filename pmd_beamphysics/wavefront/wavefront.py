@@ -58,19 +58,13 @@ class SpatialDomain(str, Enum):
     K = "k"
 
 
-# Axes to sum over for intensity/probability projections
-# TODO: cleaner code.
-_axis_for_sum = {
-    "x": (1, 2),
-    "y": (0, 2),
-    "z": (0, 1),
-    "kx": (1, 2),
-    "ky": (0, 2),
-    "kz": (0, 1),
-}
-_axis_for_sum["thetax"] = _axis_for_sum["kx"]
-_axis_for_sum["thetay"] = _axis_for_sum["ky"]
-_axis_for_sum["thetaz"] = _axis_for_sum["kz"]
+# Axes to sum over for intensity/probability projections.
+# For projection onto axis i, sum over all other axes.
+_axis_for_sum = (
+    {key: (1, 2) for key in ("x", "kx", "thetax")}
+    | {key: (0, 2) for key in ("y", "ky", "thetay")}
+    | {key: (0, 1) for key in ("z", "kz", "thetaz")}
+)
 
 
 class WavefrontBase(ABC):

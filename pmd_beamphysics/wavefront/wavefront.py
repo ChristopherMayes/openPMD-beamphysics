@@ -447,7 +447,7 @@ class WavefrontBase(ABC):
         """
         zero-pad the field arrays.
 
-        If only a sincle number is given, the array will be symmetrically padded
+        If only a single number is given, the array will be symmetrically padded
         by this
         """
 

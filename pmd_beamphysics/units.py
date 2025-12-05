@@ -51,7 +51,7 @@ class pmd_unit:
         * "mass"
         * "time"
         * "current"
-        * "temperture"
+        * "temperature"
         * "mol"
         * "luminous"
         * "charge"
@@ -75,7 +75,7 @@ class pmd_unit:
        mass            : (0,1,0,0,0,0,0)     kg
        time            : (0,0,1,0,0,0,0)     s
        current         : (0,0,0,1,0,0,0)     A
-       temperture      : (0,0,0,0,1,0,0)     K
+       temperature      : (0,0,0,0,1,0,0)     K
        mol             : (0,0,0,0,0,1,0)     mol
        luminous        : (0,0,0,0,0,0,1)     cd
 

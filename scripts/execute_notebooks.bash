@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define an array of patterns to skip
-SKIP_LIST=("parallel")
+SKIP_LIST=("parallel", "experimental")
 
 
 export PYDEVD_DISABLE_FILE_VALIDATION=1

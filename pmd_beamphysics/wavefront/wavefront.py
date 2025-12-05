@@ -1608,6 +1608,7 @@ class Wavefront(WavefrontBase):
             raise ValueError(
                 f"file must be a str, pathlib.Path, or h5py.Group, got {type(file)}"
             )
+
     def estimate_curvature(
         self,
         axis: str = "x",

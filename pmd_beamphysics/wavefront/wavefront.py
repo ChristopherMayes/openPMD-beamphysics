@@ -883,7 +883,7 @@ class WavefrontK(WavefrontBase):
         dU/dE = (ε0/2) ∫∫ |Ẽ|² dkx dky  / (ħc/e)
 
 
-        See .photon_energy_vec for the correspomnding photon energies in eV.
+        See .photon_energy_vec for the corresponding photon energies in eV.
         """
         u_kz_J_m = (
             np.sum(self.spectral_energy_density, axis=(0, 1)) * self.dkx * self.dky

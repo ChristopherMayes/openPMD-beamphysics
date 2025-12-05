@@ -144,6 +144,9 @@ class WavefrontBase(ABC):
 
     @property
     def shape(self):
+        """
+        Shape of the field arrays as (nx, ny, nz).
+        """
         if self.Ex is None:
             if self.Ey is None:
                 raise ValueError("Neither Ex nor Ey is set")
@@ -163,6 +166,11 @@ class WavefrontBase(ABC):
 
     @property
     def k0(self):
+        """
+        Central wavenumber in rad/m.
+
+        k0 = 2π / wavelength
+        """
         return 2 * pi / self.wavelength
 
     @property
@@ -174,149 +182,244 @@ class WavefrontBase(ABC):
 
     @property
     def nx(self):
+        """Number of grid points in the x direction."""
         return self.shape[0]
 
     @property
     def ny(self):
+        """Number of grid points in the y direction."""
         return self.shape[1]
 
     @property
     def nz(self):
+        """Number of grid points in the z direction."""
         return self.shape[2]
 
     # x
     @property
     def xmin(self):
         """
-        xmin = - (nx-1) * dx / 2
+        Minimum x coordinate in m.
+
+        xmin = -(nx-1) * dx / 2
         """
         return -((self.nx - 1) * self.dx) / 2
 
     @property
     def xmax(self):
         """
-        xmax =  (nx-1) * dx / 2
+        Maximum x coordinate in m.
+
+        xmax = (nx-1) * dx / 2
         """
         return ((self.nx - 1) * self.dx) / 2
 
     @property
     def xvec(self):
+        """
+        Array of x coordinates in m.
+        """
         return np.linspace(self.xmin, self.xmax, self.nx)
 
     # y
     @property
     def ymin(self):
+        """
+        Minimum y coordinate in m.
+
+        ymin = -(ny-1) * dy / 2
+        """
         return -((self.ny - 1) * self.dy) / 2
 
     @property
     def ymax(self):
+        """
+        Maximum y coordinate in m.
+
+        ymax = (ny-1) * dy / 2
+        """
         return ((self.ny - 1) * self.dy) / 2
 
     @property
     def yvec(self):
+        """
+        Array of y coordinates in m.
+        """
         return np.linspace(self.ymin, self.ymax, self.ny)
 
     # z
     @property
     def zmin(self):
+        """
+        Minimum z coordinate in m.
+
+        zmin = -(nz-1) * dz / 2
+        """
         return -((self.nz - 1) * self.dz) / 2
 
     @property
     def zmax(self):
+        """
+        Maximum z coordinate in m.
+
+        zmax = (nz-1) * dz / 2
+        """
         return ((self.nz - 1) * self.dz) / 2
 
     @property
     def zvec(self):
+        """
+        Array of z coordinates in m.
+        """
         return np.linspace(self.zmin, self.zmax, self.nz)
 
     # kx
     @property
     def kxvec(self):
+        """
+        Array of kx (transverse wavenumber) values in rad/m.
+        """
         return 2 * pi * fftshift(fftfreq(self.nx, d=self.dx))
 
     @property
     def kxmin(self):
+        """
+        Minimum kx value in rad/m.
+        """
         return 2 * pi * fftfreq_min(self.nx, self.dx)
 
     @property
     def kxmax(self):
+        """
+        Maximum kx value in rad/m.
+        """
         return 2 * pi * fftfreq_max(self.nx, self.dx)
 
     # ky
 
     @property
     def kyvec(self):
+        """
+        Array of ky (transverse wavenumber) values in rad/m.
+        """
         return 2 * pi * ifftshift(fftfreq(self.ny, d=self.dy))
 
     @property
     def kymin(self):
+        """
+        Minimum ky value in rad/m.
+        """
         return 2 * pi * fftfreq_min(self.ny, self.dy)
 
     @property
     def kymax(self):
+        """
+        Maximum ky value in rad/m.
+        """
         return 2 * pi * fftfreq_max(self.ny, self.dy)
 
     # kz
 
     @property
     def kzvec(self):
+        """
+        Array of kz (longitudinal wavenumber) values in rad/m.
+        """
         return 2 * pi * fftshift(fftfreq(self.nz, d=self.dz))
 
     @property
     def kzmin(self):
+        """
+        Minimum kz value in rad/m.
+        """
         return 2 * pi * fftfreq_min(self.nz, self.dz)
 
     @property
     def kzmax(self):
+        """
+        Maximum kz value in rad/m.
+        """
         return 2 * pi * fftfreq_max(self.nz, self.dz)
 
     # thetax = kx/k0
     @property
     def dthetax(self):
         """
-        dthetax = wavelength / (nx * dx) = dkx/k0
+        Angular spacing in thetax direction in rad.
+
+        dthetax = wavelength / (nx * dx) = dkx / k0
         """
         return self.wavelength / (self.nx * self.dx)
 
     @property
     def thetaxvec(self):
+        """
+        Array of thetax (angular deviation) values in rad.
+
+        thetax = kx / k0
+        """
         return self.kxvec / self.k0
 
     @property
     def thetaxmin(self):
+        """
+        Minimum thetax value in rad.
+        """
         return self.kxmin / self.k0
 
     @property
     def thetaxmax(self):
+        """
+        Maximum thetax value in rad.
+        """
         return self.kxmax / self.k0
 
     # thetay = ky/k0
     @property
     def dthetay(self):
         """
-        dthetay = wavelength / (nx * dy) = dky/k0
+        Angular spacing in thetay direction in rad.
+
+        dthetay = wavelength / (ny * dy) = dky / k0
         """
         return self.wavelength / (self.ny * self.dy)
 
     @property
     def thetayvec(self):
+        """
+        Array of thetay (angular deviation) values in rad.
+
+        thetay = ky / k0
+        """
         return self.kyvec / self.k0
 
     @property
     def thetaymin(self):
+        """
+        Minimum thetay value in rad.
+        """
         return self.kymin / self.k0
 
     @property
     def thetaymax(self):
+        """
+        Maximum thetay value in rad.
+        """
         return self.kymax / self.k0
 
     # bools
     @property
     def in_rspace(self):
+        """
+        True if the wavefront is in real space (position domain).
+        """
         return self.spatial_domain == SpatialDomain.R
 
     @property
     def in_kspace(self):
+        """
+        True if the wavefront is in k-space (Fourier domain).
+        """
         return self.spatial_domain == SpatialDomain.K
 
     def _mean(self, key):
@@ -805,24 +908,27 @@ class WavefrontK(WavefrontBase):
     @property
     def intensity_x(self):
         """
-        x polarization field intensity in ??
-        Intensity ~ |Ẽx|^2
+        x-polarization spectral intensity in V²·m⁴.
+
+        Spectral intensity |Ẽx|²
         """
         return np.abs(self.Ex) ** 2 if self.Ex is not None else 0
 
     @property
     def intensity_y(self):
         """
-        y polarization field intensity in ??
-        Intensity ~ |Ẽy|^2
+        y-polarization spectral intensity in V²·m⁴.
+
+        Spectral intensity |Ẽy|²
         """
         return np.abs(self.Ey) ** 2 if self.Ey is not None else 0
 
     @property
     def intensity(self) -> np.ndarray | float:
         """
-        total field intensity in ??
-        ~ (|Ẽx|^2 + |Ẽy|^2)
+        Total spectral intensity in V²·m⁴.
+
+        |Ẽx|² + |Ẽy|²
         """
         return self.intensity_x + self.intensity_y
 
@@ -889,70 +995,90 @@ class WavefrontK(WavefrontBase):
     @property
     def mean_kx(self):
         """
-        <kx> in rad/m
+        Intensity-weighted mean kx in rad/m.
+
+        <kx> = ∫ kx |Ẽ|² dkx dky dkz / ∫ |Ẽ|² dkx dky dkz
         """
         return self._mean("kx")
 
     @property
     def mean_ky(self):
         """
-        <ky> in rad/m
+        Intensity-weighted mean ky in rad/m.
+
+        <ky> = ∫ ky |Ẽ|² dkx dky dkz / ∫ |Ẽ|² dkx dky dkz
         """
         return self._mean("ky")
 
     @property
     def mean_kz(self):
         """
-        <kz> in rad/m
+        Intensity-weighted mean kz in rad/m.
+
+        <kz> = ∫ kz |Ẽ|² dkx dky dkz / ∫ |Ẽ|² dkx dky dkz
         """
         return self._mean("kz")
 
     @property
     def mean_thetax(self):
         """
-        <thetax> in rad
+        Intensity-weighted mean thetax in rad.
+
+        <θx> = <kx> / k0
         """
         return self._mean("thetax")
 
     @property
     def mean_thetay(self):
         """
-        <thetay> in rad
+        Intensity-weighted mean thetay in rad.
+
+        <θy> = <ky> / k0
         """
         return self._mean("thetay")
 
     @property
     def sigma_kx(self):
         """
-        sqrt(<kx^2> - <kx>^2) in rad/m
+        RMS width in kx in rad/m.
+
+        σ_kx = sqrt(<kx²> - <kx>²)
         """
         return self._std("kx")
 
     @property
     def sigma_ky(self):
         """
-        sqrt(<ky^2> - <ky>^2) in rad/m
+        RMS width in ky in rad/m.
+
+        σ_ky = sqrt(<ky²> - <ky>²)
         """
         return self._std("ky")
 
     @property
     def sigma_kz(self):
         """
-        sqrt(<kz^2> - <kz>^2) in rad/m
+        RMS width in kz in rad/m.
+
+        σ_kz = sqrt(<kz²> - <kz>²)
         """
         return self._std("kz")
 
     @property
     def sigma_thetax(self):
         """
-        sqrt(<thetax^2> - <thetax>^2) in rad
+        RMS angular width in thetax in rad.
+
+        σ_θx = sqrt(<θx²> - <θx>²)
         """
         return self._std("thetax")
 
     @property
     def sigma_thetay(self):
         """
-        sqrt(<thetay^2> - <thetay>^2) in rad
+        RMS angular width in thetay in rad.
+
+        σ_θy = sqrt(<θy²> - <θy>²)
         """
         return self._std("thetay")
 
@@ -1104,18 +1230,22 @@ class Wavefront(WavefrontBase):
     @property
     def fluence(self):
         """
-        Fluence in the z direction:
+        Transverse fluence profile in J/m².
 
-        F(x,y) = ϵ0/2  ∫ |E(x,y,z)|^2 dz
+        F(x,y) = ϵ0/2 ∫ |E(x,y,z)|² dz
+
+        2D real array with shape (nx, ny).
         """
         return self.dz * np.sum(self.intensity, axis=2) / c  # J / m^2
 
     @property
     def fluence_profile_x(self):
         """
-        1D fluence profile along x, integrated over y and z (J/m).
+        1D fluence profile along x in J/m.
 
-        F_x(x) = ϵ0/2  ∫∫ |E(x,y,z)|^2 dy dz
+        F_x(x) = ϵ0/2 ∫∫ |E(x,y,z)|² dy dz
+
+        Integrated over y and z directions.
         """
 
         return (
@@ -1125,9 +1255,11 @@ class Wavefront(WavefrontBase):
     @property
     def fluence_profile_y(self):
         """
-        1D fluence profile along y, integrated over x and z (J/m).
+        1D fluence profile along y in J/m.
 
-        F_y(y) = ϵ0/2  ∫∫ |E(x,y,z)|^2 dx dz
+        F_y(y) = ϵ0/2 ∫∫ |E(x,y,z)|² dx dz
+
+        Integrated over x and z directions.
         """
 
         return (
@@ -1137,10 +1269,11 @@ class Wavefront(WavefrontBase):
     @property
     def power(self):
         """
-        Longitudinal power profile along z (W).
+        Longitudinal power profile along z in W.
 
-        P(z) = ∫∫ I(x, y, z) dx dy
-             = ∫∫ (c ϵ0 / 2) |E(x, y, z)|² dx dy
+        P(z) = ∫∫ I(x, y, z) dx dy = ∫∫ (c ϵ0/2) |E(x, y, z)|² dx dy
+
+        1D real array with shape (nz,).
         """
         return np.sum(self.intensity, axis=_axis_for_sum["z"]) * self.dx * self.dy  # W
 
@@ -1310,17 +1443,28 @@ class Wavefront(WavefrontBase):
     @property
     def dkx(self) -> float:
         """
-        transverse wavevector components grid spacing in rad/m
+        Transverse wavevector spacing in kx direction in rad/m.
+
         dkx = 2π / (nx * dx)
         """
         return 2 * pi / (self.nx * self.dx)
 
     @property
     def dky(self):
+        """
+        Transverse wavevector spacing in ky direction in rad/m.
+
+        dky = 2π / (ny * dy)
+        """
         return 2 * pi / (self.ny * self.dy)
 
     @property
     def dkz(self):
+        """
+        Longitudinal wavevector spacing in kz direction in rad/m.
+
+        dkz = 2π / (nz * dz)
+        """
         return 2 * pi / (self.nz * self.dz)
 
     # Statistics
@@ -1328,42 +1472,54 @@ class Wavefront(WavefrontBase):
     @property
     def mean_x(self):
         """
-        <x> in meters
+        Intensity-weighted mean x position in m.
+
+        <x> = ∫ x I(x,y,z) dx dy dz / ∫ I(x,y,z) dx dy dz
         """
         return self._mean("x")
 
     @property
     def mean_y(self):
         """
-        <y> in meters
+        Intensity-weighted mean y position in m.
+
+        <y> = ∫ y I(x,y,z) dx dy dz / ∫ I(x,y,z) dx dy dz
         """
         return self._mean("y")
 
     @property
     def mean_z(self):
         """
-        <y> in meters
+        Intensity-weighted mean z position in m.
+
+        <z> = ∫ z I(x,y,z) dx dy dz / ∫ I(x,y,z) dx dy dz
         """
         return self._mean("z")
 
     @property
     def sigma_x(self):
         """
-        sqrt(<x^2> - <x>^2) in meters
+        RMS beam size in x in m.
+
+        σ_x = sqrt(<x²> - <x>²)
         """
         return self._std("x")
 
     @property
     def sigma_y(self):
         """
-        sqrt(<y^2> - <y>^2) in meters
+        RMS beam size in y in m.
+
+        σ_y = sqrt(<y²> - <y>²)
         """
         return self._std("y")
 
     @property
     def sigma_z(self):
         """
-        sqrt(<z^2> - <z>^2) in meters
+        RMS pulse length in z in m.
+
+        σ_z = sqrt(<z²> - <z>²)
         """
         return self._std("z")
 

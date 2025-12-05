@@ -740,10 +740,10 @@ def wavefront_write_genesis4(
     dfl = E * dx / np.sqrt(2 * Z0)
 
     if nx != ny:
-        raise ValueError(f"Genesi4 requires nx = ny. This data has {nx=}, {ny=}")
+        raise ValueError(f"Genesis4 requires nx = ny. This data has {nx=}, {ny=}")
 
     if dx != dy:
-        raise ValueError(f"Genesi4 requires dx = dy. This data has {dx=}, {dy=}")
+        raise ValueError(f"Genesis4 requires dx = dy. This data has {dx=}, {dy=}")
 
     h5["gridpoints"] = np.asarray([nx])
     h5["gridsize"] = np.asarray([dx])

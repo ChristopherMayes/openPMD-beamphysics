@@ -75,7 +75,7 @@ class pmd_unit:
        mass            : (0,1,0,0,0,0,0)     kg
        time            : (0,0,1,0,0,0,0)     s
        current         : (0,0,0,1,0,0,0)     A
-       temperature      : (0,0,0,0,1,0,0)     K
+       temperature     : (0,0,0,0,1,0,0)     K
        mol             : (0,0,0,0,0,1,0)     mol
        luminous        : (0,0,0,0,0,0,1)     cd
 
@@ -394,7 +394,7 @@ DIMENSION: dict[str, Dimension] = {
     "mass": (0, 1, 0, 0, 0, 0, 0),
     "time": (0, 0, 1, 0, 0, 0, 0),
     "current": (0, 0, 0, 1, 0, 0, 0),
-    "temperture": (0, 0, 0, 0, 1, 0, 0),
+    "temperature": (0, 0, 0, 0, 1, 0, 0),
     "mol": (0, 0, 0, 0, 0, 1, 0),
     "luminous": (0, 0, 0, 0, 0, 0, 1),
     #
@@ -437,7 +437,7 @@ SI_symbol: dict[str, str] = {
     "mass": "kg",
     "time": "s",
     "current": "A",
-    "temperture": "K",
+    "temperature": "K",
     "mol": "mol",
     "luminous": "cd",
     "charge": "C",

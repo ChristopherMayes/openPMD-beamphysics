@@ -587,7 +587,7 @@ def genesis4_par_to_data(h5, species="electron", smear=True):
 def load_genesis4_fields(h5):
     """
     Copied from: https://github.com/slaclab/lume-genesis/blob/52dc2815bb0bb42c1e057d1393c6ada07b8580b3/genesis/version4/readers.py#L8
-    TODO: Point LUME-Geneis' fuction to here instead.
+    TODO: Point LUME-Genesis' function to here instead.
 
     Loads the field data into memory from an open h5 handle.
 

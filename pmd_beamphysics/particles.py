@@ -190,6 +190,10 @@ class ParticleGroup:
                     assert len(pp) == 1, f"Number of particle paths in {h5}: {len(pp)}"
                     data = load_bunch_data(hh5[pp[0]])
 
+            elif isinstance(h5, File):
+                pp = particle_paths(h5)
+                assert len(pp) == 1, f"Number of particle paths in {h5}: {len(pp)}"
+                data = load_bunch_data(h5[pp[0]])
             else:
                 # Try dict
                 data = load_bunch_data(h5)

@@ -20,6 +20,10 @@ nav:
           - examples/fields/field_conversion.ipynb
           - examples/fields/corrector_modeling.ipynb
           - examples/fields/solenoid_modeling.ipynb
+      - Wavefront:
+          - examples/wavefront/wavefront.ipynb
+          - examples/wavefront/advanced_drift.ipynb
+          - examples/wavefront/pytorch_wavefront.ipynb
       - Utilities:
           - examples/units.ipynb
           - examples/labels.ipynb

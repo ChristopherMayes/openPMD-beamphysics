@@ -1601,12 +1601,13 @@ class Wavefront(WavefrontBase):
             with h5py.File(file, "w") as h5:
                 wavefront_write_genesis4(self, h5)
             return
-
-        if isinstance(file, h5py.Group):
-            wavefront_write_genesis4(self, h5)
-
-        raise ValueError(type(file))  # type: ignore[unreachable]
-
+        elif isinstance(file, h5py.Group):
+            wavefront_write_genesis4(self, file)
+            return
+        else:
+            raise ValueError(
+                f"file must be a str, pathlib.Path, or h5py.Group, got {type(file)}"
+            )
     def estimate_curvature(
         self,
         axis: str = "x",

@@ -23,7 +23,7 @@ nav:
       - Wavefront:
           - examples/wavefront/wavefront.ipynb
           - examples/wavefront/advanced_drift.ipynb
-          - examples/wavefront/pytorch_wavefront.ipynb
+          - examples/wavefront/experimental_pytorch_wavefront.ipynb
       - Utilities:
           - examples/units.ipynb
           - examples/labels.ipynb

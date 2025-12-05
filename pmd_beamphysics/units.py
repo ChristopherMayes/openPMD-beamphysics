@@ -242,7 +242,7 @@ class pmd_unit:
 
     def simplify(self, named_units=None) -> pmd_unit:
         """
-        Tries to simply a unit by searching from a list of named units
+        Tries to simplify a unit by searching from a list of named units
         for the same unitDimension and unitSI.
         """
 

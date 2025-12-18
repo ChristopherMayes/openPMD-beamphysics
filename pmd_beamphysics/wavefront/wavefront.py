@@ -296,7 +296,7 @@ class WavefrontBase(ABC):
         """
         Array of ky (transverse wavenumber) values in rad/m.
         """
-        return 2 * pi * ifftshift(fftfreq(self.ny, d=self.dy))
+        return 2 * pi * fftshift(fftfreq(self.ny, d=self.dy))
 
     @property
     def kymin(self):

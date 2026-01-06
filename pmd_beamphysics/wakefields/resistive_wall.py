@@ -192,7 +192,7 @@ def Gammaf(relaxation_time: float, radius: float, conductivity: float) -> float:
     return c_light * relaxation_time / s0f(radius, conductivity)
 
 
-@dataclass(slots=True)
+@dataclass
 class pseudomode:
     """
     Single-mode analytic representation of a short-range wakefield.

@@ -3,8 +3,8 @@ import os
 import numpy as np
 from h5py import File, Group
 
-from ..statistics import twiss_calc
-from ..units import c_light, mec2, unit, write_unit_h5
+from pmd_beamphysics.statistics import twiss_calc
+from pmd_beamphysics.units import c_light, mec2, unit, write_unit_h5, Z0
 
 # Genesis 1.3
 # -------------
@@ -582,3 +582,184 @@ def genesis4_par_to_data(h5, species="electron", smear=True):
     }
 
     return data
+
+
+def load_genesis4_fields(h5):
+    """
+    Copied from: https://github.com/slaclab/lume-genesis/blob/52dc2815bb0bb42c1e057d1393c6ada07b8580b3/genesis/version4/readers.py#L8
+    TODO: Point LUME-Genesis' function to here instead.
+
+    Loads the field data into memory from an open h5 handle.
+
+    Example usage:
+
+    import h5py
+    with h5py.File('rad_field.fld.h5', 'r') as h5:
+        dfl, param = load_genesis4_fields(h5)
+
+    Returns tuple (dfl, param) where
+
+        dfl is a 3d complex dfl grid with shape (nx, ny, nz)
+
+        param is a dict with:
+            gridpoints:    number of gridpoints in one transverse dimension, equal to nx and ny above
+            gridsize:      gridpoint spacing (meter)
+            refposition:   starting position (meter)
+            wavelength:    radiation wavelength (meter)
+            slicecount:    number of slices
+            slicespacing   slice spacing (meter)
+
+        These params correspond to v2 params:
+            gridpoints:   ncar
+            gridsize:     dgrid*2 / (ncar-1)
+            wavelength:   xlamds
+            slicespacing: xlamds * zsep
+
+
+    """
+
+    # Get params
+    param = {
+        key: h5[key][0]
+        for key in [
+            "gridpoints",
+            "gridsize",
+            "refposition",
+            "wavelength",
+            "slicecount",
+            "slicespacing",
+        ]
+    }
+
+    # transverse grid points in each dimension
+    nx = param["gridpoints"]
+
+    # slice list
+    slist = sorted(
+        [
+            g
+            for g in h5
+            if g.startswith("slice") and g not in ["slicecount", "slicespacing"]
+        ]
+    )
+
+    # Note from Sven:
+    #   The order of the 1D array of the wavefront is with the x coordinates as the inner loop.
+    #   So the order is (x1,y1),(x2,y1), ... (xn,y1),(x1,y2),(x2,y2),.....
+    #   This is done int he routine getLLGridpoint in the field class.
+    # Therefore the transpose is needed below
+
+    dfl = np.stack(
+        [
+            h5[g]["field-real"][:].reshape(nx, nx).T
+            + 1j * h5[g]["field-imag"][:].reshape(nx, nx).T
+            for g in slist
+        ],
+        axis=-1,
+    )
+
+    return dfl, param
+
+
+def wavefront_write_genesis4(
+    w,
+    h5: File,
+    polarization: str = None,
+    refposition: float = 0,
+) -> None:
+    """
+    Write the wavefront field data to a Genesis4-style HDF5 file.
+
+    This function stores the full field data as a 3D array of complex numbers (`DFL`) in units of `sqrt(W)`,
+    following the Genesis 4 format. The relation between the stored `DFL` data and the electric field `E` in V/m is:
+
+    .. math::
+
+        E = DFL \\times \\frac{\\sqrt{2Z_0}}{\\Delta}
+
+    where `Z0` is the characteristic impedance of free space:
+
+    .. math::
+
+        Z_0 = \\pi \\times 119.9169832 \\text{ V}^2/\\text{W}
+
+    and `Δ` represents the grid spacing.
+
+    Parameters
+    ----------
+    w : Wavefront
+        The `Wavefront` instance containing the field data to be written.
+
+    h5 : h5py.File
+        The HDF5 file object where the data will be stored in Genesis4 format.
+
+    polarization : str, optional
+        The polarization component to write. Must be either `"x"` or `"y"`. If `None`, the function
+        will attempt to infer the correct component:
+        - If only `Ex` exists, it will be written.
+        - If only `Ey` exists, it will be written.
+        - If both components exist, a `ValueError` is raised.
+
+    refposition : float, optional
+        The reference position in meters, stored as metadata in the output file. Default is `0`.
+
+    Raises
+    ------
+    ValueError
+        - If both `Ex` and `Ey` exist but no polarization is explicitly specified.
+        - If `nx != ny`, as Genesis4 requires a square grid.
+        - If `dx != dy`, as Genesis4 requires equal grid spacing in both transverse directions.
+        - If `polarization` is specified but not `"x"` or `"y"`.
+
+    Notes
+    -----
+    - The function ensures that the grid size and spacing meet Genesis4's requirements.
+    - The data is stored in slices, following the indexing convention of Genesis4:
+      The x-coordinates are stored as the inner loop, requiring a transpose before flattening.
+
+    """
+    nx, ny, nz = w.shape
+    dx, dy, dz = w.dx, w.dy, w.dz
+    wavelength = w.wavelength
+
+    # Auto-select
+    if polarization is None:
+        if w.Ey is None:
+            E = w.Ex
+        elif w.Ex is None:
+            E = w.Ey
+        else:
+            raise ValueError("Can only write one component: 'x' or 'y'")
+    else:
+        assert polarization in ("x", "y")
+        if polarization == "x":
+            E = w.Ex
+        else:
+            E = w.Ey
+
+    dfl = E * dx / np.sqrt(2 * Z0)
+
+    if nx != ny:
+        raise ValueError(f"Genesis4 requires nx = ny. This data has {nx=}, {ny=}")
+
+    if dx != dy:
+        raise ValueError(f"Genesis4 requires dx = dy. This data has {dx=}, {dy=}")
+
+    h5["gridpoints"] = np.asarray([nx])
+    h5["gridsize"] = np.asarray([dx])
+    h5["refposition"] = np.asarray([refposition])
+    h5["wavelength"] = np.asarray([wavelength])
+    h5["slicecount"] = np.asarray([nz])
+    h5["slicespacing"] = np.asarray([dz])
+
+    # Note from Sven:
+    #   The order of the 1D array of the wavefront is with the x
+    #   coordinates as the inner loop.
+    #   So the order is (x1,y1),(x2,y1), ... (xn,y1),(x1,y2),(x2,y2),.....
+    #   This is done in the routine getLLGridpoint in the field class.
+    # Therefore the transpose is needed below
+    for z in range(nz):
+        slice_index = z + 1
+        slice_group = h5.create_group(f"slice{slice_index:06}")
+        slice_group["field-real"] = dfl[:, :, z].real.T.flatten()
+        slice_group["field-imag"] = dfl[:, :, z].imag.T.flatten()

@@ -1,5 +1,6 @@
 from .fields.fieldmesh import FieldMesh
 from .particles import ParticleGroup, single_particle
+from .wavefront.wavefront import Wavefront, WavefrontK
 from .readers import particle_paths
 from .status import ParticleStatus
 from .writers import pmd_init
@@ -17,4 +18,6 @@ __all__ = [
     "particle_paths",
     "pmd_init",
     "single_particle",
+    "Wavefront",
+    "WavefrontK",
 ]

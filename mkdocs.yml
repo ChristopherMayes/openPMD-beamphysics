@@ -23,6 +23,10 @@ nav:
       - Wakefields:
           - examples/wakefields/resistive_wall_wakefield.ipynb
           - examples/wakefields/resistive_wall_impedance.ipynb
+      - Wavefront:
+          - examples/wavefront/wavefront.ipynb
+          - examples/wavefront/advanced_drift.ipynb
+          - examples/wavefront/experimental_pytorch_wavefront.ipynb
       - Utilities:
           - examples/units.ipynb
           - examples/labels.ipynb

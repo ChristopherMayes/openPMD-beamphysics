@@ -1,7 +1,7 @@
 """ """
 
 from copy import copy
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Dict, List, Union
 
 import numpy as np
 import matplotlib
@@ -10,13 +10,14 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.gridspec import GridSpec
+from matplotlib.colors import LogNorm, Normalize, TwoSlopeNorm
 
 # For field legends
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from .labels import mathlabel
 from .statistics import slice_statistics, twiss_ellipse_points
-from .units import nice_array, nice_scale_prefix, plottable_array
+from .units import nice_array, nice_scale_prefix, plottable_array, pg_units
 
 CMAP0 = copy(plt.get_cmap("viridis"))
 CMAP0.set_under("white")
@@ -990,6 +991,485 @@ def plot_fieldmesh_rectangular_2d(
         orientation="vertical",
         label=llabel,
     )
+
+
+def plot_1d_density(
+    x: Union[str, np.ndarray],
+    y: Union[str, np.ndarray],
+    x_name: str = "",
+    y_name: Optional[str] = None,
+    x_units: Optional[str] = None,
+    y_units: Optional[str] = None,
+    figsize: Tuple[float, float] = (6, 4),
+    log_scale_y: bool = False,
+    show_cdf: bool = False,
+    cdf_label: str = "CDF",
+    cdf_style: Optional[Dict[str, Union[str, float]]] = None,
+    kind: str = "bar",
+    plot_style: Optional[Dict[str, Union[str, float]]] = None,
+    xlim: Optional[Tuple[float, float]] = None,
+    ylim: Optional[Tuple[float, float]] = (0, None),
+    ax: Optional[plt.Axes] = None,
+    nice: bool = True,
+    auto_label: bool = False,
+    tex: bool = True,
+    data: Optional[Dict[str, np.ndarray]] = None,
+    return_axes: bool = False,
+) -> Optional[Tuple[plt.Figure, Dict[str, plt.Axes]]]:
+    """
+    Plot a 1D density distribution with optional cumulative distribution function (CDF).
+
+    Parameters
+    ----------
+    x : np.ndarray or str
+        1D array representing the x-axis positions (bin centers), or a string key
+        to index into the `data` dict.
+    y : np.ndarray or str
+        1D array representing the density data (y-axis values), or a string key
+        to index into the `data` dict.
+    x_name : str, default=""
+        Label for the X-axis. If not provided and `x` is a string, will use `x` as the label.
+    y_name : str, optional
+        Label for the Y-axis (density). If None (default), will use "Density" as the label,
+        or the key name if `y` is a string key.
+    x_units : str, optional
+        Units for the X-axis, displayed in parentheses next to the label.
+    y_units : str, optional
+        Units for the Y-axis (density), displayed in parentheses next to the label.
+    figsize : tuple of float, default=(6, 4)
+        Figure size for the plot.
+    log_scale_y : bool, default=False
+        If True, use a log scale for the density Y-axis.
+    show_cdf : bool, default=False
+        If True, plot the cumulative distribution function on a secondary Y-axis.
+    cdf_label : str, default="CDF"
+        Label for the CDF axis.
+    cdf_style : dict, optional
+        Style options for the CDF line plot (e.g., {"color": "red", "linewidth": 2}).
+        Default is {"color": "blue", "linewidth": 2}.
+    kind : str, default="bar"
+        Type of plot for the density: "bar" for bar chart or "line" for line plot.
+    plot_style : dict, optional
+        Style options passed to the plot function. For bar plots, options like
+        {"color": "gray", "alpha": 0.7}. For line plots, options like
+        {"color": "blue", "linewidth": 2}.
+    xlim : tuple of float, optional
+        Limits for the X-axis in the form (xmin, xmax).
+    ylim : tuple of float, optional, default=(0, None)
+        Limits for the Y-axis (density) in the form (ymin, ymax).
+        Default starts at 0, which is typical for density distributions.
+        Set to None for automatic limits based on data.
+    ax : matplotlib.axes.Axes, optional
+        Matplotlib axes object to plot on. If None, a new figure and axes will be created.
+    nice : bool, default=True
+        If True, scale the arrays to nice units with appropriate SI prefixes.
+    auto_label : bool, default=False
+        If True, automatically generate labels and units from data keys using
+        `texlabel` and `pg_units`. Only works when `x` and `y` are strings.
+    tex : bool, default=True
+        If True, use TeX formatting for labels (via `mathlabel`). Only applies when
+        `auto_label=True`.
+    data : dict, optional
+        Dictionary containing data arrays. If provided, `x` and `y` should be string
+        keys to index into this dict. This follows matplotlib's convention.
+    return_axes : bool, default=False
+        If True, return the figure and axis objects for further customization.
+
+    Returns
+    -------
+    None or (plt.Figure, dict)
+        Returns None if `return_axes` is False. Otherwise, returns the figure and
+        a dictionary of axis objects.
+
+    Examples
+    --------
+    Direct array input:
+
+        >>> plot_1d_density(x_array, y_array, x_name="Position", y_name="Density")
+
+    Using data dict (matplotlib style):
+
+        >>> data = {"position": x_array, "density": y_array}
+        >>> plot_1d_density("position", "density", data=data)
+
+    Using auto_label with ParticleGroup-style keys:
+
+        >>> data = {"t": time_array, "norm_emit_x": emittance_array}
+        >>> plot_1d_density("t", "norm_emit_x", data=data, auto_label=True)
+        # Will automatically use TeX labels and proper units
+    """
+    # Handle data dict indexing (matplotlib pattern)
+    # Handle data dict indexing (matplotlib pattern)
+    x_key = None
+    y_key = None
+
+    if isinstance(x, str):
+        if data is None:
+            raise ValueError("If `x` is a string, `data` dict must be provided")
+        x_key = x
+        x = np.asarray(data[x_key])
+    else:
+        x = np.asarray(x)
+
+    if isinstance(y, str):
+        if data is None:
+            raise ValueError("If `y` is a string, `data` dict must be provided")
+        y_key = y
+        y = np.asarray(data[y_key])
+    else:
+        y = np.asarray(y)
+
+    # Use the key as the label if not explicitly provided
+    # Note: x_name and y_name are function parameters with defaults
+    if x_key is not None:
+        if x_name == "":  # noqa: F821
+            x_name = x_key
+
+    if y_key is not None:
+        if y_name is None:  # noqa: F821
+            y_name = y_key
+
+    # Set default y_name if still None
+    if y_name is None:
+        y_name = "Density"
+
+    # Validate array lengths match
+    if len(x) != len(y):
+        raise ValueError(
+            f"Length mismatch: x has {len(x)} elements, y has {len(y)} elements"
+        )
+
+    # Warn if auto_label is True but we don't have string keys
+    if auto_label and not (x_key or y_key):
+        import warnings
+
+        warnings.warn(
+            "auto_label=True but x and y are not string keys. "
+            "auto_label only works when x/y are passed as strings with a data dict.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    # Auto-generate labels and units from keys if requested
+    if auto_label:
+        if x_key and x_units is None:
+            try:
+                x_units_obj = pg_units(x_key)
+                x_units = x_units_obj.unitSymbol
+            except (ValueError, KeyError):
+                pass  # Keep x_units as None if lookup fails
+
+        if y_key and y_units is None:
+            try:
+                y_units_obj = pg_units(y_key)
+                y_units = y_units_obj.unitSymbol
+            except (ValueError, KeyError):
+                pass  # Keep y_units as None if lookup fails
+
+    # Store base units before adding prefixes (needed for CDF)
+    x_units_base = str(x_units) if x_units else None
+    y_units_base = str(y_units) if y_units else None
+
+    # Form nice arrays
+    x, f1, p1, x_min, x_max = plottable_array(x, nice=nice, lim=xlim)
+    y, f2, p2, y_min, y_max = plottable_array(y, nice=nice, lim=ylim)
+
+    # Update units with prefixes
+    if x_units:
+        x_units = p1 + str(x_units)
+    else:
+        x_units = p1 if p1 else None
+
+    if y_units:
+        y_units = p2 + str(y_units)
+    else:
+        y_units = p2 if p2 else None
+
+    # Compute bar widths from x spacing for continuous bars
+    if len(x) > 1:
+        # Width is distance to next point
+        widths = np.diff(x)
+        # For the last bar, use the same width as the second-to-last
+        widths = np.append(widths, widths[-1])
+    else:
+        widths = 1.0
+
+    # Create figure and axis
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure
+
+    # Default plot style
+    if plot_style is None:
+        if kind == "bar":
+            plot_style = {"color": "gray", "alpha": 0.7}
+        else:  # line
+            plot_style = {"color": "blue", "linewidth": 2}
+
+    # Plot density
+    if kind == "bar":
+        ax.bar(x, y, width=widths, align="edge", **plot_style)
+    elif kind == "line":
+        ax.plot(x, y, **plot_style)
+    else:
+        raise ValueError(f"kind must be 'bar' or 'line', got '{kind}'")
+
+    # Set labels
+    if auto_label and x_key:
+        ax.set_xlabel(mathlabel(x_key, units=x_units, tex=tex))
+    else:
+        ax.set_xlabel(f"{x_name} ({x_units})" if x_units else x_name)
+
+    if auto_label and y_key:
+        ax.set_ylabel(mathlabel(y_key, units=y_units, tex=tex))
+    else:
+        ax.set_ylabel(f"{y_name} ({y_units})" if y_units else y_name)
+
+    # Apply log scale if requested
+    if log_scale_y:
+        ax.set_yscale("log")
+
+    # Set limits using values from plottable_array
+    if xlim is not None:
+        ax.set_xlim(x_min / f1, x_max / f1)
+    if ylim is not None:
+        ax.set_ylim(y_min / f2, y_max / f2)
+
+    # Dictionary to hold axes
+    axes = {"main": ax}
+
+    # Add CDF on secondary axis if requested
+    if show_cdf:
+        ax_cdf = ax.twinx()
+
+        # Compute cumulative sum (CDF)
+        # Note: cdf has units of y * widths (density * position)
+        cdf = np.cumsum(y * widths) * f1 * f2
+
+        cdf_scaled, _, cdf_prefix, _, _ = plottable_array(cdf, nice=nice)
+
+        # Default CDF style
+        if cdf_style is None:
+            cdf_style = {"color": "blue", "linewidth": 2}
+
+        ax_cdf.plot(x, cdf_scaled, label=cdf_label, **cdf_style)
+
+        # Label with appropriate units
+        # CDF has units of y_base * x_base with combined prefix
+        if x_units_base and y_units_base:
+            try:
+                from pmd_beamphysics.units import pmd_unit
+
+                cdf_units_base = (
+                    pmd_unit(y_units_base) * pmd_unit(x_units_base)
+                ).simplify()
+                cdf_units_str = cdf_prefix + str(cdf_units_base)
+                ax_cdf.set_ylabel(f"{cdf_label} ({cdf_units_str})")
+            except (ValueError, KeyError, TypeError) as e:
+                # If unit parsing/multiplication fails, fall back to simpler label
+                import warnings
+
+                warnings.warn(
+                    f"Could not compute CDF units: {e}. Using label without units.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                ax_cdf.set_ylabel(cdf_label)
+        elif cdf_prefix:
+            ax_cdf.set_ylabel(f"{cdf_label} ({cdf_prefix})")
+        else:
+            ax_cdf.set_ylabel(cdf_label)
+
+        ax_cdf.set_ylim(0, cdf_scaled.max())
+        ax_cdf.legend(loc="upper left")
+
+        axes["cdf"] = ax_cdf
+
+    # Return axes if requested
+    if return_axes:
+        return fig, axes
+
+
+def plot_2d_density_with_marginals(
+    data: np.ndarray,
+    dx: Optional[float] = 1,
+    dy: Optional[float] = 1,
+    xmin: Optional[float] = None,
+    ymin: Optional[float] = None,
+    x_name: str = "",
+    y_name: str = "",
+    z_name: str = "",
+    x_units: Optional[str] = None,
+    y_units: Optional[str] = None,
+    z_units: Optional[str] = None,
+    cmap: str = "inferno",
+    figsize: Tuple[float, float] = (5, 5),
+    log_scale_z: bool = False,
+    log_scale_marginals: bool = False,
+    marginal_titles: Tuple[Optional[str], Optional[str]] = (None, None),
+    highlight_regions: Optional[
+        List[Dict[str, Union[float, Tuple[float, float]]]]
+    ] = None,
+    marginal_style: Optional[Dict[str, Union[str, float]]] = None,
+    show_stats: bool = False,
+    show_colorbar: bool = True,
+    xlim: Tuple[float, float] = None,
+    ylim: Tuple[float, float] = None,
+    vmin: Optional[float] = None,
+    vcenter: Optional[float] = None,
+    vmax: Optional[float] = None,
+    aspect: Optional[str] = "auto",
+    return_axes: bool = False,
+) -> Optional[Tuple[plt.Figure, Dict[str, plt.Axes]]]:
+    """
+    Basic plot for a 2D density map with marginal histograms.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        2D array representing the binned density data.
+    extent : tuple of float
+        The spatial range of the data in the form (xmin, xmax, ymin, ymax).
+    x_name : str
+        Label for the X-axis.
+    y_name : str
+        Label for the Y-axis.
+    z_name : str
+        Label for the Z-axis (density).
+    x_units : str, optional
+        Units for the X-axis, displayed in parentheses next to the label.
+    y_units : str, optional
+        Units for the Y-axis, displayed in parentheses next to the label.
+    z_units : str, optional
+        Units for the Z-axis (density), displayed in parentheses next to the label.
+    cmap : str, default="viridis"
+        Colormap to use for the density plot.
+    figsize : tuple of float, default=(8, 8)
+        Figure size for the plot.
+    log_scale_z : bool, default=False
+        If True, apply a log scale to the density data (Z-axis) using a LogNorm.
+    log_scale_marginals : bool, default=False
+        If True, use a log scale for the marginal histograms.
+    marginal_titles : tuple of str, optional
+        Titles for the X and Y marginal plots in the form (x_title, y_title).
+    annotations : list of dict, optional
+        List of annotations for the main density plot. Each dict should include:
+        {"x": float, "y": float, "text": str}.
+    marginal_style : dict, optional
+        Style for the marginal bars (e.g., {"color": "gray", "alpha": 0.7}).
+    show_stats : bool, default=False
+        If True, display basic statistics (mean, median, std) on the plot.
+    return_axes : bool, default=False
+        If True, return the figure and axis objects for further customization.
+
+    Returns
+    -------
+    None or (plt.Figure, dict)
+        Returns None if `return_axes` is False. Otherwise, returns the figure and
+        a dictionary of axis objects.
+    """
+
+    # Compute bin edges from extent and data shape
+    nx, ny = data.shape
+
+    # Coordinates represent centers of pixels
+    if xmin is None:
+        # Put 0 in the center
+        xmin = -((nx - 1) * dx) / 2
+    if ymin is None:
+        # Put 0 in the center
+        ymin = -((ny - 1) * dy) / 2
+
+    xmax = xmin + (nx - 1) * dx
+    ymax = ymin + (ny - 1) * dy
+
+    xvec = np.linspace(xmin, xmax, nx)
+    yvec = np.linspace(ymin, ymax, ny)
+
+    # Compute marginal histograms
+    x_marginal = np.sum(data, axis=1) * dy  # sum over y
+    y_marginal = np.sum(data, axis=0) * dx
+
+    # Define normalization for the density plot
+    # Set defaults for vmin and vmax based on the data
+    vmin = vmin if vmin is not None else np.min(data)
+    vmax = vmax if vmax is not None else np.max(data)
+
+    # Choose normalization
+    if log_scale_z:
+        norm = LogNorm(vmin=vmin, vmax=vmax)
+    elif vcenter is None:
+        norm = Normalize(vmin=vmin, vmax=vmax)
+    else:
+        norm = TwoSlopeNorm(vmin=vmin, vcenter=vcenter, vmax=vmax)
+
+    # Create figure and GridSpec
+    fig = plt.figure(figsize=figsize)
+    gs = GridSpec(6, 6, figure=fig, wspace=0.05, hspace=0.05)
+
+    # Main density plot
+    ax_main = fig.add_subplot(gs[1:, :-1])
+    extent = (xmin - dx / 2, xmax + dx / 2, ymin - dy / 2, ymax + dy / 2)
+    density_plot = ax_main.imshow(
+        data.T,
+        origin="lower",
+        # Extent is the full extent of all pixels, so add half widths
+        extent=extent,
+        cmap=cmap,
+        aspect=aspect,
+    )
+    ax_main.set_xlabel(f"{x_name} ({x_units})" if x_units else x_name)
+    ax_main.set_ylabel(f"{y_name} ({y_units})" if y_units else y_name)
+    density_plot.set_norm(norm)
+
+    # Top marginal
+    ax_top = fig.add_subplot(gs[0, :-1], sharex=ax_main)
+    bar_style = marginal_style if marginal_style else {"color": "gray"}
+    ax_top.bar(xvec, x_marginal, width=dx, align="center", **bar_style)
+    # ax_top.set_ylabel(marginal_titles[0] if marginal_titles[0] else "Density")
+    if z_units and y_units:
+        ax_top.set_ylabel(f"{z_units}" + r"$\cdot$" + f"{y_units}")
+
+    if log_scale_marginals:
+        ax_top.set_yscale("log")
+
+    # Right marginal
+    ax_right = fig.add_subplot(gs[1:, -1], sharey=ax_main)
+    ax_right.barh(yvec, y_marginal, height=dy, align="edge", **bar_style)
+    # ax_right.set_xlabel(marginal_titles[1] if marginal_titles[1] else "Density")
+    if z_units and x_units:
+        ax_right.set_xlabel(f"{z_units}" + r"$\cdot$" + f"{x_units}")
+    if log_scale_marginals:
+        ax_right.set_xscale("log")
+
+    # Return axes if requested
+    axes = {"main": ax_main, "top": ax_top, "right": ax_right}
+
+    # Add color bar
+    if show_colorbar:
+        cbar_ax = fig.add_axes([0.91, 0.15, 0.02, 0.7])
+        fig.colorbar(density_plot, cax=cbar_ax, orientation="vertical")
+        cbar_ax.set_ylabel(f"{z_name} ({z_units})" if z_units else z_name)
+        axes["cbar"] = cbar_ax
+
+    # Turn off tick labels on marginals
+    plt.setp(ax_top.get_xticklabels(), visible=False)
+    plt.setp(ax_right.get_yticklabels(), visible=False)
+
+    if xlim is None:
+        xlim = (extent[0], extent[1])
+    ax_main.set_xlim(xlim)
+    ax_top.set_xlim(xlim)
+
+    if ylim is None:
+        ylim = (extent[2], extent[3])
+    ax_main.set_ylim(ylim)
+    ax_right.set_ylim(ylim)
+
+    # Return axes if requested
+    if return_axes:
+        return fig, axes
 
 
 def wakefield_plot(

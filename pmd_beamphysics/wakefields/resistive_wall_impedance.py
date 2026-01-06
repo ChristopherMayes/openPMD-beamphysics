@@ -1,39 +1,107 @@
 """
-Resistive wall impedance implementation.
+Resistive wall impedance calculations for flat and round geometries.
 
-This module provides functions to compute the longitudinal impedance Z(k) and
-wakefield W(z) for resistive wall beam pipes using direct numerical integration.
-It implements the flat (parallel plate) geometry model with AC conductivity
-effects, based on the formalism in SLAC-PUB-10707.
+This module implements the longitudinal impedance Z(k) and wakefield W(z)
+for resistive wall beam pipes using direct numerical integration. It supports
+both flat (parallel plate) and round (circular pipe) geometries with AC
+conductivity effects based on the Drude model.
+
+Theory
+------
+The longitudinal impedance is computed from the surface impedance using
+electromagnetic field matching at the beam pipe boundary. The formulas
+follow from solving Maxwell's equations with boundary conditions imposed
+by the conducting wall.
+
+For a conducting wall, the surface impedance is defined as:
+
+    ζ = E_∥ / H_∥ = (1-i) √(k c / (2 σ Z₀ c))
+
+where σ is the (possibly frequency-dependent) conductivity.
+
+The AC conductivity follows the Drude model:
+
+    σ(k) = σ₀ / (1 - i k c τ)
+
+where τ is the relaxation time accounting for the anomalous skin effect
+at high frequencies.
 
 Functions
 ---------
+sinhc
+    Numerically stable sinh(x)/x function
 ac_conductivity
     Frequency-dependent AC conductivity with relaxation time
 surface_impedance
     Surface impedance for a conducting wall
-longitudinal_impedance
-    Longitudinal impedance Z(k) from surface impedance integration
+longitudinal_impedance_flat
+    Longitudinal impedance Z(k) for flat geometry
+longitudinal_impedance_round
+    Longitudinal impedance Z(k) for round geometry
 wakefield_from_impedance
-    Wakefield W(z) via cosine/sine transform of Z(k)
+    Wakefield W(z) via cosine transform of Re[Z(k)]
+characteristic_length
+    Characteristic length scale s₀
+
+Classes
+-------
+FlatResistiveWallImpedance
+    Impedance model for flat (parallel plate) geometry
+RoundResistiveWallImpedance
+    Impedance model for round (circular pipe) geometry
 
 References
 ----------
-Bane & Stupakov, SLAC-PUB-10707 (2004)
-https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
+.. [1] N. Mounet and E. Métral, "Electromagnetic field created by a
+   macroparticle in an infinitely long and axisymmetric multilayer beam
+   pipe," Phys. Rev. ST Accel. Beams 18, 034402 (2015).
+   https://doi.org/10.1103/PhysRevSTAB.18.034402
+
+.. [2] K. Bane and G. Stupakov, "Resistive wall wakefield in the LCLS
+   undulator beam pipe," SLAC-PUB-10707 (2004).
+   https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
+
+.. [3] A. Chao, "Physics of Collective Beam Instabilities in High Energy
+   Accelerators," Wiley, 1993, Chapter 2.
 """
+
+from __future__ import annotations
 
 import numpy as np
 from scipy.integrate import quad, quad_vec
 
 from ..units import c_light, Z0
 
+__all__ = [
+    "sinhc",
+    "ac_conductivity",
+    "surface_impedance",
+    "longitudinal_impedance_flat",
+    "longitudinal_impedance_round",
+    "wakefield_from_impedance",
+    "characteristic_length",
+    "ResistiveWallImpedance",
+    # Legacy aliases for backwards compatibility
+    "FlatResistiveWallImpedance",
+    "RoundResistiveWallImpedance",
+]
 
-def sinhc(x):
+
+def sinhc(x: float | np.ndarray) -> float | np.ndarray:
     """
     Numerically stable sinh(x)/x function.
 
-    Uses Taylor series expansion for small x to avoid numerical instability.
+    Computes:
+
+    .. math::
+
+        \\text{sinhc}(x) = \\frac{\\sinh(x)}{x}
+
+    Uses Taylor series expansion for small x to avoid numerical instability:
+
+    .. math::
+
+        \\text{sinhc}(x) \\approx 1 + \\frac{x^2}{6} + \\frac{x^4}{120} + O(x^6)
 
     Parameters
     ----------
@@ -64,12 +132,22 @@ def sinhc(x):
     return y
 
 
-def ac_conductivity(k, sigma0, ctau):
+def ac_conductivity(
+    k: float | np.ndarray,
+    sigma0: float,
+    ctau: float,
+) -> complex | np.ndarray:
     """
     Frequency-dependent AC conductivity with relaxation time.
 
-    Implements the Drude model for AC conductivity:
-        σ(k) = σ₀ / (1 - i k c τ)
+    Implements the Drude model for AC conductivity [2]_:
+
+    .. math::
+
+        \\sigma(k) = \\frac{\\sigma_0}{1 - i k c \\tau}
+
+    This accounts for the anomalous skin effect at high frequencies where
+    the mean free path of electrons becomes comparable to the skin depth.
 
     Parameters
     ----------
@@ -78,19 +156,43 @@ def ac_conductivity(k, sigma0, ctau):
     sigma0 : float
         DC conductivity [S/m]
     ctau : float
-        Relaxation distance c*τ [m]
+        Relaxation distance c·τ [m], where τ is the Drude relaxation time
 
     Returns
     -------
     sigma : complex or np.ndarray of complex
         AC conductivity [S/m]
+
+    Notes
+    -----
+    At k=0, returns σ₀ (DC conductivity).
+
+    For copper at room temperature: σ₀ ≈ 5.96×10⁷ S/m, τ ≈ 2.7×10⁻¹⁴ s.
+
+    References
+    ----------
+    .. [2] K. Bane and G. Stupakov, SLAC-PUB-10707 (2004), Eq. (4).
     """
     return sigma0 / (1 - 1j * k * ctau)
 
 
-def surface_impedance(k, sigma0, ctau):
+def surface_impedance(
+    k: float | np.ndarray,
+    sigma0: float,
+    ctau: float,
+) -> complex | np.ndarray:
     """
-    Surface impedance for a conducting wall.
+    Surface impedance for a conducting wall with AC conductivity.
+
+    The surface impedance relates tangential electric and magnetic fields
+    at the wall surface [1]_:
+
+    .. math::
+
+        \\zeta(k) = \\frac{E_\\parallel}{H_\\parallel}
+                  = (1 - i) \\sqrt{\\frac{k c}{2 \\sigma(k) Z_0 c}}
+
+    where σ(k) is the frequency-dependent AC conductivity.
 
     Parameters
     ----------
@@ -99,20 +201,38 @@ def surface_impedance(k, sigma0, ctau):
     sigma0 : float
         DC conductivity [S/m]
     ctau : float
-        Relaxation distance c*τ [m]
+        Relaxation distance c·τ [m]
 
     Returns
     -------
     zeta : complex or np.ndarray of complex
         Surface impedance [dimensionless]
+
+    References
+    ----------
+    .. [1] N. Mounet and E. Métral, Phys. Rev. ST Accel. Beams 18, 034402
+       (2015), Eq. (17) in the thick-wall limit.
     """
     sigma = ac_conductivity(k, sigma0, ctau)
     return (1 - 1j) * np.sqrt(k * c_light / (2 * sigma * Z0 * c_light))
 
 
-def _impedance_integrand(k, x, a, sigma0, ctau):
+def _impedance_integrand_flat(
+    k: float,
+    x: float | np.ndarray,
+    a: float,
+    sigma0: float,
+    ctau: float,
+) -> complex | np.ndarray:
     """
-    Impedance integrand for flat geometry.
+    Impedance integrand for flat (parallel plate) geometry.
+
+    The longitudinal impedance for flat geometry is given by [2]_:
+
+    .. math::
+
+        Z_\\parallel(k) = \\frac{Z_0}{2\\pi a} \\int_0^\\infty
+            \\frac{dx}{\\cosh(x)[\\cosh(x)/\\zeta - ik a \\cdot \\text{sinhc}(x)]}
 
     Parameters
     ----------
@@ -125,24 +245,29 @@ def _impedance_integrand(k, x, a, sigma0, ctau):
     sigma0 : float
         DC conductivity [S/m]
     ctau : float
-        Relaxation distance c*τ [m]
+        Relaxation distance c·τ [m]
 
     Returns
     -------
     result : complex or np.ndarray of complex
         Integrand value(s) [Ohm/m]
+
+    References
+    ----------
+    .. [2] K. Bane and G. Stupakov, SLAC-PUB-10707 (2004), Eq. (52).
     """
     x = np.asarray(x)
 
-    # Prefactor
+    # Prefactor: Z0 / (2π a)
     prefactor = Z0 / (2 * np.pi * a)
 
     with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
-        z = surface_impedance(k, sigma0, ctau)
+        zeta = surface_impedance(k, sigma0, ctau)
         cosh_x = np.cosh(x)
         shc_x = sinhc(x)
 
-        denom = cosh_x * (cosh_x / z - 1j * k * a * shc_x)
+        # Denominator: cosh(x) * [cosh(x)/ζ - i k a sinhc(x)]
+        denom = cosh_x * (cosh_x / zeta - 1j * k * a * shc_x)
 
         # Assign result only where denominator is finite
         result = np.where(np.isfinite(denom), prefactor / denom, 0.0 + 0.0j)
@@ -150,33 +275,53 @@ def _impedance_integrand(k, x, a, sigma0, ctau):
     return result.astype(np.complex128)
 
 
-def longitudinal_impedance(k, a, sigma0, ctau):
+# Note: Round geometry uses a closed-form expression, no integrand function needed.
+# See longitudinal_impedance_round() for the implementation.
+
+
+def longitudinal_impedance_flat(
+    k: float | np.ndarray,
+    a: float,
+    sigma0: float,
+    ctau: float,
+) -> complex | np.ndarray:
     """
     Compute longitudinal impedance Z(k) for flat (parallel plate) geometry.
 
-    Integrates the surface impedance kernel over all transverse modes.
+    Integrates the surface impedance kernel over all transverse modes [2]_:
+
+    .. math::
+
+        Z_\\parallel(k) = \\frac{Z_0}{2\\pi a} \\int_0^\\infty
+            \\frac{dx}{\\cosh(x)[\\cosh(x)/\\zeta(k) - ik a \\cdot \\text{sinhc}(x)]}
+
+    where ζ(k) is the surface impedance including AC conductivity effects.
 
     Parameters
     ----------
     k : float or np.ndarray
         Longitudinal wave number [1/m]
     a : float
-        Half-gap height [m]
+        Half-gap height between parallel plates [m]
     sigma0 : float
         DC conductivity [S/m]
     ctau : float
-        Relaxation distance c*τ [m]
+        Relaxation distance c·τ [m]
 
     Returns
     -------
     Zk : complex or np.ndarray of complex
         Longitudinal impedance [Ohm/m]
 
+    References
+    ----------
+    .. [2] K. Bane and G. Stupakov, SLAC-PUB-10707 (2004), Eq. (52).
+
     Examples
     --------
     >>> import numpy as np
     >>> ks = np.linspace(0, 1e5, 100)
-    >>> Zk = longitudinal_impedance(ks, a=4.5e-3, sigma0=2.4e7, ctau=2.4e-6)
+    >>> Zk = longitudinal_impedance_flat(ks, a=4.5e-3, sigma0=2.4e7, ctau=2.4e-6)
     """
 
     @np.vectorize
@@ -185,26 +330,106 @@ def longitudinal_impedance(k, a, sigma0, ctau):
             return 0.0 + 0.0j
 
         def integrand(x):
-            return _impedance_integrand(k_val, x, a, sigma0, ctau)
+            return _impedance_integrand_flat(k_val, x, a, sigma0, ctau)
 
         return quad_vec(integrand, 0, np.inf)[0]
 
     return _Zk_scalar(k)
 
 
-def wakefield_from_impedance(z, Zk_func, k_max=1e7, epsabs=1e-9, epsrel=1e-6):
+def longitudinal_impedance_round(
+    k: float | np.ndarray,
+    a: float,
+    sigma0: float,
+    ctau: float,
+) -> complex | np.ndarray:
+    """
+    Compute longitudinal impedance Z(k) for round (circular pipe) geometry.
+
+    Uses the closed-form expression for a single-layer resistive wall [2]_:
+
+    .. math::
+
+        Z_\\parallel(k) = \\frac{Z_0}{2\\pi a}
+            \\left(\\frac{1}{\\zeta(k)} - \\frac{ika}{2}\\right)^{-1}
+
+    where ζ(k) is the surface impedance including AC conductivity effects.
+
+    Parameters
+    ----------
+    k : float or np.ndarray
+        Longitudinal wave number [1/m]
+    a : float
+        Pipe radius [m]
+    sigma0 : float
+        DC conductivity [S/m]
+    ctau : float
+        Relaxation distance c·τ [m]
+
+    Returns
+    -------
+    Zk : complex or np.ndarray of complex
+        Longitudinal impedance [Ohm/m]
+
+    References
+    ----------
+    .. [2] K. Bane and G. Stupakov, SLAC-PUB-10707 (2004), Eq. (2).
+       See also Phys. Rev. ST Accel. Beams 18, 034402 (2015), Eq. (7).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> ks = np.linspace(0, 1e5, 100)
+    >>> Zk = longitudinal_impedance_round(ks, a=4.5e-3, sigma0=2.4e7, ctau=2.4e-6)
+    """
+    k = np.asarray(k)
+    scalar_input = k.ndim == 0
+    k = np.atleast_1d(k)
+
+    # Prefactor: Z0 / (2π a)
+    prefactor = Z0 / (2 * np.pi * a)
+
+    # Surface impedance
+    zeta = surface_impedance(k, sigma0, ctau)
+
+    # Closed-form impedance: Z = (Z0 / 2πa) / (1/ζ - ika/2)
+    # Handle k=0 case where impedance is 0
+    with np.errstate(divide="ignore", invalid="ignore"):
+        Zk = prefactor / (1.0 / zeta - 1j * k * a / 2)
+        Zk = np.where(k == 0, 0.0 + 0.0j, Zk)
+
+    if scalar_input:
+        return complex(Zk[0])
+    return Zk
+
+
+def wakefield_from_impedance(
+    z: float | np.ndarray,
+    Zk_func: callable,
+    k_max: float = 1e7,
+    epsabs: float = 1e-9,
+    epsrel: float = 1e-6,
+) -> float | np.ndarray:
     """
     Compute wakefield W(z) from Re[Z(k)] using a cosine transform.
 
-    Uses direct quadrature:
-        W(z) = (2/π) ∫₀^k_max Re(Z(k)) cos(kz) dk
+    The longitudinal wakefield is related to the impedance by [3]_:
+
+    .. math::
+
+        W(z) = \\frac{2c}{\\pi} \\int_0^{k_{\\max}} \\text{Re}[Z(k)] \\cos(kz) \\, dk
+
+    This uses the fact that the impedance satisfies Z(-k) = Z*(k) for
+    a causal system.
 
     Parameters
     ----------
     z : float or np.ndarray
-        Longitudinal position [m]. Positive z is behind the source.
+        Longitudinal position [m]. Positive z is behind the source
+        (trailing particle).
     Zk_func : callable
-        Function returning complex impedance Z(k) [Ohm/m] for wave number k [1/m]
+        Function returning complex impedance Z(k) [Ohm/m] for wave number
+        k [1/m]
     k_max : float, optional
         Upper limit of k integration [1/m]. Default is 1e7.
     epsabs : float, optional
@@ -219,13 +444,19 @@ def wakefield_from_impedance(z, Zk_func, k_max=1e7, epsabs=1e-9, epsrel=1e-6):
 
     Notes
     -----
-    The wakefield is zero for z < 0 (ahead of the source particle).
+    The wakefield is zero for z < 0 (ahead of the source particle)
+    due to causality.
+
+    References
+    ----------
+    .. [3] A. Chao, "Physics of Collective Beam Instabilities in High
+       Energy Accelerators," Wiley, 1993, Chapter 2, Eq. (2.24).
 
     Examples
     --------
     >>> import numpy as np
     >>> from functools import partial
-    >>> Zk = partial(longitudinal_impedance, a=4.5e-3, sigma0=2.4e7, ctau=2.4e-6)
+    >>> Zk = partial(longitudinal_impedance_flat, a=4.5e-3, sigma0=2.4e7, ctau=2.4e-6)
     >>> zs = np.linspace(0, 100e-6, 50)
     >>> Wz = [wakefield_from_impedance(z, Zk) for z in zs]
     """
@@ -238,7 +469,7 @@ def wakefield_from_impedance(z, Zk_func, k_max=1e7, epsabs=1e-9, epsrel=1e-6):
             return np.real(Zk_func(k)) * np.cos(k * z_val)
 
         result, _ = quad(integrand, 0, k_max, epsabs=epsabs, epsrel=epsrel, limit=200)
-        return (2 / np.pi) * result
+        return (2 * c_light / np.pi) * result
 
     z = np.asarray(z)
     if z.ndim == 0:
@@ -247,12 +478,19 @@ def wakefield_from_impedance(z, Zk_func, k_max=1e7, epsabs=1e-9, epsrel=1e-6):
     return np.array([_wakefield_scalar(zi) for zi in z])
 
 
-def characteristic_length(a, sigma0):
+def characteristic_length(a: float, sigma0: float) -> float:
     """
     Characteristic length scale s₀ for resistive wall wakefield.
 
-    From SLAC-PUB-10707 Eq. 5:
-        s₀ = (2a² / (Z₀ σ₀))^(1/3)
+    From SLAC-PUB-10707 Eq. (5) [2]_:
+
+    .. math::
+
+        s_0 = \\left( \\frac{2 a^2}{Z_0 \\sigma_0} \\right)^{1/3}
+
+    This length scale determines the transition between the short-range
+    and long-range wakefield behavior. For z << s₀, the wakefield rises
+    as z^(-1/2); for z >> s₀, it oscillates and decays.
 
     Parameters
     ----------
@@ -265,43 +503,66 @@ def characteristic_length(a, sigma0):
     -------
     s0 : float
         Characteristic length [m]
+
+    References
+    ----------
+    .. [2] K. Bane and G. Stupakov, SLAC-PUB-10707 (2004), Eq. (5).
     """
     return (2 * a**2 / (Z0 * sigma0)) ** (1 / 3)
 
 
-class FlatResistiveWallImpedance:
+class ResistiveWallImpedance:
     """
-    Resistive wall impedance model for flat (parallel plate) geometry.
+    Resistive wall impedance model for flat or round geometry.
 
     This class encapsulates the physical parameters and provides methods
-    to compute impedance Z(k) and wakefield W(z).
+    to compute impedance Z(k) and wakefield W(z) for a beam in a conducting
+    beam pipe.
+
+    Supported geometries:
+
+    - **flat**: Parallel plate geometry. The impedance is computed by
+      integrating over transverse modes (SLAC-PUB-10707 Eq. 52).
+    - **round**: Circular pipe geometry. The impedance uses a closed-form
+      expression (SLAC-PUB-10707 Eq. 2).
 
     Parameters
     ----------
-    half_gap : float
-        Half-gap height between plates [m]
+    radius : float
+        Pipe radius (round) or half-gap height (flat) [m]. Must be positive.
     conductivity : float
-        DC electrical conductivity [S/m]
+        DC electrical conductivity [S/m]. Must be positive.
     relaxation_time : float
-        Drude-model relaxation time [s]
+        Drude-model relaxation time [s]. Must be non-negative.
+    geometry : str, optional
+        Geometry type: 'round' or 'flat'. Default is 'round'.
 
     Attributes
     ----------
-    a : float
-        Half-gap height [m]
-    sigma0 : float
+    radius : float
+        Pipe radius or half-gap height [m]
+    conductivity : float
         DC conductivity [S/m]
+    relaxation_time : float
+        Relaxation time [s]
+    geometry : str
+        Geometry type ('round' or 'flat')
     ctau : float
-        Relaxation distance c*τ [m]
+        Relaxation distance c·τ [m]
     s0 : float
         Characteristic length scale [m]
 
+    References
+    ----------
+    .. [2] K. Bane and G. Stupakov, SLAC-PUB-10707 (2004).
+
     Examples
     --------
-    >>> imp = FlatResistiveWallImpedance(
-    ...     half_gap=4.5e-3,
+    >>> imp = ResistiveWallImpedance(
+    ...     radius=4.5e-3,
     ...     conductivity=2.4e7,
-    ...     relaxation_time=8e-15
+    ...     relaxation_time=8e-15,
+    ...     geometry='round'
     ... )
     >>> ks = np.linspace(0, 1e5, 100)
     >>> Zk = imp.impedance(ks)
@@ -309,13 +570,30 @@ class FlatResistiveWallImpedance:
     >>> Wz = imp.wakefield(zs)
     """
 
-    def __init__(self, half_gap, conductivity, relaxation_time):
-        self.a = half_gap
-        self.sigma0 = conductivity
-        self.ctau = c_light * relaxation_time
-        self.s0 = characteristic_length(half_gap, conductivity)
+    def __init__(
+        self,
+        radius: float,
+        conductivity: float,
+        relaxation_time: float,
+        geometry: str = "round",
+    ) -> None:
+        if radius <= 0:
+            raise ValueError("radius must be positive")
+        if conductivity <= 0:
+            raise ValueError("conductivity must be positive")
+        if relaxation_time < 0:
+            raise ValueError("relaxation_time must be non-negative")
+        if geometry not in ("round", "flat"):
+            raise ValueError(f"geometry must be 'round' or 'flat', got {geometry!r}")
 
-    def impedance(self, k):
+        self.radius = radius
+        self.conductivity = conductivity
+        self.relaxation_time = relaxation_time
+        self.geometry = geometry
+        self.ctau = c_light * relaxation_time
+        self.s0 = characteristic_length(radius, conductivity)
+
+    def impedance(self, k: float | np.ndarray) -> complex | np.ndarray:
         """
         Compute longitudinal impedance Z(k).
 
@@ -329,9 +607,22 @@ class FlatResistiveWallImpedance:
         Zk : complex or np.ndarray of complex
             Longitudinal impedance [Ohm/m]
         """
-        return longitudinal_impedance(k, self.a, self.sigma0, self.ctau)
+        if self.geometry == "round":
+            return longitudinal_impedance_round(
+                k, self.radius, self.conductivity, self.ctau
+            )
+        else:  # flat
+            return longitudinal_impedance_flat(
+                k, self.radius, self.conductivity, self.ctau
+            )
 
-    def wakefield(self, z, k_max=1e7, epsabs=1e-9, epsrel=1e-6):
+    def wakefield(
+        self,
+        z: float | np.ndarray,
+        k_max: float = 1e7,
+        epsabs: float = 1e-9,
+        epsrel: float = 1e-6,
+    ) -> float | np.ndarray:
         """
         Compute wakefield W(z) from impedance.
 
@@ -355,7 +646,12 @@ class FlatResistiveWallImpedance:
             z, self.impedance, k_max=k_max, epsabs=epsabs, epsrel=epsrel
         )
 
-    def plot_impedance(self, k_max=1e6, n_points=200, ax=None):
+    def plot_impedance(
+        self,
+        k_max: float = 1e6,
+        n_points: int = 200,
+        ax=None,
+    ):
         """
         Plot real and imaginary parts of impedance vs wave number.
 
@@ -386,11 +682,20 @@ class FlatResistiveWallImpedance:
         ax.set_xlabel(r"$k$ (1/m)")
         ax.set_ylabel(r"$Z(k)$ (Ω/m)")
         ax.legend()
-        ax.set_title(f"Flat geometry: a={self.a*1e3:.2f} mm, σ₀={self.sigma0:.2e} S/m")
+        ax.set_title(
+            f"{self.geometry.capitalize()} geometry: a={self.radius*1e3:.2f} mm, "
+            f"σ₀={self.conductivity:.2e} S/m"
+        )
 
         return ax
 
-    def plot_wakefield(self, z_max=200e-6, n_points=50, k_max=1e6, ax=None):
+    def plot_wakefield(
+        self,
+        z_max: float = 200e-6,
+        n_points: int = 50,
+        k_max: float = 1e6,
+        ax=None,
+    ):
         """
         Plot wakefield vs longitudinal position.
 
@@ -421,14 +726,100 @@ class FlatResistiveWallImpedance:
         ax.plot(zs * 1e6, Wz * 1e-12)
         ax.set_xlabel(r"$z$ (µm)")
         ax.set_ylabel(r"$W(z)$ (V/pC/m)")
-        ax.set_title(f"Flat geometry: a={self.a*1e3:.2f} mm")
+        ax.set_title(
+            f"{self.geometry.capitalize()} geometry: a={self.radius*1e3:.2f} mm"
+        )
 
         return ax
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
-            f"FlatResistiveWallImpedance("
-            f"half_gap={self.a}, "
-            f"conductivity={self.sigma0}, "
-            f"relaxation_time={self.ctau/c_light})"
+            f"ResistiveWallImpedance("
+            f"radius={self.radius}, "
+            f"conductivity={self.conductivity}, "
+            f"relaxation_time={self.relaxation_time}, "
+            f"geometry={self.geometry!r}, "
+            f"s0={self.s0:.3e})"
         )
+
+
+def FlatResistiveWallImpedance(
+    half_gap: float,
+    conductivity: float,
+    relaxation_time: float,
+) -> ResistiveWallImpedance:
+    """
+    Create a resistive wall impedance model for flat (parallel plate) geometry.
+
+    This is a convenience function that creates a `ResistiveWallImpedance`
+    with ``geometry='flat'``.
+
+    Parameters
+    ----------
+    half_gap : float
+        Half-gap height between plates [m]. Must be positive.
+    conductivity : float
+        DC electrical conductivity [S/m]. Must be positive.
+    relaxation_time : float
+        Drude-model relaxation time [s]. Must be non-negative.
+
+    Returns
+    -------
+    ResistiveWallImpedance
+        Impedance model with flat geometry.
+
+    Examples
+    --------
+    >>> imp = FlatResistiveWallImpedance(
+    ...     half_gap=4.5e-3,
+    ...     conductivity=2.4e7,
+    ...     relaxation_time=8e-15
+    ... )
+    """
+    return ResistiveWallImpedance(
+        radius=half_gap,
+        conductivity=conductivity,
+        relaxation_time=relaxation_time,
+        geometry="flat",
+    )
+
+
+def RoundResistiveWallImpedance(
+    radius: float,
+    conductivity: float,
+    relaxation_time: float,
+) -> ResistiveWallImpedance:
+    """
+    Create a resistive wall impedance model for round (circular pipe) geometry.
+
+    This is a convenience function that creates a `ResistiveWallImpedance`
+    with ``geometry='round'``.
+
+    Parameters
+    ----------
+    radius : float
+        Pipe radius [m]. Must be positive.
+    conductivity : float
+        DC electrical conductivity [S/m]. Must be positive.
+    relaxation_time : float
+        Drude-model relaxation time [s]. Must be non-negative.
+
+    Returns
+    -------
+    ResistiveWallImpedance
+        Impedance model with round geometry.
+
+    Examples
+    --------
+    >>> imp = RoundResistiveWallImpedance(
+    ...     radius=4.5e-3,
+    ...     conductivity=2.4e7,
+    ...     relaxation_time=8e-15
+    ... )
+    """
+    return ResistiveWallImpedance(
+        radius=radius,
+        conductivity=conductivity,
+        relaxation_time=relaxation_time,
+        geometry="round",
+    )

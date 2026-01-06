@@ -21,7 +21,6 @@ https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
 
 from dataclasses import dataclass
 import numpy as np
-import matplotlib.pyplot as plt
 
 from ..units import c_light, epsilon_0, Z0
 from scipy.signal import fftconvolve
@@ -95,43 +94,101 @@ def krs0_round(G: float) -> float:
     return _krs0_round_poly(G)
 
 
-def krs0_flat(G):
+def krs0_flat(G: float) -> float:
     """
-    k_r*s_0 from SLAC-PUB-10707 Fig. 14 for flat geometry
-    This is from a polynomial fit of the digitized data
+    k_r*s_0 from SLAC-PUB-10707 Fig. 14 for flat geometry.
+
+    This is from a polynomial fit of the digitized data.
+
+    Parameters
+    ----------
+    G : float
+        Dimensionless relaxation time Γ
+
+    Returns
+    -------
+    float
+        Dimensionless product k_r*s_0
     """
     return _krs0_flat_poly(G)
 
 
-def Qr_round(G):
+def Qr_round(G: float) -> float:
     """
-    Qr from SLAC-PUB-10707 Fig. 14 for round geometry
-    This is from a polynomial fit of the digitized data
+    Q_r from SLAC-PUB-10707 Fig. 14 for round geometry.
+
+    This is from a polynomial fit of the digitized data.
+
+    Parameters
+    ----------
+    G : float
+        Dimensionless relaxation time Γ
+
+    Returns
+    -------
+    float
+        Dimensionless quality factor Q_r
     """
     return _Qr_round_poly(G)
 
 
-def Qr_flat(G):
+def Qr_flat(G: float) -> float:
     """
-    Qr from SLAC-PUB-10707 Fig. 14 for flat geometry
-    This is from a polynomial fit of the digitized data
+    Q_r from SLAC-PUB-10707 Fig. 14 for flat geometry.
+
+    This is from a polynomial fit of the digitized data.
+
+    Parameters
+    ----------
+    G : float
+        Dimensionless relaxation time Γ
+
+    Returns
+    -------
+    float
+        Dimensionless quality factor Q_r
     """
     return _Qr_flat_poly(G)
 
 
-def s0f(radius, conductivity):
+def s0f(radius: float, conductivity: float) -> float:
     """
-    Characteristic distance from SLAC-PUB-10707 Eq. 5
+    Characteristic distance s₀ from SLAC-PUB-10707 Eq. 5.
+
+    Parameters
+    ----------
+    radius : float
+        Pipe radius (round) or half-gap (flat) [m]
+    conductivity : float
+        DC conductivity [S/m]
+
+    Returns
+    -------
+    float
+        Characteristic length s₀ [m]
     """
     val = 2 * radius**2 / (Z0 * conductivity)
     return val ** (1 / 3.0)
 
 
-def Gammaf(relaxation_time, radius, conductivity):
+def Gammaf(relaxation_time: float, radius: float, conductivity: float) -> float:
     """
-    dimensionless relaxation time Γ = cτ/s0
-    """
+    Dimensionless relaxation time Γ = cτ/s₀.
 
+    Parameters
+    ----------
+    relaxation_time : float
+        Drude relaxation time τ [s]
+    radius : float
+        Pipe radius (round) or half-gap (flat) [m]
+    conductivity : float
+        DC conductivity [S/m]
+
+    Returns
+    -------
+    float
+        Dimensionless relaxation time Γ
+    """
     return c_light * relaxation_time / s0f(radius, conductivity)
 
 
@@ -186,6 +243,8 @@ class pseudomode:
         return self.A * np.exp(self.d * z) * np.sin(self.k * z + self.phi)
 
     def plot(self, zmax=0.001, zmin=0, n=200):
+        import matplotlib.pyplot as plt
+
         zlist = np.linspace(zmin, zmax, n)
         Wz = self(-zlist)
 
@@ -306,7 +365,7 @@ class ResistiveWallWakefield:
     geometry: str = "round"
 
     # Internal material database (SI units)
-    # Note conductivtity_SI = conductivtity_CGS / ( Z0 *c / (4*pi))
+    # Note conductivity_SI = conductivity_CGS / (Z0 * c / (4 * pi))
     MATERIALS = {
         "copper-slac-pub-10707": {"conductivity": 6.5e7, "relaxation_time": 27e-15},
         "copper-genesis4": {"conductivity": 5.813e7, "relaxation_time": 27e-15},
@@ -323,15 +382,28 @@ class ResistiveWallWakefield:
         if self.conductivity <= 0:
             raise ValueError(f"conductivity must be positive, got {self.conductivity}")
 
-        if self.relaxation_time <= 0:
+        if self.relaxation_time < 0:
             raise ValueError(
-                f"relaxation_time must be positive, got {self.relaxation_time}"
+                f"relaxation_time must be non-negative, got {self.relaxation_time}"
             )
 
         if self.geometry not in ("round", "flat"):
             raise ValueError(
                 f"Unsupported geometry: {self.geometry}. Must be 'round' or 'flat'"
             )
+
+    def __repr__(self):
+        material = self.material_from_properties()
+        material_str = f", material={material!r}" if material else ""
+        return (
+            f"{self.__class__.__name__}("
+            f"radius={self.radius}, "
+            f"conductivity={self.conductivity}, "
+            f"relaxation_time={self.relaxation_time}, "
+            f"geometry={self.geometry!r}"
+            f"{material_str}) "
+            f"→ s₀={self.s0:.3e} m, Γ={self.Gamma:.3f}, k_r={self.kr:.1f}/m, Q_r={self.Qr:.2f}"
+        )
 
     @classmethod
     def from_material(cls, material: str, radius: float, geometry: str = "round"):
@@ -498,7 +570,7 @@ class ResistiveWallWakefield:
     @property
     def pseudomode(self):
         """
-        Single pseudomode representing this wakefield (cached)
+        Single pseudomode representing this wakefield.
         """
 
         # Conversion from cgs units

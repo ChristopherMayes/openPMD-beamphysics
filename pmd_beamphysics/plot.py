@@ -261,8 +261,6 @@ def density_plot(
     else:
         ax.set_xlabel(labelx)
 
-    # ax.set_xlabel(labelx)
-
     if xlim:
         ax.set_xlim(xmin / f1, xmax / f1)
 

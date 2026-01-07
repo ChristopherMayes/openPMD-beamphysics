@@ -20,6 +20,8 @@ https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
 """
 
 from dataclasses import dataclass
+import warnings
+
 import numpy as np
 
 from ..units import c_light, epsilon_0, Z0
@@ -412,6 +414,18 @@ class ResistiveWallWakefield:
         if self.geometry not in ("round", "flat"):
             raise ValueError(
                 f"Unsupported geometry: {self.geometry}. Must be 'round' or 'flat'"
+            )
+
+        # Check if Gamma is in the valid range for the polynomial fits
+        # The fits are from digitized SLAC-PUB-10707 Fig. 14, which covers Γ ∈ [0, 2.5]
+        Gamma = self.Gamma
+        if Gamma > 3:
+            warnings.warn(
+                f"Γ = {Gamma:.3g} is above the validated range (Γ ≲ 3) for the "
+                f"pseudomode polynomial fits. Results may be inaccurate. "
+                f"Consider using ResistiveWallImpedance for numerical integration.",
+                UserWarning,
+                stacklevel=2,
             )
 
     def __repr__(self):

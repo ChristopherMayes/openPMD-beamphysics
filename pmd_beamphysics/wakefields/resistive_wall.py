@@ -260,15 +260,22 @@ class pseudomode:
         include_self_kick: bool = True,
     ) -> np.ndarray:
         """
-        Compute short-range wakefield energy kicks per unit length
+        Compute short-range wakefield energy kicks per unit length.
 
-        Internally the particles will be sorted.
-        This should take negligible time compared with the algorithm.
+        Uses an O(N) single-pass algorithm by exploiting the exponential form
+        of the pseudomode wakefield. The key insight is that the total wake
+        at particle i from all trailing particles j > i can be written as:
+
+            ΔE_i = -Im[ c·e^(s·z_i) · Σ_{j>i} q_j·e^(-s·z_j) ]
+
+        where s = d + ik and c = A·e^(iφ). By iterating from tail to head
+        and maintaining a running sum b = Σ q_j·e^(-s·z_j), each particle's
+        kick is computed in O(1) time, giving O(N) total complexity.
 
         Parameters
         ----------
         z : ndarray of shape (N,)
-            Particle positions [m], sorted from tail to head (increasing).
+            Particle positions [m], need not be sorted.
         weight : ndarray of shape (N,)
             Particle charges [C].
         include_self_kick : bool, optional
@@ -278,6 +285,18 @@ class pseudomode:
         -------
         delta_E : ndarray of shape (N,)
             Wake-induced energy kick per unit length at each particle [eV/m].
+
+        Notes
+        -----
+        The algorithm proceeds as follows:
+
+        1. Sort particles by z (tail to head)
+        2. Initialize complex accumulator b = 0
+        3. Loop from tail (i = N-1) to head (i = 0):
+           a. Compute kick: ΔE_i = -Im[c·e^(s·z_i)·b]
+           b. Update accumulator: b += q_i·e^(-s·z_i)
+        4. Add self-kick if requested: ΔE_i -= ½·A·q_i·sin(φ)
+        5. Restore original particle ordering
         """
 
         z = np.asarray(z)
@@ -290,28 +309,31 @@ class pseudomode:
         if z.ndim != 1:
             raise ValueError("z and weight must be 1D arrays")
 
-        # Sort
+        # Sort particles from tail to head
         ix = z.argsort()
         z = z[ix]
-        z -= z.max()  # Offset to avoid numerical problems
+        z -= z.max()  # Offset to keep exponents small for numerical stability
         weight = weight[ix]
 
         N = len(z)
         delta_E = np.zeros(N)
 
-        s = self.d + 1j * self.k
-        c = self.A * np.exp(1j * self.phi)
+        # Precompute complex coefficients for the pseudomode W(z) = A·e^(dz)·sin(kz+φ)
+        s = self.d + 1j * self.k  # Complex decay+oscillation rate
+        c = self.A * np.exp(1j * self.phi)  # Amplitude with phase
 
-        b = 0.0 + 0.0j  # complex accumulator
+        # O(N) accumulator: b = Σ_{j>i} q_j·e^(-s·z_j) for particles behind current
+        b = 0.0 + 0.0j
 
+        # Iterate from tail (large z index) to head (small z index)
         for i in range(N - 1, -1, -1):
             zi = z[i]
             qi = weight[i]
 
-            # Wake from trailing particles
+            # Kick from all trailing particles: ΔE_i = -Im[c·e^(s·z_i)·b]
             delta_E[i] -= np.imag(c * np.exp(s * zi) * b)
 
-            # Accumulate this particle's contribution
+            # Add this particle to the accumulator for the next iteration
             b += qi * np.exp(-s * zi)
 
         if include_self_kick:

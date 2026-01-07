@@ -1530,12 +1530,11 @@ def wakefield_plot(
     fig : matplotlib.figure.Figure
         The matplotlib figure containing the plot.
     """
-    if key is not None:
-        key = key
-    elif particle_group.in_t_coordinates:
-        key = "delta_z/c"
-    else:
-        key = "delta_t"
+    if key is None:
+        if particle_group.in_t_coordinates:
+            key = "delta_z/c"
+        else:
+            key = "delta_t"
 
     if ax is None:
         fig, ax = plt.subplots(**kwargs)

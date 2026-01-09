@@ -729,10 +729,10 @@ class ResistiveWallWakefield:
         ----------
 
         density: ndarray
-            charge density array
+            charge density array in C / m
 
         dz: float
-            array spacing
+            array spacing in m
 
         offset : float
             Offset coordinates for the center of the grid in [m]. Default: 0

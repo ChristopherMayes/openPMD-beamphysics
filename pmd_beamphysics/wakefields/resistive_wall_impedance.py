@@ -425,8 +425,8 @@ def wakefield_from_impedance(
     Parameters
     ----------
     z : float or np.ndarray
-        Longitudinal position [m]. Positive z is behind the source
-        (trailing particle).
+        Longitudinal position [m]. Negative z is behind the source
+        (trailing particle), matching the convention in ResistiveWallWakefield.
     Zk_func : callable
         Function returning complex impedance Z(k) [Ohm/m] for wave number
         k [1/m]
@@ -444,8 +444,9 @@ def wakefield_from_impedance(
 
     Notes
     -----
-    The wakefield is zero for z < 0 (ahead of the source particle)
-    due to causality.
+    The wakefield is zero for z > 0 (ahead of the source particle)
+    due to causality. This matches the sign convention used by
+    ResistiveWallWakefield.
 
     References
     ----------
@@ -462,7 +463,7 @@ def wakefield_from_impedance(
     """
 
     def _wakefield_scalar(z_val):
-        if z_val < 0:
+        if z_val > 0:
             return 0.0
 
         def integrand(k):
@@ -525,6 +526,13 @@ class ResistiveWallImpedance:
       integrating over transverse modes (SLAC-PUB-10707 Eq. 52).
     - **round**: Circular pipe geometry. The impedance uses a closed-form
       expression (SLAC-PUB-10707 Eq. 2).
+
+    .. note::
+
+        This class uses analytical formulas for Z(k) based on AC resistivity.
+        For short bunches, the ``ResistiveWallWakefield`` class (which uses
+        pseudomode fits to Bane-Stupakov numerical calculations) may give
+        more accurate results, differing by ~10-20% depending on bunch length.
 
     Parameters
     ----------
@@ -717,20 +725,158 @@ class ResistiveWallImpedance:
         """
         import matplotlib.pyplot as plt
 
-        zs = np.linspace(0, z_max, n_points)
+        # Use negative z values (wake is behind the source)
+        zs = np.linspace(-z_max, 0, n_points)
         Wz = self.wakefield(zs, k_max=k_max)
 
         if ax is None:
             fig, ax = plt.subplots()
 
-        ax.plot(zs * 1e6, Wz * 1e-12)
-        ax.set_xlabel(r"$z$ (µm)")
+        # Plot -z so that "behind" appears to the right (positive axis)
+        ax.plot(-zs * 1e6, Wz * 1e-12)
+        ax.set_xlabel(r"$-z$ (µm)")
         ax.set_ylabel(r"$W(z)$ (V/pC/m)")
         ax.set_title(
             f"{self.geometry.capitalize()} geometry: a={self.radius*1e3:.2f} mm"
         )
 
         return ax
+
+    def convolve_density(
+        self,
+        density: np.ndarray,
+        dz: float,
+        offset: float = 0,
+        include_self_kick: bool = True,
+    ) -> np.ndarray:
+        """
+        Compute integrated wakefield by convolving density with impedance using FFT.
+
+        This method efficiently computes the wake potential by working in
+        frequency domain using the real-valued FFT (rfft) for efficiency:
+
+        1. Compute rfft of density to get λ̃(k) for k ≥ 0
+        2. Multiply by impedance Z(k) and c
+        3. Inverse rfft to get the integrated wake in position space
+
+        The longitudinal impedance Z(k) is related to the wakefield W(z) by:
+
+        .. math::
+
+            Z(k) = \\frac{1}{c} \\int_0^{\\infty} W(z) e^{-ikz} dz
+
+        So the integrated wake from a charge distribution λ(z) is:
+
+        .. math::
+
+            V(z) = \\int \\lambda(z') W(z - z') dz'
+                 = c \\cdot \\mathcal{F}^{-1}[ \\tilde{\\lambda}(k) \\cdot Z(k) ]
+
+        .. note::
+
+            This method uses the analytical impedance formula Z(k) directly.
+            The impedance model gives results that differ by ~10-20% from the
+            pseudomode-based ResistiveWallWakefield.convolve_density, which uses
+            fitted parameters from Bane-Stupakov's numerical calculations.
+            For most practical applications with short bunches, the pseudomode
+            approximation may be more accurate. The analytical impedance is
+            useful when access to Z(k) directly is needed.
+
+        Parameters
+        ----------
+        density : np.ndarray
+            Charge density array [C/m]. Positive values represent positive charge.
+        dz : float
+            Grid spacing [m].
+        offset : float, optional
+            Offset for the z coordinate [m]. Default is 0.
+            For example, an offset of -1.23 computes the wake at z=-1.23 m
+            relative to the density grid.
+        include_self_kick : bool, optional
+            Whether to include the additional ½ W(0⁻) self-kick contribution.
+            Default is True. The FFT convolution naturally includes only half
+            of the self-kick at each grid point; setting this to True adds the
+            other half. For a delta-function source, this makes the impedance
+            method match the pseudomode at the source position. For extended
+            bunches, the effect is proportional to the local density.
+
+        Returns
+        -------
+        integrated_wake : np.ndarray
+            Integrated longitudinal wakefield [V/m]. Same length as input density.
+
+        Notes
+        -----
+        The FFT-based method is O(N log N) compared to O(N²) for direct convolution.
+
+        The impedance Z(k) has units of [Ohm/m] = [V/A/m]. The density λ has
+        units of [C/m]. The product c·Z·λ integrated over k gives [V/m].
+
+        Examples
+        --------
+        >>> imp = ResistiveWallImpedance(
+        ...     radius=2.5e-3,
+        ...     conductivity=5.96e7,
+        ...     relaxation_time=27e-15,
+        ...     geometry='round'
+        ... )
+        >>> n = 1000
+        >>> dz = 1e-6  # 1 micron spacing
+        >>> z = np.arange(n) * dz
+        >>> # Gaussian density profile
+        >>> sigma_z = 50e-6
+        >>> density = 1e-9 / (sigma_z * np.sqrt(2*np.pi)) * np.exp(-0.5*(z - 0.5*n*dz)**2/sigma_z**2)
+        >>> wake = imp.convolve_density(density, dz)
+        """
+        n = len(density)
+
+        # Zero-pad to 2n for linear (non-circular) convolution
+        n_padded = 2 * n
+        density_padded = np.zeros(n_padded)
+        density_padded[:n] = density
+
+        # Compute wavenumber array for full FFT frequencies
+        # fftfreq returns [0, 1, ..., n/2-1, -n/2, ..., -1] / (n*dz) in cycles/m
+        # Multiply by 2*pi to get angular wavenumber k [1/m]
+        k = 2 * np.pi * np.fft.fftfreq(n_padded, d=dz)
+
+        # Evaluate impedance at |k| (impedance is defined for k >= 0)
+        k_abs = np.abs(k)
+        Zk = self.impedance(k_abs)
+
+        # Apply Hermitian symmetry: Z(-k) = Z*(k) for real-valued output
+        Zk = np.where(k < 0, np.conj(Zk), Zk)
+
+        # Apply phase shift for offset if needed
+        if offset != 0:
+            phase_shift = np.exp(-1j * k * offset)
+            Zk = Zk * phase_shift
+
+        # Forward FFT with continuous normalization
+        density_fft = np.fft.fft(density_padded) * dz
+
+        # Multiply in frequency domain (convolution theorem)
+        wake_fft = density_fft * Zk * c_light
+
+        # Inverse FFT with continuous normalization
+        wake_full = np.fft.ifft(wake_fft) / dz
+
+        # Extract the first n points (the causal part of the convolution)
+        integrated_wake = np.real(wake_full[:n])
+
+        # Add the extra ½ self-kick if requested
+        # The FFT convolution naturally gives ½ of the self-kick contribution.
+        # To match the convention of ResistiveWallWakefield.convolve_density,
+        # we add another ½ W(0⁻) * λ(z) * dz term.
+        # Note: wakefield uses z < 0 convention (behind source), so use -dz/2
+        if include_self_kick:
+            # Evaluate wakefield at small negative z to approximate W(0⁻)
+            W0 = self.wakefield(-dz / 2)
+            # The self-kick adds ½ W(0⁻) * λ(z) * dz to each point
+            # Units: [V/C/m] * [C/m] * [m] = [V/m] ✓
+            integrated_wake = integrated_wake + 0.5 * W0 * density * dz
+
+        return integrated_wake
 
     def __repr__(self) -> str:
         return (

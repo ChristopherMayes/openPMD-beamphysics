@@ -71,6 +71,8 @@ class WakefieldBase(ABC):
         Apply wakefield kicks to a ParticleGroup
     plot(zmax=None, zmin=0, n=200)
         Plot the wakefield over a range of z values
+    plot_impedance(kmax=None, kmin=0, n=200)
+        Plot the impedance over a range of wavenumbers
     """
 
     @abstractmethod
@@ -121,6 +123,8 @@ class WakefieldBase(ABC):
         dz: float,
         offset: float = 0,
         include_self_kick: bool = True,
+        plot: bool = False,
+        ax=None,
     ) -> np.ndarray:
         """
         Compute integrated wakefield from a charge density distribution.
@@ -144,6 +148,10 @@ class WakefieldBase(ABC):
             Offset for the z coordinate [m]. Default is 0.
         include_self_kick : bool, optional
             Whether to include the half self-kick term. Default is True.
+        plot : bool, optional
+            If True, plot the density profile and wake potential. Default is False.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None and plot=True, creates a new figure.
 
         Returns
         -------
@@ -175,13 +183,45 @@ class WakefieldBase(ABC):
         if include_self_kick:
             integrated_wake = integrated_wake + 0.5 * W0 * charge
 
+        if plot:
+            self._plot_convolve_density(density, dz, integrated_wake, ax=ax)
+
         return integrated_wake
+
+    def _plot_convolve_density(self, density, dz, integrated_wake, ax=None):
+        """Plot density profile and wake potential from convolve_density."""
+        import matplotlib.pyplot as plt
+
+        n = len(density)
+        z = np.arange(n) * dz
+        z0 = z[n // 2]  # Assume centered
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(10, 5))
+
+        # Wake potential on primary axis
+        ax.plot((z - z0) * 1e6, integrated_wake * 1e-6, "C0")
+        ax.set_xlabel(r"$z - z_0$ (µm)")
+        ax.set_ylabel(r"Wake potential (MV/m)", color="C0")
+        ax.tick_params(axis="y", labelcolor="C0")
+        ax.axhline(0, color="k", lw=0.5)
+        ax.set_title("Wake Potential and Current Profile")
+
+        # Density as current on secondary axis (I = ρ * c)
+        ax2 = ax.twinx()
+        current = density * c_light  # [A]
+        ax2.fill_between((z - z0) * 1e6, current, alpha=0.3, color="C1")
+        ax2.set_ylabel(r"Current (A)", color="C1")
+        ax2.tick_params(axis="y", labelcolor="C1")
+        ax2.set_ylim(0, None)
 
     def particle_kicks(
         self,
         z: np.ndarray,
         weight: np.ndarray,
         include_self_kick: bool = True,
+        plot: bool = False,
+        ax=None,
     ) -> np.ndarray:
         """
         Compute wakefield-induced energy kicks per unit length.
@@ -197,6 +237,10 @@ class WakefieldBase(ABC):
             Particle charges [C].
         include_self_kick : bool, optional
             Whether to include the self-kick term. Default is True.
+        plot : bool, optional
+            If True, plot the per-particle kicks vs position. Default is False.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None, a new figure is created.
 
         Returns
         -------
@@ -220,7 +264,24 @@ class WakefieldBase(ABC):
                     if dz < 0:  # j is ahead of i, so i feels wake from j
                         kicks[i] -= weight[j] * self.wake(dz)
 
+        if plot:
+            self._plot_particle_kicks(z, kicks, ax=ax)
+
         return kicks
+
+    def _plot_particle_kicks(self, z, kicks, ax=None):
+        """Plot per-particle kicks vs position."""
+        import matplotlib.pyplot as plt
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 4))
+
+        z_centered = z - z.mean()
+        ax.scatter(z_centered * 1e6, kicks * 1e-6, s=1, alpha=0.5)
+        ax.set_xlabel(r"$z - \langle z \rangle$ (µm)")
+        ax.set_ylabel("Kick (MeV/m)")
+        ax.set_title("Per-Particle Wakefield Kicks")
+        ax.axhline(0, color="r", ls="--", alpha=0.5)
 
     def _self_kick_value(self) -> float:
         """
@@ -271,7 +332,7 @@ class WakefieldBase(ABC):
         if not inplace:
             return particle_group
 
-    def plot(self, zmax: float = None, zmin: float = 0, n: int = 200):
+    def plot(self, zmax: float = None, zmin: float = 0, n: int = 200, ax=None):
         """
         Plot the wakefield over a range of z values.
 
@@ -283,11 +344,8 @@ class WakefieldBase(ABC):
             Minimum trailing distance [m]. Default is 0.
         n : int, optional
             Number of points. Default is 200.
-
-        Returns
-        -------
-        fig : matplotlib.figure.Figure
-            The matplotlib figure.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None, creates a new figure.
         """
         import matplotlib.pyplot as plt
 
@@ -297,13 +355,44 @@ class WakefieldBase(ABC):
         zlist = np.linspace(zmin, zmax, n)
         Wz = self.wake(-zlist)  # Negative z for trailing particles
 
-        fig, ax = plt.subplots()
+        if ax is None:
+            _, ax = plt.subplots()
         ax.plot(zlist * 1e6, Wz * 1e-12)
         ax.set_xlabel(r"Distance behind source $|z|$ (µm)")
         ax.set_ylabel(r"$W(z)$ (V/pC/m)")
-        ax.set_title(f"{self.__class__.__name__}")
 
-        return fig
+    def plot_impedance(
+        self, kmax: float = None, kmin: float = 0, n: int = 200, ax=None
+    ):
+        """
+        Plot the impedance over a range of wavenumbers.
+
+        Parameters
+        ----------
+        kmax : float, optional
+            Maximum wavenumber [1/m]. If None, uses a sensible default.
+        kmin : float, optional
+            Minimum wavenumber [1/m]. Default is 0.
+        n : int, optional
+            Number of points. Default is 200.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None, creates a new figure.
+        """
+        import matplotlib.pyplot as plt
+
+        if kmax is None:
+            kmax = 1e6  # 1/µm default
+
+        k = np.linspace(kmin, kmax, n)
+        Z = self.impedance(k)
+
+        if ax is None:
+            _, ax = plt.subplots()
+        ax.plot(k * 1e-3, np.real(Z), label=r"Re[$Z$]")
+        ax.plot(k * 1e-3, np.imag(Z), label=r"Im[$Z$]")
+        ax.set_xlabel(r"$k$ (1/mm)")
+        ax.set_ylabel(r"$Z(k)$ (Ω/m)")
+        ax.legend()
 
 
 @dataclass
@@ -459,18 +548,18 @@ class PseudomodeWakefield(WakefieldBase):
 
     Examples
     --------
-    Single mode:
+    Single mode::
 
-    >>> pm = PseudomodeWakefield([Pseudomode(A=1e15, d=1e4, k=1e5, phi=np.pi/2)])
-    >>> pm.wake(-10e-6)  # Wake at 10 µm behind source
+        pm = PseudomodeWakefield([Pseudomode(A=1e15, d=1e4, k=1e5, phi=np.pi/2)])
+        pm.wake(-10e-6)  # Wake at 10 µm behind source
 
-    Multiple modes:
+    Multiple modes::
 
-    >>> modes = [
-    ...     Pseudomode(A=1e15, d=1e4, k=1e5, phi=np.pi/2),
-    ...     Pseudomode(A=5e14, d=2e4, k=2e5, phi=np.pi/4),
-    ... ]
-    >>> pm = PseudomodeWakefield(modes)
+        modes = [
+            Pseudomode(A=1e15, d=1e4, k=1e5, phi=np.pi/2),
+            Pseudomode(A=5e14, d=2e4, k=2e5, phi=np.pi/4),
+        ]
+        pm = PseudomodeWakefield(modes)
     """
 
     def __init__(self, modes: list) -> None:
@@ -561,6 +650,8 @@ class PseudomodeWakefield(WakefieldBase):
         z: np.ndarray,
         weight: np.ndarray,
         include_self_kick: bool = True,
+        plot: bool = False,
+        ax=None,
     ) -> np.ndarray:
         """
         Compute short-range wakefield energy kicks per unit length.
@@ -576,6 +667,10 @@ class PseudomodeWakefield(WakefieldBase):
             Particle charges [C].
         include_self_kick : bool, optional
             If True, applies the self-kick. Default is True.
+        plot : bool, optional
+            If True, plot the per-particle kicks vs position. Default is False.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None, a new figure is created.
 
         Returns
         -------
@@ -626,6 +721,10 @@ class PseudomodeWakefield(WakefieldBase):
         # Restore original order
         kicks = np.empty_like(delta_E)
         kicks[ix] = delta_E
+
+        if plot:
+            self._plot_particle_kicks(z, kicks, ax=ax)
+
         return kicks
 
     def to_bmad(
@@ -651,14 +750,15 @@ class PseudomodeWakefield(WakefieldBase):
         lines = [mode.to_bmad(type, transverse_dependence) for mode in self._modes]
         return "\n".join(lines)
 
-    def plot(self, zmax: float = 0.001, zmin: float = 0, n: int = 200):
+    def plot(self, zmax: float = 0.001, zmin: float = 0, n: int = 200, ax=None):
         """Plot the pseudomode wakefield."""
         import matplotlib.pyplot as plt
 
         zlist = np.linspace(zmin, zmax, n)
         Wz = self.wake(-zlist)
 
-        fig, ax = plt.subplots()
+        if ax is None:
+            _, ax = plt.subplots()
         ax.plot(zlist * 1e6, Wz * 1e-12)
         ax.set_xlabel(r"Distance behind source $|z|$ (µm)")
         ax.set_ylabel(r"$W(z)$ (V/pC/m)")
@@ -667,8 +767,6 @@ class PseudomodeWakefield(WakefieldBase):
             title += "s"
         title += ")"
         ax.set_title(title)
-
-        return fig
 
     def __repr__(self) -> str:
         if self.n_modes == 1:
@@ -698,10 +796,12 @@ class TabularWakefield(WakefieldBase):
 
     Examples
     --------
-    >>> z_data = -np.linspace(1e-6, 1e-3, 100)
-    >>> W_data = 1e15 * np.exp(z_data / 100e-6) * np.sin(1e5 * z_data)
-    >>> wake = TabularWakefield(z_data, W_data)
-    >>> wake.wake(-50e-6)  # Interpolated wake at 50 µm behind source
+    ::
+
+        z_data = -np.linspace(1e-6, 1e-3, 100)
+        W_data = 1e15 * np.exp(z_data / 100e-6) * np.sin(1e5 * z_data)
+        wake = TabularWakefield(z_data, W_data)
+        wake.wake(-50e-6)  # Interpolated wake at 50 µm behind source
     """
 
     def __init__(
@@ -847,9 +947,11 @@ class ImpedanceWakefield(WakefieldBase):
 
     Examples
     --------
-    >>> def my_impedance(k):
-    ...     return 100 / (1 + 1j * k * 1e-6)  # Simple resonator
-    >>> wake = ImpedanceWakefield(my_impedance)
+    ::
+
+        def my_impedance(k):
+            return 100 / (1 + 1j * k * 1e-6)  # Simple resonator
+        wake = ImpedanceWakefield(my_impedance)
     """
 
     def __init__(
@@ -929,6 +1031,8 @@ class ImpedanceWakefield(WakefieldBase):
         weight: np.ndarray,
         include_self_kick: bool = True,
         n_bins: int = None,
+        plot: bool = False,
+        ax=None,
     ) -> np.ndarray:
         """
         Compute wakefield-induced energy kicks per unit length.
@@ -947,6 +1051,10 @@ class ImpedanceWakefield(WakefieldBase):
             Whether to include the self-kick term. Default is True.
         n_bins : int, optional
             Number of bins for the density grid. Default is max(100, N//10).
+        plot : bool, optional
+            If True, plot the per-particle kicks vs position. Default is False.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None, a new figure is created.
 
         Returns
         -------
@@ -993,6 +1101,9 @@ class ImpedanceWakefield(WakefieldBase):
             z_grid, wake_potential, kind="linear", bounds_error=False, fill_value=0.0
         )
         kicks = -interp(z)  # Negative sign: energy loss for trailing particles
+
+        if plot:
+            self._plot_particle_kicks(z, kicks, ax=ax)
 
         return kicks
 

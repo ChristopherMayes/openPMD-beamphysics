@@ -22,6 +22,7 @@ nav:
           - examples/fields/solenoid_modeling.ipynb
       - Wakefields:
           - examples/wakefields/resistive_wall.ipynb
+          - examples/wakefields/impedance_wakefield.ipynb
       - Wavefront:
           - examples/wavefront/wavefront.ipynb
           - examples/wavefront/advanced_drift.ipynb
@@ -45,6 +46,7 @@ theme:
     - navigation.top
     - navigation.tabs
     - navigation.indexes
+    - content.code.copy
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default

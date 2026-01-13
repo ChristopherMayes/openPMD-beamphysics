@@ -850,10 +850,12 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
 
     Examples
     --------
-    >>> wake = ResistiveWallPseudomode.from_material(
-    ...     "copper-slac-pub-10707", radius=2.5e-3, geometry="round"
-    ... )
-    >>> wake.wake(-10e-6)  # Wake at 10 µm behind source
+    ::
+
+        wake = ResistiveWallPseudomode.from_material(
+            "copper-slac-pub-10707", radius=2.5e-3, geometry="round"
+        )
+        wake.wake(-10e-6)  # Wake at 10 µm behind source
     """
 
     def __post_init__(self):
@@ -968,6 +970,8 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
         dz: float,
         offset: float = 0,
         include_self_kick: bool = True,
+        plot: bool = False,
+        ax=None,
     ) -> np.ndarray:
         """
         Compute integrated wakefield by convolving with charge density.
@@ -982,21 +986,30 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
             Offset for the z coordinate [m]. Default is 0.
         include_self_kick : bool, optional
             Whether to include the extra ½ self-kick. Default is True.
+        plot : bool, optional
+            If True, plot the density profile and wake potential. Default is False.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None and plot=True, creates a new figure.
 
         Returns
         -------
         integrated_wake : np.ndarray
             Integrated longitudinal wakefield [V/m].
         """
-        return self._internal_model.convolve_density(
+        result = self._internal_model.convolve_density(
             density, dz, offset=offset, include_self_kick=include_self_kick
         )
+        if plot:
+            self._plot_convolve_density(density, dz, result, ax=ax)
+        return result
 
     def particle_kicks(
         self,
         particle_group_or_z,
         weight: np.ndarray = None,
         include_self_kick: bool = True,
+        plot: bool = False,
+        ax=None,
     ) -> np.ndarray:
         """
         Compute wakefield-induced longitudinal momentum kicks.
@@ -1011,6 +1024,10 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
             Particle charges [C]. Required if particle_group_or_z is an array.
         include_self_kick : bool, optional
             Whether to include the self-kick term. Default is True.
+        plot : bool, optional
+            If True, plot the per-particle kicks vs position. Default is False.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None, a new figure is created.
 
         Returns
         -------
@@ -1019,7 +1036,7 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
         """
         z, weight = self._extract_z_weight(particle_group_or_z, weight)
         return self._internal_model.particle_kicks(
-            z, weight, include_self_kick=include_self_kick
+            z, weight, include_self_kick=include_self_kick, plot=plot, ax=ax
         )
 
     def apply_to_particles(
@@ -1057,7 +1074,7 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
         if not inplace:
             return particle_group
 
-    def plot(self, zmax=None, zmin=0, n=200, normalized=False):
+    def plot(self, zmax=None, zmin=0, n=200, normalized=False, ax=None):
         """
         Plot the resistive wall wakefield W(z).
 
@@ -1072,11 +1089,8 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
         normalized : bool, optional
             If True, plot dimensionless Ŵ(z/s₀) = W(z)/W₀ vs z/s₀.
             Default is False.
-
-        Returns
-        -------
-        matplotlib.figure.Figure
-            The generated matplotlib figure.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None, creates a new figure.
         """
         import matplotlib.pyplot as plt
 
@@ -1086,7 +1100,8 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
         zlist = np.linspace(zmin, zmax, n)
         Wz = self.wake(-zlist)
 
-        fig, ax = plt.subplots()
+        if ax is None:
+            _, ax = plt.subplots()
 
         if normalized:
             ax.plot(zlist / self.s0, Wz / self.W0)
@@ -1098,8 +1113,6 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
             ax.set_ylabel(r"$W(z)$ (V/pC/m)")
 
         ax.set_title("ResistiveWallPseudomode")
-
-        plt.show()
 
     def to_bmad(
         self, file=None, z_max=100, amp_scale=1, scale_with_length=True, z_scale=1
@@ -1248,11 +1261,13 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
 
     Examples
     --------
-    >>> wake = ResistiveWallWakefield.from_material(
-    ...     "copper-slac-pub-10707", radius=2.5e-3, geometry="round"
-    ... )
-    >>> wake.wake(-10e-6)  # Wake at 10 µm behind source
-    >>> wake.impedance(1e5)  # Impedance at k = 100/mm
+    ::
+
+        wake = ResistiveWallWakefield.from_material(
+            "copper-slac-pub-10707", radius=2.5e-3, geometry="round"
+        )
+        wake.wake(-10e-6)  # Wake at 10 µm behind source
+        wake.impedance(1e5)  # Impedance at k = 100/mm
     """
 
     def __post_init__(self):
@@ -1368,6 +1383,8 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
         dz: float,
         offset: float = 0,
         include_self_kick: bool = True,
+        plot: bool = False,
+        ax=None,
     ) -> np.ndarray:
         """
         Compute integrated wakefield by convolving density with impedance.
@@ -1384,15 +1401,22 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
             Offset for the z coordinate [m]. Default is 0.
         include_self_kick : bool, optional
             Whether to include the extra ½ self-kick. Default is True.
+        plot : bool, optional
+            If True, plot the density profile and wake potential. Default is False.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None and plot=True, creates a new figure.
 
         Returns
         -------
         integrated_wake : np.ndarray
             Integrated longitudinal wakefield [V/m].
         """
-        return self._internal_model.convolve_density(
+        result = self._internal_model.convolve_density(
             density, dz, offset=offset, include_self_kick=include_self_kick
         )
+        if plot:
+            self._plot_convolve_density(density, dz, result, ax=ax)
+        return result
 
     def particle_kicks(
         self,
@@ -1400,6 +1424,8 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
         weight: np.ndarray = None,
         include_self_kick: bool = True,
         n_bins: int = None,
+        plot: bool = False,
+        ax=None,
     ) -> np.ndarray:
         """
         Compute wakefield-induced longitudinal momentum kicks.
@@ -1418,6 +1444,10 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
             Whether to include the self-kick term. Default is True.
         n_bins : int, optional
             Number of bins for the density grid. Default is max(100, N//10).
+        plot : bool, optional
+            If True, plot the per-particle kicks vs position. Default is False.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None, a new figure is created.
 
         Returns
         -------
@@ -1426,7 +1456,12 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
         """
         z, weight = self._extract_z_weight(particle_group_or_z, weight)
         return self._internal_model.particle_kicks(
-            z, weight, include_self_kick=include_self_kick, n_bins=n_bins
+            z,
+            weight,
+            include_self_kick=include_self_kick,
+            n_bins=n_bins,
+            plot=plot,
+            ax=ax,
         )
 
     def apply_to_particles(
@@ -1464,7 +1499,7 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
         if not inplace:
             return particle_group
 
-    def plot(self, zmax=None, zmin=0, n=200, normalized=False):
+    def plot(self, zmax=None, zmin=0, n=200, normalized=False, ax=None):
         """
         Plot the resistive wall wakefield W(z).
 
@@ -1479,11 +1514,8 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
         normalized : bool, optional
             If True, plot dimensionless Ŵ(z/s₀) = W(z)/W₀ vs z/s₀.
             Default is False.
-
-        Returns
-        -------
-        matplotlib.figure.Figure
-            The generated matplotlib figure.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None, creates a new figure.
         """
         import matplotlib.pyplot as plt
 
@@ -1493,7 +1525,8 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
         zlist = np.linspace(zmin, zmax, n)
         Wz = self.wake(-zlist)
 
-        fig, ax = plt.subplots()
+        if ax is None:
+            _, ax = plt.subplots()
 
         if normalized:
             ax.plot(zlist / self.s0, Wz / self.W0)
@@ -1503,7 +1536,3 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
             ax.plot(zlist * 1e6, Wz * 1e-12)
             ax.set_xlabel(r"Distance behind source $|z|$ (µm)")
             ax.set_ylabel(r"$W(z)$ (V/pC/m)")
-
-        ax.set_title("ResistiveWallWakefield")
-
-        plt.show()

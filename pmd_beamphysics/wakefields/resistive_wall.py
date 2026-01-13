@@ -1,31 +1,405 @@
 """
 Resistive wall wakefield implementation.
 
-This module provides an analytical model for short-range resistive wall wakefields
+This module provides analytical models for short-range resistive wall wakefields
 in accelerator beam pipes, based on the approach described in SLAC-PUB-10707.
 It supports both round and flat geometries and includes effects of AC conductivity
 through material relaxation times.
 
+Two models are available:
+
+- **ResistiveWallWakefield**: Accurate impedance-based model using FFT
+  convolution. Recommended for most applications.
+
+- **ResistiveWallPseudomode**: Fast pseudomode-based model using polynomial fits.
+  Good for quick calculations, ~10-20% difference from full impedance.
+
+Low-level functions are also exported for direct impedance/wakefield evaluation.
+
 Classes
 -------
-pseudomode
-    Single-mode analytic representation of a short-range wakefield
+ResistiveWallWakefieldBase
+    Abstract base class with shared properties
 ResistiveWallWakefield
-    Complete wakefield model with geometry and material properties
+    Accurate impedance-based wakefield model
+ResistiveWallPseudomode
+    Fast pseudomode-based wakefield model
+
+Functions
+---------
+sinhc
+    Numerically stable sinh(x)/x
+ac_conductivity
+    Drude-model AC conductivity
+surface_impedance
+    Surface impedance for conducting wall
+longitudinal_impedance_round
+    Longitudinal impedance Z(k) for round pipe
+longitudinal_impedance_flat
+    Longitudinal impedance Z(k) for flat geometry
+wakefield_from_impedance
+    Wakefield W(z) via cosine transform (quadrature)
+wakefield_from_impedance_fft
+    Wakefield W(z) via FFT (fast)
+characteristic_length
+    Characteristic length s₀
 
 References
 ----------
-Bane & Stupakov, SLAC-PUB-10707 (2004)
-https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
+.. [1] K. Bane and G. Stupakov, "Resistive wall wakefield in the LCLS
+   undulator beam pipe," SLAC-PUB-10707 (2004).
+   https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
+
+.. [2] N. Mounet and E. Métral, Phys. Rev. ST Accel. Beams 18, 034402 (2015).
+
+.. [3] A. Chao, "Physics of Collective Beam Instabilities in High Energy
+   Accelerators," Wiley, 1993, Chapter 2.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 import warnings
 
 import numpy as np
+from scipy.integrate import quad, quad_vec
 
 from ..units import c_light, epsilon_0, Z0
-from scipy.signal import fftconvolve
+from .base import WakefieldBase, Pseudomode, PseudomodeWakefield, ImpedanceWakefield
+
+
+# =============================================================================
+# Low-level impedance/wakefield functions
+# =============================================================================
+
+
+def sinhc(x: float | np.ndarray) -> float | np.ndarray:
+    """
+    Numerically stable sinh(x)/x function.
+
+    Uses Taylor series expansion for small x to avoid numerical instability.
+
+    Parameters
+    ----------
+    x : float or np.ndarray
+        Input value(s)
+
+    Returns
+    -------
+    y : float or np.ndarray
+        sinh(x)/x, defined as 1 at x = 0
+    """
+    x = np.asarray(x)
+    scalar_input = x.ndim == 0
+    x = np.atleast_1d(x)
+
+    y = np.empty_like(x, dtype=np.float64)
+
+    small = np.abs(x) < 1e-5
+    x_small = x[small]
+    x_large = x[~small]
+
+    y[small] = 1 + x_small**2 / 6 + x_small**4 / 120
+    y[~small] = np.sinh(x_large) / x_large
+
+    if scalar_input:
+        return float(y[0])
+    return y
+
+
+def ac_conductivity(
+    k: float | np.ndarray,
+    sigma0: float,
+    ctau: float,
+) -> complex | np.ndarray:
+    """
+    Frequency-dependent AC conductivity with relaxation time (Drude model).
+
+    .. math::
+
+        \\sigma(k) = \\frac{\\sigma_0}{1 - i k c \\tau}
+
+    Parameters
+    ----------
+    k : float or np.ndarray
+        Longitudinal wave number [1/m]
+    sigma0 : float
+        DC conductivity [S/m]
+    ctau : float
+        Relaxation distance c·τ [m]
+
+    Returns
+    -------
+    sigma : complex or np.ndarray of complex
+        AC conductivity [S/m]
+    """
+    return sigma0 / (1 - 1j * k * ctau)
+
+
+def surface_impedance(
+    k: float | np.ndarray,
+    sigma0: float,
+    ctau: float,
+) -> complex | np.ndarray:
+    """
+    Surface impedance for a conducting wall with AC conductivity.
+
+    .. math::
+
+        \\zeta(k) = (1 - i) \\sqrt{\\frac{k c}{2 \\sigma(k) Z_0 c}}
+
+    Parameters
+    ----------
+    k : float or np.ndarray
+        Longitudinal wave number [1/m]
+    sigma0 : float
+        DC conductivity [S/m]
+    ctau : float
+        Relaxation distance c·τ [m]
+
+    Returns
+    -------
+    zeta : complex or np.ndarray of complex
+        Surface impedance [dimensionless]
+    """
+    sigma = ac_conductivity(k, sigma0, ctau)
+    return (1 - 1j) * np.sqrt(k * c_light / (2 * sigma * Z0 * c_light))
+
+
+def _impedance_integrand_flat(
+    k: float,
+    x: float | np.ndarray,
+    a: float,
+    sigma0: float,
+    ctau: float,
+) -> complex | np.ndarray:
+    """Impedance integrand for flat (parallel plate) geometry."""
+    x = np.asarray(x)
+    prefactor = Z0 / (2 * np.pi * a)
+
+    with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
+        zeta = surface_impedance(k, sigma0, ctau)
+        cosh_x = np.cosh(x)
+        shc_x = sinhc(x)
+        denom = cosh_x * (cosh_x / zeta - 1j * k * a * shc_x)
+        result = np.where(np.isfinite(denom), prefactor / denom, 0.0 + 0.0j)
+
+    return result.astype(np.complex128)
+
+
+def longitudinal_impedance_flat(
+    k: float | np.ndarray,
+    a: float,
+    sigma0: float,
+    ctau: float,
+) -> complex | np.ndarray:
+    """
+    Compute longitudinal impedance Z(k) for flat (parallel plate) geometry.
+
+    Uses numerical integration over transverse modes (SLAC-PUB-10707 Eq. 52).
+
+    Parameters
+    ----------
+    k : float or np.ndarray
+        Longitudinal wave number [1/m]
+    a : float
+        Half-gap height between parallel plates [m]
+    sigma0 : float
+        DC conductivity [S/m]
+    ctau : float
+        Relaxation distance c·τ [m]
+
+    Returns
+    -------
+    Zk : complex or np.ndarray of complex
+        Longitudinal impedance [Ohm/m]
+    """
+
+    @np.vectorize
+    def _Zk_scalar(k_val):
+        if k_val == 0:
+            return 0.0 + 0.0j
+
+        def integrand(x):
+            return _impedance_integrand_flat(k_val, x, a, sigma0, ctau)
+
+        return quad_vec(integrand, 0, np.inf)[0]
+
+    return _Zk_scalar(k)
+
+
+def longitudinal_impedance_round(
+    k: float | np.ndarray,
+    a: float,
+    sigma0: float,
+    ctau: float,
+) -> complex | np.ndarray:
+    """
+    Compute longitudinal impedance Z(k) for round (circular pipe) geometry.
+
+    Uses closed-form expression (SLAC-PUB-10707 Eq. 2).
+
+    Parameters
+    ----------
+    k : float or np.ndarray
+        Longitudinal wave number [1/m]
+    a : float
+        Pipe radius [m]
+    sigma0 : float
+        DC conductivity [S/m]
+    ctau : float
+        Relaxation distance c·τ [m]
+
+    Returns
+    -------
+    Zk : complex or np.ndarray of complex
+        Longitudinal impedance [Ohm/m]
+    """
+    k = np.asarray(k)
+    scalar_input = k.ndim == 0
+    k = np.atleast_1d(k)
+
+    prefactor = Z0 / (2 * np.pi * a)
+    zeta = surface_impedance(k, sigma0, ctau)
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        Zk = prefactor / (1.0 / zeta - 1j * k * a / 2)
+        Zk = np.where(k == 0, 0.0 + 0.0j, Zk)
+
+    if scalar_input:
+        return complex(Zk[0])
+    return Zk
+
+
+def wakefield_from_impedance(
+    z: float | np.ndarray,
+    Zk_func: callable,
+    k_max: float = 1e7,
+    epsabs: float = 1e-9,
+    epsrel: float = 1e-6,
+) -> float | np.ndarray:
+    """
+    Compute wakefield W(z) from Re[Z(k)] using a cosine transform (quadrature).
+
+    .. math::
+
+        W(z) = \\frac{2c}{\\pi} \\int_0^{k_{\\max}} \\text{Re}[Z(k)] \\cos(kz) \\, dk
+
+    Parameters
+    ----------
+    z : float or np.ndarray
+        Longitudinal position [m]. Negative z is behind the source.
+    Zk_func : callable
+        Function returning complex impedance Z(k) [Ohm/m]
+    k_max : float, optional
+        Upper limit of k integration [1/m]. Default is 1e7.
+    epsabs : float, optional
+        Absolute tolerance. Default is 1e-9.
+    epsrel : float, optional
+        Relative tolerance. Default is 1e-6.
+
+    Returns
+    -------
+    Wz : float or np.ndarray
+        Wakefield [V/C/m]
+    """
+
+    def _wakefield_scalar(z_val):
+        if z_val > 0:
+            return 0.0
+
+        def integrand(k):
+            return np.real(Zk_func(k)) * np.cos(k * z_val)
+
+        result, _ = quad(integrand, 0, k_max, epsabs=epsabs, epsrel=epsrel, limit=200)
+        return (2 * c_light / np.pi) * result
+
+    z = np.asarray(z)
+    if z.ndim == 0:
+        return _wakefield_scalar(float(z))
+
+    return np.array([_wakefield_scalar(zi) for zi in z])
+
+
+def wakefield_from_impedance_fft(
+    z: np.ndarray,
+    Zk_func: callable,
+    k_max: float = 1e7,
+    n_fft: int = 8192,
+) -> np.ndarray:
+    """
+    Compute wakefield W(z) from Z(k) using FFT and interpolation.
+
+    Much faster than `wakefield_from_impedance` for arrays.
+
+    Parameters
+    ----------
+    z : np.ndarray
+        Longitudinal positions [m]. Negative z is behind the source.
+    Zk_func : callable
+        Function returning complex impedance Z(k) [Ohm/m]
+    k_max : float, optional
+        Upper limit of k integration [1/m]. Default is 1e7.
+    n_fft : int, optional
+        Number of FFT points. Default is 8192.
+
+    Returns
+    -------
+    Wz : np.ndarray
+        Wakefield [V/C/m]
+    """
+    from scipy.interpolate import interp1d
+    from scipy.fft import irfft
+
+    z = np.asarray(z)
+
+    dk = k_max / (n_fft - 1)
+    k_grid = np.linspace(0, k_max, n_fft)
+
+    Zk_grid = Zk_func(k_grid)
+    ReZ = np.real(Zk_grid)
+
+    n_full = 2 * (n_fft - 1)
+    dz = 2 * np.pi / (n_full * dk)
+    z_grid = np.arange(n_full) * dz
+
+    W_grid = irfft(ReZ, n=n_full) * n_full * dk * (c_light / np.pi)
+
+    interp = interp1d(z_grid, W_grid, kind="cubic", bounds_error=False, fill_value=0.0)
+
+    result = interp(-z)
+    result = np.where(z > 0, 0.0, result)
+
+    return result
+
+
+def characteristic_length(a: float, sigma0: float) -> float:
+    """
+    Characteristic length scale s₀ for resistive wall wakefield.
+
+    From SLAC-PUB-10707 Eq. (5):
+
+    .. math::
+
+        s_0 = \\left( \\frac{2 a^2}{Z_0 \\sigma_0} \\right)^{1/3}
+
+    Parameters
+    ----------
+    a : float
+        Half-gap height (flat) or radius (round) [m]
+    sigma0 : float
+        DC conductivity [S/m]
+
+    Returns
+    -------
+    s0 : float
+        Characteristic length [m]
+    """
+    return (2 * a**2 / (Z0 * sigma0)) ** (1 / 3)
+
+
+# Alias for backwards compatibility
+s0f = characteristic_length
 
 # AC wake Fitting Formula Polynomial coefficients
 # found by fitting digitized plots in SLAC-PUB-10707 Fig. 14
@@ -153,26 +527,6 @@ def Qr_flat(G: float) -> float:
     return _Qr_flat_poly(G)
 
 
-def s0f(radius: float, conductivity: float) -> float:
-    """
-    Characteristic distance s₀ from SLAC-PUB-10707 Eq. 5.
-
-    Parameters
-    ----------
-    radius : float
-        Pipe radius (round) or half-gap (flat) [m]
-    conductivity : float
-        DC conductivity [S/m]
-
-    Returns
-    -------
-    float
-        Characteristic length s₀ [m]
-    """
-    val = 2 * radius**2 / (Z0 * conductivity)
-    return val ** (1 / 3.0)
-
-
 def Gammaf(relaxation_time: float, radius: float, conductivity: float) -> float:
     """
     Dimensionless relaxation time Γ = cτ/s₀.
@@ -194,166 +548,51 @@ def Gammaf(relaxation_time: float, radius: float, conductivity: float) -> float:
     return c_light * relaxation_time / s0f(radius, conductivity)
 
 
-@dataclass
-class pseudomode:
+def pseudomode(A: float, d: float, k: float, phi: float) -> PseudomodeWakefield:
     """
-    Single-mode analytic representation of a short-range wakefield.
+    Create a single-mode pseudomode wakefield.
+
+    .. deprecated::
+        Use :class:`PseudomodeWakefield` directly instead. This function
+        is maintained for backwards compatibility.
 
     Models the longitudinal wakefield as a damped sinusoid:
         W(z) = A * exp(d * z) * sin(k * z + φ)
-
-    This form is used to approximate short-range wakefields such as the resistive wall wake,
-    and can be evaluated directly, plotted, or exported in Bmad format.
 
     Parameters
     ----------
     A : float
         Amplitude coefficient [V/C/m].
     d : float
-        Exponential decay rate [1/m]. Typically negative.
+        Exponential decay rate [1/m].
     k : float
         Oscillation wavenumber [1/m].
     phi : float
         Phase offset [rad].
 
-    Methods
+    Returns
     -------
-    __call__(z)
-        Evaluate W(z) for an array of z values.
-    plot(zmax=..., zmin=..., n=...)
-        Plot the pseudomode over a range of z values.
-    to_bmad(type="longitudinal", transverse_dependence="none")
-        Format pseudomode parameters as a Bmad-compatible string.
-    particle_kicks(z, weight, include_self_kick=True)
-        Compute energy kicks per unit length on a particle distribution.
-
-    Notes
-    -----
-    - Wakefields are defined for z ≤ 0 (i.e., trailing the source particle).
-    - This is a mathematical abstraction used to model physical wakefields.
+    PseudomodeWakefield
+        A single-mode pseudomode wakefield object.
     """
-
-    A: float
-    d: float
-    k: float
-    phi: float
-
-    def to_bmad(self, type="longitudinal", transverse_dependence="none"):
-        return f"{type} = {{{self.A}, {self.d}, {self.k}, {self.phi/(2*np.pi)}, {transverse_dependence}}}"
-
-    def __call__(self, z):
-        return self.A * np.exp(self.d * z) * np.sin(self.k * z + self.phi)
-
-    def plot(self, zmax=0.001, zmin=0, n=200):
-        import matplotlib.pyplot as plt
-
-        zlist = np.linspace(zmin, zmax, n)
-        Wz = self(-zlist)
-
-        fig, ax = plt.subplots()
-        ax.plot(zlist * 1e6, Wz * 1e-12)
-        ax.set_xlabel(r"$-z$ (µm)")
-        ax.set_ylabel(r"$W_z$ (V/pC/m)")
-
-    def particle_kicks(
-        self,
-        z: np.ndarray,
-        weight: np.ndarray,
-        include_self_kick: bool = True,
-    ) -> np.ndarray:
-        """
-        Compute short-range wakefield energy kicks per unit length.
-
-        Uses an O(N) single-pass algorithm by exploiting the exponential form
-        of the pseudomode wakefield. The key insight is that the total wake
-        at particle i from all trailing particles j > i can be written as:
-
-            ΔE_i = -Im[ c·e^(s·z_i) · Σ_{j>i} q_j·e^(-s·z_j) ]
-
-        where s = d + ik and c = A·e^(iφ). By iterating from tail to head
-        and maintaining a running sum b = Σ q_j·e^(-s·z_j), each particle's
-        kick is computed in O(1) time, giving O(N) total complexity.
-
-        Parameters
-        ----------
-        z : ndarray of shape (N,)
-            Particle positions [m], need not be sorted.
-        weight : ndarray of shape (N,)
-            Particle charges [C].
-        include_self_kick : bool, optional
-            If True, applies the ½ A q sin(φ) self-kick. Default is True.
-
-        Returns
-        -------
-        delta_E : ndarray of shape (N,)
-            Wake-induced energy kick per unit length at each particle [eV/m].
-
-        Notes
-        -----
-        The algorithm proceeds as follows:
-
-        1. Sort particles by z (tail to head)
-        2. Initialize complex accumulator b = 0
-        3. Loop from tail (i = N-1) to head (i = 0):
-           a. Compute kick: ΔE_i = -Im[c·e^(s·z_i)·b]
-           b. Update accumulator: b += q_i·e^(-s·z_i)
-        4. Add self-kick if requested: ΔE_i -= ½·A·q_i·sin(φ)
-        5. Restore original particle ordering
-        """
-
-        z = np.asarray(z)
-        weight = np.asarray(weight)
-
-        if z.shape != weight.shape:
-            raise ValueError(
-                f"Mismatched shapes: z.shape={z.shape}, weight.shape={weight.shape}"
-            )
-        if z.ndim != 1:
-            raise ValueError("z and weight must be 1D arrays")
-
-        # Sort particles from tail to head
-        ix = z.argsort()
-        z = z[ix]
-        z -= z.max()  # Offset to keep exponents small for numerical stability
-        weight = weight[ix]
-
-        N = len(z)
-        delta_E = np.zeros(N)
-
-        # Precompute complex coefficients for the pseudomode W(z) = A·e^(dz)·sin(kz+φ)
-        s = self.d + 1j * self.k  # Complex decay+oscillation rate
-        c = self.A * np.exp(1j * self.phi)  # Amplitude with phase
-
-        # O(N) accumulator: b = Σ_{j>i} q_j·e^(-s·z_j) for particles behind current
-        b = 0.0 + 0.0j
-
-        # Iterate from tail (large z index) to head (small z index)
-        for i in range(N - 1, -1, -1):
-            zi = z[i]
-            qi = weight[i]
-
-            # Kick from all trailing particles: ΔE_i = -Im[c·e^(s·z_i)·b]
-            delta_E[i] -= np.imag(c * np.exp(s * zi) * b)
-
-            # Add this particle to the accumulator for the next iteration
-            b += qi * np.exp(-s * zi)
-
-        if include_self_kick:
-            delta_E -= 0.5 * self.A * weight * np.sin(self.phi)
-
-        # Return kicks in the original particle order
-        kicks = np.empty_like(delta_E)
-        kicks[ix] = delta_E
-        return kicks
+    warnings.warn(
+        "pseudomode() is deprecated, use PseudomodeWakefield directly",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return PseudomodeWakefield(A=A, d=d, k=k, phi=phi)
 
 
 @dataclass
-class ResistiveWallWakefield:
+class ResistiveWallWakefieldBase(WakefieldBase):
     """
-    Analytic short-range resistive wall wakefield model based on SLAC-PUB-10707 (Bane & Stupakov, 2004).
+    Base class for resistive wall wakefield models based on SLAC-PUB-10707.
 
-    Models the longitudinal wakefield trailing a charged particle moving through a
-    conducting pipe, using a single damped sinusoidal pseudomode fit.
+    This abstract base class provides shared properties and methods for
+    resistive wall wakefield calculations. Use the concrete subclasses:
+
+    - :class:`ResistiveWallWakefield`: Accurate impedance-based model
+    - :class:`ResistiveWallPseudomode`: Fast pseudomode-based model
 
     Parameters
     ----------
@@ -364,23 +603,17 @@ class ResistiveWallWakefield:
     relaxation_time : float
         Drude-model relaxation time of the conductor [s].
     geometry : str, optional
-        Geometry of the beam pipe: either 'round' or 'flat'. Default is 'round'.
+        Geometry of the beam pipe: 'round' or 'flat'. Default is 'round'.
 
-    Notes
-    -----
-    - The model uses polynomial fits for k_r * s₀ and Q_r as functions of Γ = c * τ / s₀,
-      based on digitized data from SLAC-PUB-10707 Fig. 14.
-    - Wakefield output supports evaluation, convolution, and export in Bmad format.
-    - Materials with known conductivity and τ values are available via `from_material()`.
-    - Relaxation times for materials have a large uncertainty in this model. See Bane, Stupakov, Tu (2006).
+    Attributes
+    ----------
+    s0 : float
+        Characteristic length scale [m]
 
     References
     ----------
     Bane & Stupakov, SLAC-PUB-10707 (2004)
     https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
-
-    Bane, Stupakov, Tu, Proceedings of EPAC 2006, Edinburgh, Scotland THPCH073 (2006)
-    https://accelconf.web.cern.ch/e06/PAPERS/THPCH073.PDF
     """
 
     radius: float
@@ -389,7 +622,6 @@ class ResistiveWallWakefield:
     geometry: str = "round"
 
     # Internal material database (SI units)
-    # Note conductivity_SI = conductivity_CGS / (Z0 * c / (4 * pi))
     MATERIALS = {
         "copper-slac-pub-10707": {"conductivity": 6.5e7, "relaxation_time": 27e-15},
         "copper-genesis4": {"conductivity": 5.813e7, "relaxation_time": 27e-15},
@@ -416,40 +648,20 @@ class ResistiveWallWakefield:
                 f"Unsupported geometry: {self.geometry}. Must be 'round' or 'flat'"
             )
 
-        # Check if Gamma is in the valid range for the polynomial fits
-        # The fits are from digitized SLAC-PUB-10707 Fig. 14, which covers Γ ∈ [0, 2.5]
-        Gamma = self.Gamma
-        if Gamma > 3:
-            warnings.warn(
-                f"Γ = {Gamma:.3g} is above the validated range (Γ ≲ 3) for the "
-                f"pseudomode polynomial fits. Results may be inaccurate. "
-                f"Consider using ResistiveWallImpedance for numerical integration.",
-                UserWarning,
-                stacklevel=2,
-            )
-
-    def __repr__(self):
-        material = self.material_from_properties()
-        material_str = f", material={material!r}" if material else ""
-        return (
-            f"{self.__class__.__name__}("
-            f"radius={self.radius}, "
-            f"conductivity={self.conductivity}, "
-            f"relaxation_time={self.relaxation_time}, "
-            f"geometry={self.geometry!r}"
-            f"{material_str}) "
-            f"→ s₀={self.s0:.3e} m, Γ={self.Gamma:.3f}, k_r={self.kr:.1f}/m, Q_r={self.Qr:.2f}"
-        )
-
     @classmethod
-    def from_material(cls, material: str, radius: float, geometry: str = "round"):
+    def from_material(
+        cls,
+        material: str,
+        radius: float,
+        geometry: str = "round",
+    ):
         """
-        Create a ResistiveWallWakefield from a known material preset.
+        Create a wakefield from a known material preset.
 
         Parameters
         ----------
         material : str
-            Material name. Must be in list(ResistiveWallWakefield.MATERIALS)
+            Material name. Must be in list(cls.MATERIALS)
         radius : float
             Pipe radius [m]
         geometry : str
@@ -494,32 +706,112 @@ class ResistiveWallWakefield:
         return None
 
     @property
+    def s0(self):
+        """
+        Characteristic length scale s₀ of the resistive wall wakefield [m].
+
+        From SLAC-PUB-10707 Eq. (5):
+
+        .. math::
+
+            s_0 = \\left( \\frac{2 a^2}{Z_0 \\sigma_0} \\right)^{1/3}
+
+        where a is the pipe radius (round) or half-gap (flat), Z₀ is the
+        impedance of free space, and σ₀ is the DC conductivity.
+        """
+        return s0f(self.radius, self.conductivity)
+
+    @property
+    def W0(self):
+        """
+        Characteristic wake amplitude W₀ at z=0 [V/C/m].
+
+        From SLAC-PUB-10707:
+        - Round: W₀ = c·Z₀ / (π·a²)
+        - Flat:  W₀ = c·Z₀·π / (16·a²) = W₀_round · (π²/16)
+
+        The dimensionless scaled wake is Ŵ(z/s₀) = W(z) / W₀.
+        """
+        W0_round = c_light * Z0 / (np.pi * self.radius**2)
+        if self.geometry == "round":
+            return W0_round
+        else:  # flat
+            return W0_round * np.pi**2 / 16
+
+    def _extract_z_weight(self, particle_group_or_z, weight=None):
+        """Extract z and weight arrays from input."""
+        if hasattr(particle_group_or_z, "in_t_coordinates"):
+            particle_group = particle_group_or_z
+            if particle_group.in_t_coordinates:
+                z = np.asarray(particle_group.z)
+            else:
+                z = -c_light * np.asarray(particle_group.t)
+            weight = np.asarray(particle_group.weight)
+        else:
+            z = np.asarray(particle_group_or_z)
+            if weight is None:
+                raise ValueError("weight must be provided when z is an array")
+            weight = np.asarray(weight)
+        return z, weight
+
+
+@dataclass
+class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
+    """
+    Fast pseudomode-based resistive wall wakefield model.
+
+    Models the longitudinal wakefield trailing a charged particle moving through a
+    conducting pipe using a single damped sinusoidal pseudomode. Uses polynomial
+    fits from SLAC-PUB-10707 Fig. 14 for fast O(N) particle tracking.
+
+    For higher accuracy (at ~10-20× computational cost), use
+    :class:`ResistiveWallWakefield` instead.
+
+    Parameters
+    ----------
+    radius : float
+        Radius of the beam pipe [m]. For flat geometry, this is half the gap.
+    conductivity : float
+        Electrical conductivity of the wall material [S/m].
+    relaxation_time : float
+        Drude-model relaxation time of the conductor [s].
+    geometry : str, optional
+        Geometry of the beam pipe: 'round' or 'flat'. Default is 'round'.
+
+    Notes
+    -----
+    - The pseudomode approximation is ~10-20% different from the full impedance model.
+    - Materials with known conductivity and τ values are available via `from_material()`.
+
+    References
+    ----------
+    Bane & Stupakov, SLAC-PUB-10707 (2004)
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        # Check if Gamma is in the valid range for the polynomial fits
+        if self.Gamma > 3:
+            warnings.warn(
+                f"Γ = {self.Gamma:.3g} is above the validated range (Γ ≲ 3) for the "
+                f"pseudomode polynomial fits. Results may be inaccurate. "
+                f"Consider using ResistiveWallWakefield instead.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        # Create the internal pseudomode model
+        self._internal_model = self._create_pseudomode()
+
+    @property
     def Gamma(self):
-        """
-        Dimensionless relaxation time Γ = c * τ / s₀.
-
-        Describes the relative importance of material dispersion in the resistive wall model,
-        where:
-            τ   = relaxation time [s],
-            c   = speed of light [m/s],
-            s₀  = characteristic length scale [m].
-
-        Used as the input variable for polynomial fits to Q_r and k_r * s₀ from SLAC-PUB-10707.
-        """
+        """Dimensionless relaxation time Γ = c * τ / s₀."""
         return Gammaf(self.relaxation_time, self.radius, self.conductivity)
 
     @property
     def Qr(self):
-        """
-        Dimensionless quality factor Q_r of the wakefield pseudomode.
-
-        Obtained from a polynomial fit to SLAC-PUB-10707 Fig. 14 (bottom left) as a function of Γ.
-
-        Depends on geometry:
-            - 'round' or 'flat'
-
-        Q_r characterizes the damping rate of the oscillatory pseudomode.
-        """
+        """Dimensionless quality factor Q_r of the wakefield pseudomode."""
         if self.geometry == "round":
             return Qr_round(self.Gamma)
         if self.geometry == "flat":
@@ -529,20 +821,7 @@ class ResistiveWallWakefield:
 
     @property
     def kr(self):
-        """
-        Real-valued wave number k_r of the wakefield pseudomode [1/m].
-
-        Computed from:
-            k_r = (k_r * s₀) / s₀
-
-        where (k_r * s₀) is a dimensionless polynomial fit from SLAC-PUB-10707 Fig. 14 (top left).
-
-        Depends on geometry:
-            - 'round' or 'flat'
-
-        k_r sets the frequency of oscillation of the short-range wakefield.
-        """
-
+        """Real-valued wave number k_r of the wakefield pseudomode [1/m]."""
         if self.geometry == "round":
             return krs0_round(self.Gamma) / self.s0
         if self.geometry == "flat":
@@ -550,32 +829,233 @@ class ResistiveWallWakefield:
         else:
             raise NotImplementedError(f"{self.geometry=}")
 
+    def _create_pseudomode(self) -> PseudomodeWakefield:
+        """Create the pseudomode representation."""
+        # Conversion from cgs units
+        A = 1 / (4 * np.pi * epsilon_0) * 4 / self.radius**2
+        if self.geometry == "flat":
+            A *= np.pi**2 / 16
+
+        d = self.kr / (2 * self.Qr)
+        mode = Pseudomode(A=A, d=d, k=self.kr, phi=np.pi / 2)
+        return PseudomodeWakefield(modes=[mode])
+
+    def __repr__(self):
+        material = self.material_from_properties()
+        material_str = f", material={material!r}" if material else ""
+        return (
+            f"{self.__class__.__name__}("
+            f"radius={self.radius}, "
+            f"conductivity={self.conductivity}, "
+            f"relaxation_time={self.relaxation_time}, "
+            f"geometry={self.geometry!r}"
+            f"{material_str}) "
+            f"→ s₀={self.s0:.3e} m, Γ={self.Gamma:.3f}, k_r={self.kr:.1f}/m, Q_r={self.Qr:.2f}"
+        )
+
     @property
-    def s0(self):
+    def pseudomode(self) -> PseudomodeWakefield:
+        """The internal PseudomodeWakefield model."""
+        return self._internal_model
+
+    def wake(self, z):
         """
-        Characteristic length scale s₀ of the resistive wall wakefield [m].
+        Evaluate the wakefield at position z.
 
-        Defined by SLAC-PUB-10707 Eq. (5) as:
-            s₀ = (2 * a² / (Z₀ * σ))^(1/3)
+        Parameters
+        ----------
+        z : float or np.ndarray
+            Longitudinal position [m]. Negative z is behind the source.
 
-        where:
-            a   = pipe radius [m],
-            σ   = conductivity [S/m],
-            Z₀  = vacuum impedance [Ω].
-
-        s₀ sets the scale of the wakefield decay length and frequency.
+        Returns
+        -------
+        W : float or np.ndarray
+            Wakefield value [V/C/m]. Returns 0 for z > 0 (causality).
         """
-        return s0f(self.radius, self.conductivity)
+        return self._internal_model.wake(z)
+
+    def impedance(self, k):
+        """
+        Evaluate the impedance at wavenumber k.
+
+        Parameters
+        ----------
+        k : float or np.ndarray
+            Wavenumber [1/m].
+
+        Returns
+        -------
+        Z : complex or np.ndarray
+            Impedance [Ohm/m].
+        """
+        return self._internal_model.impedance(k)
+
+    def __call__(self, z):
+        """Evaluate the wakefield at position z (convenience method)."""
+        return self.wake(z)
+
+    def convolve_density(
+        self,
+        density: np.ndarray,
+        dz: float,
+        offset: float = 0,
+        include_self_kick: bool = True,
+    ) -> np.ndarray:
+        """
+        Compute integrated wakefield by convolving with charge density.
+
+        Parameters
+        ----------
+        density : np.ndarray
+            Charge density array [C/m].
+        dz : float
+            Grid spacing [m].
+        offset : float, optional
+            Offset for the z coordinate [m]. Default is 0.
+        include_self_kick : bool, optional
+            Whether to include the extra ½ self-kick. Default is True.
+
+        Returns
+        -------
+        integrated_wake : np.ndarray
+            Integrated longitudinal wakefield [V/m].
+        """
+        return self._internal_model.convolve_density(
+            density, dz, offset=offset, include_self_kick=include_self_kick
+        )
+
+    def particle_kicks(
+        self,
+        particle_group_or_z,
+        weight: np.ndarray = None,
+        include_self_kick: bool = True,
+    ) -> np.ndarray:
+        """
+        Compute wakefield-induced longitudinal momentum kicks.
+
+        Uses O(N) algorithm exploiting the pseudomode exponential form.
+
+        Parameters
+        ----------
+        particle_group_or_z : ParticleGroup or np.ndarray
+            Either a ParticleGroup object or an array of z positions [m].
+        weight : np.ndarray, optional
+            Particle charges [C]. Required if particle_group_or_z is an array.
+        include_self_kick : bool, optional
+            Whether to include the self-kick term. Default is True.
+
+        Returns
+        -------
+        np.ndarray
+            Array of longitudinal momentum kicks per unit length [eV/m].
+        """
+        z, weight = self._extract_z_weight(particle_group_or_z, weight)
+        return self._internal_model.particle_kicks(
+            z, weight, include_self_kick=include_self_kick
+        )
+
+    def apply_to_particles(
+        self,
+        particle_group,
+        length: float,
+        inplace: bool = False,
+        include_self_kick: bool = True,
+    ):
+        """
+        Apply the wakefield momentum kicks to a ParticleGroup.
+
+        Parameters
+        ----------
+        particle_group : ParticleGroup
+            The particle group to apply the wakefield to.
+        length : float
+            Length over which the wakefield acts [m].
+        inplace : bool, optional
+            If True, modifies in place. If False, returns a modified copy.
+        include_self_kick : bool, optional
+            Whether to include the self-kick term. Default is True.
+
+        Returns
+        -------
+        ParticleGroup or None
+            The modified ParticleGroup if `inplace=False`, otherwise None.
+        """
+        if not inplace:
+            particle_group = particle_group.copy()
+
+        kicks = self.particle_kicks(particle_group, include_self_kick=include_self_kick)
+        particle_group.pz += kicks * length
+
+        if not inplace:
+            return particle_group
+
+    def plot(self, zmax=None, zmin=0, n=200, normalized=False):
+        """
+        Plot the resistive wall wakefield W(z).
+
+        Parameters
+        ----------
+        zmax : float, optional
+            Maximum trailing distance [m]. Defaults to 10 decay lengths.
+        zmin : float, optional
+            Minimum trailing distance [m]. Default is 0.
+        n : int, optional
+            Number of points. Default is 200.
+        normalized : bool, optional
+            If True, plot dimensionless Ŵ(z/s₀) = W(z)/W₀ vs z/s₀.
+            Default is False.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated matplotlib figure.
+        """
+        import matplotlib.pyplot as plt
+
+        if zmax is None:
+            zmax = 1 / (self.kr / (2 * self.Qr)) * 10
+
+        zlist = np.linspace(zmin, zmax, n)
+        Wz = self.wake(-zlist)
+
+        fig, ax = plt.subplots()
+
+        if normalized:
+            ax.plot(zlist / self.s0, Wz / self.W0)
+            ax.set_xlabel(r"$|z|/s_0$")
+            ax.set_ylabel(r"$W(z)/W_0$")
+        else:
+            ax.plot(zlist * 1e6, Wz * 1e-12)
+            ax.set_xlabel(r"Distance behind source $|z|$ (µm)")
+            ax.set_ylabel(r"$W(z)$ (V/pC/m)")
+
+        ax.set_title("ResistiveWallPseudomode")
+
+        plt.show()
 
     def to_bmad(
         self, file=None, z_max=100, amp_scale=1, scale_with_length=True, z_scale=1
     ):
         """
+        Export wakefield in Bmad format.
 
         Parameters
         ----------
-        z_max: float
-            trailing z distance
+        file : str, optional
+            Output file path. If None, returns string only.
+        z_max : float
+            Trailing z distance for Bmad.
+        amp_scale : float
+            Amplitude scaling factor.
+        scale_with_length : bool
+            Whether to scale with length.
+        z_scale : float
+            Z scaling factor.
+
+        Returns
+        -------
+        str
+            Bmad-formatted wakefield string.
         """
         s = f"""! AC Resistive wall wakefield
 ! Adapted from SLAC-PUB-10707
@@ -595,7 +1075,7 @@ class ResistiveWallWakefield:
         s += "! sr_wake =  \n"
 
         s += f"{{{z_scale=}, {amp_scale=}, {scale_with_length=}, {z_max=},\n"
-        s += self.pseudomode.to_bmad() + "}\n"
+        s += self._internal_model.to_bmad() + "}\n"
 
         if file is not None:
             with open(file, "w") as f:
@@ -603,86 +1083,207 @@ class ResistiveWallWakefield:
 
         return s
 
-    @property
-    def pseudomode(self):
+
+@dataclass
+class ResistiveWallWakefield(ResistiveWallWakefieldBase):
+    """
+    Accurate impedance-based resistive wall wakefield model.
+
+    Models the longitudinal wakefield trailing a charged particle moving through a
+    conducting pipe using numerical FFT-based convolution with the full impedance Z(k).
+    More accurate than the pseudomode approximation but slower (~10-20×).
+
+    For faster computation with slightly reduced accuracy, use
+    :class:`ResistiveWallPseudomode` instead.
+
+    Parameters
+    ----------
+    radius : float
+        Radius of the beam pipe [m]. For flat geometry, this is half the gap.
+    conductivity : float
+        Electrical conductivity of the wall material [S/m].
+    relaxation_time : float
+        Drude-model relaxation time of the conductor [s].
+    geometry : str, optional
+        Geometry of the beam pipe: 'round' or 'flat'. Default is 'round'.
+
+    References
+    ----------
+    Bane & Stupakov, SLAC-PUB-10707 (2004)
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        # Precompute relaxation distance for impedance calculations
+        self._ctau = c_light * self.relaxation_time
+
+        # Create internal model for particle kicks and convolution
+        self._internal_model = ImpedanceWakefield(
+            impedance_func=self.impedance,
+            wakefield_func=self._wakefield_internal,
+        )
+
+    def _wakefield_internal(
+        self,
+        z: float | np.ndarray,
+        k_max: float = 1e7,
+        n_fft: int = 4096,
+    ) -> float | np.ndarray:
+        """Internal wakefield computation using FFT."""
+        z_arr = np.asarray(z)
+        is_scalar = z_arr.ndim == 0
+        z_arr = np.atleast_1d(z_arr)
+
+        result = wakefield_from_impedance_fft(
+            z_arr, self.impedance, k_max=k_max, n_fft=n_fft
+        )
+
+        if is_scalar:
+            return float(result[0])
+        return result
+
+    def __repr__(self):
+        material = self.material_from_properties()
+        material_str = f", material={material!r}" if material else ""
+        return (
+            f"{self.__class__.__name__}("
+            f"radius={self.radius}, "
+            f"conductivity={self.conductivity}, "
+            f"relaxation_time={self.relaxation_time}, "
+            f"geometry={self.geometry!r}"
+            f"{material_str}) "
+            f"→ s₀={self.s0:.3e} m"
+        )
+
+    def impedance(self, k):
         """
-        Single pseudomode representing this wakefield.
-        """
-
-        # Conversion from cgs units
-        A = 1 / (4 * np.pi * epsilon_0) * 4 / self.radius**2
-        if self.geometry == "flat":
-            A *= np.pi**2 / 16
-
-        d = self.kr / (2 * self.Qr)
-
-        return pseudomode(A, d, self.kr, np.pi / 2)
-
-    def plot(self, zmax=None):
-        """
-        Plot the resistive wall wakefield pseudomode W(z).
-
-        The wake is plotted from z = 0 (source particle) to a specified negative trailing distance.
+        Evaluate the impedance at wavenumber k.
 
         Parameters
         ----------
-        zmax : float, optional
-            Maximum trailing distance [m] to plot.
-            If not provided, defaults to 10 decay lengths:  zmax = 10 * (2 * Q_r / k_r)
+        k : float or np.ndarray
+            Wavenumber [1/m].
 
         Returns
         -------
-        matplotlib.figure.Figure
-            The generated matplotlib figure.
+        Z : complex or np.ndarray
+            Impedance [Ohm/m].
         """
+        if self.geometry == "round":
+            return longitudinal_impedance_round(
+                k, self.radius, self.conductivity, self._ctau
+            )
+        else:  # flat
+            return longitudinal_impedance_flat(
+                k, self.radius, self.conductivity, self._ctau
+            )
 
-        if zmax is None:
-            zmax = 1 / (self.kr / (2 * self.Qr)) * 10
-
-        return self.pseudomode.plot(zmax=zmax)
-
-    def __call__(self, z):
+    def wake(self, z, k_max: float = 1e7, method: str = "auto", n_fft: int = 4096):
         """
-        Wakefield value at z relative to the source particle.
-
-        z > 0 is the head of the bunch and returns 0.
-        """
-        z = np.asarray(z)
-        out = np.empty_like(z, dtype=float)
-
-        mask = z > 0
-        out[mask] = 0
-        out[~mask] = self.pseudomode(z[~mask])
-        return out
-
-    def particle_kicks(
-        self,
-        particle_group,
-        include_self_kick: bool = True,
-    ) -> np.ndarray:
-        """
-        Compute wakefield-induced longitudinal momentum kicks for a ParticleGroup.
+        Evaluate the wakefield at position z.
 
         Parameters
         ----------
-        particle_group : ParticleGroup
-            The particle group to evaluate kicks for.
+        z : float or np.ndarray
+            Longitudinal position [m]. Negative z is behind the source.
+        k_max : float, optional
+            Upper limit of k integration [1/m]. Default is 1e7.
+        method : str, optional
+            'auto', 'fft', or 'quad'. Default is 'auto'.
+        n_fft : int, optional
+            Number of FFT points for FFT method. Default is 4096.
+
+        Returns
+        -------
+        W : float or np.ndarray
+            Wakefield value [V/C/m]. Returns 0 for z > 0 (causality).
+        """
+        z_arr = np.asarray(z)
+        is_scalar = z_arr.ndim == 0
+
+        if method == "auto":
+            method = "quad" if is_scalar else "fft"
+
+        if method == "fft":
+            z_arr = np.atleast_1d(z_arr)
+            result = wakefield_from_impedance_fft(
+                z_arr, self.impedance, k_max=k_max, n_fft=n_fft
+            )
+            if is_scalar:
+                return float(result[0])
+            return result
+        else:  # quad
+            return wakefield_from_impedance(z, self.impedance, k_max=k_max)
+
+    def __call__(self, z):
+        """Evaluate the wakefield at position z (convenience method)."""
+        return self.wake(z)
+
+    def convolve_density(
+        self,
+        density: np.ndarray,
+        dz: float,
+        offset: float = 0,
+        include_self_kick: bool = True,
+    ) -> np.ndarray:
+        """
+        Compute integrated wakefield by convolving density with impedance.
+
+        Uses FFT in frequency domain for efficiency.
+
+        Parameters
+        ----------
+        density : np.ndarray
+            Charge density array [C/m].
+        dz : float
+            Grid spacing [m].
+        offset : float, optional
+            Offset for the z coordinate [m]. Default is 0.
         include_self_kick : bool, optional
-            Whether to include the ½ A q sin(φ) self-kick term. Default is True.
+            Whether to include the extra ½ self-kick. Default is True.
+
+        Returns
+        -------
+        integrated_wake : np.ndarray
+            Integrated longitudinal wakefield [V/m].
+        """
+        return self._internal_model.convolve_density(
+            density, dz, offset=offset, include_self_kick=include_self_kick
+        )
+
+    def particle_kicks(
+        self,
+        particle_group_or_z,
+        weight: np.ndarray = None,
+        include_self_kick: bool = True,
+        n_bins: int = None,
+    ) -> np.ndarray:
+        """
+        Compute wakefield-induced longitudinal momentum kicks.
+
+        Uses FFT-based density convolution with interpolation back to
+        particle positions. This is O(N + M log M) where N is the number
+        of particles and M is the number of grid points.
+
+        Parameters
+        ----------
+        particle_group_or_z : ParticleGroup or np.ndarray
+            Either a ParticleGroup object or an array of z positions [m].
+        weight : np.ndarray, optional
+            Particle charges [C]. Required if particle_group_or_z is an array.
+        include_self_kick : bool, optional
+            Whether to include the self-kick term. Default is True.
+        n_bins : int, optional
+            Number of bins for the density grid. Default is max(100, N//10).
 
         Returns
         -------
         np.ndarray
-            Array of longitudinal momentum kicks per unit length [eV/m], shape (N,).
+            Array of longitudinal momentum kicks per unit length [eV/m].
         """
-        if particle_group.in_t_coordinates:
-            z = np.asarray(particle_group.z)
-        else:
-            z = -c_light * np.asarray(particle_group.t)
-
-        weight = np.asarray(particle_group.weight)
-        return self.pseudomode.particle_kicks(
-            z, weight, include_self_kick=include_self_kick
+        z, weight = self._extract_z_weight(particle_group_or_z, weight)
+        return self._internal_model.particle_kicks(
+            z, weight, include_self_kick=include_self_kick, n_bins=n_bins
         )
 
     def apply_to_particles(
@@ -695,8 +1296,6 @@ class ResistiveWallWakefield:
         """
         Apply the wakefield momentum kicks to a ParticleGroup.
 
-        This modifies the pz component based on computed kicks and the specified length.
-
         Parameters
         ----------
         particle_group : ParticleGroup
@@ -704,9 +1303,9 @@ class ResistiveWallWakefield:
         length : float
             Length over which the wakefield acts [m].
         inplace : bool, optional
-            If True, modifies the ParticleGroup in place. If False, returns a modified copy. Default is False.
+            If True, modifies in place. If False, returns a modified copy.
         include_self_kick : bool, optional
-            Whether to include the ½ A q sin(φ) self-kick term. Default is True.
+            Whether to include the self-kick term. Default is True.
 
         Returns
         -------
@@ -722,45 +1321,46 @@ class ResistiveWallWakefield:
         if not inplace:
             return particle_group
 
-    def convolve_density(self, density, dz, offset=0):
+    def plot(self, zmax=None, zmin=0, n=200, normalized=False):
         """
+        Plot the resistive wall wakefield W(z).
 
         Parameters
         ----------
-
-        density: ndarray
-            charge density array in C / m
-
-        dz: float
-            array spacing in m
-
-        offset : float
-            Offset coordinates for the center of the grid in [m]. Default: 0
-            For example, an offset of -1.23 can be used to compute the trailing wake at z=-1.23 m relative to the density
+        zmax : float, optional
+            Maximum trailing distance [m]. Defaults to 100 * s0.
+        zmin : float, optional
+            Minimum trailing distance [m]. Default is 0.
+        n : int, optional
+            Number of points. Default is 200.
+        normalized : bool, optional
+            If True, plot dimensionless Ŵ(z/s₀) = W(z)/W₀ vs z/s₀.
+            Default is False.
 
         Returns
         -------
-        integrated_wake: ndarray
-            Integrated wakefield in eV / m
-
+        matplotlib.figure.Figure
+            The generated matplotlib figure.
         """
+        import matplotlib.pyplot as plt
 
-        # make wakefield array
-        n = len(density)
+        if zmax is None:
+            zmax = 100 * self.s0
 
-        # Make double sized density array
-        density2 = np.zeros(2 * n)
-        density2[0:n] = density
+        zlist = np.linspace(zmin, zmax, n)
+        Wz = self.wake(-zlist)
 
-        # double-sized symmetric z vec
-        z = np.arange(-n, n + 1, 1) * dz + dz / 2 + offset
-        green2 = self(z)
+        fig, ax = plt.subplots()
 
-        # Approximate (f * g)(t) = ∫ f(Δ) gz(z‑Δ) dΔ
-        # Convolution of double-sized arrays
-        conv = fftconvolve(density2, green2, mode="full")
+        if normalized:
+            ax.plot(zlist / self.s0, Wz / self.W0)
+            ax.set_xlabel(r"$|z|/s_0$")
+            ax.set_ylabel(r"$W(z)/W_0$")
+        else:
+            ax.plot(zlist * 1e6, Wz * 1e-12)
+            ax.set_xlabel(r"Distance behind source $|z|$ (µm)")
+            ax.set_ylabel(r"$W(z)$ (V/pC/m)")
 
-        # The result is in a shifted location in the output array
-        iwake = conv[n - 1 : 2 * n - 1] * dz
+        ax.set_title("ResistiveWallWakefield")
 
-        return iwake
+        plt.show()

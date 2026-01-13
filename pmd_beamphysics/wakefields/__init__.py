@@ -1,27 +1,45 @@
-from .resistive_wall import ResistiveWallWakefield
-from .resistive_wall_impedance import (
-    FlatResistiveWallImpedance,
-    ResistiveWallImpedance,
-    RoundResistiveWallImpedance,
+from .base import (
+    ImpedanceWakefield,
+    Pseudomode,
+    PseudomodeWakefield,
+    TabularWakefield,
+    WakefieldBase,
+)
+from .resistive_wall import (
+    ResistiveWallWakefield,
+    ResistiveWallWakefieldBase,
+    ResistiveWallPseudomode,
+    pseudomode,
+    # Low-level impedance functions
+    sinhc,
     ac_conductivity,
-    characteristic_length,
+    surface_impedance,
     longitudinal_impedance_flat,
     longitudinal_impedance_round,
-    sinhc,
-    surface_impedance,
     wakefield_from_impedance,
+    wakefield_from_impedance_fft,
+    characteristic_length,
 )
 
 __all__ = [
+    # Base classes
+    "WakefieldBase",
+    "Pseudomode",
+    "PseudomodeWakefield",
+    "TabularWakefield",
+    "ImpedanceWakefield",
+    # Resistive wall
+    "ResistiveWallWakefieldBase",
     "ResistiveWallWakefield",
-    "ResistiveWallImpedance",
-    "FlatResistiveWallImpedance",
-    "RoundResistiveWallImpedance",
+    "ResistiveWallPseudomode",
+    "pseudomode",  # Legacy alias
+    # Low-level impedance functions
+    "sinhc",
     "ac_conductivity",
-    "characteristic_length",
+    "surface_impedance",
     "longitudinal_impedance_flat",
     "longitudinal_impedance_round",
-    "sinhc",
-    "surface_impedance",
     "wakefield_from_impedance",
+    "wakefield_from_impedance_fft",
+    "characteristic_length",
 ]

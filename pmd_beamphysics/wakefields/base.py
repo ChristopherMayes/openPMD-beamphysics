@@ -127,9 +127,7 @@ class WakefieldBase(ABC):
 
         This computes the causal wake potential:
 
-        .. math::
-
-            V(z_i) = \\sum_{j>i} Q_j \\cdot W(z_j - z_i) + \\frac{1}{2} Q_i \\cdot W(0)
+        $$V(z_i) = \\sum_{j>i} Q_j \\cdot W(z_j - z_i) + \\frac{1}{2} Q_i \\cdot W(0)$$
 
         where only particles ahead (larger z index) contribute to the wake
         felt by each particle. This is mathematically a correlation, not
@@ -342,69 +340,57 @@ class Pseudomode:
 
         For a pseudomode wakefield defined for z ≤ 0:
 
-        .. math::
-
-            W(z) = A \\cdot e^{dz} \\cdot \\sin(k_0 z + \\phi)
+        $$W(z) = A \\cdot e^{dz} \\cdot \\sin(k_0 z + \\phi)$$
 
         The impedance is defined as:
 
-        .. math::
-
-            Z(k) = \\frac{1}{c} \\int_{-\\infty}^{0} W(z) \\cdot e^{-ikz} \\, dz
+        $$Z(k) = \\frac{1}{c} \\int_{-\\infty}^{0} W(z) \\cdot e^{-ikz} \\, dz$$
 
         **Derivation:**
 
         Substituting the wakefield:
 
-        .. math::
+        $$Z(k) = \\frac{A}{c} \\int_{-\\infty}^{0} e^{dz} \\sin(k_0 z + \\phi) e^{-ikz} \\, dz$$
 
-            Z(k) = \\frac{A}{c} \\int_{-\\infty}^{0} e^{dz} \\sin(k_0 z + \\phi) e^{-ikz} \\, dz
+        Using $\\sin(\\theta) = \\frac{e^{i\\theta} - e^{-i\\theta}}{2i}$:
 
-        Using :math:`\\sin(\\theta) = \\frac{e^{i\\theta} - e^{-i\\theta}}{2i}`:
+        $$Z(k) = \\frac{A}{2ic} \\left[
+            e^{i\\phi} \\int_{-\\infty}^{0} e^{(d + i(k_0 - k))z} dz
+            - e^{-i\\phi} \\int_{-\\infty}^{0} e^{(d - i(k_0 + k))z} dz
+        \\right]$$
 
-        .. math::
+        Since $d > 0$, both integrals converge:
 
-            Z(k) = \\frac{A}{2ic} \\left[
-                e^{i\\phi} \\int_{-\\infty}^{0} e^{(d + i(k_0 - k))z} dz
-                - e^{-i\\phi} \\int_{-\\infty}^{0} e^{(d - i(k_0 + k))z} dz
-            \\right]
-
-        Since :math:`d > 0`, both integrals converge:
-
-        .. math::
-
-            \\int_{-\\infty}^{0} e^{az} dz = \\frac{1}{a} \\quad \\text{for } \\text{Re}(a) > 0
+        $$\\int_{-\\infty}^{0} e^{az} dz = \\frac{1}{a} \\quad \\text{for } \\text{Re}(a) > 0$$
 
         Evaluating:
 
-        .. math::
-
-            Z(k) = \\frac{A}{2ic} \\left[
-                \\frac{e^{i\\phi}}{d + i(k_0 - k)}
-                - \\frac{e^{-i\\phi}}{d - i(k_0 + k)}
-            \\right]
+        $$Z(k) = \\frac{A}{2ic} \\left[
+            \\frac{e^{i\\phi}}{d + i(k_0 - k)}
+            - \\frac{e^{-i\\phi}}{d - i(k_0 + k)}
+        \\right]$$
 
         **Mathematica verification:**
 
-        .. code-block:: mathematica
+        ```mathematica
+        (* Define the wakefield and compute impedance numerically *)
+        W[z_, A_, d_, k0_, phi_] := A Exp[d z] Sin[k0 z + phi]
 
-            (* Define the wakefield and compute impedance numerically *)
-            W[z_, A_, d_, k0_, phi_] := A Exp[d z] Sin[k0 z + phi]
+        (* Analytical result *)
+        Zanalytic[k_, A_, d_, k0_, phi_] :=
+            A/(2 I c) (Exp[I phi]/(d + I (k0 - k)) - Exp[-I phi]/(d - I (k0 + k)))
 
-            (* Analytical result *)
-            Zanalytic[k_, A_, d_, k0_, phi_] :=
-                A/(2 I c) (Exp[I phi]/(d + I (k0 - k)) - Exp[-I phi]/(d - I (k0 + k)))
+        (* Numerical integration (should match) *)
+        Znumeric[k_, A_, d_, k0_, phi_] :=
+            1/c NIntegrate[W[z, A, d, k0, phi] Exp[-I k z], {z, -Infinity, 0}]
 
-            (* Numerical integration (should match) *)
-            Znumeric[k_, A_, d_, k0_, phi_] :=
-                1/c NIntegrate[W[z, A, d, k0, phi] Exp[-I k z], {z, -Infinity, 0}]
-
-            (* Test with sample values *)
-            c = 299792458;
-            {A, d, k0, phi} = {1*^15, 1*^4, 1*^5, Pi/4};
-            ktest = 5*^4;
-            {Zanalytic[ktest, A, d, k0, phi], Znumeric[ktest, A, d, k0, phi]}
-            (* Both should give the same complex number *)
+        (* Test with sample values *)
+        c = 299792458;
+        {A, d, k0, phi} = {1*^15, 1*^4, 1*^5, Pi/4};
+        ktest = 5*^4;
+        {Zanalytic[ktest, A, d, k0, phi], Znumeric[ktest, A, d, k0, phi]}
+        (* Both should give the same complex number *)
+        ```
 
         Parameters
         ----------
@@ -455,9 +441,7 @@ class PseudomodeWakefield(WakefieldBase):
 
     Models the longitudinal wakefield as:
 
-    .. math::
-
-        W(z) = \\sum_i A_i \\cdot e^{d_i \\cdot z} \\cdot \\sin(k_i \\cdot z + \\phi_i)
+    $$W(z) = \\sum_i A_i \\cdot e^{d_i \\cdot z} \\cdot \\sin(k_i \\cdot z + \\phi_i)$$
 
     This form is used to approximate short-range wakefields such as the
     resistive wall wake.
@@ -852,17 +836,14 @@ class ImpedanceWakefield(WakefieldBase):
 
     Notes
     -----
-    The impedance Z(k) is related to the wakefield W(z) by:
+    The wakefield W(z) is defined for z ≤ 0 (trailing particles), with W(z) = 0
+    for z > 0 (causality). The impedance Z(k) is related to the wakefield by:
 
-    .. math::
-
-        Z(k) = \\frac{1}{c} \\int_0^{\\infty} W(z) e^{-ikz} dz
+    $$Z(k) = \\frac{1}{c} \\int_{-\\infty}^{0} W(z) e^{-ikz} dz$$
 
     And the inverse:
 
-    .. math::
-
-        W(z) = \\frac{2c}{\\pi} \\int_0^{\\infty} \\text{Re}[Z(k)] \\cos(kz) dk
+    $$W(z) = \\frac{2c}{\\pi} \\int_0^{\\infty} \\text{Re}[Z(k)] \\cos(kz) dk \\quad (z \\le 0)$$
 
     Examples
     --------

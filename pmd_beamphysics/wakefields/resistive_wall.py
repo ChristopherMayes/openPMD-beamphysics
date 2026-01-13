@@ -50,7 +50,8 @@ References
    undulator beam pipe," SLAC-PUB-10707 (2004).
    https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
 
-.. [2] N. Mounet and E. Métral, Phys. Rev. ST Accel. Beams 18, 034402 (2015).
+.. [2] D. Sagan, "Bmad Manual," Section 24.6: Short-Range Wakefields.
+   https://www.classe.cornell.edu/bmad/manual.html
 
 .. [3] A. Chao, "Physics of Collective Beam Instabilities in High Energy
    Accelerators," Wiley, 1993, Chapter 2.
@@ -115,9 +116,7 @@ def ac_conductivity(
     """
     Frequency-dependent AC conductivity with relaxation time (Drude model).
 
-    .. math::
-
-        \\sigma(k) = \\frac{\\sigma_0}{1 - i k c \\tau}
+    $$\\sigma(k) = \\frac{\\sigma_0}{1 - i k c \\tau}$$
 
     Parameters
     ----------
@@ -144,9 +143,7 @@ def surface_impedance(
     """
     Surface impedance for a conducting wall with AC conductivity.
 
-    .. math::
-
-        \\zeta(k) = (1 - i) \\sqrt{\\frac{k c}{2 \\sigma(k) Z_0 c}}
+    $$\\zeta(k) = (1 - i) \\sqrt{\\frac{k c}{2 \\sigma(k) Z_0 c}}$$
 
     Parameters
     ----------
@@ -281,9 +278,11 @@ def wakefield_from_impedance(
     """
     Compute wakefield W(z) from Re[Z(k)] using a cosine transform (quadrature).
 
-    .. math::
+    For z ≤ 0 (trailing particles):
 
-        W(z) = \\frac{2c}{\\pi} \\int_0^{k_{\\max}} \\text{Re}[Z(k)] \\cos(kz) \\, dk
+    $$W(z) = \\frac{2c}{\\pi} \\int_0^{k_{\\max}} \\text{Re}[Z(k)] \\cos(kz) \\, dk$$
+
+    Returns 0 for z > 0 (causality).
 
     Parameters
     ----------
@@ -379,9 +378,7 @@ def characteristic_length(a: float, sigma0: float) -> float:
 
     From SLAC-PUB-10707 Eq. (5):
 
-    .. math::
-
-        s_0 = \\left( \\frac{2 a^2}{Z_0 \\sigma_0} \\right)^{1/3}
+    $$s_0 = \\left( \\frac{2 a^2}{Z_0 \\sigma_0} \\right)^{1/3}$$
 
     Parameters
     ----------
@@ -712,9 +709,7 @@ class ResistiveWallWakefieldBase(WakefieldBase):
 
         From SLAC-PUB-10707 Eq. (5):
 
-        .. math::
-
-            s_0 = \\left( \\frac{2 a^2}{Z_0 \\sigma_0} \\right)^{1/3}
+        $$s_0 = \\left( \\frac{2 a^2}{Z_0 \\sigma_0} \\right)^{1/3}$$
 
         where a is the pipe radius (round) or half-gap (flat), Z₀ is the
         impedance of free space, and σ₀ is the DC conductivity.
@@ -760,32 +755,105 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
     """
     Fast pseudomode-based resistive wall wakefield model.
 
-    Models the longitudinal wakefield trailing a charged particle moving through a
-    conducting pipe using a single damped sinusoidal pseudomode. Uses polynomial
-    fits from SLAC-PUB-10707 Fig. 14 for fast O(N) particle tracking.
+    This class models the short-range resistive wall wakefield using a damped
+    sinusoidal "pseudomode" approximation. When a relativistic charged particle
+    travels through a conducting beam pipe, it induces image currents in the
+    pipe walls. Due to the finite conductivity of the wall material, these
+    currents penetrate into the conductor and dissipate energy, creating a
+    wakefield that acts on trailing particles.
 
-    For higher accuracy (at ~10-20× computational cost), use
-    :class:`ResistiveWallWakefield` instead.
+    Physics Background
+    ------------------
+    The resistive wall impedance arises from the skin effect in the conducting
+    walls. At high frequencies (short distances), the AC conductivity of metals
+    deviates from DC behavior due to the Drude relaxation time τ:
+
+    $$\\sigma(\\omega) = \\frac{\\sigma_0}{1 - i\\omega\\tau}$$
+
+    This frequency dependence causes the wakefield to oscillate and decay
+    exponentially behind the source particle. The wakefield can be well
+    approximated by a single damped sinusoid (pseudomode):
+
+    $$W(z) = A \\cdot e^{d \\cdot z} \\cdot \\sin(k_r z + \\phi) \\quad (z \\le 0)$$
+
+    where the parameters $k_r$ (oscillation wavenumber) and $Q_r$ (quality factor,
+    related to decay rate $d = k_r / 2Q_r$) depend on the dimensionless relaxation
+    parameter $\\Gamma = c\\tau / s_0$.
+
+    Characteristic Scales
+    ---------------------
+    - **s₀**: Characteristic length scale where the wake transitions from
+      the $1/\\sqrt{z}$ DC behavior to oscillatory AC behavior:
+
+      $$s_0 = \\left( \\frac{2a^2}{Z_0 \\sigma_0} \\right)^{1/3}$$
+
+    - **Γ**: Dimensionless relaxation parameter $\\Gamma = c\\tau / s_0$.
+      For copper, Γ ≈ 0.8; for aluminum, Γ ≈ 0.2.
+
+    - **W₀**: Characteristic wake amplitude at z = 0:
+      - Round: $W_0 = c Z_0 / (\\pi a^2)$
+      - Flat: $W_0 = c Z_0 \\pi / (16 a^2)$
+
+    Algorithm
+    ---------
+    The pseudomode form enables an O(N) algorithm for computing particle kicks,
+    compared to O(N²) or O(N log N) for general wakefields. This makes it
+    suitable for multi-pass tracking simulations.
 
     Parameters
     ----------
     radius : float
         Radius of the beam pipe [m]. For flat geometry, this is half the gap.
     conductivity : float
-        Electrical conductivity of the wall material [S/m].
+        Electrical DC conductivity of the wall material [S/m].
     relaxation_time : float
-        Drude-model relaxation time of the conductor [s].
+        Drude-model relaxation time τ of the conductor [s].
+        Typical values: Cu ≈ 27 fs, Al ≈ 8 fs.
     geometry : str, optional
         Geometry of the beam pipe: 'round' or 'flat'. Default is 'round'.
 
+    Attributes
+    ----------
+    s0 : float
+        Characteristic length scale [m]
+    Gamma : float
+        Dimensionless relaxation parameter Γ = cτ/s₀
+    kr : float
+        Resonant wavenumber [1/m]
+    Qr : float
+        Quality factor of the pseudomode
+
     Notes
     -----
-    - The pseudomode approximation is ~10-20% different from the full impedance model.
-    - Materials with known conductivity and τ values are available via `from_material()`.
+    - The pseudomode approximation has ~10-20% error compared to the full
+      impedance model, primarily in the first oscillation peak.
+    - The polynomial fits for k_r and Q_r are valid for Γ ≲ 3. A warning is
+      issued for larger values.
+    - Materials with known conductivity and τ values are available via
+      `from_material()`.
+
+    See Also
+    --------
+    ResistiveWallWakefield : Accurate impedance-based model (slower)
 
     References
     ----------
-    Bane & Stupakov, SLAC-PUB-10707 (2004)
+    .. [1] K. Bane and G. Stupakov, "Resistive wall wakefield in the LCLS
+       undulator beam pipe," SLAC-PUB-10707 (2004).
+       https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
+
+    .. [2] D. Sagan, "Bmad Manual," Section 24.6: Short-Range Wakefields.
+       https://www.classe.cornell.edu/bmad/manual.html
+
+    .. [3] A. Chao, "Physics of Collective Beam Instabilities in High Energy
+       Accelerators," Wiley, 1993, Chapter 2.
+
+    Examples
+    --------
+    >>> wake = ResistiveWallPseudomode.from_material(
+    ...     "copper-slac-pub-10707", radius=2.5e-3, geometry="round"
+    ... )
+    >>> wake.wake(-10e-6)  # Wake at 10 µm behind source
     """
 
     def __post_init__(self):
@@ -831,7 +899,7 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
 
     def _create_pseudomode(self) -> PseudomodeWakefield:
         """Create the pseudomode representation."""
-        # Conversion from cgs units
+        # Amplitude A = c * Z0 / (π * a²), using Z0 = 1/(ε₀*c)
         A = 1 / (4 * np.pi * epsilon_0) * 4 / self.radius**2
         if self.geometry == "flat":
             A *= np.pi**2 / 16
@@ -1060,7 +1128,7 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
         s = f"""! AC Resistive wall wakefield
 ! Adapted from SLAC-PUB-10707
 !    Material        : {self.material_from_properties()}
-!    Conductivity    : {self.conductivity} (Ωm)⁻¹
+!    Conductivity    : {self.conductivity} S/m
 !    Relaxation time : {self.relaxation_time} s
 !    Geometry        : {self.geometry}
 """
@@ -1089,27 +1157,102 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
     """
     Accurate impedance-based resistive wall wakefield model.
 
-    Models the longitudinal wakefield trailing a charged particle moving through a
-    conducting pipe using numerical FFT-based convolution with the full impedance Z(k).
-    More accurate than the pseudomode approximation but slower (~10-20×).
+    This class computes the short-range resistive wall wakefield by numerically
+    evaluating the full longitudinal impedance Z(k) and transforming to the
+    wakefield W(z) via FFT. This approach captures all physical effects including
+    the anomalous skin effect at high frequencies.
 
-    For faster computation with slightly reduced accuracy, use
-    :class:`ResistiveWallPseudomode` instead.
+    Physics Background
+    ------------------
+    When a relativistic charged particle travels through a conducting beam pipe,
+    electromagnetic fields penetrate into the conductor due to the finite
+    conductivity. The skin depth δ decreases with frequency:
+
+    $$\\delta = \\sqrt{\\frac{2}{\\omega \\mu_0 \\sigma}}$$
+
+    At very high frequencies (relevant for short-range wakes), the electron
+    mean free path becomes comparable to the skin depth, and the simple Ohmic
+    model breaks down. The Drude model accounts for this through a frequency-
+    dependent conductivity with relaxation time τ:
+
+    $$\\sigma(k) = \\frac{\\sigma_0}{1 - ikc\\tau}$$
+
+    The longitudinal impedance per unit length for a round pipe is:
+
+    $$Z(k) = \\frac{Z_0}{2\\pi a} \\cdot \\frac{\\zeta(k)}{1 - i k a \\zeta(k) / 2}$$
+
+    where ζ(k) is the surface impedance and a is the pipe radius.
+
+    The wakefield is obtained via cosine transform (for z ≤ 0):
+
+    $$W(z) = \\frac{2c}{\\pi} \\int_0^{\\infty} \\text{Re}[Z(k)] \\cos(kz) \\, dk$$
+
+    Characteristic Scales
+    ---------------------
+    - **s₀**: Characteristic length scale:
+
+      $$s_0 = \\left( \\frac{2a^2}{Z_0 \\sigma_0} \\right)^{1/3}$$
+
+      For copper with a = 2.5 mm, s₀ ≈ 8 µm.
+
+    - **W₀**: Characteristic wake amplitude at z = 0:
+      - Round: $W_0 = c Z_0 / (\\pi a^2)$
+      - Flat: $W_0 = c Z_0 \\pi / (16 a^2)$
+
+    Geometry
+    --------
+    - **Round (circular pipe)**: Closed-form impedance expression.
+    - **Flat (parallel plates)**: Requires numerical integration over
+      transverse modes; more computationally expensive.
 
     Parameters
     ----------
     radius : float
-        Radius of the beam pipe [m]. For flat geometry, this is half the gap.
+        Radius of the beam pipe [m]. For flat geometry, this is the half-gap.
     conductivity : float
-        Electrical conductivity of the wall material [S/m].
+        Electrical DC conductivity of the wall material [S/m].
     relaxation_time : float
-        Drude-model relaxation time of the conductor [s].
+        Drude-model relaxation time τ of the conductor [s].
+        Typical values: Cu ≈ 27 fs, Al ≈ 8 fs.
     geometry : str, optional
         Geometry of the beam pipe: 'round' or 'flat'. Default is 'round'.
 
+    Attributes
+    ----------
+    s0 : float
+        Characteristic length scale [m]
+    W0 : float
+        Characteristic wake amplitude [V/C/m]
+
+    Notes
+    -----
+    - This model is ~10-20× slower than `ResistiveWallPseudomode` but more
+      accurate, especially for the first oscillation peak.
+    - The FFT-based convolution uses O(N log N) complexity for density
+      convolution, compared to O(N) for the pseudomode model.
+    - For flat geometry, impedance calculation requires numerical integration
+      and is significantly slower than round geometry.
+
+    See Also
+    --------
+    ResistiveWallPseudomode : Fast approximate model using damped sinusoid
+
     References
     ----------
-    Bane & Stupakov, SLAC-PUB-10707 (2004)
+    .. [1] K. Bane and G. Stupakov, "Resistive wall wakefield in the LCLS
+       undulator beam pipe," SLAC-PUB-10707 (2004).
+       https://www.slac.stanford.edu/cgi-wrap/getdoc/slac-pub-10707.pdf
+
+    .. [2] A. Chao, "Physics of Collective Beam Instabilities in High Energy
+       Accelerators," Wiley, 1993, Chapter 2.
+
+    Examples
+    --------
+    >>> wake = ResistiveWallWakefield.from_material(
+    ...     "copper-slac-pub-10707", radius=2.5e-3, geometry="round"
+    ... )
+    >>> wake.wake(-10e-6)  # Wake at 10 µm behind source
+    >>> wake.impedance(1e5)  # Impedance at k = 100/mm
     """
 
     def __post_init__(self):

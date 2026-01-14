@@ -14,12 +14,11 @@ dependencies:
   - pytest-benchmark
   - pytest-cov
   - jupyterlab>=3
-  - pygments
+  # Documentation
   - mkdocs
   - mkdocstrings
   - mkdocs-material
   - mkdocs-jupyter
   - mkdocstrings-python
+  - pygments
   - pip
-  - pip:
-      - mkdocstrings-python

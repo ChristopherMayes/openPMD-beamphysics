@@ -578,7 +578,7 @@ SHORT_PREFIX: dict[float, str] = dict((v, k) for k, v in SHORT_PREFIX_FACTOR.ite
 # Nice scaling
 
 
-def nice_scale_prefix(scale: float) -> tuple[float, str]:
+def nice_scale_prefix(scale: float, unit_symbol: str = None) -> tuple[float, str]:
     """
     Returns a nice factor and an SI prefix string.
 
@@ -586,6 +586,9 @@ def nice_scale_prefix(scale: float) -> tuple[float, str]:
     ----------
     scale : float
         The scale to be converted into a nice factor and SI prefix.
+    unit_symbol : str, optional
+        The unit symbol to check for special cases. If provided, prefixes
+        will be suppressed for units containing sqrt symbols (√, sqrt, \\sqrt).
 
     Returns
     -------
@@ -598,7 +601,15 @@ def nice_scale_prefix(scale: float) -> tuple[float, str]:
     --------
     >>> nice_scale_prefix(scale=2e-10)
     (1e-12, 'p')
+    
+    >>> nice_scale_prefix(scale=2e-10, unit_symbol='√m')
+    (1, '')
     """
+    
+    # Check if unit contains sqrt symbols - suppress prefixes for these
+    if unit_symbol is not None:
+        if 'sqrt' in unit_symbol.lower() or '√' in unit_symbol or '\\sqrt' in unit_symbol:
+            return 1, ""
 
     if scale == 0:
         return 1, ""
@@ -617,7 +628,7 @@ def nice_scale_prefix(scale: float) -> tuple[float, str]:
     return f, SHORT_PREFIX[f]
 
 
-def nice_array(a: np.ndarray) -> tuple[np.ndarray, float, str]:
+def nice_array(a: np.ndarray, unit_symbol: str = None) -> tuple[np.ndarray, float, str]:
     """
     Scale an input array and return the scaled array, the scaling factor, and the
     corresponding unit prefix.
@@ -626,6 +637,9 @@ def nice_array(a: np.ndarray) -> tuple[np.ndarray, float, str]:
     ----------
     a : array-like, or float
         Input array to be scaled.
+    unit_symbol : str, optional
+        The unit symbol to check for special cases. If provided, prefixes
+        may be suppressed for certain unit types (e.g., sqrt units).
 
     Returns
     -------
@@ -650,11 +664,11 @@ def nice_array(a: np.ndarray) -> tuple[np.ndarray, float, str]:
         a = np.asarray(a)
         x = max(np.ptp(a), abs(np.mean(a)))  # Account for tiny spread
 
-    fac, prefix = nice_scale_prefix(x)
+    fac, prefix = nice_scale_prefix(x, unit_symbol)
     return a / fac, fac, prefix
 
 
-def plottable_array(x: np.ndarray, nice: bool = True, lim: Limit | None = None):
+def plottable_array(x: np.ndarray, nice: bool = True, lim: Limit | None = None, unit_symbol: str = None):
     """
     Similar to nice_array, but also considers limits for plotting
 
@@ -663,7 +677,11 @@ def plottable_array(x: np.ndarray, nice: bool = True, lim: Limit | None = None):
     x: array-like
     nice: bool, default = True
         Scale array by some nice factor.
-    xlim: tuple, default = None
+    lim: tuple, default = None
+        Optional limits (min, max)
+    unit_symbol: str, optional
+        Unit symbol to check for special cases (e.g., sqrt). If provided,
+        prefixes may be suppressed for certain unit types.
 
     Returns
     -------
@@ -690,7 +708,7 @@ def plottable_array(x: np.ndarray, nice: bool = True, lim: Limit | None = None):
         xmax = x.max()
 
     if nice:
-        _, factor, p1 = nice_array([xmin, xmax])
+        _, factor, p1 = nice_array([xmin, xmax], unit_symbol)
     else:
         factor, p1 = 1, ""
 

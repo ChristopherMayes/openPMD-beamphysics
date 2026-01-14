@@ -9,7 +9,6 @@ from .resistive_wall import (
     ResistiveWallWakefield,
     ResistiveWallWakefieldBase,
     ResistiveWallPseudomode,
-    pseudomode,
     # Low-level impedance functions
     sinhc,
     ac_conductivity,
@@ -32,7 +31,6 @@ __all__ = [
     "ResistiveWallWakefieldBase",
     "ResistiveWallWakefield",
     "ResistiveWallPseudomode",
-    "pseudomode",  # Legacy alias
     # Low-level impedance functions
     "sinhc",
     "ac_conductivity",

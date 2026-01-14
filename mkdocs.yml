@@ -112,6 +112,3 @@ plugins:
             show_submodules: false
             group_by_category: true
             unwrap_annotated: true
-            import:
-              - https://docs.python.org/3/objects.inv
-              - https://docs.h5py.org/en/stable/objects.inv

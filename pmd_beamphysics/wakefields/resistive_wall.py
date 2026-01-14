@@ -749,6 +749,10 @@ class ResistiveWallWakefieldBase(WakefieldBase):
             weight = np.asarray(weight)
         return z, weight
 
+    def __call__(self, z: float | np.ndarray) -> float | np.ndarray:
+        """Evaluate the wakefield at position z (convenience method)."""
+        return self.wake(z)
+
 
 @dataclass
 class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
@@ -928,7 +932,7 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
         """The internal PseudomodeWakefield model."""
         return self._internal_model
 
-    def wake(self, z):
+    def wake(self, z: float | np.ndarray) -> float | np.ndarray:
         """
         Evaluate the wakefield at position z.
 
@@ -944,7 +948,7 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
         """
         return self._internal_model.wake(z)
 
-    def impedance(self, k):
+    def impedance(self, k: float | np.ndarray) -> complex | np.ndarray:
         """
         Evaluate the impedance at wavenumber k.
 
@@ -959,10 +963,6 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
             Impedance [Ohm/m].
         """
         return self._internal_model.impedance(k)
-
-    def __call__(self, z):
-        """Evaluate the wakefield at position z (convenience method)."""
-        return self.wake(z)
 
     def convolve_density(
         self,
@@ -1112,7 +1112,26 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
             ax.set_xlabel(r"Distance behind source $|z|$ (µm)")
             ax.set_ylabel(r"$W(z)$ (V/pC/m)")
 
-        ax.set_title("ResistiveWallPseudomode")
+    def plot_impedance(
+        self, kmax: float = None, kmin: float = 0, n: int = 500, ax=None
+    ):
+        """
+        Plot the resistive wall impedance Z(k).
+
+        Parameters
+        ----------
+        kmax : float, optional
+            Maximum wavenumber [1/m]. Defaults to 10/s0.
+        kmin : float, optional
+            Minimum wavenumber [1/m]. Default is 0.
+        n : int, optional
+            Number of points. Default is 500.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None, creates a new figure.
+        """
+        if kmax is None:
+            kmax = 10 / self.s0
+        super().plot_impedance(kmax=kmax, kmin=kmin, n=n, ax=ax)
 
     def to_bmad(
         self, file=None, z_max=100, amp_scale=1, scale_with_length=True, z_scale=1
@@ -1373,10 +1392,6 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
         else:  # quad
             return wakefield_from_impedance(z, self.impedance, k_max=k_max)
 
-    def __call__(self, z):
-        """Evaluate the wakefield at position z (convenience method)."""
-        return self.wake(z)
-
     def convolve_density(
         self,
         density: np.ndarray,
@@ -1536,3 +1551,24 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
             ax.plot(zlist * 1e6, Wz * 1e-12)
             ax.set_xlabel(r"Distance behind source $|z|$ (µm)")
             ax.set_ylabel(r"$W(z)$ (V/pC/m)")
+
+    def plot_impedance(
+        self, kmax: float = None, kmin: float = 0, n: int = 500, ax=None
+    ):
+        """
+        Plot the resistive wall impedance Z(k).
+
+        Parameters
+        ----------
+        kmax : float, optional
+            Maximum wavenumber [1/m]. Defaults to 10/s0.
+        kmin : float, optional
+            Minimum wavenumber [1/m]. Default is 0.
+        n : int, optional
+            Number of points. Default is 500.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None, creates a new figure.
+        """
+        if kmax is None:
+            kmax = 10 / self.s0
+        super().plot_impedance(kmax=kmax, kmin=kmin, n=n, ax=ax)

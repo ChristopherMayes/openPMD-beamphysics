@@ -1203,7 +1203,7 @@ class ParticleGroup:
         This function overlays the computed wakefield kicks (in eV/m) as a scatter plot on
         the primary y-axis, and the corresponding particle density as a histogram on a
         secondary y-axis. The independent variable is chosen automatically based on the
-        coordinate system or specified explicitly with `xkey`.
+        coordinate system or specified explicitly with `key`.
 
         Parameters
         ----------

@@ -1520,7 +1520,7 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
         import matplotlib.pyplot as plt
 
         if zmax is None:
-            zmax = 100 * self.s0
+            zmax = 20 * self.s0
 
         zlist = np.linspace(zmin, zmax, n)
         Wz = self.wake(-zlist)

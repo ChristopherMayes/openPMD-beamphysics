@@ -20,6 +20,7 @@ import numpy as np
 from ...units import epsilon_0
 from ..pseudomode import Pseudomode, PseudomodeWakefield
 from .base import (
+    Geometry,
     ResistiveWallWakefieldBase,
     Gammaf,
     krs0_round,
@@ -163,9 +164,9 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase, PseudomodeWakefield):
     @property
     def Qr(self):
         """Dimensionless quality factor Q_r of the wakefield pseudomode."""
-        if self.geometry == "round":
+        if self.geometry == Geometry.ROUND:
             return Qr_round(self.Gamma)
-        if self.geometry == "flat":
+        if self.geometry == Geometry.FLAT:
             return Qr_flat(self.Gamma)
         else:
             raise NotImplementedError(f"{self.geometry=}")
@@ -173,9 +174,9 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase, PseudomodeWakefield):
     @property
     def kr(self):
         """Real-valued wave number k_r of the wakefield pseudomode [1/m]."""
-        if self.geometry == "round":
+        if self.geometry == Geometry.ROUND:
             return krs0_round(self.Gamma) / self.s0
-        if self.geometry == "flat":
+        if self.geometry == Geometry.FLAT:
             return krs0_flat(self.Gamma) / self.s0
         else:
             raise NotImplementedError(f"{self.geometry=}")
@@ -184,7 +185,7 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase, PseudomodeWakefield):
         """Create the pseudomode for this resistive wall wakefield."""
         # Amplitude A = c * Z0 / (π * a²), using Z0 = 1/(ε₀*c)
         A = 1 / (4 * np.pi * epsilon_0) * 4 / self.radius**2
-        if self.geometry == "flat":
+        if self.geometry == Geometry.FLAT:
             A *= np.pi**2 / 16
 
         d = self.kr / (2 * self.Qr)
@@ -198,7 +199,7 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase, PseudomodeWakefield):
             f"radius={self.radius}, "
             f"conductivity={self.conductivity}, "
             f"relaxation_time={self.relaxation_time}, "
-            f"geometry={self.geometry!r}"
+            f"geometry={self.geometry.value!r}"
             f"{material_str}) "
             f"→ s₀={self.s0:.3e} m, Γ={self.Gamma:.3f}, k_r={self.kr:.1f}/m, Q_r={self.Qr:.2f}"
         )
@@ -293,12 +294,12 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase, PseudomodeWakefield):
 !    Material        : {self.material_from_properties()}
 !    Conductivity    : {self.conductivity} S/m
 !    Relaxation time : {self.relaxation_time} s
-!    Geometry        : {self.geometry}
+!    Geometry        : {self.geometry.value}
 """
 
-        if self.geometry == "round":
+        if self.geometry == Geometry.ROUND:
             s += f"!    Radius          : {self.radius} m\n"
-        elif self.geometry == "flat":
+        elif self.geometry == Geometry.FLAT:
             s += f"!    full gap        : {2*self.radius} m\n"
 
         s += f"!    s₀              : {self.s0}  m\n"

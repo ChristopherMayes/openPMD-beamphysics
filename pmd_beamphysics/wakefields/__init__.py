@@ -34,6 +34,7 @@ from .impedance import ImpedanceWakefield
 from .pseudomode import Pseudomode, PseudomodeWakefield
 from .tabular import TabularWakefield
 from .resistive_wall import (
+    Geometry,
     ResistiveWallWakefieldBase,
     ResistiveWallWakefield,
     ResistiveWallPseudomode,
@@ -56,6 +57,7 @@ __all__ = [
     "TabularWakefield",
     "ImpedanceWakefield",
     # Resistive wall
+    "Geometry",
     "ResistiveWallWakefieldBase",
     "ResistiveWallWakefield",
     "ResistiveWallPseudomode",

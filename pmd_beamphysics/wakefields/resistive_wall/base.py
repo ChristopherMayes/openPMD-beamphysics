@@ -32,6 +32,7 @@ characteristic_length
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 
 import numpy as np
 from scipy.integrate import quad, quad_vec
@@ -39,7 +40,17 @@ from scipy.integrate import quad, quad_vec
 from ...units import c_light, Z0
 from ..base import WakefieldBase
 
+
+class Geometry(str, Enum):
+    """Beam pipe geometry for resistive wall wakefield calculations."""
+
+    ROUND = "round"
+    FLAT = "flat"
+
+
 __all__ = [
+    # Enum
+    "Geometry",
     # Class
     "ResistiveWallWakefieldBase",
     # Low-level functions
@@ -583,7 +594,7 @@ class ResistiveWallWakefieldBase(WakefieldBase):
     radius: float
     conductivity: float
     relaxation_time: float
-    geometry: str = "round"
+    geometry: Geometry = Geometry.ROUND
 
     # Internal material database (SI units)
     MATERIALS = {
@@ -607,17 +618,22 @@ class ResistiveWallWakefieldBase(WakefieldBase):
                 f"relaxation_time must be non-negative, got {self.relaxation_time}"
             )
 
-        if self.geometry not in ("round", "flat"):
-            raise ValueError(
-                f"Unsupported geometry: {self.geometry}. Must be 'round' or 'flat'"
-            )
+        # Convert string to enum if needed (for backwards compatibility)
+        if isinstance(self.geometry, str):
+            try:
+                object.__setattr__(self, "geometry", Geometry(self.geometry))
+            except ValueError:
+                raise ValueError(
+                    f"Unsupported geometry: {self.geometry!r}. "
+                    f"Must be Geometry.ROUND or Geometry.FLAT"
+                )
 
     @classmethod
     def from_material(
         cls,
         material: str,
         radius: float,
-        geometry: str = "round",
+        geometry: Geometry | str = Geometry.ROUND,
     ):
         """
         Create a wakefield from a known material preset.
@@ -695,9 +711,9 @@ class ResistiveWallWakefieldBase(WakefieldBase):
         The dimensionless scaled wake is Ŵ(z/s₀) = W(z) / W₀.
         """
         W0_round = c_light * Z0 / (np.pi * self.radius**2)
-        if self.geometry == "round":
+        if self.geometry == Geometry.ROUND:
             return W0_round
-        else:  # flat
+        else:  # FLAT
             return W0_round * np.pi**2 / 16
 
     def __call__(self, z: float | np.ndarray) -> float | np.ndarray:

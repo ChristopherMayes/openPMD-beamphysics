@@ -51,6 +51,7 @@ References
 """
 
 from .base import (
+    Geometry,
     ResistiveWallWakefieldBase,
     # Low-level functions
     sinhc,
@@ -72,6 +73,8 @@ from .impedance import ResistiveWallWakefield
 from .pseudomode import ResistiveWallPseudomode
 
 __all__ = [
+    # Enum
+    "Geometry",
     # Classes
     "ResistiveWallWakefieldBase",
     "ResistiveWallWakefield",

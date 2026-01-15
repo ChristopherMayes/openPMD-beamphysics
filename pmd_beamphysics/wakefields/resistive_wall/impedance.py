@@ -19,6 +19,7 @@ import numpy as np
 from ...units import c_light
 from ..impedance import ImpedanceWakefield
 from .base import (
+    Geometry,
     ResistiveWallWakefieldBase,
     longitudinal_impedance_round,
     longitudinal_impedance_flat,
@@ -148,7 +149,7 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase, ImpedanceWakefield):
             f"radius={self.radius}, "
             f"conductivity={self.conductivity}, "
             f"relaxation_time={self.relaxation_time}, "
-            f"geometry={self.geometry!r}"
+            f"geometry={self.geometry.value!r}"
             f"{material_str}) "
             f"→ s₀={self.s0:.3e} m"
         )
@@ -167,11 +168,11 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase, ImpedanceWakefield):
         Z : complex or np.ndarray
             Impedance [Ohm/m].
         """
-        if self.geometry == "round":
+        if self.geometry == Geometry.ROUND:
             return longitudinal_impedance_round(
                 k, self.radius, self.conductivity, self._ctau
             )
-        else:  # flat
+        else:  # FLAT
             return longitudinal_impedance_flat(
                 k, self.radius, self.conductivity, self._ctau
             )

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from ..units import c_light
@@ -174,8 +175,6 @@ class WakefieldBase(ABC):
 
     def _plot_convolve_density(self, density, dz, integrated_wake, ax=None):
         """Plot density profile and wake potential from convolve_density."""
-        import matplotlib.pyplot as plt
-
         n = len(density)
         z = np.arange(n) * dz
         z0 = z[n // 2]  # Assume centered
@@ -267,8 +266,6 @@ class WakefieldBase(ABC):
         ax : matplotlib.axes.Axes, optional
             Axes to plot on. If None, creates a new figure.
         """
-        import matplotlib.pyplot as plt
-
         if zmax is None:
             zmax = 1e-3  # 1 mm default
 
@@ -298,8 +295,6 @@ class WakefieldBase(ABC):
         ax : matplotlib.axes.Axes, optional
             Axes to plot on. If None, creates a new figure.
         """
-        import matplotlib.pyplot as plt
-
         if kmax is None:
             kmax = 1e6  # 1/µm default
 

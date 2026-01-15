@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from ..units import c_light
@@ -372,8 +373,6 @@ class PseudomodeWakefield(WakefieldBase):
 
     def plot(self, zmax: float = 0.001, zmin: float = 0, n: int = 200, ax=None):
         """Plot the pseudomode wakefield."""
-        import matplotlib.pyplot as plt
-
         zlist = np.linspace(zmin, zmax, n)
         Wz = self.wake(-zlist)
 

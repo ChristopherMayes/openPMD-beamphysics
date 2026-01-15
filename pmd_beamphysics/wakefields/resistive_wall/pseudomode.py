@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import warnings
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from ...units import epsilon_0
@@ -224,8 +225,6 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase, PseudomodeWakefield):
         ax : matplotlib.axes.Axes, optional
             Axes to plot on. If None, creates a new figure.
         """
-        import matplotlib.pyplot as plt
-
         if zmax is None:
             zmax = 1 / (self.kr / (2 * self.Qr)) * 10
 

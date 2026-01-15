@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from ...units import c_light
@@ -199,8 +200,6 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase, ImpedanceWakefield):
         ax : matplotlib.axes.Axes, optional
             Axes to plot on. If None, creates a new figure.
         """
-        import matplotlib.pyplot as plt
-
         if zmax is None:
             zmax = 20 * self.s0
 

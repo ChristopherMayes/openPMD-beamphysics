@@ -36,7 +36,7 @@ from .statistics import (
     slice_statistics,
 )
 from .units import c_light, parse_bunching_str, pg_units
-from .wakefields import ResistiveWallWakefield
+from .wakefields import WakefieldBase
 from .writers import pmd_init, write_pmd_bunch
 from .utils import get_rotation_matrix
 
@@ -1185,9 +1185,62 @@ class ParticleGroup:
         if return_figure:
             return fig
 
+    def apply_wakefield(
+        self,
+        wakefield: WakefieldBase,
+        length: float,
+        inplace: bool = False,
+        include_self_kick: bool = True,
+    ):
+        """
+        Apply wakefield momentum kicks to this ParticleGroup.
+
+        Parameters
+        ----------
+        wakefield : WakefieldBase
+            A wakefield object providing the `particle_kicks(z, weight)` method.
+        length : float
+            Length over which the wakefield acts [m].
+        inplace : bool, optional
+            If True, modifies in place. If False, returns a modified copy.
+            Default is False.
+        include_self_kick : bool, optional
+            Whether to include the self-kick term. Default is True.
+
+        Returns
+        -------
+        ParticleGroup or None
+            Modified ParticleGroup if inplace=False, otherwise None.
+
+        Examples
+        --------
+        ::
+
+            from pmd_beamphysics.wakefields import ResistiveWallWakefield
+            wake = ResistiveWallWakefield.from_material("copper-slac-pub-10707", radius=2.5e-3)
+            P_after = P.apply_wakefield(wake, length=10.0)
+        """
+        if not inplace:
+            P = self.copy()
+        else:
+            P = self
+
+        # Extract z positions
+        if P.in_t_coordinates:
+            z = np.asarray(P.z)
+        else:
+            z = -c_light * np.asarray(P.t)
+
+        weight = np.asarray(P.weight)
+        kicks = wakefield.particle_kicks(z, weight, include_self_kick=include_self_kick)
+        P.pz += kicks * length
+
+        if not inplace:
+            return P
+
     def wakefield_plot(
         self,
-        wake: ResistiveWallWakefield,
+        wake: WakefieldBase,
         key=None,
         nice=True,
         ax=None,
@@ -1198,7 +1251,7 @@ class ParticleGroup:
         **kwargs,
     ):
         """
-        Plot the longitudinal wakefield kick along with its density.
+        Plot per-particle wakefield kicks overlaid with the bunch density.
 
         This function overlays the computed wakefield kicks (in eV/m) as a scatter plot on
         the primary y-axis, and the corresponding particle density as a histogram on a
@@ -1207,9 +1260,9 @@ class ParticleGroup:
 
         Parameters
         ----------
-        wake : ResistiveWallWakefield
-            An object that provides the method `wake.particle_kicks(particle_group)` returning
-            longitudinal wakefield kicks in eV/m.
+        wake : WakefieldBase
+            A wakefield object providing the `particle_kicks(z, weight)` method,
+            returning longitudinal wakefield kicks in eV/m.
 
         key : str, optional
             Key to use as the independent variable. If None, defaults to 'delta_z/c' or 'delta_t'

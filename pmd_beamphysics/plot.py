@@ -17,7 +17,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from .labels import mathlabel
 from .statistics import slice_statistics, twiss_ellipse_points
-from .units import nice_array, nice_scale_prefix, plottable_array, pg_units
+from .units import nice_array, nice_scale_prefix, plottable_array, pg_units, c_light
 
 CMAP0 = copy(plt.get_cmap("viridis"))
 CMAP0.set_under("white")
@@ -1547,7 +1547,12 @@ def wakefield_plot(
 
     # Wake kicks
     x_raw = particle_group[key]
-    kicks = wake.particle_kicks(particle_group)
+
+    if particle_group.in_t_coordinates:
+        z = np.asarray(particle_group.z)
+    else:
+        z = -c_light * np.asarray(particle_group.t)
+    kicks = wake.particle_kicks(z=z, weight=particle_group.weight)
 
     x, f1, p1, xmin, xmax = plottable_array(x_raw, nice=nice, lim=xlim)
     y, f2, p2, ymin, ymax = plottable_array(kicks, nice=nice, lim=ylim)

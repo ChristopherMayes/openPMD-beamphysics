@@ -67,12 +67,14 @@ class WakefieldBase(ABC):
         Compute integrated wake from a charge density distribution [V/m]
     particle_kicks(z, weight, include_self_kick=True)
         Compute momentum kicks for a distribution of particles [eV/m]
-    apply_to_particles(particle_group, length, inplace=False, include_self_kick=True)
-        Apply wakefield kicks to a ParticleGroup
     plot(zmax=None, zmin=0, n=200)
         Plot the wakefield over a range of z values
     plot_impedance(kmax=None, kmin=0, n=200)
         Plot the impedance over a range of wavenumbers
+
+    See Also
+    --------
+    ParticleGroup.apply_wakefield : Apply wakefield kicks to a ParticleGroup
     """
 
     @abstractmethod
@@ -220,8 +222,6 @@ class WakefieldBase(ABC):
         z: np.ndarray,
         weight: np.ndarray,
         include_self_kick: bool = True,
-        plot: bool = False,
-        ax=None,
     ) -> np.ndarray:
         """
         Compute wakefield-induced energy kicks per unit length.
@@ -237,10 +237,6 @@ class WakefieldBase(ABC):
             Particle charges [C].
         include_self_kick : bool, optional
             Whether to include the self-kick term. Default is True.
-        plot : bool, optional
-            If True, plot the per-particle kicks vs position. Default is False.
-        ax : matplotlib.axes.Axes, optional
-            Axes to plot on. If None, a new figure is created.
 
         Returns
         -------
@@ -264,24 +260,7 @@ class WakefieldBase(ABC):
                     if dz < 0:  # j is ahead of i, so i feels wake from j
                         kicks[i] -= weight[j] * self.wake(dz)
 
-        if plot:
-            self._plot_particle_kicks(z, kicks, ax=ax)
-
         return kicks
-
-    def _plot_particle_kicks(self, z, kicks, ax=None):
-        """Plot per-particle kicks vs position."""
-        import matplotlib.pyplot as plt
-
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(8, 4))
-
-        z_centered = z - z.mean()
-        ax.scatter(z_centered * 1e6, kicks * 1e-6, s=1, alpha=0.5)
-        ax.set_xlabel(r"$z - \langle z \rangle$ (µm)")
-        ax.set_ylabel("Kick (MeV/m)")
-        ax.set_title("Per-Particle Wakefield Kicks")
-        ax.axhline(0, color="r", ls="--", alpha=0.5)
 
     def _self_kick_value(self) -> float:
         """
@@ -290,47 +269,6 @@ class WakefieldBase(ABC):
         Subclasses should override this for efficiency.
         """
         return self.wake(-1e-15)
-
-    def apply_to_particles(
-        self,
-        particle_group,
-        length: float,
-        inplace: bool = False,
-        include_self_kick: bool = True,
-    ):
-        """
-        Apply wakefield momentum kicks to a ParticleGroup.
-
-        Parameters
-        ----------
-        particle_group : ParticleGroup
-            The particle group to apply the wakefield to.
-        length : float
-            Length over which the wakefield acts [m].
-        inplace : bool, optional
-            If True, modifies in place. If False, returns a modified copy.
-        include_self_kick : bool, optional
-            Whether to include the self-kick term. Default is True.
-
-        Returns
-        -------
-        ParticleGroup or None
-            Modified ParticleGroup if inplace=False, otherwise None.
-        """
-        if not inplace:
-            particle_group = particle_group.copy()
-
-        if particle_group.in_t_coordinates:
-            z = np.asarray(particle_group.z)
-        else:
-            z = -c_light * np.asarray(particle_group.t)
-
-        weight = np.asarray(particle_group.weight)
-        kicks = self.particle_kicks(z, weight, include_self_kick=include_self_kick)
-        particle_group.pz += kicks * length
-
-        if not inplace:
-            return particle_group
 
     def plot(self, zmax: float = None, zmin: float = 0, n: int = 200, ax=None):
         """
@@ -650,8 +588,6 @@ class PseudomodeWakefield(WakefieldBase):
         z: np.ndarray,
         weight: np.ndarray,
         include_self_kick: bool = True,
-        plot: bool = False,
-        ax=None,
     ) -> np.ndarray:
         """
         Compute short-range wakefield energy kicks per unit length.
@@ -667,10 +603,6 @@ class PseudomodeWakefield(WakefieldBase):
             Particle charges [C].
         include_self_kick : bool, optional
             If True, applies the self-kick. Default is True.
-        plot : bool, optional
-            If True, plot the per-particle kicks vs position. Default is False.
-        ax : matplotlib.axes.Axes, optional
-            Axes to plot on. If None, a new figure is created.
 
         Returns
         -------
@@ -721,9 +653,6 @@ class PseudomodeWakefield(WakefieldBase):
         # Restore original order
         kicks = np.empty_like(delta_E)
         kicks[ix] = delta_E
-
-        if plot:
-            self._plot_particle_kicks(z, kicks, ax=ax)
 
         return kicks
 
@@ -980,17 +909,21 @@ class ImpedanceWakefield(WakefieldBase):
         """
         return self._impedance_func(k)
 
-    def wake(self, z: np.ndarray | float) -> np.ndarray | float:
+    def wake(self, z: np.ndarray | float, n_fft: int = 4096) -> np.ndarray | float:
         """
         Evaluate the wakefield at position z.
 
         If a wakefield function was provided, uses it directly.
-        Otherwise, computes via numerical cosine transform of Re[Z(k)].
+        Otherwise, computes via cosine transform of Re[Z(k)]:
+        - Scalars: numerical quadrature (accurate)
+        - Arrays: FFT with interpolation (fast)
 
         Parameters
         ----------
         z : float or np.ndarray
             Longitudinal position [m].
+        n_fft : int, optional
+            Number of FFT points for array evaluation. Default is 4096.
 
         Returns
         -------
@@ -1000,14 +933,15 @@ class ImpedanceWakefield(WakefieldBase):
         if self._wakefield_func is not None:
             return self._wakefield_func(z)
 
-        # Numerical cosine transform
-        from scipy.integrate import quad
-
         z = np.asarray(z)
         scalar_input = z.ndim == 0
         z = np.atleast_1d(z)
 
-        def _compute_single(z_val):
+        if scalar_input:
+            # Single point: use quadrature for accuracy
+            from scipy.integrate import quad
+
+            z_val = float(z[0])
             if z_val > 0:
                 return 0.0
 
@@ -1016,12 +950,32 @@ class ImpedanceWakefield(WakefieldBase):
 
             result, _ = quad(integrand, 0, self._k_max, limit=200)
             return (2 * c_light / np.pi) * result
+        else:
+            # Array: use FFT for speed
+            from scipy.interpolate import interp1d
+            from scipy.fft import irfft
 
-        result = np.array([_compute_single(zi) for zi in z])
+            k_max = self._k_max
+            dk = k_max / (n_fft - 1)
+            k_grid = np.linspace(0, k_max, n_fft)
 
-        if scalar_input:
-            return float(result[0])
-        return result
+            Zk_grid = self._impedance_func(k_grid)
+            ReZ = np.real(Zk_grid)
+
+            n_full = 2 * (n_fft - 1)
+            dz = 2 * np.pi / (n_full * dk)
+            z_grid = np.arange(n_full) * dz
+
+            W_grid = irfft(ReZ, n=n_full) * n_full * dk * (c_light / np.pi)
+
+            interp = interp1d(
+                z_grid, W_grid, kind="cubic", bounds_error=False, fill_value=0.0
+            )
+
+            result = interp(-z)
+            result = np.where(z > 0, 0.0, result)
+
+            return result
 
     # convolve_density is inherited from WakefieldBase
 
@@ -1031,8 +985,6 @@ class ImpedanceWakefield(WakefieldBase):
         weight: np.ndarray,
         include_self_kick: bool = True,
         n_bins: int = None,
-        plot: bool = False,
-        ax=None,
     ) -> np.ndarray:
         """
         Compute wakefield-induced energy kicks per unit length.
@@ -1051,10 +1003,6 @@ class ImpedanceWakefield(WakefieldBase):
             Whether to include the self-kick term. Default is True.
         n_bins : int, optional
             Number of bins for the density grid. Default is max(100, N//10).
-        plot : bool, optional
-            If True, plot the per-particle kicks vs position. Default is False.
-        ax : matplotlib.axes.Axes, optional
-            Axes to plot on. If None, a new figure is created.
 
         Returns
         -------
@@ -1101,9 +1049,6 @@ class ImpedanceWakefield(WakefieldBase):
             z_grid, wake_potential, kind="linear", bounds_error=False, fill_value=0.0
         )
         kicks = -interp(z)  # Negative sign: energy loss for trailing particles
-
-        if plot:
-            self._plot_particle_kicks(z, kicks, ax=ax)
 
         return kicks
 

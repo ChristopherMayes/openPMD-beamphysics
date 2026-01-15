@@ -733,29 +733,13 @@ class ResistiveWallWakefieldBase(WakefieldBase):
         else:  # flat
             return W0_round * np.pi**2 / 16
 
-    def _extract_z_weight(self, particle_group_or_z, weight=None):
-        """Extract z and weight arrays from input."""
-        if hasattr(particle_group_or_z, "in_t_coordinates"):
-            particle_group = particle_group_or_z
-            if particle_group.in_t_coordinates:
-                z = np.asarray(particle_group.z)
-            else:
-                z = -c_light * np.asarray(particle_group.t)
-            weight = np.asarray(particle_group.weight)
-        else:
-            z = np.asarray(particle_group_or_z)
-            if weight is None:
-                raise ValueError("weight must be provided when z is an array")
-            weight = np.asarray(weight)
-        return z, weight
-
     def __call__(self, z: float | np.ndarray) -> float | np.ndarray:
         """Evaluate the wakefield at position z (convenience method)."""
         return self.wake(z)
 
 
 @dataclass
-class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
+class ResistiveWallPseudomode(ResistiveWallWakefieldBase, PseudomodeWakefield):
     """
     Fast pseudomode-based resistive wall wakefield model.
 
@@ -875,8 +859,8 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
                 stacklevel=2,
             )
 
-        # Create the internal pseudomode model
-        self._internal_model = self._create_pseudomode()
+        # Initialize the PseudomodeWakefield with our computed mode
+        PseudomodeWakefield.__init__(self, modes=[self._create_mode()])
 
     @property
     def Gamma(self):
@@ -903,16 +887,15 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
         else:
             raise NotImplementedError(f"{self.geometry=}")
 
-    def _create_pseudomode(self) -> PseudomodeWakefield:
-        """Create the pseudomode representation."""
+    def _create_mode(self) -> Pseudomode:
+        """Create the pseudomode for this resistive wall wakefield."""
         # Amplitude A = c * Z0 / (π * a²), using Z0 = 1/(ε₀*c)
         A = 1 / (4 * np.pi * epsilon_0) * 4 / self.radius**2
         if self.geometry == "flat":
             A *= np.pi**2 / 16
 
         d = self.kr / (2 * self.Qr)
-        mode = Pseudomode(A=A, d=d, k=self.kr, phi=np.pi / 2)
-        return PseudomodeWakefield(modes=[mode])
+        return Pseudomode(A=A, d=d, k=self.kr, phi=np.pi / 2)
 
     def __repr__(self):
         material = self.material_from_properties()
@@ -927,152 +910,7 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
             f"→ s₀={self.s0:.3e} m, Γ={self.Gamma:.3f}, k_r={self.kr:.1f}/m, Q_r={self.Qr:.2f}"
         )
 
-    @property
-    def pseudomode(self) -> PseudomodeWakefield:
-        """The internal PseudomodeWakefield model."""
-        return self._internal_model
-
-    def wake(self, z: float | np.ndarray) -> float | np.ndarray:
-        """
-        Evaluate the wakefield at position z.
-
-        Parameters
-        ----------
-        z : float or np.ndarray
-            Longitudinal position [m]. Negative z is behind the source.
-
-        Returns
-        -------
-        W : float or np.ndarray
-            Wakefield value [V/C/m]. Returns 0 for z > 0 (causality).
-        """
-        return self._internal_model.wake(z)
-
-    def impedance(self, k: float | np.ndarray) -> complex | np.ndarray:
-        """
-        Evaluate the impedance at wavenumber k.
-
-        Parameters
-        ----------
-        k : float or np.ndarray
-            Wavenumber [1/m].
-
-        Returns
-        -------
-        Z : complex or np.ndarray
-            Impedance [Ohm/m].
-        """
-        return self._internal_model.impedance(k)
-
-    def convolve_density(
-        self,
-        density: np.ndarray,
-        dz: float,
-        offset: float = 0,
-        include_self_kick: bool = True,
-        plot: bool = False,
-        ax=None,
-    ) -> np.ndarray:
-        """
-        Compute integrated wakefield by convolving with charge density.
-
-        Parameters
-        ----------
-        density : np.ndarray
-            Charge density array [C/m].
-        dz : float
-            Grid spacing [m].
-        offset : float, optional
-            Offset for the z coordinate [m]. Default is 0.
-        include_self_kick : bool, optional
-            Whether to include the extra ½ self-kick. Default is True.
-        plot : bool, optional
-            If True, plot the density profile and wake potential. Default is False.
-        ax : matplotlib.axes.Axes, optional
-            Axes to plot on. If None and plot=True, creates a new figure.
-
-        Returns
-        -------
-        integrated_wake : np.ndarray
-            Integrated longitudinal wakefield [V/m].
-        """
-        result = self._internal_model.convolve_density(
-            density, dz, offset=offset, include_self_kick=include_self_kick
-        )
-        if plot:
-            self._plot_convolve_density(density, dz, result, ax=ax)
-        return result
-
-    def particle_kicks(
-        self,
-        particle_group_or_z,
-        weight: np.ndarray = None,
-        include_self_kick: bool = True,
-        plot: bool = False,
-        ax=None,
-    ) -> np.ndarray:
-        """
-        Compute wakefield-induced longitudinal momentum kicks.
-
-        Uses O(N) algorithm exploiting the pseudomode exponential form.
-
-        Parameters
-        ----------
-        particle_group_or_z : ParticleGroup or np.ndarray
-            Either a ParticleGroup object or an array of z positions [m].
-        weight : np.ndarray, optional
-            Particle charges [C]. Required if particle_group_or_z is an array.
-        include_self_kick : bool, optional
-            Whether to include the self-kick term. Default is True.
-        plot : bool, optional
-            If True, plot the per-particle kicks vs position. Default is False.
-        ax : matplotlib.axes.Axes, optional
-            Axes to plot on. If None, a new figure is created.
-
-        Returns
-        -------
-        np.ndarray
-            Array of longitudinal momentum kicks per unit length [eV/m].
-        """
-        z, weight = self._extract_z_weight(particle_group_or_z, weight)
-        return self._internal_model.particle_kicks(
-            z, weight, include_self_kick=include_self_kick, plot=plot, ax=ax
-        )
-
-    def apply_to_particles(
-        self,
-        particle_group,
-        length: float,
-        inplace: bool = False,
-        include_self_kick: bool = True,
-    ):
-        """
-        Apply the wakefield momentum kicks to a ParticleGroup.
-
-        Parameters
-        ----------
-        particle_group : ParticleGroup
-            The particle group to apply the wakefield to.
-        length : float
-            Length over which the wakefield acts [m].
-        inplace : bool, optional
-            If True, modifies in place. If False, returns a modified copy.
-        include_self_kick : bool, optional
-            Whether to include the self-kick term. Default is True.
-
-        Returns
-        -------
-        ParticleGroup or None
-            The modified ParticleGroup if `inplace=False`, otherwise None.
-        """
-        if not inplace:
-            particle_group = particle_group.copy()
-
-        kicks = self.particle_kicks(particle_group, include_self_kick=include_self_kick)
-        particle_group.pz += kicks * length
-
-        if not inplace:
-            return particle_group
+    # wake, impedance, particle_kicks, convolve_density inherited from PseudomodeWakefield
 
     def plot(self, zmax=None, zmin=0, n=200, normalized=False, ax=None):
         """
@@ -1175,7 +1013,7 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
         s += "! sr_wake =  \n"
 
         s += f"{{{z_scale=}, {amp_scale=}, {scale_with_length=}, {z_max=},\n"
-        s += self._internal_model.to_bmad() + "}\n"
+        s += PseudomodeWakefield.to_bmad(self) + "}\n"
 
         if file is not None:
             with open(file, "w") as f:
@@ -1185,7 +1023,7 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase):
 
 
 @dataclass
-class ResistiveWallWakefield(ResistiveWallWakefieldBase):
+class ResistiveWallWakefield(ResistiveWallWakefieldBase, ImpedanceWakefield):
     """
     Accurate impedance-based resistive wall wakefield model.
 
@@ -1294,30 +1132,8 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
         # Precompute relaxation distance for impedance calculations
         self._ctau = c_light * self.relaxation_time
 
-        # Create internal model for particle kicks and convolution
-        self._internal_model = ImpedanceWakefield(
-            impedance_func=self.impedance,
-            wakefield_func=self._wakefield_internal,
-        )
-
-    def _wakefield_internal(
-        self,
-        z: float | np.ndarray,
-        k_max: float = 1e7,
-        n_fft: int = 4096,
-    ) -> float | np.ndarray:
-        """Internal wakefield computation using FFT."""
-        z_arr = np.asarray(z)
-        is_scalar = z_arr.ndim == 0
-        z_arr = np.atleast_1d(z_arr)
-
-        result = wakefield_from_impedance_fft(
-            z_arr, self.impedance, k_max=k_max, n_fft=n_fft
-        )
-
-        if is_scalar:
-            return float(result[0])
-        return result
+        # Initialize ImpedanceWakefield - wake() and impedance() are provided by this class
+        ImpedanceWakefield.__init__(self, impedance_func=self.impedance)
 
     def __repr__(self):
         material = self.material_from_properties()
@@ -1355,164 +1171,9 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase):
                 k, self.radius, self.conductivity, self._ctau
             )
 
-    def wake(self, z, k_max: float = 1e7, method: str = "auto", n_fft: int = 4096):
-        """
-        Evaluate the wakefield at position z.
-
-        Parameters
-        ----------
-        z : float or np.ndarray
-            Longitudinal position [m]. Negative z is behind the source.
-        k_max : float, optional
-            Upper limit of k integration [1/m]. Default is 1e7.
-        method : str, optional
-            'auto', 'fft', or 'quad'. Default is 'auto'.
-        n_fft : int, optional
-            Number of FFT points for FFT method. Default is 4096.
-
-        Returns
-        -------
-        W : float or np.ndarray
-            Wakefield value [V/C/m]. Returns 0 for z > 0 (causality).
-        """
-        z_arr = np.asarray(z)
-        is_scalar = z_arr.ndim == 0
-
-        if method == "auto":
-            method = "quad" if is_scalar else "fft"
-
-        if method == "fft":
-            z_arr = np.atleast_1d(z_arr)
-            result = wakefield_from_impedance_fft(
-                z_arr, self.impedance, k_max=k_max, n_fft=n_fft
-            )
-            if is_scalar:
-                return float(result[0])
-            return result
-        else:  # quad
-            return wakefield_from_impedance(z, self.impedance, k_max=k_max)
-
-    def convolve_density(
-        self,
-        density: np.ndarray,
-        dz: float,
-        offset: float = 0,
-        include_self_kick: bool = True,
-        plot: bool = False,
-        ax=None,
-    ) -> np.ndarray:
-        """
-        Compute integrated wakefield by convolving density with impedance.
-
-        Uses FFT in frequency domain for efficiency.
-
-        Parameters
-        ----------
-        density : np.ndarray
-            Charge density array [C/m].
-        dz : float
-            Grid spacing [m].
-        offset : float, optional
-            Offset for the z coordinate [m]. Default is 0.
-        include_self_kick : bool, optional
-            Whether to include the extra ½ self-kick. Default is True.
-        plot : bool, optional
-            If True, plot the density profile and wake potential. Default is False.
-        ax : matplotlib.axes.Axes, optional
-            Axes to plot on. If None and plot=True, creates a new figure.
-
-        Returns
-        -------
-        integrated_wake : np.ndarray
-            Integrated longitudinal wakefield [V/m].
-        """
-        result = self._internal_model.convolve_density(
-            density, dz, offset=offset, include_self_kick=include_self_kick
-        )
-        if plot:
-            self._plot_convolve_density(density, dz, result, ax=ax)
-        return result
-
-    def particle_kicks(
-        self,
-        particle_group_or_z,
-        weight: np.ndarray = None,
-        include_self_kick: bool = True,
-        n_bins: int = None,
-        plot: bool = False,
-        ax=None,
-    ) -> np.ndarray:
-        """
-        Compute wakefield-induced longitudinal momentum kicks.
-
-        Uses FFT-based density convolution with interpolation back to
-        particle positions. This is O(N + M log M) where N is the number
-        of particles and M is the number of grid points.
-
-        Parameters
-        ----------
-        particle_group_or_z : ParticleGroup or np.ndarray
-            Either a ParticleGroup object or an array of z positions [m].
-        weight : np.ndarray, optional
-            Particle charges [C]. Required if particle_group_or_z is an array.
-        include_self_kick : bool, optional
-            Whether to include the self-kick term. Default is True.
-        n_bins : int, optional
-            Number of bins for the density grid. Default is max(100, N//10).
-        plot : bool, optional
-            If True, plot the per-particle kicks vs position. Default is False.
-        ax : matplotlib.axes.Axes, optional
-            Axes to plot on. If None, a new figure is created.
-
-        Returns
-        -------
-        np.ndarray
-            Array of longitudinal momentum kicks per unit length [eV/m].
-        """
-        z, weight = self._extract_z_weight(particle_group_or_z, weight)
-        return self._internal_model.particle_kicks(
-            z,
-            weight,
-            include_self_kick=include_self_kick,
-            n_bins=n_bins,
-            plot=plot,
-            ax=ax,
-        )
-
-    def apply_to_particles(
-        self,
-        particle_group,
-        length: float,
-        inplace: bool = False,
-        include_self_kick: bool = True,
-    ):
-        """
-        Apply the wakefield momentum kicks to a ParticleGroup.
-
-        Parameters
-        ----------
-        particle_group : ParticleGroup
-            The particle group to apply the wakefield to.
-        length : float
-            Length over which the wakefield acts [m].
-        inplace : bool, optional
-            If True, modifies in place. If False, returns a modified copy.
-        include_self_kick : bool, optional
-            Whether to include the self-kick term. Default is True.
-
-        Returns
-        -------
-        ParticleGroup or None
-            The modified ParticleGroup if `inplace=False`, otherwise None.
-        """
-        if not inplace:
-            particle_group = particle_group.copy()
-
-        kicks = self.particle_kicks(particle_group, include_self_kick=include_self_kick)
-        particle_group.pz += kicks * length
-
-        if not inplace:
-            return particle_group
+    # wake inherited from ImpedanceWakefield (uses FFT for arrays, quad for scalars)
+    # convolve_density inherited from WakefieldBase
+    # particle_kicks inherited from ImpedanceWakefield
 
     def plot(self, zmax=None, zmin=0, n=200, normalized=False, ax=None):
         """

@@ -13,10 +13,6 @@ inputs:
     description: "Conda environment name to create"
     required: false
     default: "beamphysics-dev"
-  extras:
-    description: "Package extras to install"
-    required: true
-    default: "dev"
 runs:
   using: "composite"
   steps:
@@ -54,7 +50,3 @@ runs:
           mamba install -n ${{ inputs.env_name }} python=${{ inputs.python-version }}
         fi
       if: steps.cache.outputs.cache-hit != 'true'
-    - name: Setup the environment
-      shell: bash -l {0}
-      run: |
-        python -m pip install .[${{ inputs.extras }}]

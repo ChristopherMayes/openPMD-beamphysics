@@ -11,8 +11,11 @@ classifiers = [
   "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-  # All core dependencies must be sourced from conda (conda-forge).
-  # See ``environment.yml`` for further information.
+  "numpy",
+  "scipy>=1.0.0",
+  "matplotlib",
+  "h5py",
+  "python-dateutil",
 ]
 description = "Tools for analyzing and viewing particle data in the openPMD standard, extension beamphysics."
 dynamic = ["version"]
@@ -22,10 +25,10 @@ readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.9"
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov"]
+dev = ["pytest", "pytest-cov", "pytest-benchmark"]
 doc = [
-  "mkdocs==1.5.2",
-  "mkdocs-jupyter==0.24.6",
+  "mkdocs",
+  "mkdocs-jupyter",
   "mkdocs-macros-plugin",
   "mkdocs-material",
   "mkdocstrings",
@@ -49,8 +52,8 @@ file = "LICENSE"
 
 [tool.pytest.ini_options]
 addopts = "--cov=pmd_beamphysics/"
-log_cli_level = "info"
-log_level = "debug"
+log_cli_level = "INFO"
+log_level = "DEBUG"
 testpaths = ["tests"]
 
 [tool.setuptools_scm]

@@ -244,7 +244,9 @@ def density_plot(
     hist, bin_edges = np.histogram(x, bins=bins, weights=w)
     hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
     hist_width = np.diff(bin_edges)
-    hist_y, hist_f, hist_prefix, _, _ = plottable_array(hist / hist_width, nice=nice)
+    hist_y, hist_f, hist_prefix, _hist_xmin, _hist_xmax = plottable_array(
+        hist / hist_width, nice=nice
+    )
 
     ax.bar(hist_x, hist_y, hist_width, color=color, alpha=alpha)
 

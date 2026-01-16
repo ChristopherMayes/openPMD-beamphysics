@@ -9,6 +9,7 @@ jobs:
     if: ${{ github.repository == 'ChristopherMayes/openPMD-beamphysics' }}
     name: Build and publish Python distributions to PyPI
     runs-on: ubuntu-latest
+    environment: pypi
     permissions:
       id-token: write
       contents: read

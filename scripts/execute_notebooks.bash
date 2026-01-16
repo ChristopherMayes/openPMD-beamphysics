@@ -56,7 +56,10 @@ do
     # Execute notebook from its own directory so relative paths work
     notebook_dir=$(dirname "$file")
     notebook_name=$(basename "$file")
-    pushd "$notebook_dir" > /dev/null
+    if ! pushd "$notebook_dir" > /dev/null; then
+        print_color "red" "Failed to change directory to $notebook_dir. Skipping $file"
+        continue
+    fi
     jupyter nbconvert --to notebook --execute "$notebook_name" --inplace
     popd > /dev/null
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Exit on error
+# Exit on error, but not for tput
 set -e
 
 # Track failures
@@ -11,29 +11,27 @@ SKIP_LIST=("parallel", "experimental")
 
 
 export PYDEVD_DISABLE_FILE_VALIDATION=1
-# Function to print colored text
+
+# Function to print colored text (handles missing terminal gracefully)
 print_color() {
-    case $1 in
-        red)
-            color_code=$(tput setaf 1)
-            ;;
-        green)
-            color_code=$(tput setaf 2)
-            ;;
-        yellow)
-            color_code=$(tput setaf 3)
-            ;;
-        blue)
-            color_code=$(tput setaf 4)
-            ;;
-        reset)
-            color_code=$(tput sgr0)
-            ;;
-        *)
-            color_code=$(tput sgr0)
-            ;;
-    esac
-    echo -e "${color_code}$2$(tput sgr0)"
+    local color="$1"
+    local message="$2"
+
+    # Check if tput is available and TERM is set
+    if command -v tput &> /dev/null && [ -n "$TERM" ] && [ "$TERM" != "dumb" ]; then
+        case $color in
+            red)    color_code=$(tput setaf 1 2>/dev/null || echo "") ;;
+            green)  color_code=$(tput setaf 2 2>/dev/null || echo "") ;;
+            yellow) color_code=$(tput setaf 3 2>/dev/null || echo "") ;;
+            blue)   color_code=$(tput setaf 4 2>/dev/null || echo "") ;;
+            *)      color_code="" ;;
+        esac
+        reset_code=$(tput sgr0 2>/dev/null || echo "")
+        echo -e "${color_code}${message}${reset_code}"
+    else
+        # No color support, just print the message
+        echo "$message"
+    fi
 }
 
 NOTEBOOKS=$(find ./docs -type f -name "*.ipynb" -not -path '*/.*')

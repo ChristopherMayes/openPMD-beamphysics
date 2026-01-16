@@ -1,0 +1,215 @@
+{
+    "version": "PA31-3.0",
+    "C": {
+        "value": 90658.74531999999,
+        "unit": "km",
+        "comments": "circumference"
+    },
+    "Np": {
+        "z": 25000000000.0,
+        "w": 25000000000.0,
+        "zh": 10000000000,
+        "ttbar": 10000000000,
+        "unit": "",
+        "comments": "Number of particles per bunch in the booster"
+    },
+    "Nb": {
+        "z": 1120,
+        "w": 890,
+        "zh": 380,
+        "ttbar": 56,
+        "unit": "",
+        "comments": "Number of bunches in the booster"
+    },
+    "E": {
+        "injection": 20000000000.0,
+        "z": 45600000000.0,
+        "w": 80000000000.0,
+        "zh": 120000000000.0,
+        "ttbar": 182500000000.0,
+        "unit": "eV",
+        "comments": "Number of bunches in the booster"
+    },
+    "bunch": {
+        "epsnx": {
+            "value": 9.999999999999999e-06,
+            "unit": "m",
+            "comments": "normalised horizontal emittance at injection"
+        },
+        "epsny": {
+            "value": 9.999999999999999e-06,
+            "unit": "m",
+            "comments": "normalised vertical emittance at injection"
+        },
+        "sigmaz": {
+            "value": 0.004,
+            "unit": "m",
+            "comments": "bunch length at injection"
+        },
+        "sigmae": {
+            "value": 0.001,
+            "unit": "",
+            "comments": "energy spread at injection"
+        }
+    },
+    "optics": {
+        "Qx": {
+            "z": 414.225,
+            "w": 414.225,
+            "zh": 414.225,
+            "ttbar": 414.225,
+            "unit": "",
+            "comments": "Horizontal tune"
+        },
+        "Qy": {
+            "z": 410.29,
+            "w": 410.29,
+            "zh": 410.29,
+            "ttbar": 410.29,
+            "unit": "",
+            "comments": "Vertical tune"
+        },
+        "chix": {
+            "z": 2.057246532,
+            "w": 2.057246532,
+            "zh": 2.057246532,
+            "ttbar": 2.057246532,
+            "unit": "",
+            "comments": "Horizontal chromaticty"
+        },
+        "chiy": {
+            "z": 1.778971585,
+            "w": 1.778971585,
+            "zh": 1.778971585,
+            "ttbar": 1.778971585,
+            "unit": "",
+            "comments": "Vertical chromaticity"
+        },
+        "alpha": {
+            "z": 7.120435962e-06,
+            "w": 7.120435962e-06,
+            "zh": 7.120435962e-06,
+            "ttbar": 7.120435962e-06,
+            "unit": "",
+            "comments": "Momentum compaction factor"
+        },
+        "I2": {
+            "z": 0.0005936549319,
+            "w": 0.0005936549319,
+            "zh": 0.0005936549319,
+            "ttbar": 0.0005936549319,
+            "unit": "",
+            "comments": "Second synchrotron integrate"
+        },
+        "I3": {
+            "z": 5.681453654e-08,
+            "w": 5.681453654e-08,
+            "zh": 5.681453654e-08,
+            "ttbar": 5.681453654e-08,
+            "unit": "",
+            "comments": "Third synchrotron integrate"
+        },
+        "I5": {
+            "z": 1.698280783e-11,
+            "w": 1.698280783e-11,
+            "zh": 1.698280783e-11,
+            "ttbar": 1.698280783e-11,
+            "unit": "",
+            "comments": "Fifth synchrotron integrate"
+        },
+        "dpt": {
+            "z": 0.03,
+            "w": 0.03,
+            "zh": 0.03,
+            "ttbar": 0.03,
+            "unit": "",
+            "comments": "Maximum energy acceptance at injection"
+        },
+        "damp_xy": {
+            "z": 9.045401802006868,
+            "w": 9.045401802006868,
+            "h": 0,
+            "ttbar": 9.045401802006868,
+            "unit": "s",
+            "comments": "transverse damping time at injection at injection energy",
+            "zh": 9.045401802006868
+        },
+        "damp_s": {
+            "z": 4.522700901003434,
+            "w": 4.522700901003434,
+            "h": 0,
+            "ttbar": 4.522700901003434,
+            "unit": "s",
+            "comments": "longitudinal damping time at injection energy",
+            "zh": 4.522700901003434
+        },
+        "coupling": {
+            "z": 0.002,
+            "w": 0.002,
+            "h": 0,
+            "ttbar": 0.002,
+            "unit": "",
+            "comments": "horizontal /vertical coupling",
+            "zh": 0.002
+        }
+    },
+    "RF": {
+        "RF_freq": {
+            "z": 800000000.0,
+            "w": 800000000.0,
+            "zh": 800000000.0,
+            "ttbar": 800000000.0,
+            "unit": "Hz",
+            "comments": "RF frequency"
+        },
+        "Vtot": {
+            "z": 50084569.672473334,
+            "w": 50084569.672473334,
+            "zh": 50084569.672473334,
+            "ttbar": 50084569.672473334,
+            "unit": "Volt",
+            "comments": "RF voltage at injection"
+        },
+        "phis_inj": {
+            "z": 178.47,
+            "w": 178.47,
+            "zh": 178.47,
+            "ttbar": 178.47,
+            "unit": "degree",
+            "comments": "Synchronous phase at injection"
+        },
+        "phis_ext": {
+            "z": 140.85,
+            "w": 121.59,
+            "zh": 117.9,
+            "ttbar": 114.39,
+            "unit": "degree",
+            "comments": "Synchronous phase at extraction"
+        },
+        "Qs_inj": {
+            "z": 0.026196452787125228,
+            "w": 0.026196452787125228,
+            "zh": 0.026196452787125228,
+            "ttbar": 0.026196452787125228,
+            "unit": "",
+            "comments": "Synchronous tune at injection"
+        },
+        "Qs_ext": {
+            "z": 0.016336180203794588,
+            "w": 0.026860361079496593,
+            "zh": 0.04578745941499729,
+            "ttbar": 0.0794681106351288,
+            "unit": "",
+            "comments": "Synchronous tune at extraction"
+        }
+    },
+    "beam_pipe": {
+        "shape": "Circular",
+        "material": "Copper",
+        "D": {
+            "value": 0.06,
+            "unit": "m",
+            "comment": "inner diameter"
+        }
+    }
+}

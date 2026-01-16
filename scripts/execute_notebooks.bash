@@ -30,7 +30,7 @@ print_color() {
     echo -e "${color_code}$2$(tput sgr0)"
 }
 
-NOTEBOOKS=$(find . -type f -name "*.ipynb" -not -path '*/.*')
+NOTEBOOKS=$(find ./docs -type f -name "*.ipynb" -not -path '*/.*')
 
 echo $NOTEBOOKS
 
@@ -52,7 +52,13 @@ do
     fi
 
     print_color "blue" "Executing $file"
-    jupyter nbconvert --to notebook --execute $file --inplace
+
+    # Execute notebook from its own directory so relative paths work
+    notebook_dir=$(dirname "$file")
+    notebook_name=$(basename "$file")
+    pushd "$notebook_dir" > /dev/null
+    jupyter nbconvert --to notebook --execute "$notebook_name" --inplace
+    popd > /dev/null
 
     end_time=$(date +%s)  # End time in seconds
     elapsed=$((end_time - start_time))  # Calculate elapsed time in seconds

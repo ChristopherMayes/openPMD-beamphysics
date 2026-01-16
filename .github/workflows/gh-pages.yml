@@ -25,6 +25,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           extras: "doc"
+      - name: Install package
+        shell: bash -l {0}
+        run: pip install -e .
       - name: Execute notebooks
         shell: bash -l {0}
         run: |

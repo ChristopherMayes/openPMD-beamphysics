@@ -26,7 +26,7 @@ __all__ = [
 ]
 
 # Path to the YAML file (in the same directory as this module)
-YAML_PATH = Path(__file__).parent / "statistics_standard.yaml"
+YAML_PATH = Path(__file__).parent / "statistics.yaml"
 
 # Required fields for validation
 REQUIRED_STAT_FIELDS = [

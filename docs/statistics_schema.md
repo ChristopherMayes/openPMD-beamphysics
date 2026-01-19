@@ -22,7 +22,7 @@ schema_version: "1.0"
 The statistics standard is defined in:
 
 ```
-pmd_beamphysics/statistics_standard.yaml
+pmd_beamphysics/statistics_standard/statistics_standard.yaml
 ```
 
 ## Top-Level Structure

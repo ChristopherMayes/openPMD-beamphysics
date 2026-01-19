@@ -32,6 +32,9 @@ jobs:
         shell: bash -l {0}
         run: |
           scripts/execute_notebooks.bash
+      - name: Generate statistics standard docs
+        shell: bash -l {0}
+        run: python scripts/generate_statistics_docs.py
       - name: Build Docs
         shell: bash -l {0}
         run: mkdocs build

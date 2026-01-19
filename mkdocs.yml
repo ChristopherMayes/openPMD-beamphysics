@@ -35,6 +35,10 @@ nav:
       - Particles: api/particles.md
       - Fields: api/fields.md
       - Wakefields: api/wakefields.md
+      - Statistics Standard: api/statistics_standard.md
+
+  - Contributing:
+      - Statistics Schema: statistics_schema.md
 
 theme:
   icon:

@@ -1,0 +1,573 @@
+# openPMD-beamphysics Statistics Standard
+# =========================================
+# This file defines a standard for particle beam statistics.
+# See docs/statistics_schema.md for field definitions and validation rules.
+
+schema_version: "1.0"
+
+categories:
+  - id: coordinates
+    name: Phase Space Coordinates
+    description: Basic position and momentum coordinates in Cartesian space.
+
+  - id: time
+    name: Time Coordinate
+    description: Time-related quantities.
+
+  - id: relativistic
+    name: Relativistic Quantities
+    description: Relativistic energy, momentum, and velocity factors.
+
+  - id: slopes
+    name: Transverse Slopes
+    description: Angular divergence quantities.
+
+  - id: polar
+    name: Polar/Cylindrical Coordinates
+    description: Cylindrical coordinate representations.
+
+  - id: normalized
+    name: Normalized Coordinates
+    description: Courant-Snyder normalized phase space coordinates and amplitudes.
+
+  - id: emittance
+    name: Emittance
+    description: Beam emittance quantities measuring phase space volume.
+
+  - id: twiss
+    name: Twiss Parameters
+    description: Courant-Snyder (Twiss) lattice functions and dispersion.
+
+  - id: beam
+    name: Beam Properties
+    description: Integrated beam properties like charge, current, and bunching.
+
+  - id: particle
+    name: Particle Properties
+    description: Individual particle properties and counts.
+
+statistics:
+  # ===================
+  # Phase Space Coordinates
+  # ===================
+  - label: x
+    mathlabel: x
+    units: m
+    description: Horizontal position coordinate.
+    reference: "openPMD-beamphysics standard"
+    category: coordinates
+
+  - label: y
+    mathlabel: y
+    units: m
+    description: Vertical position coordinate.
+    reference: "openPMD-beamphysics standard"
+    category: coordinates
+
+  - label: z
+    mathlabel: z
+    units: m
+    description: Longitudinal position coordinate.
+    reference: "openPMD-beamphysics standard"
+    category: coordinates
+
+  - label: px
+    mathlabel: p_x
+    units: eV/c
+    description: Horizontal momentum component.
+    reference: "openPMD-beamphysics standard"
+    category: coordinates
+
+  - label: py
+    mathlabel: p_y
+    units: eV/c
+    description: Vertical momentum component.
+    reference: "openPMD-beamphysics standard"
+    category: coordinates
+
+  - label: pz
+    mathlabel: p_z
+    units: eV/c
+    description: Longitudinal momentum component.
+    reference: "openPMD-beamphysics standard"
+    category: coordinates
+
+  # ===================
+  # Time Coordinate
+  # ===================
+  - label: t
+    mathlabel: t
+    units: s
+    description: Time coordinate of the particle.
+    reference: "openPMD-beamphysics standard"
+    category: time
+
+  - label: z/c
+    mathlabel: z/c
+    units: s
+    description: Position expressed as time (z divided by speed of light).
+    reference: "openPMD-beamphysics standard"
+    category: time
+
+  # ===================
+  # Relativistic Quantities
+  # ===================
+  - label: p
+    mathlabel: p
+    units: eV/c
+    description: Total momentum magnitude.
+    formula: p = \sqrt{p_x^2 + p_y^2 + p_z^2}
+    reference: "openPMD-beamphysics standard"
+    category: relativistic
+
+  - label: energy
+    mathlabel: E
+    units: eV
+    description: Total relativistic energy.
+    formula: E = \sqrt{p^2 c^2 + m^2 c^4}
+    reference: "openPMD-beamphysics standard"
+    category: relativistic
+
+  - label: kinetic_energy
+    mathlabel: E_\text{kinetic}
+    units: eV
+    description: Kinetic energy (total energy minus rest mass energy).
+    formula: E_\text{kinetic} = E - mc^2
+    reference: "openPMD-beamphysics standard"
+    category: relativistic
+
+  - label: mass
+    mathlabel: m
+    units: eV
+    description: Rest mass energy of the particle species.
+    reference: "openPMD-beamphysics standard"
+    category: relativistic
+
+  - label: gamma
+    mathlabel: \gamma
+    units: "1"
+    description: Relativistic Lorentz factor.
+    formula: \gamma = E / (mc^2)
+    reference: "openPMD-beamphysics standard"
+    category: relativistic
+
+  - label: beta
+    mathlabel: \beta
+    units: "1"
+    description: Relativistic velocity divided by speed of light.
+    formula: \beta = p / E = v / c
+    reference: "openPMD-beamphysics standard"
+    category: relativistic
+
+  - label: beta_x
+    mathlabel: \beta_x
+    units: "1"
+    description: Horizontal component of relativistic velocity / c.
+    formula: \beta_x = p_x / E
+    reference: "openPMD-beamphysics standard"
+    category: relativistic
+
+  - label: beta_y
+    mathlabel: \beta_y
+    units: "1"
+    description: Vertical component of relativistic velocity / c.
+    formula: \beta_y = p_y / E
+    reference: "openPMD-beamphysics standard"
+    category: relativistic
+
+  - label: beta_z
+    mathlabel: \beta_z
+    units: "1"
+    description: Longitudinal component of relativistic velocity / c.
+    formula: \beta_z = p_z / E
+    reference: "openPMD-beamphysics standard"
+    category: relativistic
+
+  - label: higher_order_energy
+    mathlabel: E_{(2)}
+    units: eV
+    description: >-
+      Energy with a polynomial fit (default quadratic) in z or t subtracted.
+      Used to isolate higher-order energy correlations.
+    reference: "openPMD-beamphysics standard"
+    category: relativistic
+
+  - label: higher_order_energy_spread
+    mathlabel: \sigma_{E_{(2)}}
+    units: eV
+    description: Standard deviation of higher_order_energy.
+    formula: \sigma_{E_{(2)}} = \text{std}(E_{(2)})
+    reference: "openPMD-beamphysics standard"
+    category: relativistic
+
+  # ===================
+  # Transverse Slopes
+  # ===================
+  - label: xp
+    mathlabel: x'
+    units: rad
+    description: Horizontal divergence angle (slope dx/dz).
+    formula: x' = p_x / p_z
+    reference: "openPMD-beamphysics standard"
+    category: slopes
+
+  - label: yp
+    mathlabel: y'
+    units: rad
+    description: Vertical divergence angle (slope dy/dz).
+    formula: y' = p_y / p_z
+    reference: "openPMD-beamphysics standard"
+    category: slopes
+
+  # ===================
+  # Polar/Cylindrical Coordinates
+  # ===================
+  - label: r
+    mathlabel: r
+    units: m
+    description: Radial distance from the z-axis in cylindrical coordinates.
+    formula: r = \sqrt{x^2 + y^2}
+    reference: "openPMD-beamphysics standard"
+    category: polar
+
+  - label: theta
+    mathlabel: \theta
+    units: rad
+    description: Azimuthal angle in the x-y plane.
+    formula: \theta = \arctan(y/x)
+    reference: "openPMD-beamphysics standard"
+    category: polar
+
+  - label: pr
+    mathlabel: p_r
+    units: eV/c
+    description: Radial momentum component in cylindrical coordinates.
+    formula: p_r = p_x \cos\theta + p_y \sin\theta
+    reference: "openPMD-beamphysics standard"
+    category: polar
+
+  - label: ptheta
+    mathlabel: p_{\theta}
+    units: eV/c
+    description: Azimuthal momentum component in cylindrical coordinates.
+    formula: p_\theta = -p_x \sin\theta + p_y \cos\theta
+    reference: "openPMD-beamphysics standard"
+    category: polar
+
+  - label: Lz
+    mathlabel: L_z
+    units: m*eV/c
+    description: Angular momentum about the z-axis.
+    formula: L_z = x p_y - y p_x = r \cdot p_\theta
+    reference: "openPMD-beamphysics standard"
+    category: polar
+
+  # ===================
+  # Normalized Coordinates
+  # ===================
+  - label: x_bar
+    mathlabel: \overline{x}
+    units: sqrt(m)
+    description: >-
+      Courant-Snyder normalized horizontal position coordinate.
+      Computed from the beam's covariance matrix.
+    formula: \overline{x} = x / \sqrt{\beta_x}
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: normalized
+
+  - label: px_bar
+    mathlabel: \overline{p_x}
+    units: sqrt(m)
+    description: >-
+      Courant-Snyder normalized horizontal momentum coordinate.
+      Computed from the beam's covariance matrix.
+    formula: \overline{p_x} = (\alpha_x x + \beta_x x') / \sqrt{\beta_x}
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: normalized
+
+  - label: y_bar
+    mathlabel: \overline{y}
+    units: sqrt(m)
+    description: >-
+      Courant-Snyder normalized vertical position coordinate.
+      Computed from the beam's covariance matrix.
+    formula: \overline{y} = y / \sqrt{\beta_y}
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: normalized
+
+  - label: py_bar
+    mathlabel: \overline{p_y}
+    units: sqrt(m)
+    description: >-
+      Courant-Snyder normalized vertical momentum coordinate.
+      Computed from the beam's covariance matrix.
+    formula: \overline{p_y} = (\alpha_y y + \beta_y y') / \sqrt{\beta_y}
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: normalized
+
+  - label: Jx
+    mathlabel: J_x
+    units: m
+    description: >-
+      Normalized action (amplitude) in the horizontal plane.
+      The average equals the normalized emittance.
+    formula: J_x = (\overline{x}^2 + \overline{p_x}^2) / 2
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: normalized
+
+  - label: Jy
+    mathlabel: J_y
+    units: m
+    description: >-
+      Normalized action (amplitude) in the vertical plane.
+      The average equals the normalized emittance.
+    formula: J_y = (\overline{y}^2 + \overline{p_y}^2) / 2
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: normalized
+
+  # ===================
+  # Emittance
+  # ===================
+  - label: norm_emit_x
+    mathlabel: \epsilon_{n,x}
+    units: m
+    description: >-
+      Normalized RMS emittance in the horizontal plane.
+      Invariant under linear transport for a relativistic beam.
+    formula: \epsilon_{n,x} = \frac{1}{mc} \sqrt{\langle x^2 \rangle \langle p_x^2 \rangle - \langle x p_x \rangle^2}
+    reference: "Wiedemann, Particle Accelerator Physics (Springer)"
+    category: emittance
+
+  - label: norm_emit_y
+    mathlabel: \epsilon_{n,y}
+    units: m
+    description: >-
+      Normalized RMS emittance in the vertical plane.
+      Invariant under linear transport for a relativistic beam.
+    formula: \epsilon_{n,y} = \frac{1}{mc} \sqrt{\langle y^2 \rangle \langle p_y^2 \rangle - \langle y p_y \rangle^2}
+    reference: "Wiedemann, Particle Accelerator Physics (Springer)"
+    category: emittance
+
+  - label: norm_emit_4d
+    mathlabel: \epsilon_{4D}
+    units: m^2
+    description: >-
+      4D normalized emittance in transverse (x-y) phase space.
+      Square root of determinant of 4x4 covariance matrix normalized by (mc)^2.
+    formula: \epsilon_{4D} = \frac{1}{(mc)^2} \sqrt{\det(\Sigma_{4 \times 4})}
+    reference: "Wiedemann, Particle Accelerator Physics (Springer)"
+    category: emittance
+
+  # ===================
+  # Twiss Parameters
+  # ===================
+  - label: twiss_alpha_x
+    mathlabel: \alpha_x
+    units: "1"
+    description: Courant-Snyder alpha parameter in horizontal plane.
+    formula: \alpha_x = -\langle x, x' \rangle / \epsilon_x
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: twiss
+
+  - label: twiss_beta_x
+    mathlabel: \beta_x
+    units: m
+    description: Courant-Snyder beta function in horizontal plane.
+    formula: \beta_x = \langle x^2 \rangle / \epsilon_x
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: twiss
+
+  - label: twiss_gamma_x
+    mathlabel: \gamma_x
+    units: 1/m
+    description: Courant-Snyder gamma parameter in horizontal plane.
+    formula: \gamma_x = \langle x'^2 \rangle / \epsilon_x = (1 + \alpha_x^2) / \beta_x
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: twiss
+
+  - label: twiss_emit_x
+    mathlabel: \epsilon_x
+    units: m
+    description: Geometric RMS emittance in horizontal plane.
+    formula: \epsilon_x = \sqrt{\langle x^2 \rangle \langle x'^2 \rangle - \langle x x' \rangle^2}
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: twiss
+
+  - label: twiss_norm_emit_x
+    mathlabel: \epsilon_{n,x}
+    units: m
+    description: Normalized emittance from Twiss calculation in horizontal plane.
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: twiss
+
+  - label: twiss_eta_x
+    mathlabel: \eta_x
+    units: m
+    description: Horizontal dispersion function.
+    formula: \eta_x = \langle x \delta \rangle / \langle \delta^2 \rangle
+    reference: "Wiedemann, Particle Accelerator Physics (Springer)"
+    category: twiss
+
+  - label: twiss_etap_x
+    mathlabel: \eta'_x
+    units: "1"
+    description: Derivative of horizontal dispersion function.
+    formula: \eta'_x = \langle x' \delta \rangle / \langle \delta^2 \rangle
+    reference: "Wiedemann, Particle Accelerator Physics (Springer)"
+    category: twiss
+
+  - label: twiss_alpha_y
+    mathlabel: \alpha_y
+    units: "1"
+    description: Courant-Snyder alpha parameter in vertical plane.
+    formula: \alpha_y = -\langle y, y' \rangle / \epsilon_y
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: twiss
+
+  - label: twiss_beta_y
+    mathlabel: \beta_y
+    units: m
+    description: Courant-Snyder beta function in vertical plane.
+    formula: \beta_y = \langle y^2 \rangle / \epsilon_y
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: twiss
+
+  - label: twiss_gamma_y
+    mathlabel: \gamma_y
+    units: 1/m
+    description: Courant-Snyder gamma parameter in vertical plane.
+    formula: \gamma_y = \langle y'^2 \rangle / \epsilon_y = (1 + \alpha_y^2) / \beta_y
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: twiss
+
+  - label: twiss_emit_y
+    mathlabel: \epsilon_y
+    units: m
+    description: Geometric RMS emittance in vertical plane.
+    formula: \epsilon_y = \sqrt{\langle y^2 \rangle \langle y'^2 \rangle - \langle y y' \rangle^2}
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: twiss
+
+  - label: twiss_norm_emit_y
+    mathlabel: \epsilon_{n,y}
+    units: m
+    description: Normalized emittance from Twiss calculation in vertical plane.
+    reference: "Courant & Snyder, Ann. Phys. 3, 1-48 (1958)"
+    reference_url: https://doi.org/10.1016/0003-4916(58)90012-5
+    category: twiss
+
+  - label: twiss_eta_y
+    mathlabel: \eta_y
+    units: m
+    description: Vertical dispersion function.
+    formula: \eta_y = \langle y \delta \rangle / \langle \delta^2 \rangle
+    reference: "Wiedemann, Particle Accelerator Physics (Springer)"
+    category: twiss
+
+  - label: twiss_etap_y
+    mathlabel: \eta'_y
+    units: "1"
+    description: Derivative of vertical dispersion function.
+    formula: \eta'_y = \langle y' \delta \rangle / \langle \delta^2 \rangle
+    reference: "Wiedemann, Particle Accelerator Physics (Springer)"
+    category: twiss
+
+  # ===================
+  # Beam Properties
+  # ===================
+  - label: charge
+    mathlabel: Q
+    units: C
+    description: Total beam charge (sum of particle weights).
+    formula: Q = \sum_i w_i
+    reference: "openPMD-beamphysics standard"
+    category: beam
+
+  - label: weight
+    mathlabel: w
+    units: C
+    description: Macro-particle charge weight used for statistical calculations.
+    reference: "openPMD-beamphysics standard"
+    category: beam
+
+  - label: species_charge
+    mathlabel: q
+    units: C
+    description: Elementary charge of the particle species.
+    reference: "openPMD-beamphysics standard"
+    category: beam
+
+  - label: average_current
+    mathlabel: I_{av}
+    units: A
+    description: >-
+      Simple average current computed as total charge divided by bunch length in time.
+    formula: I_{av} = Q / \Delta t
+    reference: "openPMD-beamphysics standard"
+    category: beam
+
+  - label: bunching
+    mathlabel: b(\lambda)
+    units: "1"
+    description: >-
+      Complex bunching parameter at a given wavelength.
+      Magnitude indicates modulation depth; phase indicates centroid position.
+    formula: b(\lambda) = \frac{\sum_i w_i e^{i k z_i}}{\sum_i w_i}, \quad k = 2\pi/\lambda
+    reference: "K.-J. Kim, NIM A 250 (1986)"
+    reference_url: https://doi.org/10.1016/0168-9002(86)90916-6
+    category: beam
+
+  # ===================
+  # Particle Properties
+  # ===================
+  - label: n_particle
+    mathlabel: N
+    units: "1"
+    description: Total number of macro-particles in the group.
+    reference: "openPMD-beamphysics standard"
+    category: particle
+
+  - label: n_alive
+    mathlabel: N_{alive}
+    units: "1"
+    description: Number of particles with status equal to 1 (alive/active).
+    reference: "openPMD-beamphysics standard"
+    category: particle
+
+  - label: n_dead
+    mathlabel: N_{dead}
+    units: "1"
+    description: Number of particles with status not equal to 1 (lost/inactive).
+    reference: "openPMD-beamphysics standard"
+    category: particle
+
+  - label: status
+    mathlabel: \text{status}
+    units: "1"
+    description: >-
+      Particle status flag. A value of 1 indicates an alive particle;
+      other values indicate various loss conditions.
+    reference: "openPMD-beamphysics standard"
+    category: particle
+
+  - label: id
+    mathlabel: \text{id}
+    units: "1"
+    description: Unique integer identifier for each particle.
+    reference: "openPMD-beamphysics standard"
+    category: particle

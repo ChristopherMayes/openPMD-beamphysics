@@ -43,6 +43,9 @@ where = ["."]
 include = ["pmd_beamphysics*"]
 namespaces = false
 
+[tool.setuptools.package-data]
+"pmd_beamphysics.statistics_standard" = ["statistics_standard.yaml"]
+
 [project.license]
 file = "LICENSE"
 

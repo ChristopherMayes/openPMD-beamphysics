@@ -12,6 +12,7 @@ Example usage:
     errors = validate_standard(standard)
 """
 
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,12 @@ __all__ = [
     "validate_standard",
     "validate_against_particlegroup",
     "generate_markdown",
+    "generate_computed_markdown",
+    "load_computed_statistics",
+    "get_computed_statistic",
+    "export_computed_statistics",
+    "ARRAY_KEYS",
+    "OPERATORS",
 ]
 
 # Path to the YAML file (in the same directory as this module)
@@ -36,6 +43,75 @@ REQUIRED_STAT_FIELDS = [
     "description",
     "reference",
     "category",
+]
+
+# ---------------------------------------------------------------------------
+# Computed Statistics Configuration
+# ---------------------------------------------------------------------------
+
+# Base array keys that can have operators applied
+ARRAY_KEYS = """
+x y z px py pz t status weight id
+z/c
+p energy kinetic_energy xp yp higher_order_energy
+r theta pr ptheta
+Lz
+gamma beta beta_x beta_y beta_z
+x_bar px_bar Jx Jy
+""".split()
+
+# Operators and their properties for computed statistics
+OPERATORS = {
+    "mean_": {
+        "name": "Mean",
+        "description_template": "Weighted mean of {base_desc}",
+        "mathlabel_template": r"\langle {base_mathlabel} \rangle",
+        "reference": "Standard weighted average",
+    },
+    "sigma_": {
+        "name": "Standard Deviation",
+        "description_template": "Weighted standard deviation of {base_desc}",
+        "mathlabel_template": r"\sigma_{{{base_mathlabel}}}",
+        "reference": "Standard weighted standard deviation",
+    },
+    "min_": {
+        "name": "Minimum",
+        "description_template": "Minimum value of {base_desc}",
+        "mathlabel_template": r"\min({base_mathlabel})",
+        "reference": "NumPy min operation",
+    },
+    "max_": {
+        "name": "Maximum",
+        "description_template": "Maximum value of {base_desc}",
+        "mathlabel_template": r"\max({base_mathlabel})",
+        "reference": "NumPy max operation",
+    },
+    "ptp_": {
+        "name": "Peak-to-Peak",
+        "description_template": "Peak-to-peak range (max - min) of {base_desc}",
+        "mathlabel_template": r"\Delta {base_mathlabel}",
+        "reference": "NumPy ptp (peak-to-peak) operation",
+    },
+    "delta_": {
+        "name": "Delta",
+        "description_template": "Deviation from mean of {base_desc}",
+        "mathlabel_template": r"\Delta {base_mathlabel}",
+        "reference": "Particle value minus weighted mean",
+    },
+}
+
+# Categories for computed statistics
+COMPUTED_CATEGORIES = [
+    {
+        "id": "computed_operators",
+        "name": "Operator Statistics",
+        "description": "Statistics computed by applying operators (mean, sigma, min, max, ptp, delta) to base quantities.",
+    },
+    {
+        "id": "computed_covariance",
+        "name": "Covariance Statistics",
+        "description": "Weighted covariance between pairs of base quantities.",
+    },
 ]
 REQUIRED_CATEGORY_FIELDS = ["id", "name", "description"]
 
@@ -333,6 +409,10 @@ def generate_markdown(standard: dict[str, Any]) -> str:
     )
     lines.append("| `cov_X__Y` | `cov_x__px` | Covariance $\\langle X, Y \\rangle$ |")
     lines.append("")
+    lines.append(
+        "See [Computed Statistics](computed_statistics.md) for a complete enumeration of all computed statistics."
+    )
+    lines.append("")
 
     return "\n".join(lines)
 
@@ -389,3 +469,351 @@ def get_category(
         if cat.get("id") == category_id:
             return cat
     return None
+
+
+# ---------------------------------------------------------------------------
+# Computed Statistics Functions
+# ---------------------------------------------------------------------------
+
+
+def _multiply_units(unit1: str, unit2: str) -> str:
+    """Multiply two unit strings together."""
+    if unit1 == "1" and unit2 == "1":
+        return "1"
+    if unit1 == "1":
+        return unit2
+    if unit2 == "1":
+        return unit1
+
+    # Handle common simplifications
+    if unit1 == unit2:
+        return f"{unit1}^2"
+
+    return f"{unit1}*{unit2}"
+
+
+def _generate_computed_statistics_list(base_stats: dict[str, dict]) -> list[dict]:
+    """
+    Generate all computed statistics from operators and base keys.
+
+    Parameters
+    ----------
+    base_stats : dict
+        Dictionary mapping label -> statistic dict from the base standard.
+
+    Returns
+    -------
+    list of dict
+        List of computed statistic entries.
+    """
+    computed = []
+
+    # Generate operator + key combinations
+    for op_prefix, op_info in OPERATORS.items():
+        for key in ARRAY_KEYS:
+            base = base_stats.get(key)
+            if not base:
+                continue
+
+            label = f"{op_prefix}{key}"
+            base_mathlabel = base.get("mathlabel", key)
+            base_desc = base.get("description", key).lower()
+
+            # Handle units (same as base for all current operators)
+            units = base.get("units", "1")
+
+            stat = {
+                "label": label,
+                "mathlabel": op_info["mathlabel_template"].format(
+                    base_mathlabel=base_mathlabel
+                ),
+                "units": units,
+                "description": op_info["description_template"].format(
+                    base_desc=base_desc
+                ),
+                "reference": op_info["reference"],
+                "category": "computed_operators",
+                "base_statistic": key,
+                "operator": op_prefix.rstrip("_"),
+            }
+            computed.append(stat)
+
+    # Generate covariance combinations (cov_{key1}__{key2})
+    for key1 in ARRAY_KEYS:
+        base1 = base_stats.get(key1)
+        if not base1:
+            continue
+
+        for key2 in ARRAY_KEYS:
+            base2 = base_stats.get(key2)
+            if not base2:
+                continue
+
+            label = f"cov_{key1}__{key2}"
+            mathlabel1 = base1.get("mathlabel", key1)
+            mathlabel2 = base2.get("mathlabel", key2)
+
+            # Covariance units are product of the two base units
+            units1 = base1.get("units", "1")
+            units2 = base2.get("units", "1")
+            units = _multiply_units(units1, units2)
+
+            desc1 = base1.get("description", key1).lower().rstrip(".")
+            desc2 = base2.get("description", key2).lower().rstrip(".")
+
+            stat = {
+                "label": label,
+                "mathlabel": rf"\langle {mathlabel1} {mathlabel2} \rangle - \langle {mathlabel1} \rangle \langle {mathlabel2} \rangle",
+                "units": units,
+                "description": f"Weighted covariance between {desc1} and {desc2}.",
+                "reference": "Standard weighted covariance",
+                "category": "computed_covariance",
+                "base_statistics": [key1, key2],
+            }
+            computed.append(stat)
+
+    return computed
+
+
+@lru_cache(maxsize=1)
+def load_computed_statistics() -> dict[str, Any]:
+    """
+    Generate and return computed statistics derived from base statistics.
+
+    This function generates statistics for all combinations of:
+    - Operators (mean_, sigma_, min_, max_, ptp_, delta_) with array keys
+    - Covariance combinations (cov_{key1}__{key2})
+
+    The result is cached, so subsequent calls return the same dictionary.
+
+    Returns
+    -------
+    dict
+        Dictionary with 'schema_version', 'description', 'categories', and 'statistics' keys,
+        following the same format as the base statistics standard.
+
+    Example
+    -------
+    >>> computed = load_computed_statistics()
+    >>> len(computed['statistics'])  # Number of computed statistics
+    1147
+    >>> computed['statistics'][0]['label']  # First computed statistic
+    'mean_x'
+    """
+    # Load base statistics
+    base_standard = load_standard()
+    base_stats = {stat["label"]: stat for stat in base_standard.get("statistics", [])}
+
+    # Generate computed statistics
+    computed_list = _generate_computed_statistics_list(base_stats)
+
+    return {
+        "schema_version": "1.0",
+        "description": "Auto-generated computed statistics derived from base statistics and operators.",
+        "categories": COMPUTED_CATEGORIES,
+        "statistics": computed_list,
+    }
+
+
+def get_computed_statistic(label: str) -> dict | None:
+    """
+    Look up a computed statistic by its label.
+
+    Parameters
+    ----------
+    label : str
+        The statistic label to look up (e.g., 'sigma_x', 'cov_x__px').
+
+    Returns
+    -------
+    dict or None
+        The statistic entry, or None if not found.
+
+    Example
+    -------
+    >>> stat = get_computed_statistic('sigma_x')
+    >>> stat['mathlabel']
+    '\\\\sigma_{x}'
+    >>> stat['units']
+    'm'
+    """
+    computed = load_computed_statistics()
+    for stat in computed.get("statistics", []):
+        if stat.get("label") == label:
+            return stat
+    return None
+
+
+def export_computed_statistics(path: Path | str) -> None:
+    """
+    Export computed statistics to a YAML file.
+
+    This is useful for debugging or inspection of the generated statistics.
+
+    Parameters
+    ----------
+    path : Path or str
+        Path to write the YAML file.
+
+    Example
+    -------
+    >>> export_computed_statistics('computed_statistics.yaml')
+    """
+    computed = load_computed_statistics()
+    path = Path(path)
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.dump(
+            computed,
+            f,
+            default_flow_style=False,
+            sort_keys=False,
+            allow_unicode=True,
+            width=120,
+        )
+
+
+def generate_computed_markdown() -> str:
+    """
+    Generate Markdown documentation for computed statistics.
+
+    Returns
+    -------
+    str
+        Markdown-formatted documentation string.
+    """
+    computed = load_computed_statistics()
+    lines = []
+
+    # Header
+    lines.append("# Computed Statistics Reference")
+    lines.append("")
+    lines.append(
+        "This document lists all computed statistics available in `ParticleGroup`."
+    )
+    lines.append("")
+    lines.append(
+        "These are derived from [base statistics](statistics_standard.md) by applying operators."
+    )
+    lines.append("")
+
+    # Summary
+    stats = computed.get("statistics", [])
+    n_operators = sum(1 for s in stats if s["category"] == "computed_operators")
+    n_covariance = sum(1 for s in stats if s["category"] == "computed_covariance")
+    lines.append(f"**Total:** {len(stats)} computed statistics")
+    lines.append("")
+    lines.append(
+        f"- {n_operators} operator statistics (mean, sigma, min, max, ptp, delta)"
+    )
+    lines.append(f"- {n_covariance} covariance statistics")
+    lines.append("")
+
+    # Table of contents
+    lines.append("## Contents")
+    lines.append("")
+    lines.append("- [Operators](#operators)")
+    for op_prefix, op_info in OPERATORS.items():
+        op_name = op_info["name"]
+        anchor = op_name.lower().replace(" ", "-").replace("-", "-")
+        lines.append(f"    - [{op_name}](#{anchor})")
+    lines.append("- [Covariances](#covariances)")
+    lines.append("")
+
+    # Operators section
+    lines.append("## Operators")
+    lines.append("")
+    lines.append("The following operators can be applied to any base array statistic:")
+    lines.append("")
+
+    # Table of operators
+    lines.append("| Operator | Symbol Pattern | Description |")
+    lines.append("|----------|----------------|-------------|")
+    for op_prefix, op_info in OPERATORS.items():
+        mathlabel = op_info["mathlabel_template"].format(base_mathlabel="X")
+        desc = op_info["description_template"].format(base_desc="X")
+        lines.append(f"| `{op_prefix}` | ${mathlabel}$ | {desc} |")
+    lines.append("")
+
+    # Generate tables for each operator
+    for op_prefix, op_info in OPERATORS.items():
+        op_name = op_info["name"]
+        lines.append(f"### {op_name}")
+        lines.append("")
+        lines.append(
+            op_info["description_template"].format(base_desc="base quantities") + "."
+        )
+        lines.append("")
+
+        # Filter stats for this operator
+        op_stats = [s for s in stats if s.get("operator") == op_prefix.rstrip("_")]
+
+        lines.append("| Label | Symbol | Units | Base |")
+        lines.append("|-------|--------|-------|------|")
+        for stat in op_stats:
+            label = stat.get("label", "")
+            mathlabel = stat.get("mathlabel", "")
+            units = stat.get("units", "")
+            base = stat.get("base_statistic", "")
+
+            math_fmt = f"${mathlabel}$" if mathlabel else ""
+            units_fmt = f"`{units}`" if units else ""
+            base_link = f"[`{base}`](statistics_standard.md#{_label_to_anchor(base)})"
+
+            lines.append(f"| `{label}` | {math_fmt} | {units_fmt} | {base_link} |")
+
+        lines.append("")
+
+    # Covariances section
+    lines.append("## Covariances")
+    lines.append("")
+    lines.append("Covariances are computed between all pairs of base array statistics.")
+    lines.append("")
+    lines.append("**Format:** `cov_{X}__{Y}` where X and Y are base statistic labels.")
+    lines.append("")
+    lines.append(
+        "**Symbol:** $\\langle X Y \\rangle - \\langle X \\rangle \\langle Y \\rangle$"
+    )
+    lines.append("")
+    lines.append("**Units:** Product of the units of X and Y.")
+    lines.append("")
+
+    # Create a summary table of base keys
+    lines.append("### Available Base Keys")
+    lines.append("")
+    lines.append(
+        "Covariances can be computed between any pair of these base statistics:"
+    )
+    lines.append("")
+    lines.append("| Key | Symbol | Units |")
+    lines.append("|-----|--------|-------|")
+
+    base_standard = load_standard()
+    base_stats = {s["label"]: s for s in base_standard.get("statistics", [])}
+    for key in ARRAY_KEYS:
+        if key in base_stats:
+            stat = base_stats[key]
+            mathlabel = stat.get("mathlabel", key)
+            units = stat.get("units", "")
+            key_link = f"[`{key}`](statistics_standard.md#{_label_to_anchor(key)})"
+            lines.append(f"| {key_link} | ${mathlabel}$ | `{units}` |")
+
+    lines.append("")
+
+    # Full enumeration of all covariances
+    lines.append("### All Covariances")
+    lines.append("")
+    lines.append("| Label | Symbol | Units |")
+    lines.append("|-------|--------|-------|")
+
+    cov_stats = [s for s in stats if s.get("category") == "computed_covariance"]
+    for stat in cov_stats:
+        label = stat.get("label", "")
+        mathlabel = stat.get("mathlabel", "")
+        units = stat.get("units", "")
+        math_fmt = f"${mathlabel}$" if mathlabel else ""
+        units_fmt = f"`{units}`" if units else ""
+        lines.append(f"| `{label}` | {math_fmt} | {units_fmt} |")
+
+    lines.append("")
+
+    return "\n".join(lines)

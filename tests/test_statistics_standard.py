@@ -142,3 +142,75 @@ class TestStatisticsStandard:
         defined_labels = {stat["label"] for stat in standard["statistics"]}
         for label in expected_labels:
             assert label in defined_labels, f"Expected statistic '{label}' not defined"
+
+
+class TestComputedStatistics:
+    """Tests for computed statistics generation."""
+
+    @pytest.fixture
+    def computed(self):
+        """Load computed statistics."""
+        from pmd_beamphysics.standards.statistics import load_computed_statistics
+
+        return load_computed_statistics()
+
+    def test_computed_statistics_generated(self, computed):
+        """Test that computed statistics are generated."""
+        assert "statistics" in computed
+        assert len(computed["statistics"]) > 0
+
+    def test_computed_statistics_count(self, computed):
+        """Test that the expected number of statistics are generated."""
+        # 6 operators * 31 keys = 186 operator stats
+        # 31 * 31 = 961 covariance stats
+        # Total = 1147
+        assert len(computed["statistics"]) == 1147
+
+    def test_computed_categories_exist(self, computed):
+        """Test that computed statistics have categories."""
+        assert "categories" in computed
+        cat_ids = {cat["id"] for cat in computed["categories"]}
+        assert "computed_operators" in cat_ids
+        assert "computed_covariance" in cat_ids
+
+    def test_operator_statistics_format(self, computed):
+        """Test that operator statistics have correct format."""
+        from pmd_beamphysics.standards.statistics import get_computed_statistic
+
+        stat = get_computed_statistic("sigma_x")
+        assert stat is not None
+        assert stat["label"] == "sigma_x"
+        assert stat["units"] == "m"
+        assert stat["category"] == "computed_operators"
+        assert stat["base_statistic"] == "x"
+        assert stat["operator"] == "sigma"
+        assert "mathlabel" in stat
+        assert "description" in stat
+
+    def test_covariance_statistics_format(self, computed):
+        """Test that covariance statistics have correct format."""
+        from pmd_beamphysics.standards.statistics import get_computed_statistic
+
+        stat = get_computed_statistic("cov_x__px")
+        assert stat is not None
+        assert stat["label"] == "cov_x__px"
+        assert stat["units"] == "m*eV/c"
+        assert stat["category"] == "computed_covariance"
+        assert stat["base_statistics"] == ["x", "px"]
+        assert "mathlabel" in stat
+        assert "description" in stat
+
+    def test_get_computed_statistic_not_found(self):
+        """Test that get_computed_statistic returns None for unknown labels."""
+        from pmd_beamphysics.standards.statistics import get_computed_statistic
+
+        stat = get_computed_statistic("nonexistent_computed_stat")
+        assert stat is None
+
+    def test_computed_is_cached(self):
+        """Test that computed statistics are cached (same object returned)."""
+        from pmd_beamphysics.standards.statistics import load_computed_statistics
+
+        computed1 = load_computed_statistics()
+        computed2 = load_computed_statistics()
+        assert computed1 is computed2  # Same cached object

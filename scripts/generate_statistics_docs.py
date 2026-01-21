@@ -26,11 +26,13 @@ from pmd_beamphysics.standards.statistics import (
     validate_standard,
     validate_against_particlegroup,
     generate_markdown,
+    generate_computed_markdown,
 )
 
-# Default output path
+# Default output paths
 REPO_ROOT = Path(__file__).parent.parent
 DEFAULT_OUTPUT = REPO_ROOT / "docs" / "api" / "statistics_standard.md"
+DEFAULT_COMPUTED_OUTPUT = REPO_ROOT / "docs" / "api" / "computed_statistics.md"
 
 
 def main():
@@ -97,16 +99,25 @@ def main():
         print("Validation complete.")
         sys.exit(0)
 
-    # Generate markdown
-    print("Generating documentation...")
+    # Generate markdown for base statistics
+    print("Generating base statistics documentation...")
     markdown = generate_markdown(standard)
 
     # Write output
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(markdown)
+    print(f"  Written to {args.output}")
 
-    print(f"Documentation written to {args.output}")
+    # Generate markdown for computed statistics
+    print("Generating computed statistics documentation...")
+    computed_markdown = generate_computed_markdown()
+
+    with open(DEFAULT_COMPUTED_OUTPUT, "w", encoding="utf-8") as f:
+        f.write(computed_markdown)
+    print(f"  Written to {DEFAULT_COMPUTED_OUTPUT}")
+
+    print("Done!")
 
 
 if __name__ == "__main__":

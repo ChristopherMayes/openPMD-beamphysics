@@ -36,6 +36,7 @@ nav:
       - Fields: api/fields.md
       - Wakefields: api/wakefields.md
       - Statistics Standard: api/statistics_standard.md
+      - Computed Statistics: api/computed_statistics.md
 
   - Contributing:
       - Statistics Schema: statistics_schema.md

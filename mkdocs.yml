@@ -66,6 +66,7 @@ theme:
         name: Switch to light mode
 
 markdown_extensions:
+  - attr_list
   - pymdownx.highlight
   - pymdownx.superfences
   - pymdownx.arithmatex: # Enable MathJAX https://squidfunk.github.io/mkdocs-material/reference/mathjax/

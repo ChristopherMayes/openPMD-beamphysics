@@ -179,6 +179,12 @@ def validate_against_particlegroup(standard: dict[str, Any]) -> list[str]:
     return warnings
 
 
+def _label_to_anchor(label: str) -> str:
+    """Convert a label to a valid markdown anchor."""
+    # Replace special characters that might interfere with anchors
+    return label.replace("/", "").replace(" ", "-").lower()
+
+
 def generate_markdown(standard: dict[str, Any]) -> str:
     """
     Generate Markdown documentation from the statistics standard.
@@ -226,9 +232,11 @@ def generate_markdown(standard: dict[str, Any]) -> str:
         if stats_by_category[cat_id]:
             anchor = cat["name"].lower().replace(" ", "-").replace("/", "")
             lines.append(f"- [{cat['name']}](#{anchor})")
+    lines.append("- [Detailed Definitions](#detailed-definitions)")
+    lines.append("- [Computed Statistics](#computed-statistics)")
     lines.append("")
 
-    # Generate sections for each category
+    # Generate summary tables for each category
     for cat_id, cat in categories.items():
         stats = stats_by_category[cat_id]
         if not stats:
@@ -252,8 +260,9 @@ def generate_markdown(standard: dict[str, Any]) -> str:
             if len(desc) > 80:
                 desc = desc[:77] + "..."
 
-            # Format for table
-            label_fmt = f"`{label}`"
+            # Format for table with link to details
+            anchor = _label_to_anchor(label)
+            label_fmt = f"[`{label}`](#{anchor})"
             math_fmt = f"${mathlabel}$" if mathlabel else ""
             units_fmt = f"`{units}`" if units else ""
 
@@ -261,8 +270,16 @@ def generate_markdown(standard: dict[str, Any]) -> str:
 
         lines.append("")
 
-        # Detailed entries with formulas
-        lines.append("### Detailed Definitions")
+    # Detailed definitions section (all categories together)
+    lines.append("## Detailed Definitions")
+    lines.append("")
+
+    for cat_id, cat in categories.items():
+        stats = stats_by_category[cat_id]
+        if not stats:
+            continue
+
+        lines.append(f"### {cat['name']}")
         lines.append("")
 
         for stat in stats:
@@ -274,7 +291,9 @@ def generate_markdown(standard: dict[str, Any]) -> str:
             reference = stat.get("reference", "")
             reference_url = stat.get("reference_url")
 
-            lines.append(f"#### `{label}`")
+            # Use anchor-friendly id with HTML anchor tag
+            anchor = _label_to_anchor(label)
+            lines.append(f"#### `{label}` {{: #{anchor} }}")
             lines.append("")
             if mathlabel:
                 lines.append(f"**Symbol:** ${mathlabel}$")

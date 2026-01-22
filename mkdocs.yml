@@ -35,6 +35,8 @@ nav:
       - Particles: api/particles.md
       - Fields: api/fields.md
       - Wakefields: api/wakefields.md
+
+  - Standards:
       - Statistics Standard: api/statistics_standard.md
       - Computed Statistics: api/computed_statistics.md
 

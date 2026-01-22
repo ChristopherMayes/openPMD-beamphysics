@@ -14,7 +14,7 @@ Example usage:
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Union
 
 import yaml
 
@@ -118,7 +118,7 @@ COMPUTED_CATEGORIES = [
 REQUIRED_CATEGORY_FIELDS = ["id", "name", "description"]
 
 
-def load_standard(path: Path | None = None) -> dict[str, Any]:
+def load_standard(path: Optional[Path] = None) -> Dict[str, Any]:
     """
     Load and parse the statistics standard YAML file.
 
@@ -138,7 +138,7 @@ def load_standard(path: Path | None = None) -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def validate_standard(standard: dict[str, Any]) -> list[str]:
+def validate_standard(standard: Dict[str, Any]) -> List[str]:
     """
     Validate the statistics standard YAML structure.
 
@@ -203,7 +203,7 @@ def validate_standard(standard: dict[str, Any]) -> list[str]:
     return errors
 
 
-def validate_against_particlegroup(standard: dict[str, Any]) -> list[str]:
+def validate_against_particlegroup(standard: Dict[str, Any]) -> List[str]:
     """
     Validate that statistic labels are accessible in ParticleGroup.
 
@@ -263,7 +263,7 @@ def _label_to_anchor(label: str) -> str:
     return label.replace("/", "").replace(" ", "-").lower()
 
 
-def generate_markdown(standard: dict[str, Any]) -> str:
+def generate_markdown(standard: Dict[str, Any]) -> str:
     """
     Generate Markdown documentation from the statistics standard.
 
@@ -301,7 +301,7 @@ def generate_markdown(standard: dict[str, Any]) -> str:
     categories = {cat["id"]: cat for cat in standard.get("categories", [])}
 
     # Group statistics by category
-    stats_by_category: dict[str, list[dict]] = {cat_id: [] for cat_id in categories}
+    stats_by_category: Dict[str, List[Dict]] = {cat_id: [] for cat_id in categories}
 
     for stat in standard.get("statistics", []):
         cat_id = stat.get("category")
@@ -437,8 +437,8 @@ def generate_markdown(standard: dict[str, Any]) -> str:
 
 
 def get_statistic(
-    label: str, standard: dict[str, Any] | None = None
-) -> dict[str, Any] | None:
+    label: str, standard: Optional[Dict[str, Any]] = None
+) -> Optional[Dict[str, Any]]:
     """
     Look up a statistic by label.
 
@@ -464,8 +464,8 @@ def get_statistic(
 
 
 def get_category(
-    category_id: str, standard: dict[str, Any] | None = None
-) -> dict[str, Any] | None:
+    category_id: str, standard: Optional[Dict[str, Any]] = None
+) -> Optional[Dict[str, Any]]:
     """
     Look up a category by ID.
 
@@ -511,7 +511,7 @@ def _multiply_units(unit1: str, unit2: str) -> str:
     return f"{unit1}*{unit2}"
 
 
-def _generate_computed_statistics_list(base_stats: dict[str, dict]) -> list[dict]:
+def _generate_computed_statistics_list(base_stats: Dict[str, Dict]) -> List[Dict]:
     """
     Generate all computed statistics from operators and base keys.
 
@@ -595,7 +595,7 @@ def _generate_computed_statistics_list(base_stats: dict[str, dict]) -> list[dict
 
 
 @lru_cache(maxsize=1)
-def load_computed_statistics() -> dict[str, Any]:
+def load_computed_statistics() -> Dict[str, Any]:
     """
     Generate and return computed statistics derived from base statistics.
 
@@ -634,7 +634,7 @@ def load_computed_statistics() -> dict[str, Any]:
     }
 
 
-def get_computed_statistic(label: str) -> dict | None:
+def get_computed_statistic(label: str) -> Optional[Dict]:
     """
     Look up a computed statistic by its label.
 
@@ -663,7 +663,7 @@ def get_computed_statistic(label: str) -> dict | None:
     return None
 
 
-def export_computed_statistics(path: Path | str) -> None:
+def export_computed_statistics(path: Union[Path, str]) -> None:
     """
     Export computed statistics to a YAML file.
 

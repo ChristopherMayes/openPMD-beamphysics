@@ -3,6 +3,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Generated documentation
+docs/api/statistics_standard.md
+docs/api/computed_statistics.md
+
+# Generated computed statistics (runtime-generated)
+pmd_beamphysics/standards/computed_statistics.yaml
+
 # C extensions
 *.so
 

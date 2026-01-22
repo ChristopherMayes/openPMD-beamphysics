@@ -25,7 +25,7 @@ readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.9"
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "pytest-benchmark"]
+dev = ["pytest", "pytest-cov", "pytest-benchmark", "pyyaml"]
 doc = [
   "mkdocs",
   "mkdocs-jupyter",
@@ -42,6 +42,9 @@ Homepage = "https://github.com/ChristopherMayes/openPMD-beamphysics"
 where = ["."]
 include = ["pmd_beamphysics*"]
 namespaces = false
+
+[tool.setuptools.package-data]
+"pmd_beamphysics.standards" = ["statistics.yaml"]
 
 [project.license]
 file = "LICENSE"

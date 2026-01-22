@@ -152,6 +152,8 @@ class pmd_unit:
         This method handles:
         - Simple known units (e.g., 'eV', 'm', 'T')
         - Compound expressions with operators (e.g., 'eV/c', 'kg*m/s')
+        - Power notation (e.g., 'm^2', 'eV^2', 's^-1')
+        - Square root notation (e.g., 'sqrt(m)')
 
         Parameters
         ----------
@@ -181,29 +183,109 @@ class pmd_unit:
             u = known_unit[unitSymbol]
             return cls(unitSymbol, unitSI=u.unitSI, unitDimension=u.unitDimension)
 
-        # Not in known_unit - try operator parsing (e.g., "A*s", "kg*m/s")
-        if "*" in unitSymbol or "/" in unitSymbol:
-            parts = re.split(r"([*/])", unitSymbol)
-            if parts[0] not in known_unit:
-                raise ValueError(f"Unknown unitSymbol: {parts[0]}")
+        # Handle sqrt() notation: sqrt(X) = X^0.5
+        sqrt_match = re.match(r"^sqrt\((.+)\)$", unitSymbol)
+        if sqrt_match:
+            inner = sqrt_match.group(1)
+            base_unit = cls.from_symbol(inner)
+            result = power_unit(base_unit, 0.5)
+            # Preserve the original sqrt notation in the symbol
+            result._unitSymbol = unitSymbol
+            return result
 
-            result = known_unit[parts[0]]
-            for op, part in zip(parts[1::2], parts[2::2]):
-                if part not in known_unit:
-                    raise ValueError(f"Unknown unitSymbol: {part}")
-                unit_obj = known_unit[part]
+        # Not in known_unit - try operator parsing (e.g., "A*s", "kg*m/s", "m^2")
+        if "*" in unitSymbol or "/" in unitSymbol or "^" in unitSymbol:
+            # Tokenize: split by * and / but not inside parentheses
+            # This allows m^(-3/2) to remain intact
+            parts = []
+            operators = []
+            current = ""
+            paren_depth = 0
+
+            for char in unitSymbol:
+                if char == "(":
+                    paren_depth += 1
+                    current += char
+                elif char == ")":
+                    paren_depth -= 1
+                    current += char
+                elif char in "*/" and paren_depth == 0:
+                    parts.append(current)
+                    operators.append(char)
+                    current = ""
+                else:
+                    current += char
+
+            parts.append(current)  # Don't forget the last part
+
+            # Parse the first part (may include ^power)
+            result = cls._parse_single_unit(parts[0])
+
+            # Process remaining parts
+            for op, part in zip(operators, parts[1:]):
+                unit_obj = cls._parse_single_unit(part)
                 if op == "*":
                     result = result * unit_obj
                 elif op == "/":
                     result = result / unit_obj
 
-            # Return computed result
-            return cls(
-                unitSymbol, unitSI=result.unitSI, unitDimension=result.unitDimension
-            )
+            # Preserve the original symbol but keep computed dimension
+            result._unitSymbol = unitSymbol
+            return result
 
         # Not found anywhere
         raise ValueError(f"Unknown unitSymbol: {unitSymbol}")
+
+    @classmethod
+    def _parse_single_unit(cls, part: str) -> pmd_unit:
+        """
+        Parse a single unit that may include a power (e.g., 'm^2', 'eV', 's^-1')
+        or sqrt notation (e.g., 'sqrt(m)').
+
+        Parameters
+        ----------
+        part : str
+            A single unit token, optionally with power or sqrt notation.
+
+        Returns
+        -------
+        pmd_unit
+            The parsed unit object.
+        """
+        # Check if it's a known unit first
+        if part in known_unit:
+            return known_unit[part]
+
+        # Check for sqrt() notation
+        sqrt_match = re.match(r"^sqrt\((.+)\)$", part)
+        if sqrt_match:
+            inner = sqrt_match.group(1)
+            base_unit = cls._parse_single_unit(inner)
+            result = power_unit(base_unit, 0.5)
+            result._unitSymbol = part
+            return result
+
+        # Check for power notation with parenthesized fraction: m^(-3/2)
+        paren_power_match = re.match(r"^(.+)\^\((-?\d+)/(\d+)\)$", part)
+        if paren_power_match:
+            base_symbol = paren_power_match.group(1)
+            numerator = int(paren_power_match.group(2))
+            denominator = int(paren_power_match.group(3))
+            power = numerator / denominator
+            base_unit = cls._parse_single_unit(base_symbol)
+            return power_unit(base_unit, power)
+
+        # Check for power notation: m^2, m^-1, m^0.5
+        power_match = re.match(r"^(.+)\^(-?\d+(?:\.\d+)?)$", part)
+        if power_match:
+            base_symbol = power_match.group(1)
+            power = float(power_match.group(2))
+            # Recursively parse base (could be sqrt(m)^2)
+            base_unit = cls._parse_single_unit(base_symbol)
+            return power_unit(base_unit, power)
+
+        # Unknown unit
+        raise ValueError(f"Unknown unitSymbol: {part}")
 
     def __hash__(self) -> int:
         return hash((self.unitSymbol, self.unitSI, self.unitDimension))
@@ -320,7 +402,13 @@ def multiply_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
     dim = tuple(sum(x) for x in zip(d1, d2))
     unitSI = u1.unitSI * u2.unitSI
 
-    return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)
+    # Bypass make_dimension to preserve fractional dimensions
+    result = object.__new__(pmd_unit)
+    result._unitSymbol = symbol
+    result._unitSI = unitSI
+    result._unitDimension = dim
+
+    return result
 
 
 def divide_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
@@ -354,10 +442,16 @@ def divide_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
         symbol = s1 + "/" + s2
     d1 = u1.unitDimension
     d2 = u2.unitDimension
-    dim = make_dimension(a - b for a, b in zip(d1, d2))
+    dim = tuple(a - b for a, b in zip(d1, d2))
     unitSI = u1.unitSI / u2.unitSI
 
-    return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)
+    # Bypass make_dimension to preserve fractional dimensions
+    result = object.__new__(pmd_unit)
+    result._unitSymbol = symbol
+    result._unitSI = unitSI
+    result._unitDimension = dim
+
+    return result
 
 
 def sqrt_unit(u: pmd_unit) -> pmd_unit:
@@ -384,6 +478,55 @@ def sqrt_unit(u: pmd_unit) -> pmd_unit:
     dim = tuple(x // 2 for x in u.unitDimension)
 
     return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)
+
+
+def power_unit(u: pmd_unit, power: float) -> pmd_unit:
+    """
+    Raises a unit to an arbitrary power.
+
+    Parameters
+    ----------
+    u : pmd_unit
+        The base unit.
+    power : float
+        The exponent to raise the unit to.
+
+    Returns
+    -------
+    pmd_unit
+        The unit raised to the given power.
+
+    Examples
+    --------
+    >>> power_unit(pmd_unit("m"), 2)
+    pmd_unit('m^2', 1, (2, 0, 0, 0, 0, 0, 0))
+
+    >>> power_unit(pmd_unit("m"), 0.5)
+    pmd_unit('m^0.5', 1, (0.5, 0, 0, 0, 0, 0, 0))
+    """
+    if not isinstance(u, pmd_unit):
+        raise ValueError("`u` is not a pmd_unit instance")
+
+    symbol = u.unitSymbol
+    if symbol in ["", "1"]:
+        new_symbol = symbol
+    elif power == int(power):
+        new_symbol = f"{symbol}^{int(power)}"
+    else:
+        new_symbol = f"{symbol}^{power}"
+
+    unitSI = u.unitSI**power
+    # Scale each dimension by the power (preserves fractional dimensions)
+    dim = tuple(d * power for d in u.unitDimension)
+
+    # Create unit object without going through make_dimension
+    # to preserve fractional dimensions
+    result = object.__new__(pmd_unit)
+    result._unitSymbol = new_symbol
+    result._unitSI = unitSI
+    result._unitDimension = dim
+
+    return result
 
 
 # length mass time current temperature mol luminous
@@ -469,6 +612,7 @@ NAMED_UNITS = [
     pmd_unit("charge #", 1, "charge"),
     pmd_unit("V/m", 1, "electric_field"),
     pmd_unit("V", 1, "electric_potential"),
+    pmd_unit("c", c_light, "velocity"),  # Speed of light
     pmd_unit("vel/c", c_light, "velocity"),
     pmd_unit("m/s", 1, "velocity"),
     pmd_unit("eV", e_charge, "energy"),

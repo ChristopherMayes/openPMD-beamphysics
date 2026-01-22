@@ -36,6 +36,13 @@ nav:
       - Fields: api/fields.md
       - Wakefields: api/wakefields.md
 
+  - Standards:
+      - Statistics Standard: api/statistics_standard.md
+      - Computed Statistics: api/computed_statistics.md
+
+  - Contributing:
+      - Statistics Schema: statistics_schema.md
+
 theme:
   icon:
     repo: fontawesome/brands/github
@@ -62,6 +69,7 @@ theme:
         name: Switch to light mode
 
 markdown_extensions:
+  - attr_list
   - pymdownx.highlight
   - pymdownx.superfences
   - pymdownx.arithmatex: # Enable MathJAX https://squidfunk.github.io/mkdocs-material/reference/mathjax/

@@ -214,3 +214,45 @@ class TestComputedStatistics:
         computed1 = load_computed_statistics()
         computed2 = load_computed_statistics()
         assert computed1 is computed2  # Same cached object
+
+
+class TestUnitsParsingWithPmdUnit:
+    """Tests that all units strings can be parsed by pmd_unit."""
+
+    def test_base_statistics_units_parseable(self):
+        """Test that all base statistics units can be parsed by pmd_unit."""
+        from pmd_beamphysics.standards.statistics import load_standard
+        from pmd_beamphysics.units import pmd_unit
+
+        standard = load_standard()
+        failed = []
+
+        for stat in standard["statistics"]:
+            units_str = stat.get("units", "")
+            if not units_str:
+                continue
+            try:
+                pmd_unit(units_str)
+            except Exception as e:
+                failed.append((stat["label"], units_str, str(e)))
+
+        assert failed == [], f"Failed to parse units: {failed}"
+
+    def test_computed_statistics_units_parseable(self):
+        """Test that all computed statistics units can be parsed by pmd_unit."""
+        from pmd_beamphysics.standards.statistics import load_computed_statistics
+        from pmd_beamphysics.units import pmd_unit
+
+        computed = load_computed_statistics()
+        failed = []
+
+        for stat in computed["statistics"]:
+            units_str = stat.get("units", "")
+            if not units_str:
+                continue
+            try:
+                pmd_unit(units_str)
+            except Exception as e:
+                failed.append((stat["label"], units_str, str(e)))
+
+        assert failed == [], f"Failed to parse units: {failed}"

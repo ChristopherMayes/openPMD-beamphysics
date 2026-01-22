@@ -582,7 +582,7 @@ def _generate_computed_statistics_list(base_stats: Dict[str, Dict]) -> List[Dict
 
             stat = {
                 "label": label,
-                "mathlabel": rf"\langle {mathlabel1} {mathlabel2} \rangle - \langle {mathlabel1} \rangle \langle {mathlabel2} \rangle",
+                "mathlabel": rf"\langle {mathlabel1} \cdot {mathlabel2} \rangle - \langle {mathlabel1} \rangle \langle {mathlabel2} \rangle",
                 "units": units,
                 "description": f"Weighted covariance between {desc1} and {desc2}.",
                 "reference": "Standard weighted covariance",

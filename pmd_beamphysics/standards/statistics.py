@@ -18,6 +18,8 @@ from typing import Any
 
 import yaml
 
+from pmd_beamphysics.units import pmd_unit
+
 __all__ = [
     "YAML_PATH",
     "load_standard",
@@ -289,6 +291,11 @@ def generate_markdown(standard: dict[str, Any]) -> str:
         "See [Statistics Schema](../statistics_schema.md) for documentation on how to extend this standard."
     )
     lines.append("")
+    lines.append(
+        "Unit dimensions follow the [openPMD unit system](https://github.com/openPMD/openPMD-standard/blob/upcoming-2.0.0/STANDARD.md#unit-systems-and-dimensionality): "
+        "`(length, mass, time, current, temperature, amount, luminous intensity)`."
+    )
+    lines.append("")
 
     # Build category lookup
     categories = {cat["id"]: cat for cat in standard.get("categories", [])}
@@ -376,6 +383,18 @@ def generate_markdown(standard: dict[str, Any]) -> str:
                 lines.append("")
             lines.append(f"**Units:** `{units}`")
             lines.append("")
+
+            # Add unitSI and unitDimension from pmd_unit
+            if units:
+                try:
+                    u = pmd_unit.from_symbol(units)
+                    lines.append(f"**unitSI:** `{u.unitSI}`")
+                    lines.append("")
+                    lines.append(f"**unitDimension:** `{u.unitDimension}`")
+                    lines.append("")
+                except (ValueError, KeyError):
+                    pass  # Skip if unit cannot be parsed
+
             lines.append(description)
             lines.append("")
             if formula:

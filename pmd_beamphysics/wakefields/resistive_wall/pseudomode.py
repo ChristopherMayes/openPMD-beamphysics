@@ -154,8 +154,10 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase, PseudomodeWakefield):
                 stacklevel=2,
             )
 
-        # Initialize the PseudomodeWakefield with our computed mode
-        PseudomodeWakefield.__init__(self, modes=[self._create_mode()])
+    @property
+    def _modes(self) -> list:
+        """Dynamically compute the pseudomode list from current parameters."""
+        return [self._create_mode()]
 
     @property
     def Gamma(self):

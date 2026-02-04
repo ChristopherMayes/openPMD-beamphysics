@@ -325,29 +325,80 @@ def particle_amplitude(particle_group, plane="x", twiss=None, mass_normalize=Tru
     Plane should be:
         'x' for the x, px plane
         'y' for the y, py plane
+        `all` for the 6D phase space
     Other planes will work, but please check that the units make sense.
 
     If mass_normalize (default=True), the momentum will be divided by the mass, so that the units are sqrt(m).
 
     See: normalized_particle_coordinate
     """
-    x = particle_group[plane]
-    key2 = "p" + plane
+    if plane != "all":
+        x = particle_group[plane]
+        key2 = "p" + plane
 
-    if mass_normalize:
-        # Note: do not do /=, because this will replace the ParticleGroup's internal array!
-        p = particle_group[key2] / particle_group.mass
+        if mass_normalize:
+            # Note: do not do /=, because this will replace the ParticleGroup's internal array!
+            p = particle_group[key2] / particle_group.mass
+        else:
+            p = particle_group[key2]
+
+        # User could supply twiss
+        if not twiss:
+            sigma_mat2 = np.cov(x, p, aweights=particle_group.weight)
+            twiss = twiss_calc(sigma_mat2)
+
+        J = amplitude_calc(x, p, beta=twiss["beta"], alpha=twiss["alpha"])
     else:
-        p = particle_group[key2]
+        t_data = normalized_6D_coordinates(particle_group, mass_normalize)
 
-    # User could supply twiss
-    if not twiss:
-        sigma_mat2 = np.cov(x, p, aweights=particle_group.weight)
-        twiss = twiss_calc(sigma_mat2)
-
-    J = amplitude_calc(x, p, beta=twiss["beta"], alpha=twiss["alpha"])
+        J = np.linalg.norm(t_data, axis=1)
 
     return J
+
+
+def normalized_6D_coordinates(particle_group, mass_normalize=True):
+    """
+    Compute coordinates in 6D phase space normalized to the measured beam
+    matrix. Default behavior is to normalize momenta by mass such that the normalized
+    unit is in 1/sqrt(m).
+
+    If x is a vector of particle coordinates in 6D space:
+    x_bar = S^{-1}x where SS^T = cov(x, x) and x_bar is the coordinates in normalized
+    space.
+
+    Parameters
+    ----------
+    particle_group: ParticleGroup
+        Particle group to be transformed
+    mass_normalize: bool, defualt: True
+        Flag to divide by particle mass to return nomalized momentum units in 1/sqrt(m).
+
+    Returns
+    -------
+    res : ndarray
+        Particle coordinates in normalized phase space
+
+    """
+    longitudinal_coordinate = "t" if particle_group.in_z_coordinates else "z"
+
+    vnames = ["x", "px", "y", "py", longitudinal_coordinate, "pz"]
+    data = np.copy(np.stack([particle_group[name] for name in vnames]).T)
+
+    # get delta t and pz
+    data[:, -2] = data[:, -2] - np.mean(data[:, -2])
+    data[:, -1] = data[:, -1] - np.mean(data[:, -1])
+
+    if mass_normalize:
+        for i in [1, 3, 5]:
+            data[:, i] = data[:, i] / particle_group.mass
+
+    cov = np.cov(data.T, aweights=particle_group.weight)
+
+    # transform particle coordinates into normalized coordinates using inverse of
+    # Cholesky decomp
+    t_data = np.linalg.solve(np.linalg.cholesky(cov), data.T).T
+
+    return t_data
 
 
 def normalized_particle_coordinate(

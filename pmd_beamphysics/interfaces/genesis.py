@@ -1,4 +1,7 @@
 import os
+from pathlib import Path
+from collections import namedtuple
+from typing import Union, Optional
 
 import numpy as np
 from h5py import File, Group
@@ -436,133 +439,288 @@ def write_genesis4_distribution(particle_group, h5file, verbose=False):
         print(f"Datasets x, xp, y, yp, t, p written to: {h5file}")
 
 
-def genesis4_par_to_data(h5, species="electron", smear=True):
+PARFILE_SLICE_FIELDS = ("x", "px", "y", "py", "gamma", "theta", "current")
+ParfileSliceData = namedtuple("RawSliceData", PARFILE_SLICE_FIELDS)
+
+
+# Known scalars
+_parfile_scalar_datasets = [
+    "beamletsize",
+    "one4one",
+    "refposition",
+    "slicecount",
+    "slicelength",
+    "slicespacing",
+]
+
+_parfile_skip_groups = [
+    "Meta",
+]
+
+
+def genesis4_parfile_scalars(h5):
     """
-    Converts Genesis 4 data from an h5 handle or file to data for
-    openPMD-beamphysics.
+    Extract useful scalars and slice names from a Genesis4 .par file
+    """
+    # Allow for opening a file
+    if isinstance(h5, (str, Path)):
+        assert os.path.exists(h5), f"File does not exist: {h5}"
+        h5 = File(h5, "r")
 
-    Genesis4 datasets in the HDF5 file are named:
-    'x'
-        x position in meters
-    'px'
-        = gamma * beta_x
-    'y'
-        y position in meters
-    'py'
-        = gamma * beta_y'
-    'theta'
-        angle within a slice in radians
-    'gamma'
-        relativistic gamma
-    'current'
-        Current in a single slice (scalar) in Amps
+    params = {}
+    for k in _parfile_scalar_datasets:
+        if k not in h5 or h5[k].shape != (1,):
+            raise ValueError(
+                f"Expected scalar dataset '{k}' with shape (1,), got shape {h5[k].shape}"
+            )
+        params[k] = h5[k][0]
 
+    return params
+
+
+def genesis4_parfile_slice_groups(h5):
+    """
+    Extract useful scalars and slice names from a Genesis4 .par file
+    """
+    # Allow for opening a file
+    if isinstance(h5, (str, Path)):
+        assert os.path.exists(h5), f"File does not exist: {h5}"
+        h5 = File(h5, "r")
+
+    return sorted(
+        g for g in h5 if g not in _parfile_scalar_datasets + _parfile_skip_groups
+    )
+
+
+def load_parfile_slice_data(group):
+    """
+    Returns ParfileSliceData with Genesis4's named fields in a slice group.
+    """
+    values = [group[field][:] for field in PARFILE_SLICE_FIELDS[:-1]]
+    current = group["current"][:]  # This is really a scalar
+    assert len(current) == 1
+    values.append(current[0])
+    return ParfileSliceData(*values)
+
+
+def genesis4_par_to_data(
+    h5: Union[str, Path, File],
+    species: str = "electron",
+    smear: bool = False,
+    wrap: bool = False,
+    z0: float = 0,
+    slices: Optional[list[int]] = None,
+    equal_weights: bool = False,
+    cutoff: float = 1.6e-19,
+    rng: Optional[np.random.Generator] = None,
+) -> dict:
+    """
+    Convert Genesis 4 `.par` slice data from an HDF5 file into a dictionary
+    compatible with `openPMD-beamphysics` ParticleGroup input.
+
+    Each slice in the Genesis 4 output contains sampled macroparticles with
+    position, momentum, and phase data. This function reconstructs full 6D
+    coordinates and weights, with options for smearing, resampling, and filtering.
 
     Parameters
     ----------
-    h5 : open h5py handle or str
+    h5 : str, Path, or h5py.File
+        Path to a Genesis 4 `.par` HDF5 file, or an open h5py file handle.
 
     species : str, default="electron"
+        Particle species. Currently, only "electron" is supported.
 
-    smear : bool, default=True
+    smear : bool, default=False
         Genesis4 often samples the beam by skipping slices
         in a step called 'sample'.
         This will smear out the theta coordinate over these slices,
         preserving the modulus.
 
+    slices : list of int, optional
+        Specific slice indices to include. If None, all available slices are used.
+
+    wrap: bool, default = False
+        If true, the z position within a slice will be modulo the slice length.
+
+    z0 : float, default=0.0
+        Initial z-position for slice index 1, in meters.
+
+    equal_weights : bool, default=False
+        If True, particles are resampled within each slice so that all output
+        particles have equal charge weights. Useful for simulations that
+        require uniform macroparticles.
+
+    cutoff : float, default=1.6e-19
+        Minimum per-particle weight in Coulombs. Slices resulting in
+        sub-electron macroparticles are skipped to avoid numerical issues.
+
+    rng : numpy.random.Generator or seed, optional
+        Random number generator or seed used for smearing and resampling.
+        If None, a new default RNG is created.
+
+
     Returns
     -------
     data : dict
-        For ParticleGroup
+        Dictionary containing particle phase space and metadata in openPMD-compatible format:
+        {
+            "x", "y", "z"         : position [m],
+            "px", "py", "pz"      : momentum [eV/c],
+            "t"                   : time [s],
+            "status"              : particle status flag (all 1),
+            "species"             : particle species string,
+            "weight"              : particle weight [Coulombs],
+        }
+
+    Notes
+    -----
+    - The function expects Genesis slice groups named "slice000001", etc., each containing:
+        - 'x': x position in meters
+        - 'px': gamma * beta_x
+        - 'y': y position in meters
+        - 'py': gamma * beta_y
+        - 'theta': longitudinal phase angle in radians
+        - 'gamma': relativistic gamma
+        - 'current': scalar slice current in Amperes
+
+    - Scalar metadata (e.g., `slicespacing`, `slicelength`) must be stored as 1-element datasets.
+
+    - z positions are reconstructed from theta (ponderomotive phase), with optional smearing
+      to account for undersampled slices, and offset by slice position and `z0`.
+
+    - Transverse momenta px and py are scaled by mec² to convert to eV/c.
+
     """
     # Allow for opening a file
-    if isinstance(h5, str):
+    if isinstance(h5, (str, Path)):
         assert os.path.exists(h5), f"File does not exist: {h5}"
         h5 = File(h5, "r")
 
     if species != "electron":
         raise ValueError("Only electrons supported for Genesis4")
 
-    # Scalar arrays.
-    # TODO: use refposition?
-    scalars = [
-        "beamletsize",
-        "one4one",
-        "refposition",
-        "slicecount",
-        "slicelength",
-        "slicespacing",
-    ]
-
-    params = {}
-    units = {}
-    for k in scalars:
-        assert len(h5[k]) == 1
-        params[k] = h5[k][0]
-        if "unit" in h5[k].attrs:
-            units[k] = h5[k].attrs["unit"].decode("utf-8")
+    # Extract scalar parameters
+    params = genesis4_parfile_scalars(h5)
 
     # Useful local variables
     ds_slice = params["slicelength"]  # single slice length
     s_spacing = params["slicespacing"]  # spacing between slices
-    sample = int(s_spacing / ds_slice)  # This should be an integer
+    sample = round(s_spacing / ds_slice)  # This should be an integer
 
-    x = []
-    px = []
-    y = []
-    py = []
-    z = []
-    gamma = []
-    weight = []
+    #
+    xs = []
+    pxs = []
+    ys = []
+    pys = []
+    zs = []
+    gammas = []
+    weights = []
 
-    i0 = 0
-    for sname in sorted(g for g in h5 if g not in scalars):
+    if slices is None:
+        snames = genesis4_parfile_slice_groups(h5)
+
+    else:
+        snames = [f"slice{ix:06}" for ix in slices]
+
+    rng = np.random.default_rng(rng)
+
+    for sname in snames:
+        ix = int(sname[5:])  # Extract slice index
+
+        # Skip missing
+        if sname not in h5:
+            continue
+
         g = h5[sname]
         if not isinstance(g, Group) or "current" not in g:
             # Groups like 'Meta' do not contain slice data.
             continue
 
-        current = g["current"][:]  # I * s_spacing/c = Q
-        assert len(current) == 1
-        # Skip zero current slices. These usually have nans in the particle data.
-        if current == 0:
-            i0 += sample
-            continue
+        pdata = load_parfile_slice_data(g)
 
-        x.append(g["x"][:])
-        px.append(g["px"][:] * mec2)
-        y.append(g["y"][:])
-        py.append(g["py"][:] * mec2)
-        gamma.append(g["gamma"][:])
-
-        # Smear theta over sample slices
-        theta = g["theta"][:]
-        irel = theta / (2 * np.pi) % 1  # Relative bin position (0,1)
-        n1 = len(theta)
-        if smear:
-            z1 = (
-                irel + np.random.randint(0, high=sample, size=n1) + i0
-            ) * ds_slice  # Random smear
-        else:
-            z1 = (irel + i0) * ds_slice
-        z.append(z1)
+        current = pdata.current  # I * s_spacing/c = Q
+        n1 = len(pdata.x)
 
         # Convert current to weight (C)
         # I * s_spacing/c = Q
-        q1 = np.full(n1, current) * s_spacing / c_light / n1
-        weight.append(q1)
+        # Single charge
+        q1 = current * s_spacing / c_light / n1
 
-        i0 += sample  # skip samples
+        # Skip subphysical particles
+        if q1 < cutoff:
+            continue
 
-    # Collect
-    x = np.hstack(x)
-    px = np.hstack(px)
-    y = np.hstack(y)
-    py = np.hstack(py)
-    gamma = np.hstack(gamma)
-    z = np.hstack(z)
-    weight = np.hstack(weight)
+        # Skip zero current slices. These usually have nans in the particle data.
+        if current == 0:
+            continue
 
+        # Calculate z
+        theta = pdata.theta
+
+        # Smear theta over sample slices
+        irel = theta / (2 * np.pi)
+        if wrap:
+            irel = irel % 1  # Relative bin position (0,1)
+
+        # Random smear
+        if smear:
+            z1 = (irel + rng.integers(0, sample, size=n1)) * ds_slice
+        else:
+            z1 = (irel) * ds_slice
+
+        z1 = z1 + (ix - 1) * s_spacing + z0  # set absolute z
+
+        # Collect arrays
+        xs.append(pdata.x)
+        pxs.append(pdata.px * mec2)
+        ys.append(pdata.y)
+        pys.append(pdata.py * mec2)
+        gammas.append(pdata.gamma)
+        zs.append(z1)
+        weights.append(np.full(n1, q1))
+
+    if equal_weights:
+        # resample each slice
+
+        n_slices = len(weights)
+
+        counts = list(set([len(w) for w in weights]))
+        assert (
+            len(counts) == 1
+        )  # All slices are supposed to have the same number of particles
+        n1 = counts[0]
+
+        slice_charges = np.array([np.sum(w) for w in weights])
+        max_slice_charge = np.max(
+            slice_charges
+        )  # use this as an upper limit for sampling
+        n_samples = (n1 * slice_charges / max_slice_charge).astype(int)
+        total_charge = np.sum(slice_charges)
+        n_samples_total = np.sum(n_samples)
+        weight1 = total_charge / n_samples_total  # new equal weight
+
+        # Loop over populated slices (note that some are skipped above)
+        for i in range(n_slices):
+            n_sample = n_samples[i]
+            samples = rng.choice(n1, n_sample, replace=False)
+            xs[i] = xs[i][samples]
+            pxs[i] = pxs[i][samples]
+            ys[i] = ys[i][samples]
+            pys[i] = pys[i][samples]
+            zs[i] = zs[i][samples]
+            gammas[i] = gammas[i][samples]
+            weights[i] = np.full(n_sample, weight1)
+
+    # Stack
+    x = np.hstack(xs)
+    px = np.hstack(pxs)
+    y = np.hstack(ys)
+    py = np.hstack(pys)
+    gamma = np.hstack(gammas)
+    z = np.hstack(zs)
+    weight = np.hstack(weights)
+
+    # Form final particlegroup data
     n = len(weight)
     p = np.sqrt(gamma**2 - 1) * mec2
     pz = np.sqrt(p**2 - px**2 - py**2)
@@ -575,7 +733,7 @@ def genesis4_par_to_data(h5, species="electron", smear=True):
         "px": px,
         "py": py,
         "pz": pz,
-        "t": np.full(n, 0),
+        "t": np.full(n, 0.0),
         "status": np.full(n, status),
         "species": species,
         "weight": weight,

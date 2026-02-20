@@ -1,7 +1,9 @@
 """ """
 
+from __future__ import annotations
+
 from copy import copy
-from typing import Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -15,7 +17,12 @@ from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from .labels import mathlabel
-from .statistics import slice_statistics, twiss_ellipse_points
+from .plot_base import (
+    PlotPreparationError,
+    _charge_density_units_str,
+    prepare_marginal_plot,
+)
+from .statistics import slice_statistics
 from .units import (
     c_light,
     nice_array,
@@ -26,36 +33,13 @@ from .units import (
     pmd_unit,
 )
 
+if TYPE_CHECKING:
+    from .particles import ParticleGroup
+
 CMAP0 = copy(plt.get_cmap("viridis"))
 CMAP0.set_under("white")
 
 CMAP1 = copy(plt.get_cmap("plasma"))
-
-
-def _charge_density_units_str(
-    x_unit, axis_units, hist_f: float, axis_f: float = 1.0
-) -> str:
-    """
-    Units string for a histogram density: charge per displayed axis unit.
-
-    The denominator is the axis unit exactly as the axis label shows it,
-    prefix included, and the histogram's own scale becomes a prefix on the
-    C: 'nC/µm', 'pC/(keV/c)'. A time axis is special-cased to amps
-    (C/s = A), which folds the histogram and axis scales into one prefix.
-
-    ``x_unit`` is the coordinate's pmd_unit, ``axis_units`` its displayed
-    label string, ``hist_f`` the factor the density values were divided by,
-    and ``axis_f`` the factor the coordinate was divided by.
-    """
-    if (pmd_unit("C") / x_unit).simplify() == pmd_unit("A"):
-        return pmd_unit("A").scaled_symbol(hist_f / axis_f)
-
-    numerator = pmd_unit("C").scaled_symbol(hist_f)
-    try:
-        return (pmd_unit(numerator) / pmd_unit(str(axis_units))).unitSymbol
-    except (ValueError, KeyError):
-        # Axis units in the explicit power-of-ten form ('1e-3 sqrt(m)').
-        return f"{numerator}/({axis_units})"
 
 
 def plt_histogram(a, weights=None, bins=40):
@@ -300,169 +284,109 @@ def density_plot(
 
 
 def marginal_plot(
-    particle_group,
-    key1="t",
-    key2="p",
-    bins=None,
+    particle_group: ParticleGroup,
+    key1: str = "t",
+    key2: str = "p",
+    bins: int | None = None,
     *,
-    xlim=None,
-    ylim=None,
-    tex=True,
-    nice=True,
-    ellipse=False,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
+    tex: bool = True,
+    nice: bool = True,
+    ellipse: bool = False,
     **kwargs,
 ):
     """
-    Density plot and projections
-
-    Example:
-
-        marginal_plot(P, 't', 'energy', bins=200)
-
+    Density plot and projections with matplotlib.
 
     Parameters
     ----------
-    particle_group: ParticleGroup
+    particle_group : ParticleGroup
         The object to plot
-
-    key1: str, default = 't'
+    key1 : str, default = 't'
         Key to bin on the x-axis
-
-    key2: str, default = 'p'
+    key2 : str, default = 'p'
         Key to bin on the y-axis
-
-    bins: int, default = None
-       Number of bins. If None, this will use a heuristic: bins = sqrt(n_particle/4)
-
-    xlim: tuple, default = None
+    bins : int, default = None
+       Number of bins. If None, this will use a heuristic:
+       `bins = sqrt(n_particle/4)`
+    xlim : tuple, default = None
         Manual setting of the x-axis limits.
-
-    ylim: tuple, default = None
+    ylim : tuple, default = None
         Manual setting of the y-axis limits.
-
-    tex: bool, default = True
+    tex : bool, default = True
         Use TEX for labels
+    nice : bool, default = True
 
-    nice: bool, default = True
-
-    ellipse: bool, default = True
+    ellipse : bool, default = True
         If True, plot an ellipse representing the
         2x2 sigma matrix
+    **kwargs :
+        Passed to `plt.figure`.
 
     Returns
     -------
-    fig: matplotlib.figure.Figure
+    matplotlib.figure.Figure
 
+    Examples
+    --------
 
+    >>> P = ParticleGroup("particles.h5")
+    >>> marginal_plot(P, 't', 'energy', bins=200)
     """
-    if not bins:
-        n = len(particle_group)
-        bins = int(np.sqrt(n / 4))
-
-    # Scale to nice units and get the factor, unit prefix
-    x = particle_group[key1]
-    y = particle_group[key2]
-
-    if len(x) == 1:
-        bins = 100
-
-        if xlim is None:
-            (x0,) = x
-            if np.isclose(x0, 0.0):
-                xlim = (-1, 1)
-            else:
-                xlim = tuple(sorted((0.9 * x0, 1.1 * x0)))
-        if ylim is None:
-            (y0,) = y
-            if np.isclose(y0, 0.0):
-                ylim = (-1, 1)
-            else:
-                ylim = tuple(sorted((0.9 * y0, 1.1 * y0)))
-
-    # Form nice arrays with display units
-    x, f1, ux, xmin, xmax = plottable_array_and_units(
-        x, particle_group.units(key1), nice=nice, lim=xlim
-    )
-    y, f2, uy, ymin, ymax = plottable_array_and_units(
-        y, particle_group.units(key2), nice=nice, lim=ylim
-    )
-
-    w = particle_group["weight"]
-
-    # Handle labels.
-    labelx = mathlabel(key1, units=ux, tex=tex)
-    labely = mathlabel(key2, units=uy, tex=tex)
 
     fig = plt.figure(**kwargs)
-    if np.all(np.isnan(x)):
-        fig.text(0.5, 0.5, f"{key1} is all NaN", ha="center", va="center")
-        return fig
-    if np.all(np.isnan(y)):
-        fig.text(0.5, 0.5, f"{key2} is all NaN", ha="center", va="center")
+    try:
+        pdata = prepare_marginal_plot(
+            particle_group,
+            key1=key1,
+            key2=key2,
+            bins=bins,
+            xlim=xlim,
+            ylim=ylim,
+            nice=nice,
+            ellipse=ellipse,
+        )
+    except PlotPreparationError as ex:
+        fig.text(0.5, 0.5, str(ex), ha="center", va="center")
         return fig
 
     gs = GridSpec(4, 4)
-
     ax_joint = fig.add_subplot(gs[1:4, 0:3])
     ax_marg_x = fig.add_subplot(gs[0, 0:3])
     ax_marg_y = fig.add_subplot(gs[1:4, 3])
-    # ax_info = fig.add_subplot(gs[0, 3:4])
-    # ax_info.table(cellText=['a'])
 
-    # Main plot
-    # Proper weighting
-    if len(x) == 1:
-        ax_joint.scatter(x, y)
+    if len(pdata.x.data) == 1:
+        ax_joint.scatter(pdata.x.data, pdata.y.data)
     else:
         ax_joint.hexbin(
-            x,
-            y,
-            C=w,
+            pdata.x.data,
+            pdata.y.data,
+            C=pdata.weights,
             reduce_C_function=np.sum,
-            gridsize=bins,
+            gridsize=pdata.bins,
             cmap=CMAP0,
             vmin=1e-20,
         )
 
-    if ellipse:
-        sigma_mat2 = particle_group.cov(key1, key2)
-        x_ellipse, y_ellipse = twiss_ellipse_points(sigma_mat2)
-        x_ellipse += particle_group.avg(key1)
-        y_ellipse += particle_group.avg(key2)
-        ax_joint.plot(x_ellipse / f1, y_ellipse / f2, color="red")
-
-    # Manual histogramming version
-    # H, xedges, yedges = np.histogram2d(x, y, weights=w, bins=bins)
-    # extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
-    # ax_joint.imshow(H.T, cmap=cmap, vmin=1e-16, origin='lower', extent=extent, aspect='auto')
+    if pdata.ellipse_x is not None and pdata.ellipse_y is not None:
+        ax_joint.plot(pdata.ellipse_x, pdata.ellipse_y, color="red")
 
     # Top histogram
-    # Old method:
-    # dx = x.ptp()/bins
-    # ax_marg_x.hist(x, weights=w/dx/f1, bins=bins, color='gray')
-    hist, bin_edges = np.histogram(x, bins=bins, weights=w)
-    hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
-    hist_width = np.diff(bin_edges)
-    hist_y, hist_f, _ = nice_array(hist / hist_width)
-    ax_marg_x.bar(hist_x, hist_y, hist_width, color="gray")
-    density_units = _charge_density_units_str(
-        particle_group.units(key1), ux, hist_f, f1
+    ax_marg_x.bar(
+        pdata.x.hist_centers, pdata.x.hist_values, pdata.x.hist_width, color="gray"
     )
-    ax_marg_x.set_ylabel(mathlabel(units=density_units, tex=tex))
 
-    # Side histogram
-    # Old method:
-    # dy = y.ptp()/bins
-    # ax_marg_y.hist(y, orientation="horizontal", weights=w/dy, bins=bins, color='gray')
-    hist, bin_edges = np.histogram(y, bins=bins, weights=w)
-    hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
-    hist_width = np.diff(bin_edges)
-    hist_y, hist_f, _ = nice_array(hist / hist_width)
-    ax_marg_y.barh(hist_x, hist_y, hist_width, color="gray")
-    density_units = _charge_density_units_str(
-        particle_group.units(key2), uy, hist_f, f2
+    # Right histogram
+    ax_marg_y.barh(
+        pdata.y.hist_centers, pdata.y.hist_values, pdata.y.hist_width, color="gray"
     )
-    ax_marg_y.set_xlabel(mathlabel(units=density_units, tex=tex))
+
+    labelx = mathlabel(key1, units=pdata.x.full_unit, tex=tex)
+    labely = mathlabel(key2, units=pdata.y.full_unit, tex=tex)
+
+    ax_marg_x.set_ylabel(pdata.x.axis_label)
+    ax_marg_y.set_xlabel(pdata.y.axis_label)
 
     # Turn off tick labels on marginals
     plt.setp(ax_marg_x.get_xticklabels(), visible=False)
@@ -473,13 +397,13 @@ def marginal_plot(
     ax_joint.set_ylabel(labely)
 
     # Actual plot limits, considering scaling
-    if xlim:
-        ax_joint.set_xlim(xmin / f1, xmax / f1)
-        ax_marg_x.set_xlim(xmin / f1, xmax / f1)
+    if xlim is not None:
+        ax_joint.set_xlim(pdata.x.lim)
+        ax_marg_x.set_xlim(pdata.x.lim)
 
-    if ylim:
-        ax_joint.set_ylim(ymin / f2, ymax / f2)
-        ax_marg_y.set_ylim(ymin / f2, ymax / f2)
+    if ylim is not None:
+        ax_joint.set_ylim(pdata.y.lim)
+        ax_marg_y.set_ylim(pdata.y.lim)
 
     return fig
 

@@ -170,7 +170,21 @@ class ParticleGroup:
 
     Use `help(ParticleGroup.plot)`, etc. for usage.
 
+    Parameters
+    ----------
+    h5 : str, pathlib.Path, h5py.File, or dict, optional
+        Source of particle data. Can be a filename (str or Path) to an
+        HDF5 file, an open ``h5py.File`` handle, or a dict-like object
+        with openPMD particle data. Mutually exclusive with `data`.
+    data : dict, optional
+        Raw particle data as a dict with keys ``'x'``, ``'px'``, ``'y'``,
+        ``'py'``, ``'z'``, ``'pz'``, ``'t'``, ``'status'``, ``'weight'``,
+        and ``'species'``. Mutually exclusive with `h5`.
 
+    Raises
+    ------
+    NotImplementedError
+        If both `h5` and `data` are provided.
     """
 
     def __init__(self, h5=None, data=None):
@@ -368,8 +382,9 @@ class ParticleGroup:
 
     def assign_id(self):
         """
-        Assigns unique ids, integers from 1 to n_particle
+        Assign unique integer IDs to all particles.
 
+        Sets ``self.id`` to integers from 1 to ``n_particle``.
         """
         if "id" not in self._settable_array_keys:
             self._settable_array_keys.append("id")
@@ -390,8 +405,20 @@ class ParticleGroup:
         """Number of alive particles, defined by status != 1"""
         return self.n_particle - self.n_alive
 
-    def units(self, key):
-        """Returns the units of any key"""
+    def units(self, key: str):
+        """
+        Return the units string for a given key.
+
+        Parameters
+        ----------
+        key : str
+            Any valid particle key name.
+
+        Returns
+        -------
+        str
+            The units string (e.g., ``'m'``, ``'eV/c'``, ``'s'``).
+        """
         return pg_units(key)
 
     @property
@@ -595,33 +622,105 @@ class ParticleGroup:
         """Normalized amplitude J in the y-py plane"""
         return particle_amplitude(self, "y")
 
-    def delta(self, key):
-        """Attribute (array) relative to its mean"""
+    def delta(self, key: str):
+        """
+        Return an attribute array relative to its weighted mean.
+
+        Parameters
+        ----------
+        key : str
+            Any valid particle property name.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of ``self[key] - self.avg(key)``.
+        """
         return self[key] - self.avg(key)
 
     # Statistical property functions
 
-    def min(self, key):
-        """Minimum of any key"""
-        return np.min(self[key])  # was: getattr(self, key)
+    def min(self, key: str):
+        """
+        Return the minimum value of a particle property.
 
-    def max(self, key):
-        """Maximum of any key"""
+        Parameters
+        ----------
+        key : str
+            Any valid particle property name.
+
+        Returns
+        -------
+        float
+            Minimum value.
+        """
+        return np.min(self[key])
+
+    def max(self, key: str):
+        """
+        Return the maximum value of a particle property.
+
+        Parameters
+        ----------
+        key : str
+            Any valid particle property name.
+
+        Returns
+        -------
+        float
+            Maximum value.
+        """
         return np.max(self[key])
 
-    def ptp(self, key):
-        """Peak-to-Peak = max - min of any key"""
+    def ptp(self, key: str):
+        """
+        Return the peak-to-peak (max - min) range of a particle property.
+
+        Parameters
+        ----------
+        key : str
+            Any valid particle property name.
+
+        Returns
+        -------
+        float
+            Peak-to-peak value.
+        """
         return np.ptp(self[key])
 
-    def avg(self, key):
-        """Statistical average"""
+    def avg(self, key: str):
+        """
+        Return the weighted average of a particle property.
+
+        Parameters
+        ----------
+        key : str
+            Any valid particle property name.
+
+        Returns
+        -------
+        float
+            Weighted average using ``self.weight`` as weights.
+        """
         dat = self[key]  # equivalent to self.key for accessing properties above
         if np.isscalar(dat):
             return dat
         return np.average(dat, weights=self.weight)
 
-    def std(self, key):
-        """Standard deviation (actually sample)"""
+    def std(self, key: str):
+        """
+        Return the weighted standard deviation of a particle property.
+
+        Parameters
+        ----------
+        key : str
+            Any valid particle property name.
+
+        Returns
+        -------
+        float
+            Weighted standard deviation using ``self.weight`` as weights.
+        """
         dat = self[key]
         if np.isscalar(dat):
             return 0
@@ -775,7 +874,7 @@ class ParticleGroup:
 
         return statistics.bunching(z, wavelength, weight=self.weight)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str):
         """
         Returns a property or statistical quantity that can be computed:
 
@@ -800,32 +899,44 @@ class ParticleGroup:
                 len(subkeys) == 2
             ), f"Too many properties in covariance request: {key}"
             return self.cov(*subkeys)[0, 1]
-        elif key.startswith("delta_"):
+        if key.startswith("delta_"):
             return self.delta(key[6:])
-        elif key.startswith("sigma_"):
+        if key.startswith("sigma_"):
             return self.std(key[6:])
-        elif key.startswith("mean_"):
+        if key.startswith("mean_"):
             return self.avg(key[5:])
-        elif key.startswith("min_"):
+        if key.startswith("min_"):
             return self.min(key[4:])
-        elif key.startswith("max_"):
+        if key.startswith("max_"):
             return self.max(key[4:])
-        elif key.startswith("ptp_"):
+        if key.startswith("ptp_"):
             return self.ptp(key[4:])
-        elif "bunching" in key:
+        if "bunching" in key:
             wavelength = parse_bunching_str(key)
             bunching = self.bunching(wavelength)  # complex
 
             # abs or arg (angle):
             if "phase_" in key:
                 return np.angle(bunching)
-            else:
-                return np.abs(bunching)
+            return np.abs(bunching)
 
-        else:
-            return getattr(self, key)
+        return getattr(self, key)
 
     def where(self, x):
+        """
+        Filter particles by a boolean condition.
+
+        Parameters
+        ----------
+        x : array_like of bool
+            Boolean mask or condition array. Particles where `x` is True
+            are selected.
+
+        Returns
+        -------
+        ParticleGroup
+            A new ParticleGroup containing only the selected particles.
+        """
         return self[np.where(x)]
 
     # TODO: should the user be allowed to do this?
@@ -841,7 +952,15 @@ class ParticleGroup:
     # Simple 'tracking'
     def drift(self, delta_t):
         """
-        Drifts particles by time delta_t
+        Drift all particles for a given time interval.
+
+        Updates x, y, z, and t in-place using each particle's velocity.
+
+        Parameters
+        ----------
+        delta_t : float or numpy.ndarray
+            Time interval in seconds. Can be a scalar (same for all particles)
+            or an array with one value per particle.
         """
         self.x = self.x + self.beta_x * c_light * delta_t
         self.y = self.y + self.beta_y * c_light * delta_t
@@ -849,6 +968,19 @@ class ParticleGroup:
         self.t = self.t + delta_t
 
     def drift_to_z(self, z=None):
+        """
+        Drift all particles to the same z position.
+
+        Each particle is drifted by the time needed to reach `z` given
+        its longitudinal velocity. After drifting, all z values are set
+        exactly to `z`.
+
+        Parameters
+        ----------
+        z : float, optional
+            Target z position in meters. If None, particles are drifted
+            to the mean z.
+        """
         if z is None:
             z = self.avg("z")
         dt = (z - self.z) / (self.beta_z * c_light)
@@ -858,7 +990,7 @@ class ParticleGroup:
 
     def drift_to_t(self, t=None):
         """
-        Drifts all particles to the same t
+        Drifts all particles to the same t.
 
         If no z is given, particles will be drifted to the average t
         """
@@ -919,12 +1051,48 @@ class ParticleGroup:
         write_astra(self, filePath, verbose=verbose, probe=probe)
 
     def write_bmad(self, filePath, p0c=None, t_ref=0, verbose=False):
+        """
+        Write particle data in Bmad format.
+
+        Parameters
+        ----------
+        filePath : str or pathlib.Path
+            Output file path.
+        p0c : float, optional
+            Reference momentum in eV/c. If None, the average pz is used.
+        t_ref : float, optional
+            Reference time in seconds. Default is 0.
+        verbose : bool, optional
+            If True, print information during writing. Default is False.
+        """
         bmad.write_bmad(self, filePath, p0c=p0c, t_ref=t_ref, verbose=verbose)
 
     def write_elegant(self, filePath, verbose=False):
+        """
+        Write particle data in Elegant SDDS format.
+
+        Parameters
+        ----------
+        filePath : str or pathlib.Path
+            Output file path.
+        verbose : bool, optional
+            If True, print information during writing. Default is False.
+        """
         write_elegant(self, filePath, verbose=verbose)
 
     def write_genesis2_beam_file(self, filePath, n_slice=None, verbose=False):
+        """
+        Write particle data as a Genesis 1.3 v2 beam file.
+
+        Parameters
+        ----------
+        filePath : str or pathlib.Path
+            Output file path.
+        n_slice : int, optional
+            Number of slices. If None, a default is determined automatically.
+        verbose : bool, optional
+            If True, print information during writing. Default is False.
+        """
         # Get beam columns
         beam_columns = genesis2_beam_data(self, n_slice=n_slice)
         # Actually write the file
@@ -934,6 +1102,20 @@ class ParticleGroup:
     def write_genesis4_beam(
         self, filePath, n_slice=None, return_input_str=False, verbose=False
     ):
+        """
+        Write particle data as a Genesis 1.3 v4 beam file.
+
+        Parameters
+        ----------
+        filePath : str or pathlib.Path
+            Output file path.
+        n_slice : int, optional
+            Number of slices. If None, a default is determined automatically.
+        return_input_str : bool, optional
+            Defaults to False.
+        verbose : bool, optional
+            If True, print information during writing. Default is False.
+        """
         return write_genesis4_beam(
             self,
             filePath,
@@ -943,9 +1125,32 @@ class ParticleGroup:
         )
 
     def write_genesis4_distribution(self, filePath, verbose=False):
+        """
+        Write particle data as a Genesis 1.3 v4 distribution HDF5 file.
+
+        Parameters
+        ----------
+        filePath : str or pathlib.Path
+            Output file path.
+        verbose : bool, optional
+            If True, print information during writing. Default is False.
+        """
         write_genesis4_distribution(self, filePath, verbose=verbose)
 
     def write_gpt(self, filePath, asci2gdf_bin=None, verbose=False):
+        """
+        Write particle data in GPT (General Particle Tracer) format.
+
+        Parameters
+        ----------
+        filePath : str or pathlib.Path
+            Output file path.
+        asci2gdf_bin : str, optional
+            Path to the ``asci2gdf`` binary for GDF conversion. If None,
+            an ASCII file is written.
+        verbose : bool, optional
+            If True, print information during writing. Default is False.
+        """
         write_gpt(self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose)
 
     def write_impact(
@@ -955,6 +1160,21 @@ class ParticleGroup:
         include_header=True,
         verbose=False,
     ):
+        """
+        Write particle data in Impact-T format.
+
+        Parameters
+        ----------
+        filePath : str or pathlib.Path
+            Output file path.
+        cathode_kinetic_energy_ref : float, optional
+            Reference kinetic energy at the cathode in eV. If None, the
+            average kinetic energy is used.
+        include_header : bool, optional
+            If True, include the Impact-T header line. Default is True.
+        verbose : bool, optional
+            If True, print information during writing. Default is False.
+        """
         from .interfaces.impact import write_impact
 
         return write_impact(
@@ -966,21 +1186,77 @@ class ParticleGroup:
         )
 
     def write_litrack(self, filePath, p0c=None, verbose=False):
+        """
+        Write particle data in LiTrack format.
+
+        Parameters
+        ----------
+        filePath : str or pathlib.Path
+            Output file path.
+        p0c : float, optional
+            Reference momentum in eV/c. If None, the average pz is used.
+        verbose : bool, optional
+            If True, print information during writing. Default is False.
+        """
         return write_litrack(self, outfile=filePath, p0c=p0c, verbose=verbose)
 
     def write_lucretia(
         self, filePath, ele_name="BEGINNING", t_ref=0, stop_ix=None, verbose=False
     ):
+        """
+        Write particle data in Lucretia format.
+
+        Parameters
+        ----------
+        filePath : str or pathlib.Path
+            Output file path.
+        ele_name : str, optional
+            Element name for the Lucretia beam. Default is ``'BEGINNING'``.
+        t_ref : float, optional
+            Reference time in seconds. Default is 0.
+        stop_ix : int, optional
+            Stop index for the Lucretia beam structure.
+        verbose : bool, optional
+            If True, print information during writing. Default is False.
+        """
         return write_lucretia(
             self, filePath, ele_name=ele_name, t_ref=t_ref, stop_ix=stop_ix
         )
 
     def write_simion(self, filePath, color=0, flip_z_to_x=True, verbose=False):
+        """
+        Write particle data in SIMION format.
+
+        Parameters
+        ----------
+        filePath : str or pathlib.Path
+            Output file path.
+        color : int, optional
+            SIMION color index for particles. Default is 0.
+        flip_z_to_x : bool, optional
+            If True, swap z and x axes for SIMION's coordinate convention.
+            Default is True.
+        verbose : bool, optional
+            If True, print information during writing. Default is False.
+        """
         return write_simion(
             self, filePath, verbose=verbose, color=color, flip_z_to_x=flip_z_to_x
         )
 
     def write_opal(self, filePath, verbose=False, dist_type="emitted"):
+        """
+        Write particle data in OPAL (Object Oriented Parallel Accelerator Library) format.
+
+        Parameters
+        ----------
+        filePath : str or pathlib.Path
+            Output file path.
+        verbose : bool, optional
+            If True, print information during writing. Default is False.
+        dist_type : str, optional
+            Distribution type, either ``'emitted'`` or ``'injected'``.
+            Default is ``'emitted'``.
+        """
         return write_opal(self, filePath, verbose=verbose, dist_type=dist_type)
 
     # openPMD
@@ -1131,8 +1407,25 @@ class ParticleGroup:
 
     def slice_statistics(self, *keys, n_slice=100, slice_key=None):
         """
-        Slice statistics
+        Compute slice statistics along the bunch.
 
+        Parameters
+        ----------
+        *keys : str
+            Statistical quantities to compute per slice (e.g., ``'sigma_x'``,
+            ``'norm_emit_x'``, ``'mean_energy'``).
+        n_slice : int, optional
+            Number of slices. Default is 100.
+        slice_key : str, optional
+            Key to slice on. If None, defaults to ``'z'`` when particles are in
+            t-coordinates, or ``'t'`` otherwise.
+
+        Returns
+        -------
+        dict
+            Dictionary of slice statistics arrays, including a
+            ``'current'`` or ``'density'`` key computed from charge
+            per slice.
         """
 
         if slice_key is None:
@@ -1171,6 +1464,36 @@ class ParticleGroup:
         ylim=None,
         **kwargs,
     ):
+        """
+        Plot slice statistics along the bunch.
+
+        Parameters
+        ----------
+        *keys : str
+            Keys to plot slice statistics for (e.g., ``'sigma_x'``, ``'norm_emit_x'``).
+        n_slice : int, optional
+            Number of slices. Default is 100.
+        slice_key : str, optional
+            Key to slice on. If None, defaults to ``'z'`` for t-coordinates or
+            ``'t'`` for z-coordinates.
+        tex : bool, optional
+            Use TeX for axis labels. Default is True.
+        nice : bool, optional
+            Scale to nice units. Default is True.
+        return_figure : bool, optional
+            If True, return the matplotlib Figure. Default is False.
+        xlim : tuple of float, optional
+            Manual x-axis limits in raw units.
+        ylim : tuple of float, optional
+            Manual y-axis limits in raw units.
+        **kwargs
+            Additional keyword arguments passed to ``plt.subplots``.
+
+        Returns
+        -------
+        None or matplotlib.figure.Figure
+            Returns a Figure only if ``return_figure=True``.
+        """
         fig = slice_plot(
             self,
             *keys,
@@ -1311,6 +1634,21 @@ class ParticleGroup:
 
     # New constructors
     def split(self, n_chunks=100, key="z"):
+        """
+        Split the particle group into even chunks sorted by a key.
+
+        Parameters
+        ----------
+        n_chunks : int, optional
+            Number of chunks to split into. Default is 100.
+        key : str, optional
+            Particle attribute to sort by before splitting. Default is ``'z'``.
+
+        Returns
+        -------
+        list of ParticleGroup
+            A list of ParticleGroup objects, one per chunk.
+        """
         return split_particles(self, n_chunks=n_chunks, key=key)
 
     def fractional_split(self, fractions: Union[float, int, list], key: str):
@@ -1374,7 +1712,14 @@ class ParticleGroup:
         return particle_groups
 
     def copy(self):
-        """Returns a deep copy"""
+        """
+        Return a deep copy of this ParticleGroup.
+
+        Returns
+        -------
+        ParticleGroup
+            An independent copy with no shared data.
+        """
         return deepcopy(self)
 
     @functools.wraps(resample_particles)
@@ -1383,8 +1728,15 @@ class ParticleGroup:
         return ParticleGroup(data=data)
 
     # Internal sorting
-    def _sort(self, key):
-        """Sorts internal arrays by key"""
+    def _sort(self, key: str):
+        """
+        Sort all internal arrays in-place by a particle property.
+
+        Parameters
+        ----------
+        key : str
+            Particle property to sort by (e.g., ``'z'``, ``'t'``).
+        """
         ixlist = np.argsort(self[key])
         for k in self._settable_array_keys:
             self._data[k] = self[k][ixlist]
@@ -1412,13 +1764,16 @@ class ParticleGroup:
         return NotImplemented
 
     def __len__(self):
+        """Return the number of particles."""
         return len(self[self._settable_array_keys[0]])
 
     def __str__(self):
+        """Return a human-readable summary string."""
         s = f"ParticleGroup with {self.n_particle} particles with total charge {self.charge} C"
         return s
 
     def __repr__(self):
+        """Return a detailed string representation with memory location."""
         memloc = hex(id(self))
         return f"<ParticleGroup with {self.n_particle} particles at {memloc}>"
 

@@ -2,11 +2,14 @@
 Tests for the statistics standard schema validation.
 """
 
+import warnings
+
 import pytest
 
 from beamphysics.standards.statistics import (
     YAML_PATH,
     load_standard,
+    validate_against_particlegroup,
     validate_standard,
     get_statistic,
     get_category,
@@ -52,6 +55,16 @@ class TestStatisticsStandard:
         errors = validate_standard(standard)
         assert errors == [], f"Schema validation errors: {errors}"
 
+    def test_validate_against_particlegroup(self, standard):
+        """Test that the schema validation passes with no errors."""
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            errors = validate_against_particlegroup(standard)
+        for error in errors:
+            print(error)
+        assert errors == [], f"Schema validation errors: {'\n'.join(errors)}"
+
     def test_all_categories_have_required_fields(self, standard):
         """Test that all categories have required fields."""
         required_fields = ["id", "name", "description"]
@@ -68,6 +81,8 @@ class TestStatisticsStandard:
             "description",
             "reference",
             "category",
+            "units",
+            "shape",
         ]
         for stat in standard["statistics"]:
             for field in required_fields:
@@ -214,6 +229,16 @@ class TestComputedStatistics:
         computed1 = load_computed_statistics()
         computed2 = load_computed_statistics()
         assert computed1 is computed2  # Same cached object
+
+    def test_validate_against_particlegroup(self, computed):
+        """Test that the schema validation passes with no errors."""
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            errors = validate_against_particlegroup(computed)
+        for error in errors:
+            print(error)
+        assert errors == [], f"Schema validation errors: {'\n'.join(errors)}"
 
 
 class TestUnitsParsingWithPmdUnit:

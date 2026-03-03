@@ -874,6 +874,25 @@ class ParticleGroup:
 
         return statistics.bunching(z, wavelength, weight=self.weight)
 
+    def info(self, key: str):
+        """
+        Return information about a specific statistics key.
+
+        Parameters
+        ----------
+        key : str
+
+        Returns
+        -------
+        dict
+            Information on the specific statistics item, including the following keys:
+            label, mathlabel, units, description, formula, reference,
+            reference_url, category, dtype, and shape
+        """
+        from .standards.statistics import get_all_statistics_by_key
+
+        return get_all_statistics_by_key()[key]
+
     def __getitem__(self, key: str):
         """
         Returns a property or statistical quantity that can be computed:
@@ -911,6 +930,21 @@ class ParticleGroup:
             return self.max(key[4:])
         if key.startswith("ptp_"):
             return self.ptp(key[4:])
+        if key.startswith("twiss_"):
+            twiss_key = key[6:]
+            plane = twiss_key[-1]
+            if plane not in {"x", "y"}:
+                raise KeyError(
+                    f"Invalid twiss key: {key} ({twiss_key}). Must end in plane 'x' or 'y'."
+                )
+            return self.twiss(plane)[twiss_key]
+
+        if key == "bunching":
+            raise ValueError(
+                "'bunching' is not a valid key on its own. There should be a suffix to indicate "
+                "wavelength, such as: 'bunching_1.23e-4', 'bunching_1.23e-4_nm', or 'bunching_phase_1.23e-4'"
+            )
+
         if "bunching" in key:
             wavelength = parse_bunching_str(key)
             bunching = self.bunching(wavelength)  # complex

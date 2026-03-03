@@ -897,7 +897,7 @@ for plane in ("x", "y"):
         )
 
 
-def pg_units(key):
+def pg_units(key: str) -> pmd_unit:
     """
     Returns a str representing the units of any attribute
     """

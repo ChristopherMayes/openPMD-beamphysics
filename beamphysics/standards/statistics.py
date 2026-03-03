@@ -47,6 +47,8 @@ REQUIRED_STAT_FIELDS = [
     "description",
     "reference",
     "category",
+    "shape",
+    "dtype",
 ]
 
 # ---------------------------------------------------------------------------
@@ -71,36 +73,42 @@ OPERATORS = {
         "description_template": "Weighted mean of {base_desc}",
         "mathlabel_template": r"\langle {base_mathlabel} \rangle",
         "reference": "Standard weighted average",
+        "shape": [],
     },
     "sigma_": {
         "name": "Standard Deviation",
         "description_template": "Weighted standard deviation of {base_desc}",
         "mathlabel_template": r"\sigma_{{{base_mathlabel}}}",
         "reference": "Standard weighted standard deviation",
+        "shape": [],
     },
     "min_": {
         "name": "Minimum",
         "description_template": "Minimum value of {base_desc}",
         "mathlabel_template": r"\min({base_mathlabel})",
         "reference": "NumPy min operation",
+        "shape": [],
     },
     "max_": {
         "name": "Maximum",
         "description_template": "Maximum value of {base_desc}",
         "mathlabel_template": r"\max({base_mathlabel})",
         "reference": "NumPy max operation",
+        "shape": [],
     },
     "ptp_": {
         "name": "Peak-to-Peak",
         "description_template": "Peak-to-peak range (max - min) of {base_desc}",
         "mathlabel_template": r"\Delta {base_mathlabel}",
         "reference": "NumPy ptp (peak-to-peak) operation",
+        "shape": [],
     },
     "delta_": {
         "name": "Delta",
         "description_template": "Deviation from mean of {base_desc}",
         "mathlabel_template": r"\Delta {base_mathlabel}",
         "reference": "Particle value minus weighted mean",
+        "shape": ["n_particle"],
     },
 }
 
@@ -223,35 +231,59 @@ def validate_against_particlegroup(standard: Dict[str, Any]) -> List[str]:
     """
     warnings = []
 
-    try:
-        # Create a minimal ParticleGroup for introspection
-        data = {
-            "x": np.array([0.0]),
-            "px": np.array([0.0]),
-            "y": np.array([0.0]),
-            "py": np.array([0.0]),
-            "z": np.array([0.0]),
-            "pz": np.array([1e6]),  # Need nonzero pz for some derived quantities
-            "t": np.array([0.0]),
-            "weight": np.array([1e-12]),
-            "status": np.array([1]),
-            "species": "electron",
-        }
-        P = ParticleGroup(data=data)
+    # Create a minimal ParticleGroup for introspection
+    n_particle = 10
+    data = {
+        "x": np.array([0.0] * n_particle),
+        "px": np.array([0.0] * n_particle),
+        "y": np.array([0.0] * n_particle),
+        "py": np.array([0.0] * n_particle),
+        "z": np.array([0.0] * n_particle),
+        "pz": np.array(
+            [1e6] * n_particle
+        ),  # Need nonzero pz for some derived quantities
+        "t": np.array([0.0] * n_particle),
+        "weight": np.array([1e-12] * n_particle),
+        "status": np.array([1] * n_particle),
+        "species": "electron",
+    }
+    P = ParticleGroup(data=data)
 
-        for stat in standard.get("statistics", []):
-            label = stat.get("label")
-            if label is None:
-                continue
+    for stat in standard.get("statistics", []):
+        label = stat.get("label")
+        if label is None:
+            continue
 
-            # Try to access the attribute
-            try:
-                _ = P[label]
-            except (AttributeError, KeyError, Exception) as e:
-                warnings.append(f"Label '{label}' not accessible in ParticleGroup: {e}")
+        if label == "bunching":
+            label = "bunching_1.23e-4"
 
-    except ImportError:
-        warnings.append("Could not import ParticleGroup for validation")
+        # Try to access the attribute
+        try:
+            value = P[label]
+        except (AttributeError, KeyError, Exception) as e:
+            warnings.append(f"Label '{label}' not accessible in ParticleGroup: {e}")
+            continue
+
+        expected_dtype = stat["dtype"]
+        expected_shape = tuple(
+            {"n_particle": n_particle}.get(dim, n_particle) for dim in stat["shape"]
+        )
+        shape = np.shape(value)
+
+        if shape != expected_shape:
+            warnings.append(
+                f"Label '{label}': shape {shape} does not match standard shape {expected_shape} or {stat['shape']}"
+            )
+
+        if np.isscalar(value):
+            dtype = type(value)
+        else:
+            dtype = type(value[0])
+        dtype = dtype.__name__.replace("64", "")
+        if dtype != expected_dtype:
+            warnings.append(
+                f"Label '{label}': dtype {dtype} does not match standard dtype {expected_dtype} ({stat['dtype']})"
+            )
 
     return warnings
 
@@ -540,6 +572,13 @@ def _generate_computed_statistics_list(base_stats: Dict[str, Dict]) -> List[Dict
             # Handle units (same as base for all current operators)
             units = base.get("units", "1")
 
+            dtype = base["dtype"]
+            if base["dtype"] == "int" and op_prefix.rstrip("_") in {
+                "mean",
+                "sigma",
+                "delta",
+            }:
+                dtype = "float"
             stat = {
                 "label": label,
                 "mathlabel": op_info["mathlabel_template"].format(
@@ -553,6 +592,8 @@ def _generate_computed_statistics_list(base_stats: Dict[str, Dict]) -> List[Dict
                 "category": "computed_operators",
                 "base_statistic": key,
                 "operator": op_prefix.rstrip("_"),
+                "shape": op_info["shape"],
+                "dtype": dtype,
             }
             computed.append(stat)
 
@@ -587,6 +628,8 @@ def _generate_computed_statistics_list(base_stats: Dict[str, Dict]) -> List[Dict
                 "reference": "Standard weighted covariance",
                 "category": "computed_covariance",
                 "base_statistics": [key1, key2],
+                "shape": [],
+                "dtype": "float",
             }
             computed.append(stat)
 
@@ -626,7 +669,7 @@ def load_computed_statistics() -> Dict[str, Any]:
     computed_list = _generate_computed_statistics_list(base_stats)
 
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "description": "Auto-generated computed statistics derived from base statistics and operators.",
         "categories": COMPUTED_CATEGORIES,
         "statistics": computed_list,
@@ -679,15 +722,36 @@ def export_computed_statistics(path: Union[Path, str]) -> None:
     """
     computed = load_computed_statistics()
     path = Path(path)
+
+    class NoAliasDumper(yaml.SafeDumper):
+        def ignore_aliases(self, data):
+            # Without this, all shapes will reuse the same anchor &id1 [] -> *id1
+            return True
+
     with open(path, "w", encoding="utf-8") as f:
         yaml.dump(
             computed,
             f,
+            Dumper=NoAliasDumper,
             default_flow_style=False,
             sort_keys=False,
             allow_unicode=True,
             width=120,
         )
+
+
+@lru_cache(maxsize=1)
+def get_all_statistics_by_key() -> dict[str, dict]:
+    """Get all statistics information by key (label)."""
+    standard = load_standard()
+    computed = load_computed_statistics()
+    return {
+        stat["label"]: stat
+        for stat in [
+            *standard["statistics"],
+            *computed["statistics"],
+        ]
+    }
 
 
 def generate_computed_markdown() -> str:

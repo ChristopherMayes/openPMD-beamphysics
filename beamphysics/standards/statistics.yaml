@@ -54,7 +54,7 @@ statistics:
     mathlabel: x
     units: m
     description: Horizontal position coordinate.
-    reference: openPMD-beamphysics standard
+    reference:
     category: coordinates
     dtype: float
     shape: [n_particle]
@@ -63,7 +63,7 @@ statistics:
     mathlabel: y
     units: m
     description: Vertical position coordinate.
-    reference: openPMD-beamphysics standard
+    reference:
     category: coordinates
     dtype: float
     shape: [n_particle]
@@ -72,7 +72,7 @@ statistics:
     mathlabel: z
     units: m
     description: Longitudinal position coordinate.
-    reference: openPMD-beamphysics standard
+    reference:
     category: coordinates
     dtype: float
     shape: [n_particle]
@@ -81,7 +81,7 @@ statistics:
     mathlabel: p_x
     units: eV/c
     description: Horizontal momentum component.
-    reference: openPMD-beamphysics standard
+    reference:
     category: coordinates
     dtype: float
     shape: [n_particle]
@@ -90,7 +90,7 @@ statistics:
     mathlabel: p_y
     units: eV/c
     description: Vertical momentum component.
-    reference: openPMD-beamphysics standard
+    reference:
     category: coordinates
     dtype: float
     shape: [n_particle]
@@ -99,7 +99,7 @@ statistics:
     mathlabel: p_z
     units: eV/c
     description: Longitudinal momentum component.
-    reference: openPMD-beamphysics standard
+    reference:
     category: coordinates
 
     # ===================
@@ -111,7 +111,7 @@ statistics:
     mathlabel: t
     units: s
     description: Time coordinate of the particle.
-    reference: openPMD-beamphysics standard
+    reference:
     category: time
     dtype: float
     shape: [n_particle]
@@ -120,7 +120,7 @@ statistics:
     mathlabel: z/c
     units: s
     description: Position expressed as time (z divided by speed of light).
-    reference: openPMD-beamphysics standard
+    reference:
     category: time
 
     # ===================
@@ -133,7 +133,7 @@ statistics:
     units: eV/c
     description: Total momentum magnitude.
     formula: p = \sqrt{p_x^2 + p_y^2 + p_z^2}
-    reference: openPMD-beamphysics standard
+    reference:
     category: relativistic
     dtype: float
     shape: [n_particle]
@@ -143,7 +143,7 @@ statistics:
     units: eV
     description: Total relativistic energy.
     formula: E = \sqrt{p^2 c^2 + m^2 c^4}
-    reference: openPMD-beamphysics standard
+    reference:
     category: relativistic
     dtype: float
     shape: [n_particle]
@@ -153,7 +153,7 @@ statistics:
     units: eV
     description: Kinetic energy (total energy minus rest mass energy).
     formula: E_\text{kinetic} = E - mc^2
-    reference: openPMD-beamphysics standard
+    reference:
     category: relativistic
     dtype: float
     shape: [n_particle]
@@ -162,7 +162,7 @@ statistics:
     mathlabel: m
     units: eV
     description: Rest mass energy of the particle species.
-    reference: openPMD-beamphysics standard
+    reference:
     category: relativistic
     dtype: float
     shape: []
@@ -172,7 +172,7 @@ statistics:
     units: "1"
     description: Relativistic Lorentz factor.
     formula: \gamma = E / (mc^2)
-    reference: openPMD-beamphysics standard
+    reference:
     category: relativistic
     dtype: float
     shape: [n_particle]
@@ -182,7 +182,7 @@ statistics:
     units: "1"
     description: Relativistic velocity divided by speed of light.
     formula: \beta = p / E = v / c
-    reference: openPMD-beamphysics standard
+    reference:
     category: relativistic
     dtype: float
     shape: [n_particle]
@@ -192,7 +192,7 @@ statistics:
     units: "1"
     description: Horizontal component of relativistic velocity / c.
     formula: \beta_x = p_x / E
-    reference: openPMD-beamphysics standard
+    reference:
     category: relativistic
     dtype: float
     shape: [n_particle]
@@ -202,7 +202,7 @@ statistics:
     units: "1"
     description: Vertical component of relativistic velocity / c.
     formula: \beta_y = p_y / E
-    reference: openPMD-beamphysics standard
+    reference:
     category: relativistic
     dtype: float
     shape: [n_particle]
@@ -212,7 +212,7 @@ statistics:
     units: "1"
     description: Longitudinal component of relativistic velocity / c.
     formula: \beta_z = p_z / E
-    reference: openPMD-beamphysics standard
+    reference:
     category: relativistic
     dtype: float
     shape: [n_particle]
@@ -223,7 +223,7 @@ statistics:
     description: >-
       Energy with a polynomial fit (default quadratic) in z or t subtracted.
       Used to isolate higher-order energy correlations.
-    reference: openPMD-beamphysics standard
+    reference:
     category: relativistic
     dtype: float
     shape: [n_particle]
@@ -233,7 +233,7 @@ statistics:
     units: eV
     description: Standard deviation of higher_order_energy.
     formula: \sigma_{E_{(2)}} = \text{std}(E_{(2)})
-    reference: openPMD-beamphysics standard
+    reference:
     category: relativistic
 
     # ===================
@@ -246,7 +246,7 @@ statistics:
     units: rad
     description: Horizontal divergence angle (slope dx/dz).
     formula: x' = p_x / p_z
-    reference: openPMD-beamphysics standard
+    reference:
     category: slopes
     dtype: float
     shape: [n_particle]
@@ -256,7 +256,7 @@ statistics:
     units: rad
     description: Vertical divergence angle (slope dy/dz).
     formula: y' = p_y / p_z
-    reference: openPMD-beamphysics standard
+    reference:
     category: slopes
 
     # ===================
@@ -269,7 +269,7 @@ statistics:
     units: m
     description: Radial distance from the z-axis in cylindrical coordinates.
     formula: r = \sqrt{x^2 + y^2}
-    reference: openPMD-beamphysics standard
+    reference:
     category: polar
     dtype: float
     shape: [n_particle]
@@ -279,7 +279,7 @@ statistics:
     units: rad
     description: Azimuthal angle in the x-y plane.
     formula: \theta = \arctan(y/x)
-    reference: openPMD-beamphysics standard
+    reference:
     category: polar
     dtype: float
     shape: [n_particle]
@@ -289,7 +289,7 @@ statistics:
     units: eV/c
     description: Radial momentum component in cylindrical coordinates.
     formula: p_r = p_x \cos\theta + p_y \sin\theta
-    reference: openPMD-beamphysics standard
+    reference:
     category: polar
     dtype: float
     shape: [n_particle]
@@ -299,7 +299,7 @@ statistics:
     units: eV/c
     description: Azimuthal momentum component in cylindrical coordinates.
     formula: p_\theta = -p_x \sin\theta + p_y \cos\theta
-    reference: openPMD-beamphysics standard
+    reference:
     category: polar
     dtype: float
     shape: [n_particle]
@@ -309,7 +309,7 @@ statistics:
     units: m*eV/c
     description: Angular momentum about the z-axis.
     formula: L_z = x p_y - y p_x = r \cdot p_\theta
-    reference: openPMD-beamphysics standard
+    reference:
     category: polar
 
     # ===================
@@ -601,7 +601,7 @@ statistics:
     units: C
     description: Total beam charge (sum of particle weights).
     formula: Q = \sum_i w_i
-    reference: openPMD-beamphysics standard
+    reference:
     category: beam
     dtype: float
     shape: []
@@ -610,7 +610,7 @@ statistics:
     mathlabel: w
     units: C
     description: Macro-particle charge weight used for statistical calculations.
-    reference: openPMD-beamphysics standard
+    reference:
     category: beam
     dtype: float
     shape: [n_particle]
@@ -619,7 +619,7 @@ statistics:
     mathlabel: q
     units: C
     description: Elementary charge of the particle species.
-    reference: openPMD-beamphysics standard
+    reference:
     category: beam
     dtype: float
     shape: []
@@ -630,7 +630,7 @@ statistics:
     description: >-
       Simple average current computed as total charge divided by bunch length in time.
     formula: I_{av} = Q / \Delta t
-    reference: openPMD-beamphysics standard
+    reference:
     category: beam
     dtype: float
     shape: []
@@ -655,7 +655,7 @@ statistics:
     mathlabel: N
     units: "1"
     description: Total number of macro-particles in the group.
-    reference: openPMD-beamphysics standard
+    reference:
     category: particle
     dtype: int
     shape: []
@@ -664,7 +664,7 @@ statistics:
     mathlabel: N_{alive}
     units: "1"
     description: Number of particles with status equal to 1 (alive/active).
-    reference: openPMD-beamphysics standard
+    reference:
     category: particle
     dtype: int
     shape: []
@@ -673,7 +673,7 @@ statistics:
     mathlabel: N_{dead}
     units: "1"
     description: Number of particles with status not equal to 1 (lost/inactive).
-    reference: openPMD-beamphysics standard
+    reference:
     category: particle
     dtype: int
     shape: []
@@ -684,7 +684,7 @@ statistics:
     description: >-
       Particle status flag. A value of 1 indicates an alive particle;
       other values indicate various loss conditions.
-    reference: openPMD-beamphysics standard
+    reference:
     category: particle
     dtype: int
     shape: [n_particle]
@@ -693,7 +693,7 @@ statistics:
     mathlabel: \text{id}
     units: "1"
     description: Unique integer identifier for each particle.
-    reference: openPMD-beamphysics standard
+    reference:
     category: particle
     dtype: int
     shape: [n_particle]

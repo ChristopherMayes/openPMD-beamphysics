@@ -6,6 +6,7 @@ import warnings
 
 import pytest
 
+from beamphysics.particles import single_particle
 from beamphysics.standards.statistics import (
     YAML_PATH,
     load_standard,
@@ -159,6 +160,15 @@ class TestStatisticsStandard:
         for label in expected_labels:
             assert label in defined_labels, f"Expected statistic '{label}' not defined"
 
+    def test_particlegroup_stats_info(self, standard):
+        """Check that PG.info(key) works."""
+
+        P = single_particle()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            for item in standard["statistics"]:
+                assert isinstance(P.info(item["label"]), dict)
+
 
 class TestComputedStatistics:
     """Tests for computed statistics generation."""
@@ -241,6 +251,15 @@ class TestComputedStatistics:
             print(error)
         error_str = "\n".join(errors)
         assert errors == [], f"Schema validation errors: {error_str}"
+
+    def test_particlegroup_stats_info(self, computed):
+        """Check that PG.info(key) works."""
+
+        P = single_particle()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            for item in computed["statistics"]:
+                assert isinstance(P.info(item["label"]), dict)
 
 
 class TestUnitsParsingWithPmdUnit:

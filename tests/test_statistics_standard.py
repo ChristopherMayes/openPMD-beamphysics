@@ -63,7 +63,8 @@ class TestStatisticsStandard:
             errors = validate_against_particlegroup(standard)
         for error in errors:
             print(error)
-        assert errors == [], f"Schema validation errors: {'\n'.join(errors)}"
+        error_str = "\n".join(errors)
+        assert errors == [], f"Schema validation errors: {error_str}"
 
     def test_all_categories_have_required_fields(self, standard):
         """Test that all categories have required fields."""
@@ -238,7 +239,8 @@ class TestComputedStatistics:
             errors = validate_against_particlegroup(computed)
         for error in errors:
             print(error)
-        assert errors == [], f"Schema validation errors: {'\n'.join(errors)}"
+        error_str = "\n".join(errors)
+        assert errors == [], f"Schema validation errors: {error_str}"
 
 
 class TestUnitsParsingWithPmdUnit:

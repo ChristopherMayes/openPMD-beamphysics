@@ -34,7 +34,7 @@ from .statistics import (
     resample_particles,
     slice_statistics,
 )
-from .units import c_light, parse_bunching_str, pg_units
+from .units import c_light, parse_bunching_str, pg_units, pmd_unit
 from .utils import get_rotation_matrix
 from .wakefields import WakefieldBase
 from .writers import pmd_init, write_pmd_bunch
@@ -405,7 +405,7 @@ class ParticleGroup:
         """Number of alive particles, defined by status != 1"""
         return self.n_particle - self.n_alive
 
-    def units(self, key: str):
+    def units(self, key: str) -> pmd_unit:
         """
         Return the units string for a given key.
 
@@ -416,8 +416,7 @@ class ParticleGroup:
 
         Returns
         -------
-        str
-            The units string (e.g., ``'m'``, ``'eV/c'``, ``'s'``).
+        pmd_unit
         """
         return pg_units(key)
 

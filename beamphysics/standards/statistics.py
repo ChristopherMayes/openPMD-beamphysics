@@ -48,7 +48,7 @@ REQUIRED_STAT_FIELDS = [
     "reference",
     "category",
     "shape",
-    # "dtype",
+    "dtype",
 ]
 
 # ---------------------------------------------------------------------------

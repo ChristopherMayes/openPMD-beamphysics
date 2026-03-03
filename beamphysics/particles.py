@@ -407,7 +407,7 @@ class ParticleGroup:
 
     def units(self, key: str) -> pmd_unit:
         """
-        Return the units string for a given key.
+        Get the unit information (`pmd_unit`) for a given key.
 
         Parameters
         ----------

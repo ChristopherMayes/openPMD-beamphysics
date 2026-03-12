@@ -654,10 +654,10 @@ class WavefrontBase(ABC):
         fmt = ""
 
         html = f"""
-        <div style="font-family: monospace; border: 1px solid #ccc; padding: 10px; max-width: 600px;">
+        <div style="font-family: monospace; border: 1px solid rgba(128,128,128,0.3); padding: 10px; max-width: 600px;">
             <h4 style="margin-top: 0;">{self.__class__.__name__}</h4>
             <table style="width: 100%; border-collapse: collapse;">
-                <tr style="background-color: #f0f0f0;">
+                <tr style="background-color: rgba(128,128,128,0.1);">
                     <td><b>wavelength</b></td>
                     <td>{self.wavelength:{fmt}} m</td>
                 </tr>
@@ -666,7 +666,7 @@ class WavefrontBase(ABC):
                     <td><b>grid shape</b></td>
                     <td>{self.shape}</td>
                 </tr>
-                <tr style="background-color: #f0f0f0;">
+                <tr style="background-color: rgba(128,128,128,0.1);">
                     <td><b>dx</b></td>
                     <td>{self.dx:{fmt}} m</td>
                 </tr>
@@ -674,7 +674,7 @@ class WavefrontBase(ABC):
                     <td><b>dy</b></td>
                     <td>{self.dy:{fmt}} m</td>
                 </tr>
-                <tr style="background-color: #f0f0f0;">
+                <tr style="background-color: rgba(128,128,128,0.1);">
                     <td><b>dz</b></td>
                     <td>{self.dz:{fmt}} m</td>
                 </tr>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 
 from bokeh.core.enums import SizingModeType
 import numpy as np
@@ -17,6 +18,31 @@ from bokeh.plotting import figure
 
 from .labels import mathlabel
 from .plot_base import prepare_marginal_plot
+
+
+@dataclasses.dataclass
+class FontPlotSettings:
+    """Font settings for Bokeh marginal plots."""
+
+    axis_label_text_font_size: str = "14px"
+    major_label_text_font_size: str = "12px"
+
+
+@dataclasses.dataclass
+class MarginalFontSettings:
+    """Font settings for Bokeh marginal plots."""
+
+    main: FontPlotSettings = dataclasses.field(default_factory=FontPlotSettings)
+    top: FontPlotSettings = dataclasses.field(
+        default_factory=lambda: FontPlotSettings(
+            axis_label_text_font_size="10px", major_label_text_font_size="8px"
+        )
+    )
+    right: FontPlotSettings = dataclasses.field(
+        default_factory=lambda: FontPlotSettings(
+            axis_label_text_font_size="10px", major_label_text_font_size="8px"
+        )
+    )
 
 
 def mathjax_fix(label: str) -> str:
@@ -46,6 +72,7 @@ def marginal_plot(
     marginal_fraction: float = 0.33,
     palette: Palette = Viridis256,
     low_color: str = "#ffffff00",
+    font_settings: MarginalFontSettings | None = None,
 ) -> LayoutDOM:
     """
     Density plot and projections with bokeh.
@@ -93,6 +120,9 @@ def marginal_plot(
     >>> obj = marginal_plot(P, 't', 'energy', bins=200)
     >>> bokeh.io.save(obj, "t_vs_energy.html")
     """
+    if font_settings is None:
+        font_settings = MarginalFontSettings()
+
     pdata = prepare_marginal_plot(
         particle_group,
         key1=key1,
@@ -124,6 +154,10 @@ def marginal_plot(
         tools="pan,wheel_zoom,box_zoom,save,reset,hover",
         toolbar_location="left",
     )
+
+    for axis in (fig_joint.xaxis, fig_joint.yaxis):
+        axis.axis_label_text_font_size = font_settings.main.axis_label_text_font_size
+        axis.major_label_text_font_size = font_settings.main.major_label_text_font_size
 
     if len(pdata.x.data) == 1:
         fig_joint.scatter(pdata.x.data, pdata.y.data, size=10, color="navy")
@@ -196,6 +230,7 @@ def marginal_plot(
         fill_color="gray",
         line_color="gray",
     )
+
     p_top.yaxis.axis_label = mathjax_fix(pdata.x.axis_label)
     # p_top.yaxis.axis_label_orientation = ...
     p_top.xaxis.visible = False
@@ -228,6 +263,13 @@ def marginal_plot(
             plot.xaxis.major_label_orientation = x_label_orientation
     for plot in plots:
         plot.toolbar.logo = None
+
+    for axis, ax_font_cfg in (
+        (p_top.yaxis, font_settings.top),
+        (p_right.xaxis, font_settings.right),
+    ):
+        axis.axis_label_text_font_size = ax_font_cfg.axis_label_text_font_size
+        axis.major_label_text_font_size = ax_font_cfg.major_label_text_font_size
 
     if sizing_mode is not None:
         fig_joint.sizing_mode = "scale_width"

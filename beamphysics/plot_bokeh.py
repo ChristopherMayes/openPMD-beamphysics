@@ -22,25 +22,38 @@ from .plot_base import prepare_marginal_plot
 
 @dataclasses.dataclass
 class FontPlotSettings:
-    """Font settings for Bokeh marginal plots."""
+    """Font settings for a single Bokeh figure's axes."""
 
     axis_label_text_font_size: str = "14px"
+    axis_label_text_font_style: str = "italic"
     major_label_text_font_size: str = "12px"
+    major_label_text_font_style: str = "normal"
+
+    def apply(self, *axes) -> None:
+        """Apply these font settings to one or more Bokeh axis objects."""
+        for axis in axes:
+            axis.axis_label_text_font_size = self.axis_label_text_font_size
+            axis.axis_label_text_font_style = self.axis_label_text_font_style
+            axis.major_label_text_font_size = self.major_label_text_font_size
+            axis.major_label_text_font_style = self.major_label_text_font_style
 
 
 @dataclasses.dataclass
 class MarginalFontSettings:
     """Font settings for Bokeh marginal plots."""
 
+    text_font: str | None = None
     main: FontPlotSettings = dataclasses.field(default_factory=FontPlotSettings)
     top: FontPlotSettings = dataclasses.field(
         default_factory=lambda: FontPlotSettings(
-            axis_label_text_font_size="10px", major_label_text_font_size="8px"
+            axis_label_text_font_size="10px",
+            major_label_text_font_size="8px",
         )
     )
     right: FontPlotSettings = dataclasses.field(
         default_factory=lambda: FontPlotSettings(
-            axis_label_text_font_size="10px", major_label_text_font_size="8px"
+            axis_label_text_font_size="10px",
+            major_label_text_font_size="8px",
         )
     )
 
@@ -155,9 +168,7 @@ def marginal_plot(
         toolbar_location="left",
     )
 
-    for axis in (fig_joint.xaxis, fig_joint.yaxis):
-        axis.axis_label_text_font_size = font_settings.main.axis_label_text_font_size
-        axis.major_label_text_font_size = font_settings.main.major_label_text_font_size
+    font_settings.main.apply(fig_joint.xaxis, fig_joint.yaxis)
 
     if len(pdata.x.data) == 1:
         fig_joint.scatter(pdata.x.data, pdata.y.data, size=10, color="navy")
@@ -264,12 +275,14 @@ def marginal_plot(
     for plot in plots:
         plot.toolbar.logo = None
 
-    for axis, ax_font_cfg in (
-        (p_top.yaxis, font_settings.top),
-        (p_right.xaxis, font_settings.right),
-    ):
-        axis.axis_label_text_font_size = ax_font_cfg.axis_label_text_font_size
-        axis.major_label_text_font_size = ax_font_cfg.major_label_text_font_size
+    font_settings.top.apply(p_top.yaxis)
+    font_settings.right.apply(p_right.xaxis)
+
+    if font_settings.text_font is not None:
+        for plot in plots:
+            for axis in (plot.xaxis, plot.yaxis):
+                axis.axis_label_text_font = font_settings.text_font
+                axis.major_label_text_font = font_settings.text_font
 
     if sizing_mode is not None:
         fig_joint.sizing_mode = "scale_width"

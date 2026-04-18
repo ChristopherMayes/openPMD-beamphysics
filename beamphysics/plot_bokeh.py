@@ -2,22 +2,24 @@ from __future__ import annotations
 
 import dataclasses
 
-from bokeh.core.enums import SizingModeType
 import numpy as np
+from bokeh.core.enums import SizingModeType
 from bokeh.layouts import column, gridplot, row
 from bokeh.models import (
+    ColorBar,
     ColumnDataSource,
+    Div,
+    HoverTool,
     LayoutDOM,
     LinearColorMapper,
-    ColorBar,
     Spacer,
 )
 from bokeh.palettes import Palette, Viridis256
-
 from bokeh.plotting import figure
 
 from .labels import mathlabel
 from .plot_base import prepare_marginal_plot
+from .units import c_light
 
 
 @dataclasses.dataclass
@@ -43,6 +45,7 @@ class MarginalFontSettings:
     """Font settings for Bokeh marginal plots."""
 
     text_font: str | None = None
+    annotation_text_font_size: str | None = None
     main: FontPlotSettings = dataclasses.field(default_factory=FontPlotSettings)
     top: FontPlotSettings = dataclasses.field(
         default_factory=lambda: FontPlotSettings(
@@ -67,6 +70,90 @@ def mathjax_fix(label: str) -> str:
     return label
 
 
+@dataclasses.dataclass
+class StatsAnnotation:
+    """A single beam statistic annotation row."""
+
+    label: str
+    sub_label: str
+    value: str
+    units: str
+
+
+def get_annotations(particle_group, key1: str, key2: str) -> list[StatsAnnotation]:
+    """
+    Return beam-statistic annotations for a given key combination.
+
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+        The particle group to compute statistics from.
+    key1 : str
+        The x-axis key.
+    key2 : str
+        The y-axis key.
+
+    Returns
+    -------
+    list[StatsAnnotation]
+    """
+
+    # Longitudinal phase space: delta_z/c or z/c vs energy
+    if key1 in ("delta_z/c", "z/c") and key2 == "energy":
+        sigma_z = particle_group["sigma_z"]
+        sigma_p = particle_group["sigma_p"]
+        p0 = particle_group["mean_p"]
+        return [
+            StatsAnnotation("σ", "z", f"{sigma_z / c_light * 1e15:.0f}", "fs"),
+            StatsAnnotation("σ", "δ", f"{sigma_p / p0 * 1e4:.1f} × 10⁻⁴", ""),
+            StatsAnnotation(
+                "⟨E⟩", "", f"{particle_group['mean_energy'] / 1e6:.1f}", "MeV"
+            ),
+        ]
+
+    # Transverse spot: x vs y
+    if key1 == "x" and key2 == "y":
+        return [
+            StatsAnnotation("⟨x⟩", "", f"{particle_group['mean_x'] * 1e6:.1f}", "µm"),
+            StatsAnnotation("⟨y⟩", "", f"{particle_group['mean_y'] * 1e6:.1f}", "µm"),
+            StatsAnnotation("σ", "x", f"{particle_group['sigma_x'] * 1e6:.1f}", "µm"),
+            StatsAnnotation("σ", "y", f"{particle_group['sigma_y'] * 1e6:.1f}", "µm"),
+        ]
+
+    # Horizontal phase space: x vs xp or px
+    if key1 == "x" and key2 in ("xp", "px"):
+        return [
+            StatsAnnotation(
+                "ε", "n,x", f"{particle_group['norm_emit_x'] * 1e6:.2f}", "mm-mrad"
+            ),
+        ]
+
+    # Vertical phase space: y vs yp or py
+    if key1 == "y" and key2 in ("yp", "py"):
+        return [
+            StatsAnnotation(
+                "ε", "n,y", f"{particle_group['norm_emit_y'] * 1e6:.2f}", "mm-mrad"
+            ),
+        ]
+
+    return []
+
+
+def _annotations_to_html(annotations: list[StatsAnnotation]) -> str | None:
+    """Convert a list of Annotation objects to an HTML table."""
+    if not annotations:
+        return None
+
+    rows = []
+    for a in annotations:
+        label = f"{a.label}<sub>{a.sub_label}</sub>" if a.sub_label else a.label
+        rows.append(
+            f"<tr><td style='text-align:right;padding-right:4px'>{label}</td>"
+            f"<td>{a.value} {a.units}</td></tr>"
+        )
+    return "<table style='border-collapse:collapse'>" + "".join(rows) + "</table>"
+
+
 def marginal_plot(
     particle_group,
     key1: str = "t",
@@ -85,6 +172,8 @@ def marginal_plot(
     marginal_fraction: float = 0.33,
     palette: Palette = Viridis256,
     low_color: str = "#ffffff00",
+    text: str | None = None,
+    title: str | None = None,
     font_settings: MarginalFontSettings | None = None,
 ) -> LayoutDOM:
     """
@@ -121,6 +210,14 @@ def marginal_plot(
         Fraction of the plot to use for the marginal plots.
     palette : bokeh.palettes.Palette, default=Viridis256
         Color map.
+    text : str or None, optional
+        Custom HTML text to display in the top-right corner.  If ``None``
+        (the default), automatic beam-statistics text is generated for
+        recognized key combinations (e.g. ``x``/``y``, ``x``/``px``,
+        ``delta_z/c``/``energy``).  Pass an empty string ``""`` to suppress
+        automatic text.
+    title : str or None, optional
+        Title to set on the main density plot.
 
     Returns
     -------
@@ -164,7 +261,7 @@ def marginal_plot(
         y_axis_label=labely,
         x_range=pdata.x.lim,
         y_range=pdata.y.lim,
-        tools="pan,wheel_zoom,box_zoom,save,reset,hover",
+        tools="pan,wheel_zoom,box_zoom,save,reset",
         toolbar_location="left",
     )
 
@@ -202,7 +299,7 @@ def marginal_plot(
             }
         )
 
-        fig_joint.image(
+        image_renderer = fig_joint.image(
             image="image",
             x="x",
             y="y",
@@ -211,6 +308,16 @@ def marginal_plot(
             source=source_img,
             color_mapper=mapper,
         )
+
+        hover = HoverTool(
+            renderers=[image_renderer],
+            tooltips=[
+                (labelx, "$x"),
+                (labely, "$y"),
+                ("density", "@image"),
+            ],
+        )
+        fig_joint.add_tools(hover)
 
     if pdata.ellipse_x is not None and pdata.ellipse_y is not None:
         fig_joint.line(
@@ -284,6 +391,66 @@ def marginal_plot(
                 axis.axis_label_text_font = font_settings.text_font
                 axis.major_label_text_font = font_settings.text_font
 
+    annotation_html: str | None = None
+    if text is None:
+        annotation_html = _annotations_to_html(
+            get_annotations(particle_group, key1, key2)
+        )
+    elif text:
+        annotation_html = text.replace("\n", "<br>")
+
+    text_div: Div | None = None
+    if annotation_html:
+        popup_font_size = font_settings.annotation_text_font_size or "12px"
+        popup_css = ""
+        if font_settings.text_font is not None:
+            popup_css += f"font-family: {font_settings.text_font}; "
+        popup_html = f"""
+            <style>
+            .bk-stats-trigger {{
+              cursor: pointer;
+              position: relative;
+              text-align: center;
+            }}
+            .bk-stats-popup {{
+              display: none;
+              position: absolute;
+              top: 100%;
+              right: 0;
+              background: white;
+              color: black;
+              border: 1px solid #ccc;
+              border-radius: 4px;
+              padding: 8px 12px;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+              z-index: 100;
+              white-space: nowrap;
+              line-height: 1.6;
+              font-size: {popup_font_size};
+              {popup_css}
+            }}
+            .bk-stats-trigger:hover .bk-stats-popup {{
+              display: block;
+            }}
+            </style>
+              <div class="bk-stats-trigger">Stats
+              <div class="bk-stats-popup">{annotation_html}</div>
+            </div>
+           """
+        text_div = Div(
+            text=popup_html,
+            width=marg_w,
+            height=marg_h,
+            styles={"overflow": "visible"},
+        )
+
+    if title:
+        fig_joint.title.text = title
+
+    top_right = (
+        text_div if text_div is not None else Spacer(width=marg_w, height=marg_h)
+    )
+
     if sizing_mode is not None:
         fig_joint.sizing_mode = "scale_width"
         fig_joint.aspect_ratio = main_h / main_w
@@ -292,12 +459,17 @@ def marginal_plot(
 
         left_col = column(p_top, fig_joint, sizing_mode=sizing_mode)
         right_col = column(
-            Spacer(width=marg_w, height=marg_h),
+            top_right,
             p_right,
             sizing_mode="stretch_height",
             width=marg_w,
         )
         return row(left_col, right_col, sizing_mode=sizing_mode)
+
+    if text_div is not None:
+        left_col = column(p_top, fig_joint)
+        right_col = column(text_div, p_right)
+        return row(left_col, right_col)
 
     return gridplot(
         [

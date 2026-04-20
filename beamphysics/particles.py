@@ -1,4 +1,3 @@
-import functools
 import os
 import pathlib
 from copy import deepcopy
@@ -9,12 +8,12 @@ from h5py import File
 
 from . import statistics
 from .interfaces import bmad
-from .interfaces.astra import write_astra
+from .interfaces.astra import write_astra as _write_astra
 from .interfaces.elegant import write_elegant
 from .interfaces.genesis import (
     genesis2_beam_data,
     write_genesis2_beam_file,
-    write_genesis4_beam,
+    write_genesis4_beam as _write_genesis4_beam,
     write_genesis4_distribution,
 )
 from .interfaces.gpt import write_gpt
@@ -1041,12 +1040,12 @@ class ParticleGroup:
     # def __dict__(self):
     #    return self.data
 
-    @functools.wraps(bmad.particlegroup_to_bmad)
     def to_bmad(self, p0c=None, tref=None):
         return bmad.particlegroup_to_bmad(self, p0c=p0c, tref=tref)
 
+    to_bmad.__doc__ = bmad.particlegroup_to_bmad.__doc__
+
     @classmethod
-    @functools.wraps(bmad.bmad_to_particlegroup_data)
     def from_bmad(cls, bmad_dict):
         """
         Convert Bmad particle data as a dict
@@ -1076,12 +1075,15 @@ class ParticleGroup:
         data = bmad.bmad_to_particlegroup_data(bmad_dict)
         return cls(data=data)
 
+    from_bmad.__doc__ = bmad.bmad_to_particlegroup_data.__doc__
+
     # -------
     # Writers
 
-    @functools.wraps(write_astra)
     def write_astra(self, filePath, verbose=False, probe=False):
-        write_astra(self, filePath, verbose=verbose, probe=probe)
+        _write_astra(self, filePath, verbose=verbose, probe=probe)
+
+    write_astra.__doc__ = _write_astra.__doc__
 
     def write_bmad(self, filePath, p0c=None, t_ref=0, verbose=False):
         """
@@ -1131,7 +1133,6 @@ class ParticleGroup:
         # Actually write the file
         write_genesis2_beam_file(filePath, beam_columns, verbose=verbose)
 
-    @functools.wraps(write_genesis4_beam)
     def write_genesis4_beam(
         self, filePath, n_slice=None, return_input_str=False, verbose=False
     ):
@@ -1149,13 +1150,15 @@ class ParticleGroup:
         verbose : bool, optional
             If True, print information during writing. Default is False.
         """
-        return write_genesis4_beam(
+        return _write_genesis4_beam(
             self,
             filePath,
             n_slice=n_slice,
             return_input_str=return_input_str,
             verbose=verbose,
         )
+
+    write_genesis4_beam.__doc__ = _write_genesis4_beam.__doc__
 
     def write_genesis4_distribution(self, filePath, verbose=False):
         """
@@ -1755,10 +1758,11 @@ class ParticleGroup:
         """
         return deepcopy(self)
 
-    @functools.wraps(resample_particles)
     def resample(self, n=0, equal_weights=False):
         data = resample_particles(self, n, equal_weights=equal_weights)
         return ParticleGroup(data=data)
+
+    resample.__doc__ = resample_particles.__doc__
 
     # Internal sorting
     def _sort(self, key: str):

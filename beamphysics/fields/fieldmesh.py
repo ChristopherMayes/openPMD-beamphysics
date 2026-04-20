@@ -1,4 +1,3 @@
-import functools
 import os
 from copy import deepcopy
 
@@ -23,7 +22,7 @@ from ..interfaces.impact import (
     create_impact_emfield_cartesian_ele,
     create_impact_solrf_ele,
     parse_impact_emfield_cartesian,
-    write_impact_emfield_cartesian,
+    write_impact_emfield_cartesian as _write_impact_emfield_cartesian,
 )
 from ..interfaces.superfish import read_superfish_t7, write_superfish_t7
 from ..plot import (
@@ -572,7 +571,6 @@ class FieldMesh:
         else:
             raise NotImplementedError(f"Geometry {self.geometry} not implemented")
 
-    # @functools.wraps(plot_fieldmesh_cylindrical_1d)
     def plot_onaxis(self, *args, **kwargs):
         if self.geometry == "cylindrical":
             return plot_fieldmesh_cylindrical_1d(self, *args, **kwargs)
@@ -609,9 +607,10 @@ class FieldMesh:
 
         write_pmd_field(g, self.data, name=name)
 
-    @functools.wraps(write_astra_1d_fieldmap)
     def write_astra_1d(self, filePath):
         return write_astra_1d_fieldmap(self, filePath)
+
+    write_astra_1d.__doc__ = write_astra_1d_fieldmap.__doc__
 
     def to_astra_1d(self):
         z, fz = astra_1d_fieldmap_data(self)
@@ -621,13 +620,15 @@ class FieldMesh:
     def write_astra_3d(self, common_filePath, verbose=False):
         return write_astra_3d_fieldmaps(self, common_filePath)
 
-    @functools.wraps(create_impact_solrf_ele)
     def to_impact_solrf(self, *args, **kwargs):
         return create_impact_solrf_ele(self, *args, **kwargs)
 
-    @functools.wraps(create_impact_emfield_cartesian_ele)
+    to_impact_solrf.__doc__ = create_impact_solrf_ele.__doc__
+
     def to_impact_emfield_cartesian(self, *args, **kwargs):
         return create_impact_emfield_cartesian_ele(self, *args, **kwargs)
+
+    to_impact_emfield_cartesian.__doc__ = create_impact_emfield_cartesian_ele.__doc__
 
     def to_cylindrical(self):
         """
@@ -655,7 +656,6 @@ class FieldMesh:
             self, filePath, asci2gdf_bin=asci2gdf_bin, verbose=verbose
         )
 
-    @functools.wraps(write_impact_emfield_cartesian)
     def write_impact_emfield_cartesian(self, filename):
         """
         Writes Impact-T style 1Tv3.T7 file corresponding to
@@ -668,10 +668,11 @@ class FieldMesh:
 
         """
 
-        return write_impact_emfield_cartesian(self, filename)
+        return _write_impact_emfield_cartesian(self, filename)
+
+    write_impact_emfield_cartesian.__doc__ = _write_impact_emfield_cartesian.__doc__
 
     # Superfish
-    @functools.wraps(write_superfish_t7)
     def write_superfish(self, filePath, verbose=False):
         """
         Write a Superfish T7 file.
@@ -681,6 +682,8 @@ class FieldMesh:
         For dynamic (`harmonic /= 0`) fields, a Fish T7 file is written
         """
         return write_superfish_t7(self, filePath, verbose=verbose)
+
+    write_superfish.__doc__ = write_superfish_t7.__doc__
 
     @classmethod
     def from_ansys_ascii_3d(cls, *, efile=None, hfile=None, frequency=None):
@@ -774,7 +777,6 @@ class FieldMesh:
         return cls(data=dict(attrs=attrs, components=components))
 
     @classmethod
-    @functools.wraps(read_superfish_t7)
     def from_superfish(cls, filename, type=None, geometry="cylindrical"):
         """
         Class method to parse a superfish T7 style file.
@@ -782,6 +784,8 @@ class FieldMesh:
         data = read_superfish_t7(filename, type=type, geometry=geometry)
         c = cls(data=data)
         return c
+
+    from_superfish.__doc__ = read_superfish_t7.__doc__
 
     @classmethod
     def from_onaxis(
@@ -877,9 +881,10 @@ class FieldMesh:
         data = dict(attrs=attrs, components=components)
         return cls(data=data)
 
-    @functools.wraps(expand_fieldmesh_from_onaxis)
     def expand_onaxis(self, *args, **kwargs):
         return expand_fieldmesh_from_onaxis(self, *args, **kwargs)
+
+    expand_onaxis.__doc__ = expand_fieldmesh_from_onaxis.__doc__
 
     def __eq__(self, other):
         """

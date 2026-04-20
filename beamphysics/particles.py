@@ -8,12 +8,12 @@ from h5py import File
 
 from . import statistics
 from .interfaces import bmad
-from .interfaces.astra import write_astra as _write_astra
+from .interfaces.astra import write_astra
 from .interfaces.elegant import write_elegant
 from .interfaces.genesis import (
     genesis2_beam_data,
     write_genesis2_beam_file,
-    write_genesis4_beam as _write_genesis4_beam,
+    write_genesis4_beam,
     write_genesis4_distribution,
 )
 from .interfaces.gpt import write_gpt
@@ -1041,32 +1041,50 @@ class ParticleGroup:
     #    return self.data
 
     def to_bmad(self, p0c=None, tref=None):
-        return bmad.particlegroup_to_bmad(self, p0c=p0c, tref=tref)
+        """
+        Convert to Bmad phase space coordinates.
 
-    to_bmad.__doc__ = bmad.particlegroup_to_bmad.__doc__
+        Bmad      openPMD-beamphysics
+        ----      -------------------
+        Bmad x  = x
+        Bmad px = px/p0c
+        Bmad y  = y
+        Bmad py = py/p0c
+        Bmad z = -beta * c * (t - tref)
+        Bmad pz = p/p0c - 1
+        Bmad t  = t
+
+        Parameters
+        ----------
+        p0c : float, optional
+            Reference momentum times the speed of light (in eV).
+            Default is None, which uses self['mean_p'].
+        tref : float, optional
+            Reference time (in seconds).
+            Default is None, which uses self['mean_t'].
+
+        Returns
+        -------
+        dict
+            A dictionary containing Bmad phase space coordinates.
+        """
+        return bmad.particlegroup_to_bmad(self, p0c=p0c, tref=tref)
 
     @classmethod
     def from_bmad(cls, bmad_dict):
         """
-        Convert Bmad particle data as a dict
-        to ParticleGroup data.
+        Convert Bmad particle data to a ParticleGroup.
 
-        See: ParticleGroup.to_bmad or particlegroup_to_bmad
+        This reverses the conversion done by to_bmad, mapping
+        Bmad phase space coordinates back to a ParticleGroup data format.
 
         Parameters
         ----------
-        bmad_data: dict
-            Dict with keys:
-            'x'
-            'px'
-            'y'
-            'py'
-            'z'
-            'pz',
-            'charge'
-            'species',
-            'tref'
-            'state'
+        bmad_dict : dict
+            A dictionary containing Bmad phase space coordinates
+            with keys:
+            'x', 'px', 'y', 'py', 'z', 'pz',
+            'charge', 'species', 'tref', 'state'
 
         Returns
         -------
@@ -1075,15 +1093,18 @@ class ParticleGroup:
         data = bmad.bmad_to_particlegroup_data(bmad_dict)
         return cls(data=data)
 
-    from_bmad.__doc__ = bmad.bmad_to_particlegroup_data.__doc__
-
     # -------
     # Writers
 
     def write_astra(self, filePath, verbose=False, probe=False):
-        _write_astra(self, filePath, verbose=verbose, probe=probe)
+        """
+        Write Astra style particles.
 
-    write_astra.__doc__ = _write_astra.__doc__
+        For now, the species must be electrons.
+
+        If probe, the six standard probe particles will be written.
+        """
+        write_astra(self, filePath, verbose=verbose, probe=probe)
 
     def write_bmad(self, filePath, p0c=None, t_ref=0, verbose=False):
         """
@@ -1150,15 +1171,13 @@ class ParticleGroup:
         verbose : bool, optional
             If True, print information during writing. Default is False.
         """
-        return _write_genesis4_beam(
+        return write_genesis4_beam(
             self,
             filePath,
             n_slice=n_slice,
             return_input_str=return_input_str,
             verbose=verbose,
         )
-
-    write_genesis4_beam.__doc__ = _write_genesis4_beam.__doc__
 
     def write_genesis4_distribution(self, filePath, verbose=False):
         """
@@ -1378,35 +1397,32 @@ class ParticleGroup:
 
         Parameters
         ----------
-        particle_group: ParticleGroup
-            The object to plot
-
-        key1: str, default = 't'
+        key1 : str, default = 't'
             Key to bin on the x-axis
 
-        key2: str, default = None
+        key2 : str, default = None
             Key to bin on the y-axis.
 
-        bins: int, default = None
+        bins : int, default = None
            Number of bins. If None, this will use a heuristic: bins = sqrt(n_particle/4)
 
-        xlim: tuple, default = None
+        xlim : tuple, default = None
             Manual setting of the x-axis limits. Note that these are in raw, unscaled units.
 
-        ylim: tuple, default = None
+        ylim : tuple, default = None
             Manual setting of the y-axis limits. Note that these are in raw, unscaled units.
 
-        tex: bool, default = True
+        tex : bool, default = True
             Use TEX for labels
 
-        nice: bool, default = True
+        nice : bool, default = True
             Scale to nice units
 
-        ellipse: bool, default = True
+        ellipse : bool, default = True
             If True, plot an ellipse representing the
             2x2 sigma matrix
 
-        return_figure: bool, default = False
+        return_figure : bool, default = False
             If true, return a matplotlib.figure.Figure object
 
         **kwargs
@@ -1759,10 +1775,35 @@ class ParticleGroup:
         return deepcopy(self)
 
     def resample(self, n=0, equal_weights=False):
+        """
+        Resample particles randomly.
+
+        If n equals self.n_particle or n=0,
+        particle indices will be scrambled.
+
+        Otherwise if weights are equal, a random subset of particles will be selected.
+
+        Otherwise if weights are not equal, particles will be sampled according
+        to their weight using
+        [scipy.stats.rv_discrete](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_discrete.html).
+        Note that this latter method can result in duplicate particles,
+        and can be very slow for a large number of particles.
+
+        Parameters
+        ----------
+        n : int, default=0
+            Number to resample.
+            If n=0, this will use all particles.
+
+        equal_weights : bool, default=False
+            If True, will ensure that all particles have equal weights.
+
+        Returns
+        -------
+        ParticleGroup
+        """
         data = resample_particles(self, n, equal_weights=equal_weights)
         return ParticleGroup(data=data)
-
-    resample.__doc__ = resample_particles.__doc__
 
     # Internal sorting
     def _sort(self, key: str):

@@ -22,7 +22,7 @@ from ..interfaces.impact import (
     create_impact_emfield_cartesian_ele,
     create_impact_solrf_ele,
     parse_impact_emfield_cartesian,
-    write_impact_emfield_cartesian as _write_impact_emfield_cartesian,
+    write_impact_emfield_cartesian,
 )
 from ..interfaces.superfish import read_superfish_t7, write_superfish_t7
 from ..plot import (
@@ -661,16 +661,15 @@ class FieldMesh:
         Writes Impact-T style 1Tv3.T7 file corresponding to
         the `111: EMfldCart` element.
 
+        The file will contain grid information for X, Y, and Z dimensions followed by field values.
+        The field values are stored as complex numbers in the format (real, imaginary).
+
         Parameters
         ----------
         filename : str
             Path to the file where the field data will be written.
-
         """
-
-        return _write_impact_emfield_cartesian(self, filename)
-
-    write_impact_emfield_cartesian.__doc__ = _write_impact_emfield_cartesian.__doc__
+        return write_impact_emfield_cartesian(self, filename)
 
     # Superfish
     def write_superfish(self, filePath, verbose=False):
@@ -680,10 +679,15 @@ class FieldMesh:
         For static fields, a Poisson T7 file is written.
 
         For dynamic (`harmonic /= 0`) fields, a Fish T7 file is written
+
+        If .is_static, a Poisson file is written. Otherwise a Fish file is written.
+
+        Parameters
+        ----------
+        filePath : str or pathlib.Path
+            Output file path.
         """
         return write_superfish_t7(self, filePath, verbose=verbose)
-
-    write_superfish.__doc__ = write_superfish_t7.__doc__
 
     @classmethod
     def from_ansys_ascii_3d(cls, *, efile=None, hfile=None, frequency=None):

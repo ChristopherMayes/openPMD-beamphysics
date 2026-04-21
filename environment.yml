@@ -23,4 +23,5 @@ dependencies:
   - mkdocs-jupyter
   - mkdocstrings-python
   - pygments
+  - pymdown-extensions >=10.21.2
   - pip

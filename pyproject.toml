@@ -22,7 +22,7 @@ dynamic = ["version"]
 keywords = []
 name = "openpmd-beamphysics"
 readme = { file = "README.md", content-type = "text/markdown" }
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-cov", "pytest-benchmark", "pyyaml"]

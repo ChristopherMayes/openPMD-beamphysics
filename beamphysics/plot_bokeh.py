@@ -452,7 +452,7 @@ def marginal_plot(
     )
 
     if sizing_mode is not None:
-        fig_joint.sizing_mode = "scale_width"
+        fig_joint.sizing_mode = "scale_both"
         fig_joint.aspect_ratio = main_h / main_w
         p_top.sizing_mode = "stretch_width"
         p_right.sizing_mode = "stretch_height"

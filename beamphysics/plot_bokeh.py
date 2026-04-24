@@ -310,7 +310,7 @@ def marginal_plot(
     text: str | None = None,
     title: str | None = None,
     font_settings: MarginalFontSettings | None = None,
-    stats_location: Literal["bottom", "top-right"] = "bottom",
+    stats_location: Literal["bottom", "top-right"] = "top-right",
     show: bool = True,
     **kwargs,
 ) -> LayoutDOM:
@@ -369,7 +369,7 @@ def marginal_plot(
     >>> bokeh.io.save(obj, "t_vs_energy.html")
     """
     if kwargs:
-        logger.warning(f"Unsupported kwargs: {kwargs}")
+        logger.debug("Unused kwargs (may be for another backend): %s", kwargs)
     if font_settings is None:
         font_settings = MarginalFontSettings()
 
@@ -667,7 +667,7 @@ def slice_plot(
     LayoutDOM
     """
     if kwargs:
-        logger.warning(f"Unsupported kwargs: {kwargs}")
+        logger.debug("Unused kwargs (may be for another backend): %s", kwargs)
 
     pdata = prepare_slice_plot(
         particle_group,
@@ -787,7 +787,7 @@ def wakefield_plot(
     """
 
     if kwargs:
-        logger.warning(f"Unsupported kwargs: {kwargs}")
+        logger.debug("Unused kwargs (may be for another backend): %s", kwargs)
     pdata = prepare_wakefield_plot(
         particle_group,
         wake,
@@ -1053,7 +1053,7 @@ def plot_1d_density(
     """
 
     if kwargs:
-        logger.warning(f"Unsupported kwargs: {kwargs}")
+        logger.debug("Unused kwargs (may be for another backend): %s", kwargs)
     from .units import pg_units, plottable_array
 
     # Resolve data dict
@@ -1248,7 +1248,7 @@ def plot_2d_density_with_marginals(
     LayoutDOM
     """
     if kwargs:
-        logger.warning(f"Unsupported kwargs: {kwargs}")
+        logger.debug("Unused kwargs (may be for another backend): %s", kwargs)
     nx, ny = data.shape
 
     if xmin is None:

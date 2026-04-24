@@ -17,6 +17,7 @@ from bokeh.models import (
     Range1d,  # pyright: ignore[reportPrivateImportUsage]
     Spacer,  # pyright: ignore[reportPrivateImportUsage]
 )
+from bokeh.io import show as _bokeh_show
 from bokeh.palettes import Palette, Viridis256
 from bokeh.plotting import figure
 
@@ -31,6 +32,31 @@ from .plot_base import (
 from .units import c_light
 
 logger = logging.getLogger(__name__)
+
+
+def initialize_jupyter():
+    # Is this public bokeh API? An attempt at forward-compatibility
+    try:
+        from bokeh.io.state import curstate
+    except ImportError:
+        pass
+    else:
+        state = curstate()
+        if getattr(state, "notebook", False):
+            # Jupyter already initialized
+            logger.debug("Bokeh output_notebook already called; not re-initializing")
+            return
+
+    from bokeh.plotting import output_notebook
+
+    output_notebook()
+
+
+def _maybe_show(layout: LayoutDOM, kwargs: dict) -> LayoutDOM:
+    """Pop ``show`` from *kwargs* and display the layout if truthy (default: True)."""
+    if kwargs.pop("show", True):
+        _bokeh_show(layout)
+    return layout
 
 
 @dataclasses.dataclass
@@ -240,7 +266,7 @@ def density_plot(
 
     fig.toolbar.logo = None
 
-    return fig
+    return _maybe_show(fig, kwargs)
 
 
 def marginal_plot(
@@ -556,21 +582,22 @@ def marginal_plot(
             sizing_mode="stretch_height",
             width=marg_w,
         )
-        return row(left_col, right_col, sizing_mode=sizing_mode)
-
-    if text_div is not None:
+        layout = row(left_col, right_col, sizing_mode=sizing_mode)
+    elif text_div is not None:
         left_col = column(p_top, fig_joint)
         right_col = column(text_div, p_right)
-        return row(left_col, right_col)
+        layout = row(left_col, right_col)
+    else:
+        layout = gridplot(
+            [
+                [p_top, None],
+                [fig_joint, p_right],
+            ],
+            merge_tools=True,
+            toolbar_location="left",
+        )
 
-    return gridplot(
-        [
-            [p_top, None],
-            [fig_joint, p_right],
-        ],
-        merge_tools=True,
-        toolbar_location="left",
-    )
+    return _maybe_show(layout, kwargs)
 
 
 # Default Bokeh color cycle for multi-curve plots
@@ -705,7 +732,7 @@ def slice_plot(
 
     fig.toolbar.logo = None
 
-    return fig
+    return _maybe_show(fig, kwargs)
 
 
 def wakefield_plot(
@@ -819,7 +846,7 @@ def wakefield_plot(
 
     fig.toolbar.logo = None
 
-    return fig
+    return _maybe_show(fig, kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -1018,7 +1045,7 @@ def plot_1d_density(
         fig.sizing_mode = sizing_mode
     fig.toolbar.logo = None
 
-    return fig
+    return _maybe_show(fig, kwargs)
 
 
 def plot_2d_density_with_marginals(
@@ -1202,13 +1229,15 @@ def plot_2d_density_with_marginals(
         right_col = column(
             top_right, p_right, sizing_mode="stretch_height", width=marg_w
         )
-        return row(left_col, right_col, sizing_mode=sizing_mode)
+        layout = row(left_col, right_col, sizing_mode=sizing_mode)
+    else:
+        layout = gridplot(
+            [
+                [p_top, top_right],
+                [fig_main, p_right],
+            ],
+            merge_tools=True,
+            toolbar_location="left",
+        )
 
-    return gridplot(
-        [
-            [p_top, top_right],
-            [fig_main, p_right],
-        ],
-        merge_tools=True,
-        toolbar_location="left",
-    )
+    return _maybe_show(layout, kwargs)

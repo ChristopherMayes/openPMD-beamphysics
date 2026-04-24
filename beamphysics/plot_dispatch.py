@@ -9,6 +9,12 @@ import numpy as np
 
 from .plot_base import Limit
 
+import functools
+import logging
+import sys
+
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from .particles import ParticleGroup
 
@@ -174,6 +180,38 @@ def resolve_backend(backend: str | None = None, obj: Any = None) -> str:
     return _default_backend
 
 
+@functools.cache
+def is_jupyter() -> bool:
+    """
+    Determine if we're in a Jupyter notebook session.
+
+    This works by way of interacting with IPython display and seeing what
+    choice it makes regarding reprs.
+
+    Returns
+    -------
+    bool
+    """
+    if "IPython" not in sys.modules or "IPython.display" not in sys.modules:
+        return False
+
+    from IPython.display import display
+
+    class ReprCheck:
+        def _repr_html_(self) -> str:
+            self.mode = "jupyter"
+            logger.info("Detected Jupyter. Using the notebook graph backend.")
+            return "<!-- Detected Jupyter. -->"
+
+        def __repr__(self) -> str:
+            self.mode = "console"
+            return ""
+
+    check = ReprCheck()
+    display(check)
+    return check.mode == "jupyter"
+
+
 def _load_mpl_backend() -> PlotBackend:
     from . import plot as mod
 
@@ -191,7 +229,7 @@ def _load_mpl_backend() -> PlotBackend:
 def _load_bokeh_backend() -> PlotBackend:
     from . import plot_bokeh as mod
 
-    return PlotBackend(
+    backend = PlotBackend(
         name="bokeh",
         density_plot=mod.density_plot,
         marginal_plot=mod.marginal_plot,
@@ -200,6 +238,10 @@ def _load_bokeh_backend() -> PlotBackend:
         plot_1d_density=mod.plot_1d_density,
         plot_2d_density_with_marginals=mod.plot_2d_density_with_marginals,
     )
+
+    if is_jupyter():
+        mod.initialize_jupyter()
+    return backend
 
 
 _backend_loaders = {

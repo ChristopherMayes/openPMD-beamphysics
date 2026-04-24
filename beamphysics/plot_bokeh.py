@@ -692,7 +692,7 @@ def slice_plot(
         fig.line(
             pdata.x,
             curve.values,
-            legend_label=curve.label,
+            legend_label=mathjax_fix(curve.label),
             color=color,
             line_width=2,
         )
@@ -959,7 +959,7 @@ def density_and_slice_plot(
             pdata.slice_x,
             curve.values,
             y_range_name="stats",
-            legend_label=curve.label,
+            legend_label=mathjax_fix(curve.label),
             color=color,
             line_width=2,
         )
@@ -1263,8 +1263,8 @@ def plot_2d_density_with_marginals(
     vmin = vmin if vmin is not None else float(np.min(data))
     vmax = vmax if vmax is not None else float(np.max(data))
 
-    x_label = f"{x_name} ({x_units})" if x_units else x_name
-    y_label = f"{y_name} ({y_units})" if y_units else y_name
+    x_label = mathjax_fix(f"{x_name} ({x_units})" if x_units else x_name)
+    y_label = mathjax_fix(f"{y_name} ({y_units})" if y_units else y_name)
 
     # Layout sizes
     main_w = int(width * (1.0 - marginal_fraction))
@@ -1304,7 +1304,7 @@ def plot_2d_density_with_marginals(
     )
 
     if show_colorbar:
-        cbar_label = f"{z_name} ({z_units})" if z_units else z_name
+        cbar_label = mathjax_fix(f"{z_name} ({z_units})" if z_units else z_name)
         color_bar = ColorBar(color_mapper=mapper, title=cbar_label, location=(0, 0))
         fig_main.add_layout(color_bar, "left")
 
@@ -1330,7 +1330,7 @@ def plot_2d_density_with_marginals(
         line_color="gray",
     )
     if z_units and y_units:
-        p_top.yaxis.axis_label = f"{z_units} {y_units}"
+        p_top.yaxis.axis_label = mathjax_fix(f"{z_units} {y_units}")
     p_top.xaxis.visible = False
 
     # Right marginal (Y projection)
@@ -1352,7 +1352,7 @@ def plot_2d_density_with_marginals(
         line_color="gray",
     )
     if z_units and x_units:
-        p_right.xaxis.axis_label = f"{z_units} {x_units}"
+        p_right.xaxis.axis_label = mathjax_fix(f"{z_units} {x_units}")
     p_right.yaxis.visible = False
 
     for p in (fig_main, p_top, p_right):

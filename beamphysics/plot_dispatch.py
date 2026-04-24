@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, Union
+from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 
@@ -95,8 +95,8 @@ class Plot1dDensityFn(Protocol):
 
     def __call__(
         self,
-        x: Union[str, np.ndarray],
-        y: Union[str, np.ndarray],
+        x: str | np.ndarray,
+        y: str | np.ndarray,
         *,
         nice: bool = ...,
         xlim: tuple[float, float] | None = ...,

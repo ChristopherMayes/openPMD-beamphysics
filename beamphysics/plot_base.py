@@ -18,6 +18,8 @@ from .units import (
 if TYPE_CHECKING:
     from .particles import ParticleGroup
 
+Limit = tuple[float | None, float | None]
+
 
 def _charge_density_units_str(
     x_unit, axis_units, hist_f: float, axis_f: float = 1.0

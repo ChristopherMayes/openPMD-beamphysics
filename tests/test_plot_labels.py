@@ -7,10 +7,8 @@ matplotlib.use("Agg")
 import pytest
 
 from beamphysics import single_particle
-from beamphysics.plot import (
-    _charge_density_units_str,
-    marginal_plot,
-)
+from beamphysics.plot import marginal_plot
+from beamphysics.plot_base import _charge_density_units_str
 from beamphysics.units import plottable_array_and_units, pmd_unit
 
 

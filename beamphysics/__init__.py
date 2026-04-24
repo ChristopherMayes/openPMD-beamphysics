@@ -27,6 +27,8 @@ _LAZY_IMPORTS = {
     "WavefrontAttrs": ".wavefront",
     "WavefrontK": ".wavefront",
     "pmd_init": ".writers",
+    "set_default_backend": ".plot_dispatch",
+    "get_default_backend": ".plot_dispatch",
 }
 
 
@@ -38,6 +40,8 @@ __all__ = [
     "ParticleStatus",
     "pmd_init",
     "single_particle",
+    "set_default_backend",
+    "get_default_backend",
     "Wavefront",
     "WavefrontAttrs",
     "WavefrontK",

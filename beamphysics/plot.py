@@ -19,12 +19,13 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from .labels import mathlabel
 from .plot_base import (
     PlotPreparationError,
-    _charge_density_units_str,
+    prepare_density_plot,
     prepare_marginal_plot,
+    prepare_slice_plot,
+    prepare_wakefield_plot,
 )
 from .statistics import slice_statistics
 from .units import (
-    c_light,
     nice_array,
     nice_scale_prefix,
     pg_units,
@@ -70,124 +71,64 @@ def slice_plot(
 
     Parameters
     ----------
-    particle_group: ParticleGroup
+    particle_group : ParticleGroup
         The object to plot
 
-    keys: iterable of str
+    keys : iterable of str
         Keys to calculate the statistics, e.g. `sigma_x`.
 
-    n_slice: int, default = 40
+    n_slice : int, default = 40
         Number of slices
 
-    slice_key: str, default = None
+    slice_key : str, default = None
          The dimension to slice in. This is typically `t` or `z`.
          `delta_t`, etc. are also allowed.
          If None, `t` or `z` will automatically be determined.
 
-    ylim: tuple, default = None
+    ylim : tuple, default = None
         Manual setting of the y-axis limits.
 
-    tex: bool, default = True
+    tex : bool, default = True
         Use TEX for labels
 
     Returns
     -------
-    fig: matplotlib.figure.Figure
+    fig : matplotlib.figure.Figure
 
     """
-
-    # Allow a single key
-    # if isinstance(keys, str):
-    #
-    #     keys = (keys, )
-
-    if slice_key is None:
-        if particle_group.in_t_coordinates:
-            slice_key = "z"
-        else:
-            slice_key = "t"
-
-    # Special case for delta_
-    if slice_key.startswith("delta_"):
-        slice_key = slice_key[6:]
-        has_delta_prefix = True
-    else:
-        has_delta_prefix = False
-
-    # Get all data
-    slice_dat = particle_group.slice_statistics(
-        *keys, n_slice=n_slice, slice_key=slice_key
-    )
-    slice_dat["density"] = slice_dat["charge"] / slice_dat["ptp_" + slice_key]
-    y2_key = "density"
-
-    # X-axis
-    x = slice_dat["mean_" + slice_key]
-    if has_delta_prefix:
-        x -= particle_group["mean_" + slice_key]
-        slice_key = "delta_" + slice_key  # restore
-
-    x, f1, ux, xmin, xmax = plottable_array_and_units(
-        x, particle_group.units(slice_key), nice=nice, lim=xlim
+    pdata = prepare_slice_plot(
+        particle_group,
+        *keys,
+        n_slice=n_slice,
+        slice_key=slice_key,
+        xlim=xlim,
+        ylim=ylim,
+        nice=nice,
+        tex=tex,
     )
 
-    # Y-axis
-
-    # Units check (value-based: 'Hz' == '1/s')
-    ulist = [particle_group.units(k) for k in keys]
-    u0 = ulist[0]
-    if not all(u == u0 for u in ulist):
-        raise ValueError(f"Incompatible units: {[u.unitSymbol for u in ulist]}")
-    uy = u0.unitSymbol
-
-    ymin = min([slice_dat[k].min() for k in keys])
-    ymax = max([slice_dat[k].max() for k in keys])
-
-    _, f2, uy, ymin, ymax = plottable_array_and_units(
-        np.array([ymin, ymax]), uy, nice=nice, lim=ylim
-    )
-
-    # Form Figure
     fig, ax = plt.subplots(**kwargs)
 
     # Main curves
-    if len(keys) == 1:
-        color = "black"
-    else:
-        color = None
-
-    for k in keys:
-        label = mathlabel(k, units=uy, tex=tex)
-        ax.plot(x, slice_dat[k] / f2, label=label, color=color)
-    if len(keys) > 1:
+    color = "black" if len(pdata.curves) == 1 else None
+    for curve in pdata.curves:
+        ax.plot(pdata.x, curve.values, label=curve.label, color=color)
+    if len(pdata.curves) > 1:
         ax.legend()
 
+    ax.set_xlabel(pdata.x_label)
+    ax.set_ylabel(pdata.y_label)
+
     # Density on r.h.s
-    y2, fy2, _, _, _ = plottable_array(slice_dat[y2_key], nice=nice, lim=None)
-
-    # Charge per (unprefixed) slice coordinate; a time axis displays as amps
-    slice_unit = particle_group.units(slice_key)
-    y2_units = _charge_density_units_str(slice_unit, slice_unit, fy2)
-
-    # Labels
-    labelx = mathlabel(slice_key, units=ux, tex=tex)
-    labely = mathlabel(*keys, units=uy, tex=tex)
-    labely2 = mathlabel(y2_key, units=y2_units, tex=tex)
-
-    ax.set_xlabel(labelx)
-    ax.set_ylabel(labely)
-
-    # rhs plot
     ax2 = ax.twinx()
-    ax2.set_ylabel(labely2)
-    ax2.fill_between(x, 0, y2, color="black", alpha=0.2)
+    ax2.set_ylabel(pdata.density_label)
+    ax2.fill_between(pdata.x, 0, pdata.density_values, color="black", alpha=0.2)
     ax2.set_ylim(0, None)
 
-    # Actual plot limits, considering scaling
-    if xlim:
-        ax.set_xlim(xmin / f1, xmax / f1)
-    if ylim:
-        ax.set_ylim(ymin / f2, ymax / f2)
+    if pdata.xlim:
+        ax.set_xlim(*pdata.xlim)
+    if pdata.ylim:
+        ax.set_ylim(*pdata.ylim)
 
     return fig
 
@@ -242,43 +183,33 @@ def density_plot(
     fig : matplotlib.figure.Figure
         The created or parent figure.
     """
-    if bins is None:
-        n = len(particle_group)
-        bins = int(n / 100)
-
-    x, f1, ux, xmin, xmax = plottable_array_and_units(
-        particle_group[key], particle_group.units(key), nice=nice, lim=xlim
+    pdata = prepare_density_plot(
+        particle_group, key=key, bins=bins, xlim=xlim, nice=nice, tex=tex
     )
-    w = particle_group["weight"]
-
-    labelx = mathlabel(key, units=ux, tex=tex)
 
     if ax is None:
         fig, ax = plt.subplots(**kwargs)
     else:
         fig = ax.get_figure()
 
-    hist, bin_edges = np.histogram(x, bins=bins, weights=w)
-    hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
-    hist_width = np.diff(bin_edges)
-    hist_y, hist_f, _, _hist_xmin, _hist_xmax = plottable_array(
-        hist / hist_width, nice=nice
+    ax.bar(
+        pdata.hist_centers,
+        pdata.hist_values,
+        pdata.hist_width,
+        color=color,
+        alpha=alpha,
     )
-
-    ax.bar(hist_x, hist_y, hist_width, color=color, alpha=alpha)
-
-    density_units = _charge_density_units_str(particle_group.units(key), ux, hist_f, f1)
-    ax.set_ylabel(f"density ({density_units})")
+    ax.set_ylabel(pdata.y_label)
 
     if hasattr(ax, "get_shared_x_axes") and ax.get_shared_x_axes().joined(
         ax, ax.figure.axes[0]
     ):
-        ax.figure.axes[0].set_xlabel(labelx)
+        ax.figure.axes[0].set_xlabel(pdata.x_label)
     else:
-        ax.set_xlabel(labelx)
+        ax.set_xlabel(pdata.x_label)
 
-    if xlim:
-        ax.set_xlim(xmin / f1, xmax / f1)
+    if pdata.xlim:
+        ax.set_xlim(*pdata.xlim)
 
     return fig
 
@@ -1490,47 +1421,41 @@ def wakefield_plot(
     fig : matplotlib.figure.Figure
         The matplotlib figure containing the plot.
     """
-    if key is None:
-        if particle_group.in_t_coordinates:
-            key = "delta_z/c"
-        else:
-            key = "delta_t"
+    pdata = prepare_wakefield_plot(
+        particle_group,
+        wake,
+        key=key,
+        nice=nice,
+        tex=tex,
+        xlim=xlim,
+        ylim=ylim,
+        bins=bins,
+    )
 
     if ax is None:
         fig, ax = plt.subplots(**kwargs)
     else:
         fig = ax.get_figure()
 
-    # Plot density on twin axis
+    # Density on twin axis
     ax2 = ax.twinx()
-    density_plot(particle_group, key=key, ax=ax2, nice=nice, alpha=0.5, bins=bins)
-
-    # Wake kicks
-    x_raw = particle_group[key]
-
-    if particle_group.in_t_coordinates:
-        z = np.asarray(particle_group.z)
-    else:
-        z = -c_light * np.asarray(particle_group.t)
-    kicks = wake.particle_kicks(z=z, weight=particle_group.weight)
-
-    x, f1, ux, xmin, xmax = plottable_array_and_units(
-        x_raw, particle_group.units(key), nice=nice, lim=xlim
+    ax2.bar(
+        pdata.density.hist_centers,
+        pdata.density.hist_values,
+        pdata.density.hist_width,
+        color="grey",
+        alpha=0.5,
     )
-    y, f2, uy, ymin, ymax = plottable_array_and_units(
-        kicks, "eV/m", nice=nice, lim=ylim
-    )
+    ax2.set_ylabel(pdata.density.y_label)
 
-    ax.scatter(x, y, marker=".", color="black", s=0.5)
+    # Wake kicks scatter
+    ax.scatter(pdata.scatter_x, pdata.scatter_y, marker=".", color="black", s=0.5)
+    ax.set_xlabel(pdata.x_label)
+    ax.set_ylabel(pdata.y_label)
 
-    # Labels
-    ax.set_xlabel(mathlabel(key, units=ux, tex=tex))
-    ax.set_ylabel(mathlabel("W_z", units=uy, tex=tex))
-
-    # Limits
-    if xlim:
-        ax.set_xlim(xmin / f1, xmax / f1)
-    if ylim:
-        ax.set_ylim(ymin / f2, ymax / f2)
+    if pdata.xlim:
+        ax.set_xlim(*pdata.xlim)
+    if pdata.ylim:
+        ax.set_ylim(*pdata.ylim)
 
     return fig

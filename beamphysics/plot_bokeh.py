@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+from typing import Literal
 
 import numpy as np
 from bokeh.core.enums import SizingModeType
@@ -177,10 +178,28 @@ def get_annotations(particle_group, key1: str, key2: str) -> list[StatsAnnotatio
     return []
 
 
-def _annotations_to_html(annotations: list[StatsAnnotation]) -> str | None:
-    """Convert a list of Annotation objects to an HTML table."""
+def _annotations_to_html(
+    annotations: list[StatsAnnotation],
+    horizontal: bool = False,
+) -> str | None:
+    """Convert a list of Annotation objects to an HTML table.
+
+    Parameters
+    ----------
+    annotations : list[StatsAnnotation]
+    horizontal : bool
+        If True, render items in a single row separated by spacing.
+    """
     if not annotations:
         return None
+
+    if horizontal:
+        items = []
+        for a in annotations:
+            label = f"{a.label}<sub>{a.sub_label}</sub>" if a.sub_label else a.label
+            items.append(f"{label} = {a.value} {a.units}")
+        sep = " &nbsp;&middot;&nbsp; "
+        return f"<span>{sep.join(items)}</span>"
 
     rows = []
     for a in annotations:
@@ -291,6 +310,7 @@ def marginal_plot(
     text: str | None = None,
     title: str | None = None,
     font_settings: MarginalFontSettings | None = None,
+    stats_location: Literal["bottom", "top-right"] = "bottom",
     show: bool = True,
     **kwargs,
 ) -> LayoutDOM:
@@ -511,64 +531,48 @@ def marginal_plot(
                 axis.axis_label_text_font = font_settings.text_font
                 axis.major_label_text_font = font_settings.text_font
 
-    annotation_html: str | None = None
-    if text is None:
-        annotation_html = _annotations_to_html(
-            get_annotations(particle_group, key1, key2)
-        )
-    elif text:
-        annotation_html = text.replace("\n", "<br>")
-
-    text_div: Div | None = None
-    if annotation_html:
-        popup_font_size = font_settings.annotation_text_font_size or "12px"
-        popup_css = ""
-        if font_settings.text_font is not None:
-            popup_css += f"font-family: {font_settings.text_font}; "
-        popup_html = f"""
-            <style>
-            .bk-stats-trigger {{
-              cursor: pointer;
-              position: relative;
-              text-align: center;
-            }}
-            .bk-stats-popup {{
-              display: none;
-              position: absolute;
-              top: 100%;
-              right: 0;
-              background: white;
-              color: black;
-              border: 1px solid #ccc;
-              border-radius: 4px;
-              padding: 8px 12px;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-              z-index: 100;
-              white-space: nowrap;
-              line-height: 1.6;
-              font-size: {popup_font_size};
-              {popup_css}
-            }}
-            .bk-stats-trigger:hover .bk-stats-popup {{
-              display: block;
-            }}
-            </style>
-              <div class="bk-stats-trigger">Stats
-              <div class="bk-stats-popup">{annotation_html}</div>
-            </div>
-           """
-        text_div = Div(
-            text=popup_html,
-            width=marg_w,
-            height=marg_h,
-            styles={"overflow": "visible"},
-        )
+    annotations = get_annotations(particle_group, key1, key2) if text is None else []
+    custom_text = text.replace("\n", "<br>") if text else None
 
     if title:
         fig_joint.title.text = title
 
-    top_right = (
-        text_div if text_div is not None else Spacer(width=marg_w, height=marg_h)
+    # Build the stats Div (if any) with style depending on location
+    stats_div: Div | None = None
+    popup_font_size = font_settings.annotation_text_font_size or "12px"
+    popup_css = ""
+    if font_settings.text_font is not None:
+        popup_css += f"font-family: {font_settings.text_font}; "
+
+    if custom_text or annotations:
+        if stats_location == "top-right":
+            content = custom_text or _annotations_to_html(annotations)
+            stats_div = Div(
+                text=f"""
+                <div style="font-size:{popup_font_size}; line-height:1.6; {popup_css}">
+                  {content}
+                </div>
+                """,
+                width=marg_w,
+                height=marg_h,
+            )
+        else:
+            # "bottom" - horizontal stats bar below the plot
+            content = custom_text or _annotations_to_html(annotations, horizontal=True)
+            stats_div = Div(
+                text=f"""
+                <div style="font-size:{popup_font_size}; color:#555;
+                            padding:4px 8px; {popup_css}">
+                  {content}
+                </div>
+                """,
+            )
+
+    # Assemble layout
+    top_right: LayoutDOM = (
+        stats_div
+        if stats_div is not None and stats_location == "top-right"
+        else Spacer(width=marg_w, height=marg_h)
     )
 
     if sizing_mode is not None:
@@ -584,20 +588,21 @@ def marginal_plot(
             sizing_mode="stretch_height",
             width=marg_w,
         )
-        layout = row(left_col, right_col, sizing_mode=sizing_mode)
-    elif text_div is not None:
-        left_col = column(p_top, fig_joint)
-        right_col = column(text_div, p_right)
-        layout = row(left_col, right_col)
+        plot_layout = row(left_col, right_col, sizing_mode=sizing_mode)
     else:
-        layout = gridplot(
+        plot_layout = gridplot(
             [
-                [p_top, None],
+                [p_top, top_right],
                 [fig_joint, p_right],
             ],
             merge_tools=True,
             toolbar_location="left",
         )
+
+    if stats_div is not None and stats_location == "bottom":
+        layout = column(plot_layout, stats_div)
+    else:
+        layout = plot_layout
 
     return _maybe_show(layout, show)
 

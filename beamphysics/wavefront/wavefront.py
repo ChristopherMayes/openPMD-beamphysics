@@ -1053,7 +1053,14 @@ class WavefrontK(WavefrontBase):
         """
         return self.intensity_x + self.intensity_y
 
-    def plot_spectral_intensity(self, cmap="inferno", logscale=False, backend=None):
+    def plot_spectral_intensity(
+        self,
+        cmap="inferno",
+        logscale=False,
+        backend=None,
+        return_figure=False,
+        **kwargs,
+    ):
         """
         Projected spectral intensity plot with marginals.
 
@@ -1065,6 +1072,8 @@ class WavefrontK(WavefrontBase):
             Use log scale for color and marginals.
         backend : str, optional
             Plot backend: ``'mpl'`` or ``'bokeh'``.
+        return_figure : bool, default = False
+            If True, return the figure/layout object.
         """
         xfactor = 1e6  # rad -> µrad
         yfactor = 1e6
@@ -1085,7 +1094,7 @@ class WavefrontK(WavefrontBase):
         )
 
         be = get_backend(backend)
-        return be.plot_2d_density_with_marginals(
+        fig = be.plot_2d_density_with_marginals(
             F,
             dx=dthetax,
             dy=dthetay,
@@ -1100,9 +1109,15 @@ class WavefrontK(WavefrontBase):
             cmap=cmap,
             log_scale_marginals=logscale,
             log_scale_z=logscale,
+            return_figure=True,
+            **kwargs,
         )
+        if return_figure:
+            return fig
 
-    def plot_photon_energy_spectrum(self, xlim=None, ax=None, backend=None):
+    def plot_photon_energy_spectrum(
+        self, xlim=None, ax=None, backend=None, return_figure=False, **kwargs
+    ):
         """
         Photon energy spectrum plot.
 
@@ -1114,12 +1129,14 @@ class WavefrontK(WavefrontBase):
             Existing axes. Only used by the ``'mpl'`` backend.
         backend : str, optional
             Plot backend: ``'mpl'`` or ``'bokeh'``.
+        return_figure : bool, default = False
+            If True, return the figure/layout object.
         """
         x = self.photon_energy_vec  # eV
         y = self.photon_energy_spectrum * 1e6  # µJ/eV
 
         be = get_backend(backend)
-        return be.plot_1d_density(
+        fig = be.plot_1d_density(
             x,
             y,
             x_name="photon energy",
@@ -1132,7 +1149,11 @@ class WavefrontK(WavefrontBase):
             xlim=xlim,
             ax=ax,
             nice=False,
+            return_figure=True,
+            **kwargs,
         )
+        if return_figure:
+            return fig
 
     # Statistics
 
@@ -1563,6 +1584,8 @@ class Wavefront(WavefrontBase):
         log_scale_y=False,
         show_cdf=False,
         backend=None,
+        return_figure=False,
+        **kwargs,
     ):
         x = self.zvec / c
         y = self.power
@@ -1570,7 +1593,7 @@ class Wavefront(WavefrontBase):
         data = {"z/c": x, "power": y}
 
         be = get_backend(backend)
-        return be.plot_1d_density(
+        fig = be.plot_1d_density(
             "z/c",
             "power",
             data=data,
@@ -1583,9 +1606,20 @@ class Wavefront(WavefrontBase):
             plot_style={"color": "purple"},
             kind="bar",
             nice=nice,
+            return_figure=True,
+            **kwargs,
         )
+        if return_figure:
+            return fig
 
-    def plot_fluence(self, cmap="inferno", logscale=False, backend=None):
+    def plot_fluence(
+        self,
+        cmap="inferno",
+        logscale=False,
+        backend=None,
+        return_figure=False,
+        **kwargs,
+    ):
         """
         Fluence plot with marginal projections.
 
@@ -1604,7 +1638,7 @@ class Wavefront(WavefrontBase):
         F = self.fluence
 
         be = get_backend(backend)
-        return be.plot_2d_density_with_marginals(
+        fig = be.plot_2d_density_with_marginals(
             F * zfactor,
             dx=self.dx * xfactor,
             dy=self.dy * yfactor,
@@ -1619,9 +1653,20 @@ class Wavefront(WavefrontBase):
             cmap=cmap,
             log_scale_marginals=logscale,
             log_scale_z=logscale,
+            return_figure=True,
+            **kwargs,
         )
+        if return_figure:
+            return fig
 
-    def plot2(self, cmap="inferno", logscale=False, backend=None):
+    def plot2(
+        self,
+        cmap="inferno",
+        logscale=False,
+        backend=None,
+        return_figure=False,
+        **kwargs,
+    ):
         """
         Simple fluence plot
 
@@ -1636,7 +1681,7 @@ class Wavefront(WavefrontBase):
         F = self.fluence
 
         be = get_backend(backend)
-        return be.plot_2d_density_with_marginals(
+        fig = be.plot_2d_density_with_marginals(
             F * zfactor,
             dx=self.dx * xfactor,
             dy=self.dy * yfactor,
@@ -1651,7 +1696,11 @@ class Wavefront(WavefrontBase):
             cmap=cmap,
             log_scale_marginals=logscale,
             log_scale_z=logscale,
+            return_figure=True,
+            **kwargs,
         )
+        if return_figure:
+            return fig
 
     @property
     def dkx(self) -> float:

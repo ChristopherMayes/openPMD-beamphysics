@@ -18,6 +18,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from .labels import mathlabel
 from .plot_base import (
+    Limit,
     PlotPreparationError,
     prepare_density_plot,
     prepare_marginal_plot,
@@ -137,10 +138,10 @@ def density_plot(
     key: str = "x",
     bins: int | str | None = None,
     *,
-    xlim: tuple[float, float] | None = None,
+    xlim: Limit | None = None,
     tex: bool = True,
     nice: bool = True,
-    ax: Axes | None = None,
+    # ax: Axes | None = None,  # <-- handled in kwargs to maintain protocol
     color="grey",
     alpha=1,
     **kwargs,
@@ -182,6 +183,7 @@ def density_plot(
     fig : matplotlib.figure.Figure
         The created or parent figure.
     """
+    ax: Axes | None = kwargs.pop("ax", None)
     pdata = prepare_density_plot(
         particle_group, key=key, bins=bins, xlim=xlim, nice=nice, tex=tex
     )
@@ -219,8 +221,8 @@ def marginal_plot(
     key2: str = "p",
     bins: int | None = None,
     *,
-    xlim: tuple[float, float] | None = None,
-    ylim: tuple[float, float] | None = None,
+    xlim: Limit | None = None,
+    ylim: Limit | None = None,
     tex: bool = True,
     nice: bool = True,
     ellipse: bool = False,
@@ -884,21 +886,22 @@ def plot_1d_density(
     y_name: str | None = None,
     x_units: str | None = None,
     y_units: str | None = None,
-    figsize: tuple[float, float] = (6, 4),
+    figsize: Limit = (6, 4),
     log_scale_y: bool = False,
     show_cdf: bool = False,
     cdf_label: str = "CDF",
     cdf_style: dict[str, str | float] | None = None,
     kind: str = "bar",
     plot_style: dict[str, str | float] | None = None,
-    xlim: tuple[float, float] | None = None,
-    ylim: tuple[float, float] | None = (0, None),
-    ax: plt.Axes | None = None,
+    xlim: Limit | None = None,
+    ylim: Limit | None = (0, None),
+    # ax: Axes | None = None,  # <-- handled in kwargs to maintain protocol
     nice: bool = True,
     auto_label: bool = False,
     tex: bool = True,
     data: dict[str, np.ndarray] | None = None,
     return_axes: bool = False,
+    **kwargs,
 ) -> tuple[plt.Figure, dict[str, plt.Axes]] | None:
     """
     Plot a 1D density distribution with optional cumulative distribution function (CDF).
@@ -982,7 +985,7 @@ def plot_1d_density(
         >>> plot_1d_density("t", "norm_emit_x", data=data, auto_label=True)
         # Will automatically use TeX labels and proper units
     """
-    # Handle data dict indexing (matplotlib pattern)
+    ax: Axes | None = kwargs.pop("ax", None)
     # Handle data dict indexing (matplotlib pattern)
     x_key = None
     y_key = None
@@ -1186,21 +1189,22 @@ def plot_2d_density_with_marginals(
     y_units: str | None = None,
     z_units: str | None = None,
     cmap: str = "inferno",
-    figsize: tuple[float, float] = (5, 5),
+    figsize: Limit = (5, 5),
     log_scale_z: bool = False,
     log_scale_marginals: bool = False,
     marginal_titles: tuple[str | None, str | None] = (None, None),
-    highlight_regions: None | (list[dict[str, float | tuple[float, float]]]) = None,
+    highlight_regions: None | (list[dict[str, float | Limit]]) = None,
     marginal_style: dict[str, str | float] | None = None,
     show_stats: bool = False,
     show_colorbar: bool = True,
-    xlim: tuple[float, float] = None,
-    ylim: tuple[float, float] = None,
+    xlim: Limit | None = None,
+    ylim: Limit | None = None,
     vmin: float | None = None,
     vcenter: float | None = None,
     vmax: float | None = None,
     aspect: str | None = "auto",
     return_axes: bool = False,
+    **kwargs,
 ) -> tuple[plt.Figure, dict[str, plt.Axes]] | None:
     """
     Basic plot for a 2D density map with marginal histograms.
@@ -1357,9 +1361,9 @@ def wakefield_plot(
     wake,
     key: str | None = None,
     nice: bool = True,
-    ax: Axes | None = None,
-    xlim: tuple[float, float] | None = None,
-    ylim: tuple[float, float] | None = None,
+    # ax: Axes | None = None,  # <-- handled in kwargs to maintain protocol
+    xlim: Limit | None = None,
+    ylim: Limit | None = None,
     tex: bool = True,
     bins: int | str | None = None,
     **kwargs,
@@ -1412,6 +1416,7 @@ def wakefield_plot(
     fig : matplotlib.figure.Figure
         The matplotlib figure containing the plot.
     """
+    ax: Axes | None = kwargs.pop("ax", None)
     pdata = prepare_wakefield_plot(
         particle_group,
         wake,

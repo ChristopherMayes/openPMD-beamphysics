@@ -12,6 +12,8 @@ from .units import c_light, nice_array, nice_scale_prefix, plottable_array
 if TYPE_CHECKING:
     from .particles import ParticleGroup
 
+Limit = tuple[float | None, float | None]
+
 
 class PlotPreparationError(Exception): ...
 

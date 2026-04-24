@@ -1,13 +1,3 @@
-"""
-Plot backend dispatch for openPMD-beamphysics.
-
-Provides a protocol-typed PlotBackend that holds callables for each plot type.
-Each backend (mpl, bokeh) provides functions conforming to these protocols.
-Backend-specific extra keyword arguments are allowed via ``**kwargs``.
-
-Resolution priority: explicit ``backend=`` arg > ``obj.plot_backend`` > module default.
-"""
-
 from __future__ import annotations
 
 import os
@@ -16,6 +6,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
+
+from .plot_base import Limit
 
 if TYPE_CHECKING:
     from .particles import ParticleGroup
@@ -35,7 +27,7 @@ class DensityPlotFn(Protocol):
         key: str = ...,
         bins: int | str | None = ...,
         *,
-        xlim: tuple[float, float] | None = ...,
+        xlim: Limit | None = ...,
         nice: bool = ...,
         **kwargs: Any,
     ) -> Any: ...
@@ -51,8 +43,8 @@ class MarginalPlotFn(Protocol):
         key2: str = ...,
         bins: int | None = ...,
         *,
-        xlim: tuple[float, float] | None = ...,
-        ylim: tuple[float, float] | None = ...,
+        xlim: Limit | None = ...,
+        ylim: Limit | None = ...,
         nice: bool = ...,
         ellipse: bool = ...,
         **kwargs: Any,
@@ -68,8 +60,8 @@ class SlicePlotFn(Protocol):
         *keys: str,
         n_slice: int = ...,
         slice_key: str | None = ...,
-        xlim: tuple[float, float] | None = ...,
-        ylim: tuple[float, float] | None = ...,
+        xlim: Limit | None = ...,
+        ylim: Limit | None = ...,
         nice: bool = ...,
         **kwargs: Any,
     ) -> Any: ...
@@ -84,8 +76,8 @@ class WakefieldPlotFn(Protocol):
         wake: Any,
         key: str | None = ...,
         nice: bool = ...,
-        xlim: tuple[float, float] | None = ...,
-        ylim: tuple[float, float] | None = ...,
+        xlim: Limit | None = ...,
+        ylim: Limit | None = ...,
         **kwargs: Any,
     ) -> Any: ...
 
@@ -99,8 +91,8 @@ class Plot1dDensityFn(Protocol):
         y: str | np.ndarray,
         *,
         nice: bool = ...,
-        xlim: tuple[float, float] | None = ...,
-        ylim: tuple[float, float] | None = ...,
+        xlim: Limit | None = ...,
+        ylim: Limit | None = ...,
         **kwargs: Any,
     ) -> Any: ...
 

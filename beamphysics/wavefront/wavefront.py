@@ -11,7 +11,6 @@ from typing import ClassVar, Union
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import LogNorm
 from numpy.fft import fftfreq, fftshift, ifftn, ifftshift
 from scipy.constants import c, e, epsilon_0, hbar
 
@@ -19,7 +18,7 @@ from ..interfaces.genesis import (
     load_genesis4_fields,
     wavefront_write_genesis4,
 )
-from ..plot import plot_1d_density, plot_2d_density_with_marginals
+from ..plot_dispatch import get_backend
 from ..statistics import mean_calc, mean_variance_calc
 from ..units import Z0, c_light
 from ..wavefront.propagators import drift_wavefront
@@ -923,63 +922,86 @@ class WavefrontK(WavefrontBase):
         """
         return self.intensity_x + self.intensity_y
 
-    def plot_spectral_intensity(self, cmap="inferno", logscale=False):
+    def plot_spectral_intensity(self, cmap="inferno", logscale=False, backend=None):
         """
-        Simple projected intensity plot
+        Projected spectral intensity plot with marginals.
 
+        Parameters
+        ----------
+        cmap : str, default = 'inferno'
+            Colormap name.
+        logscale : bool, default = False
+            Use log scale for color and marginals.
+        backend : str, optional
+            Plot backend: ``'mpl'`` or ``'bokeh'``.
         """
-
-        xlabel = r"$\theta_x$ (µrad)"
-        ylabel = r"$\theta_y$ (µrad)"
-        xfactor = 1e6
+        xfactor = 1e6  # rad -> µrad
         yfactor = 1e6
         zfactor = self.k0**2 / (1e6 * 1e6)
-        label = r"Spectral $F$ (J/µrad$^2$)"
 
-        extent = (
-            self.thetaxmin * xfactor,
-            self.thetaxmax * xfactor,
-            self.thetaymin * yfactor,
-            self.thetaymax * yfactor,
+        F = zfactor * self.spectral_fluence  # shape (nx, ny)
+
+        # Grid spacing in µrad
+        dthetax = (
+            (self.thetaxmax - self.thetaxmin) / (self.nx - 1) * xfactor
+            if self.nx > 1
+            else 1.0
+        )
+        dthetay = (
+            (self.thetaymax - self.thetaymin) / (self.ny - 1) * yfactor
+            if self.ny > 1
+            else 1.0
         )
 
-        # Alternatively:
-        # extent = (self.kxmin, self.kxmax, self.kymin, self.kymax)
-        # xlabel = r'$k_x$ (rad/m)'
-        # ylabel = r'$k_y$ (rad/m)'
-        # zfactor = 1
-        # label = r"Spectral $F$ (J$\cdot$m$^2$)"
-
-        F = zfactor * self.spectral_fluence
-        Fmax = np.max(F)
-
-        fig, ax = plt.subplots()
-        im = ax.imshow(
-            F.T,
+        be = get_backend(backend)
+        return be.plot_2d_density_with_marginals(
+            F,
+            dx=dthetax,
+            dy=dthetay,
+            xmin=self.thetaxmin * xfactor,
+            ymin=self.thetaymin * yfactor,
+            x_name=r"$\theta_x$",
+            x_units="µrad",
+            y_name=r"$\theta_y$",
+            y_units="µrad",
+            z_name=r"Spectral $F$",
+            z_units="J/µrad$^2$",
             cmap=cmap,
-            extent=extent,
-            origin="lower",
-        )  # Note data.T and origin='lower' are required
-        if logscale:
-            norm = LogNorm(vmin=Fmax / 1e6, vmax=Fmax)
-            im.set_norm(norm)
+            log_scale_marginals=logscale,
+            log_scale_z=logscale,
+        )
 
-        fig.colorbar(im, ax=ax, label=label)
+    def plot_photon_energy_spectrum(self, xlim=None, ax=None, backend=None):
+        """
+        Photon energy spectrum plot.
 
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(ylabel)
-
-    def plot_photon_energy_spectrum(self, xlim=None, ax=None):
+        Parameters
+        ----------
+        xlim : tuple of float, optional
+            X-axis limits.
+        ax : matplotlib.axes.Axes, optional
+            Existing axes. Only used by the ``'mpl'`` backend.
+        backend : str, optional
+            Plot backend: ``'mpl'`` or ``'bokeh'``.
+        """
         x = self.photon_energy_vec  # eV
-        y = self.photon_energy_spectrum  # J/eV
+        y = self.photon_energy_spectrum * 1e6  # µJ/eV
 
-        if ax is None:
-            _, ax = plt.subplots()
-        ax.plot(x, y * 1e6, color="purple")
-        ax.set_xlabel("photon energy (eV)")
-        ax.set_ylabel("photon spectral energy density (µJ/eV)")
-        ax.set_ylim(0, None)
-        ax.set_xlim(xlim)
+        be = get_backend(backend)
+        return be.plot_1d_density(
+            x,
+            y,
+            x_name="photon energy",
+            y_name="photon spectral energy density",
+            x_units="eV",
+            y_units="µJ/eV",
+            kind="line",
+            plot_style={"color": "purple"},
+            ylim=(0, None),
+            xlim=xlim,
+            ax=ax,
+            nice=False,
+        )
 
     # Statistics
 
@@ -1333,13 +1355,15 @@ class Wavefront(WavefrontBase):
         nice=True,
         log_scale_y=False,
         show_cdf=False,
+        backend=None,
     ):
         x = self.zvec / c
         y = self.power
 
         data = {"z/c": x, "power": y}
 
-        return plot_1d_density(
+        be = get_backend(backend)
+        return be.plot_1d_density(
             "z/c",
             "power",
             data=data,
@@ -1354,62 +1378,26 @@ class Wavefront(WavefrontBase):
             nice=nice,
         )
 
-    def plot_fluence(self, cmap="inferno", logscale=False):
+    def plot_fluence(self, cmap="inferno", logscale=False, backend=None):
         """
-        Simple fluence plot
+        Fluence plot with marginal projections.
 
+        Parameters
+        ----------
+        cmap : str, default = 'inferno'
+            Colormap name.
+        logscale : bool, default = False
+            Use log scale for color and marginals.
+        backend : str, optional
+            Plot backend: ``'mpl'`` or ``'bokeh'``.
         """
-
-        xlabel = r"$x$ (cm)"
-        ylabel = r"$y$ (cm)"
         xfactor = 100
         yfactor = 100
         zfactor = 1 / (100 * 100)  # 1/m^2 -> 1/cm^2
-        label = r"$F$ (J/cm$^2$)"
-        extent = (
-            self.xmin * xfactor,
-            self.xmax * xfactor,
-            self.ymin * yfactor,
-            self.ymax * yfactor,
-        )
-
-        F = self.fluence * zfactor
-        Fmax = np.max(F)
-
-        fig, ax = plt.subplots()
-        im = ax.imshow(
-            F.T,
-            cmap=cmap,
-            extent=extent,
-            origin="lower",
-        )  # Note data.T and origin='lower' are required
-        if logscale:
-            norm = LogNorm(vmin=Fmax / 1e6, vmax=Fmax)
-            im.set_norm(norm)
-
-        fig.colorbar(im, ax=ax, label=label)
-
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(ylabel)
-
-    def plot2(self, cmap="inferno", logscale=False):
-        """
-        Simple fluence plot
-
-        Notes
-        -----
-        This is experimental.
-        """
-
-        # xlabel = r"$x$ (cm)"
-        # ylabel = r"$y$ (cm)"
-        xfactor = 100
-        yfactor = 100
-        zfactor = 1 / (100 * 100)  # 1/m^2 -> 1/cm^2
-        # label = r"$F$ (J/cm$^2$)"
         F = self.fluence
 
-        plot_2d_density_with_marginals(
+        be = get_backend(backend)
+        return be.plot_2d_density_with_marginals(
             F * zfactor,
             dx=self.dx * xfactor,
             dy=self.dy * yfactor,
@@ -1426,10 +1414,37 @@ class Wavefront(WavefrontBase):
             log_scale_z=logscale,
         )
 
-        # if logscale:
-        # Fmax = np.max(F)
-        #    norm = LogNorm(vmin=Fmax / 1e6, vmax=Fmax)
-        #    im.set_norm(norm)
+    def plot2(self, cmap="inferno", logscale=False, backend=None):
+        """
+        Simple fluence plot
+
+        Notes
+        -----
+        This is experimental.
+        """
+
+        xfactor = 100
+        yfactor = 100
+        zfactor = 1 / (100 * 100)  # 1/m^2 -> 1/cm^2
+        F = self.fluence
+
+        be = get_backend(backend)
+        return be.plot_2d_density_with_marginals(
+            F * zfactor,
+            dx=self.dx * xfactor,
+            dy=self.dy * yfactor,
+            xmin=self.xmin * xfactor,
+            ymin=self.ymin * yfactor,
+            x_name=r"$x$",
+            x_units="cm",
+            y_name=r"$y$",
+            y_units="cm",
+            z_name=r"$F$",
+            z_units="J/cm$^2$",
+            cmap=cmap,
+            log_scale_marginals=logscale,
+            log_scale_z=logscale,
+        )
 
     @property
     def dkx(self) -> float:

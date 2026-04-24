@@ -6,19 +6,26 @@ import numpy as np
 from bokeh.core.enums import SizingModeType
 from bokeh.layouts import column, gridplot, row
 from bokeh.models import (
-    ColorBar,
-    ColumnDataSource,
-    Div,
-    HoverTool,
-    LayoutDOM,
-    LinearColorMapper,
-    Spacer,
+    ColorBar,  # pyright: ignore[reportPrivateImportUsage]
+    ColumnDataSource,  # pyright: ignore[reportPrivateImportUsage]
+    Div,  # pyright: ignore[reportPrivateImportUsage]
+    HoverTool,  # pyright: ignore[reportPrivateImportUsage]
+    LayoutDOM,  # pyright: ignore[reportPrivateImportUsage]
+    LinearAxis,  # pyright: ignore[reportPrivateImportUsage]
+    LinearColorMapper,  # pyright: ignore[reportPrivateImportUsage]
+    Range1d,  # pyright: ignore[reportPrivateImportUsage]
+    Spacer,  # pyright: ignore[reportPrivateImportUsage]
 )
 from bokeh.palettes import Palette, Viridis256
 from bokeh.plotting import figure
 
 from .labels import mathlabel
-from .plot_base import prepare_marginal_plot
+from .plot_base import (
+    prepare_density_plot,
+    prepare_marginal_plot,
+    prepare_slice_plot,
+    prepare_wakefield_plot,
+)
 from .units import c_light
 
 
@@ -152,6 +159,80 @@ def _annotations_to_html(annotations: list[StatsAnnotation]) -> str | None:
             f"<td>{a.value} {a.units}</td></tr>"
         )
     return "<table style='border-collapse:collapse'>" + "".join(rows) + "</table>"
+
+
+def density_plot(
+    particle_group,
+    key: str = "x",
+    bins: int | str | None = None,
+    *,
+    xlim: tuple[float, float] | None = None,
+    tex: bool = False,
+    nice: bool = True,
+    width: int = 600,
+    height: int = 400,
+    color: str = "gray",
+    alpha: float = 0.7,
+    sizing_mode: SizingModeType | None = None,
+    title: str | None = None,
+) -> LayoutDOM:
+    """
+    1D density histogram with Bokeh.
+
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+        The object to plot.
+    key : str, default = 'x'
+        Which quantity to plot.
+    bins : int or str, optional
+        Number of bins.
+    xlim : tuple of float, optional
+        Manual x-axis limits.
+    nice : bool, default = True
+        Use nice unit scaling.
+    width, height : int
+        Figure dimensions in pixels.
+
+    Returns
+    -------
+    LayoutDOM
+    """
+    pdata = prepare_density_plot(
+        particle_group, key=key, bins=bins, xlim=xlim, nice=nice, tex=tex
+    )
+
+    fig = figure(
+        width=width,
+        height=height,
+        x_axis_label=mathjax_fix(pdata.x_label),
+        y_axis_label=mathjax_fix(pdata.y_label),
+        tools="pan,wheel_zoom,box_zoom,save,reset",
+        toolbar_location="right",
+    )
+
+    fig.vbar(
+        x=pdata.hist_centers,
+        top=pdata.hist_values,
+        width=pdata.hist_width,
+        bottom=0,
+        fill_color=color,
+        line_color=color,
+        fill_alpha=alpha,
+    )
+
+    if pdata.xlim:
+        fig.x_range.start, fig.x_range.end = pdata.xlim
+
+    if title:
+        fig.title.text = title
+
+    if sizing_mode is not None:
+        fig.sizing_mode = sizing_mode
+
+    fig.toolbar.logo = None
+
+    return fig
 
 
 def marginal_plot(
@@ -475,6 +556,638 @@ def marginal_plot(
         [
             [p_top, None],
             [fig_joint, p_right],
+        ],
+        merge_tools=True,
+        toolbar_location="left",
+    )
+
+
+# Default Bokeh color cycle for multi-curve plots
+_BOKEH_COLORS = [
+    "#1f77b4",
+    "#ff7f0e",
+    "#2ca02c",
+    "#d62728",
+    "#9467bd",
+    "#8c564b",
+    "#e377c2",
+    "#7f7f7f",
+    "#bcbd22",
+    "#17becf",
+]
+
+
+def slice_plot(
+    particle_group,
+    *keys: str,
+    n_slice: int = 40,
+    slice_key: str | None = None,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
+    nice: bool = True,
+    tex: bool = False,
+    width: int = 700,
+    height: int = 400,
+    sizing_mode: SizingModeType | None = None,
+    title: str | None = None,
+    density_alpha: float = 0.2,
+) -> LayoutDOM:
+    """
+    Slice statistics plot with Bokeh.
+
+    Plots slice statistics as lines on the primary y-axis and
+    the bunch density as a filled area on a secondary y-axis.
+
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+        The object to plot.
+    keys : str
+        Statistical quantities to plot (e.g. ``'sigma_x'``, ``'norm_emit_x'``).
+    n_slice : int, default = 40
+        Number of slices.
+    slice_key : str, optional
+        Dimension to slice in (``'t'``, ``'z'``, ``'delta_t'``, etc.).
+    xlim, ylim : tuple of float, optional
+        Manual axis limits.
+    nice : bool, default = True
+        Use nice unit scaling.
+    width, height : int
+        Figure dimensions in pixels.
+
+    Returns
+    -------
+    LayoutDOM
+    """
+
+    pdata = prepare_slice_plot(
+        particle_group,
+        *keys,
+        n_slice=n_slice,
+        slice_key=slice_key,
+        xlim=xlim,
+        ylim=ylim,
+        nice=nice,
+        tex=tex,
+    )
+
+    fig = figure(
+        width=width,
+        height=height,
+        x_axis_label=mathjax_fix(pdata.x_label),
+        y_axis_label=mathjax_fix(pdata.y_label),
+        tools="pan,wheel_zoom,box_zoom,save,reset",
+        toolbar_location="right",
+    )
+
+    # Main curves
+    for i, curve in enumerate(pdata.curves):
+        color = (
+            "black" if len(pdata.curves) == 1 else _BOKEH_COLORS[i % len(_BOKEH_COLORS)]
+        )
+        fig.line(
+            pdata.x,
+            curve.values,
+            legend_label=curve.label,
+            color=color,
+            line_width=2,
+        )
+
+    if len(pdata.curves) > 1:
+        fig.legend.click_policy = "hide"
+
+    # Density on secondary y-axis
+    density_max = (
+        float(np.max(pdata.density_values)) if len(pdata.density_values) > 0 else 1.0
+    )
+    fig.extra_y_ranges["density"] = Range1d(start=0, end=density_max * 1.1)
+    fig.add_layout(
+        LinearAxis(
+            y_range_name="density",
+            axis_label=mathjax_fix(pdata.density_label),
+        ),
+        "right",
+    )
+
+    fig.varea(
+        x=pdata.x,
+        y1=0,
+        y2=pdata.density_values,
+        y_range_name="density",
+        fill_color="black",
+        fill_alpha=density_alpha,
+    )
+
+    if pdata.xlim:
+        fig.x_range.start, fig.x_range.end = pdata.xlim
+    if pdata.ylim:
+        fig.y_range.start, fig.y_range.end = pdata.ylim
+
+    if title:
+        fig.title.text = title
+
+    if sizing_mode is not None:
+        fig.sizing_mode = sizing_mode
+
+    fig.toolbar.logo = None
+
+    return fig
+
+
+def wakefield_plot(
+    particle_group,
+    wake,
+    key: str | None = None,
+    nice: bool = True,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
+    tex: bool = False,
+    bins: int | str | None = None,
+    width: int = 700,
+    height: int = 400,
+    sizing_mode: SizingModeType | None = None,
+    title: str | None = None,
+    density_alpha: float = 0.3,
+    scatter_size: float = 2,
+    **kwargs,
+) -> LayoutDOM:
+    """
+    Wakefield kicks scatter plot with density overlay using Bokeh.
+
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+        The particle distribution.
+    wake : WakefieldBase
+        Wakefield object providing ``particle_kicks(z, weight)``.
+    key : str, optional
+        Independent variable key. Auto-detected if None.
+    nice : bool, default = True
+        Use nice unit scaling.
+    width, height : int
+        Figure dimensions in pixels.
+    density_alpha : float
+        Alpha for the density overlay bars.
+    scatter_size : float
+        Size of scatter markers.
+
+    Returns
+    -------
+    LayoutDOM
+    """
+    from bokeh.models import LinearAxis, Range1d
+
+    pdata = prepare_wakefield_plot(
+        particle_group,
+        wake,
+        key=key,
+        nice=nice,
+        tex=tex,
+        xlim=xlim,
+        ylim=ylim,
+        bins=bins,
+    )
+
+    fig = figure(
+        width=width,
+        height=height,
+        x_axis_label=mathjax_fix(pdata.x_label),
+        y_axis_label=mathjax_fix(pdata.y_label),
+        tools="pan,wheel_zoom,box_zoom,save,reset",
+        toolbar_location="right",
+    )
+
+    # Density overlay on secondary y-axis
+    density_max = (
+        float(np.max(pdata.density.hist_values))
+        if len(pdata.density.hist_values) > 0
+        else 1.0
+    )
+    fig.extra_y_ranges["density"] = Range1d(start=0, end=density_max * 1.1)
+    fig.add_layout(
+        LinearAxis(
+            y_range_name="density",
+            axis_label=mathjax_fix(pdata.density.y_label),
+        ),
+        "right",
+    )
+
+    fig.vbar(
+        x=pdata.density.hist_centers,
+        top=pdata.density.hist_values,
+        width=pdata.density.hist_width,
+        bottom=0,
+        y_range_name="density",
+        fill_color="gray",
+        line_color="gray",
+        fill_alpha=density_alpha,
+    )
+
+    # Wake kicks scatter
+    fig.scatter(
+        pdata.scatter_x,
+        pdata.scatter_y,
+        size=scatter_size,
+        color="black",
+    )
+
+    if pdata.xlim:
+        fig.x_range.start, fig.x_range.end = pdata.xlim
+    if pdata.ylim:
+        fig.y_range.start, fig.y_range.end = pdata.ylim
+
+    if title:
+        fig.title.text = title
+
+    if sizing_mode is not None:
+        fig.sizing_mode = sizing_mode
+
+    fig.toolbar.logo = None
+
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Generic plotting functions (used by Wavefront, etc.)
+# ---------------------------------------------------------------------------
+
+
+def plot_1d_density(
+    x,
+    y,
+    x_name: str = "",
+    y_name: str | None = None,
+    x_units: str | None = None,
+    y_units: str | None = None,
+    log_scale_y: bool = False,
+    show_cdf: bool = False,
+    cdf_label: str = "CDF",
+    kind: str = "bar",
+    plot_style: dict | None = None,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = (0, None),
+    nice: bool = True,
+    auto_label: bool = False,
+    tex: bool = False,
+    data: dict | None = None,
+    width: int = 600,
+    height: int = 400,
+    sizing_mode: SizingModeType | None = None,
+    title: str | None = None,
+    **kwargs,
+) -> LayoutDOM:
+    """
+    Generic 1D density distribution plot with Bokeh.
+
+    Mirrors the API of the matplotlib ``plot_1d_density``.
+
+    Parameters
+    ----------
+    x, y : array or str
+        Data arrays or string keys into *data* dict.
+    x_name, y_name : str
+        Axis labels.
+    x_units, y_units : str, optional
+        Units appended to labels.
+    log_scale_y : bool
+        Log scale on y-axis.
+    show_cdf : bool
+        Show cumulative distribution on secondary y-axis.
+    kind : str
+        ``'bar'`` or ``'line'``.
+    nice : bool
+        Use nice unit scaling.
+    data : dict, optional
+        Dict mapping string keys to arrays.
+    width, height : int
+        Figure dimensions.
+
+    Returns
+    -------
+    LayoutDOM
+    """
+    from bokeh.models import LinearAxis, Range1d
+
+    from .units import pg_units, plottable_array
+
+    # Resolve data dict
+    x_key = None
+    y_key = None
+
+    if isinstance(x, str):
+        if data is None:
+            raise ValueError("If `x` is a string, `data` dict must be provided")
+        x_key = x
+        x = np.asarray(data[x_key])
+    else:
+        x = np.asarray(x)
+
+    if isinstance(y, str):
+        if data is None:
+            raise ValueError("If `y` is a string, `data` dict must be provided")
+        y_key = y
+        y = np.asarray(data[y_key])
+    else:
+        y = np.asarray(y)
+
+    if x_key is not None and x_name == "":
+        x_name = x_key
+    if y_key is not None and y_name is None:
+        y_name = y_key
+    if y_name is None:
+        y_name = "Density"
+
+    # Auto-label
+    if auto_label:
+        if x_key and x_units is None:
+            try:
+                x_units = pg_units(x_key).unitSymbol
+            except (ValueError, KeyError):
+                pass
+        if y_key and y_units is None:
+            try:
+                y_units = pg_units(y_key).unitSymbol
+            except (ValueError, KeyError):
+                pass
+
+    # Nice scaling
+    x, f1, p1, x_min, x_max = plottable_array(x, nice=nice, lim=xlim)
+    y, f2, p2, y_min, y_max = plottable_array(y, nice=nice, lim=ylim)
+
+    if x_units:
+        x_units = p1 + str(x_units)
+    elif p1:
+        x_units = p1
+
+    if y_units:
+        y_units = p2 + str(y_units)
+    elif p2:
+        y_units = p2
+
+    # Labels
+    if auto_label and x_key:
+        x_label = mathjax_fix(mathlabel(x_key, units=x_units, tex=tex))
+    else:
+        x_label = f"{x_name} ({x_units})" if x_units else x_name
+
+    if auto_label and y_key:
+        y_label = mathjax_fix(mathlabel(y_key, units=y_units, tex=tex))
+    else:
+        y_label = f"{y_name} ({y_units})" if y_units else y_name
+
+    # Bar widths
+    if len(x) > 1:
+        widths = np.diff(x)
+        widths = np.append(widths, widths[-1])
+    else:
+        widths = np.ones_like(x)
+
+    fig = figure(
+        width=width,
+        height=height,
+        x_axis_label=x_label,
+        y_axis_label=y_label,
+        tools="pan,wheel_zoom,box_zoom,save,reset",
+        toolbar_location="right",
+        y_axis_type="log" if log_scale_y else "auto",
+    )
+
+    if plot_style is None:
+        plot_style = {}
+
+    if kind == "bar":
+        color = plot_style.get("color", "gray")
+        alpha = plot_style.get("alpha", 0.7)
+        fig.vbar(
+            x=x,
+            top=y,
+            width=widths,
+            bottom=0,
+            fill_color=color,
+            line_color=color,
+            fill_alpha=alpha,
+        )
+    elif kind == "line":
+        color = plot_style.get("color", "blue")
+        line_width = plot_style.get("linewidth", plot_style.get("line_width", 2))
+        fig.line(x, y, color=color, line_width=line_width)
+    else:
+        raise ValueError(f"kind must be 'bar' or 'line', got '{kind}'")
+
+    if xlim is not None:
+        fig.x_range.start, fig.x_range.end = x_min / f1, x_max / f1
+    if ylim is not None:
+        if ylim[0] is not None:
+            fig.y_range.start = y_min / f2
+        if ylim[1] is not None:
+            fig.y_range.end = y_max / f2
+
+    # CDF on secondary y-axis
+    if show_cdf:
+        cdf = np.cumsum(y * widths) * f1 * f2
+        cdf_scaled, _, cdf_prefix, _, _ = plottable_array(cdf, nice=nice)
+
+        cdf_max = float(np.max(cdf_scaled)) if len(cdf_scaled) > 0 else 1.0
+        fig.extra_y_ranges["cdf"] = Range1d(start=0, end=cdf_max)
+        cdf_axis_label = f"{cdf_label} ({cdf_prefix})" if cdf_prefix else cdf_label
+        fig.add_layout(
+            LinearAxis(y_range_name="cdf", axis_label=cdf_axis_label),
+            "right",
+        )
+        fig.line(x, cdf_scaled, y_range_name="cdf", color="blue", line_width=2)
+
+    if title:
+        fig.title.text = title
+    if sizing_mode is not None:
+        fig.sizing_mode = sizing_mode
+    fig.toolbar.logo = None
+
+    return fig
+
+
+def plot_2d_density_with_marginals(
+    data: np.ndarray,
+    dx: float = 1,
+    dy: float = 1,
+    xmin: float | None = None,
+    ymin: float | None = None,
+    x_name: str = "",
+    y_name: str = "",
+    z_name: str = "",
+    x_units: str | None = None,
+    y_units: str | None = None,
+    z_units: str | None = None,
+    log_scale_z: bool = False,
+    log_scale_marginals: bool = False,
+    show_colorbar: bool = True,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
+    width: int = 600,
+    height: int = 600,
+    marginal_fraction: float = 0.25,
+    palette: Palette = Viridis256,
+    sizing_mode: SizingModeType | None = None,
+    title: str | None = None,
+    **kwargs,
+) -> LayoutDOM:
+    """
+    2D density map with marginal histograms using Bokeh.
+
+    Mirrors the API of the matplotlib ``plot_2d_density_with_marginals``.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        2D array of density values, shape ``(nx, ny)``.
+    dx, dy : float
+        Grid spacing.
+    xmin, ymin : float, optional
+        Origin of the grid. Default centers at 0.
+    x_name, y_name, z_name : str
+        Axis labels.
+    x_units, y_units, z_units : str, optional
+        Units appended to labels.
+    log_scale_z : bool
+        Log color mapping.
+    palette : Palette
+        Bokeh color palette.
+    width, height : int
+        Figure dimensions.
+
+    Returns
+    -------
+    LayoutDOM
+    """
+    nx, ny = data.shape
+
+    if xmin is None:
+        xmin = -((nx - 1) * dx) / 2
+    if ymin is None:
+        ymin = -((ny - 1) * dy) / 2
+
+    xmax = xmin + (nx - 1) * dx
+    ymax = ymin + (ny - 1) * dy
+
+    xvec = np.linspace(xmin, xmax, nx)
+    yvec = np.linspace(ymin, ymax, ny)
+
+    x_marginal = np.sum(data, axis=1) * dy
+    y_marginal = np.sum(data, axis=0) * dx
+
+    vmin = vmin if vmin is not None else float(np.min(data))
+    vmax = vmax if vmax is not None else float(np.max(data))
+
+    x_label = f"{x_name} ({x_units})" if x_units else x_name
+    y_label = f"{y_name} ({y_units})" if y_units else y_name
+
+    # Layout sizes
+    main_w = int(width * (1.0 - marginal_fraction))
+    main_h = int(height * (1.0 - marginal_fraction))
+    marg_w = int(width * marginal_fraction)
+    marg_h = int(height * marginal_fraction)
+
+    # Color mapper
+    if log_scale_z:
+        low = max(vmin, vmax * 1e-6)
+        mapper = LinearColorMapper(palette=palette, low=low, high=vmax)
+    else:
+        mapper = LinearColorMapper(palette=palette, low=vmin, high=vmax)
+
+    # Main density figure
+    x_range = xlim or (xmin - dx / 2, xmax + dx / 2)
+    y_range = ylim or (ymin - dy / 2, ymax + dy / 2)
+
+    fig_main = figure(
+        width=main_w,
+        height=main_h,
+        x_axis_label=x_label,
+        y_axis_label=y_label,
+        x_range=x_range,
+        y_range=y_range,
+        tools="pan,wheel_zoom,box_zoom,save,reset",
+        toolbar_location="left",
+    )
+
+    fig_main.image(
+        image=[data.T],
+        x=xmin - dx / 2,
+        y=ymin - dy / 2,
+        dw=xmax - xmin + dx,
+        dh=ymax - ymin + dy,
+        color_mapper=mapper,
+    )
+
+    if show_colorbar:
+        cbar_label = f"{z_name} ({z_units})" if z_units else z_name
+        color_bar = ColorBar(color_mapper=mapper, label=cbar_label, location=(0, 0))
+        fig_main.add_layout(color_bar, "left")
+
+    if title:
+        fig_main.title.text = title
+
+    # Top marginal (X projection)
+    p_top = figure(
+        width=main_w,
+        height=marg_h,
+        x_range=fig_main.x_range,
+        min_border=0,
+        outline_line_color=None,
+        tools="",
+    )
+    p_top.vbar(
+        x=xvec,
+        top=x_marginal,
+        width=dx,
+        bottom=0,
+        fill_color="gray",
+        line_color="gray",
+    )
+    if z_units and y_units:
+        p_top.yaxis.axis_label = f"{z_units} {y_units}"
+    p_top.xaxis.visible = False
+
+    # Right marginal (Y projection)
+    p_right = figure(
+        width=marg_w,
+        height=main_h,
+        y_range=fig_main.y_range,
+        min_border=0,
+        outline_line_color=None,
+        tools="",
+    )
+    p_right.hbar(
+        y=yvec,
+        right=y_marginal,
+        height=dy,
+        left=0,
+        fill_color="gray",
+        line_color="gray",
+    )
+    if z_units and x_units:
+        p_right.xaxis.axis_label = f"{z_units} {x_units}"
+    p_right.yaxis.visible = False
+
+    for p in (fig_main, p_top, p_right):
+        p.toolbar.logo = None
+
+    top_right = Spacer(width=marg_w, height=marg_h)
+
+    if sizing_mode is not None:
+        fig_main.sizing_mode = "scale_both"
+        p_top.sizing_mode = "stretch_width"
+        p_right.sizing_mode = "stretch_height"
+        left_col = column(p_top, fig_main, sizing_mode=sizing_mode)
+        right_col = column(
+            top_right, p_right, sizing_mode="stretch_height", width=marg_w
+        )
+        return row(left_col, right_col, sizing_mode=sizing_mode)
+
+    return gridplot(
+        [
+            [p_top, top_right],
+            [fig_main, p_right],
         ],
         merge_tools=True,
         toolbar_location="left",

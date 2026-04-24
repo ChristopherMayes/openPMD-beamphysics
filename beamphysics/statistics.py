@@ -484,8 +484,8 @@ def resample_particles(particle_group, n=0, equal_weights=False):
 
     Otherwise if weights are equal, a random subset of particles will be selected.
 
-    Otherwise if weights are not equal, particles will be sampled according to their weight using a method from SciPy:
-    https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_discrete.html#scipy.stats.rv_discrete
+    Otherwise if weights are not equal, particles will be sampled according to their weight using
+    [scipy.stats.rv_discrete](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_discrete.html).
     Note that this latter method can result in duplicate particles, and can be very slow for a large number of particles.
 
     Parameters

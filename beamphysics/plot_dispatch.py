@@ -115,6 +115,21 @@ class Plot2dDensityWithMarginalsFn(Protocol):
     ) -> Any: ...
 
 
+class DensityAndSlicePlotFn(Protocol):
+    """2D density with overlaid slice statistics."""
+
+    def __call__(
+        self,
+        particle_group: ParticleGroup,
+        key1: str = ...,
+        key2: str = ...,
+        stat_keys: list[str] = ...,
+        bins: int = ...,
+        n_slice: int = ...,
+        **kwargs: Any,
+    ) -> Any: ...
+
+
 # ---------------------------------------------------------------------------
 # PlotBackend – holds one callable per plot type
 # ---------------------------------------------------------------------------
@@ -133,6 +148,7 @@ class PlotBackend:
     marginal_plot: MarginalPlotFn
     slice_plot: SlicePlotFn
     wakefield_plot: WakefieldPlotFn
+    density_and_slice_plot: DensityAndSlicePlotFn
     plot_1d_density: Plot1dDensityFn
     plot_2d_density_with_marginals: Plot2dDensityWithMarginalsFn
 
@@ -221,6 +237,7 @@ def _load_mpl_backend() -> PlotBackend:
         marginal_plot=mod.marginal_plot,
         slice_plot=mod.slice_plot,
         wakefield_plot=mod.wakefield_plot,
+        density_and_slice_plot=mod.density_and_slice_plot,
         plot_1d_density=mod.plot_1d_density,
         plot_2d_density_with_marginals=mod.plot_2d_density_with_marginals,
     )
@@ -235,6 +252,7 @@ def _load_bokeh_backend() -> PlotBackend:
         marginal_plot=mod.marginal_plot,
         slice_plot=mod.slice_plot,
         wakefield_plot=mod.wakefield_plot,
+        density_and_slice_plot=mod.density_and_slice_plot,
         plot_1d_density=mod.plot_1d_density,
         plot_2d_density_with_marginals=mod.plot_2d_density_with_marginals,
     )

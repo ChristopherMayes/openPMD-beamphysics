@@ -320,6 +320,101 @@ def prepare_wakefield_plot(
     )
 
 
+@dataclass
+class DensityAndSlicePlotData:
+    """Prepared data for a combined 2D density + slice statistics plot."""
+
+    # 2D histogram
+    hist2d: np.ndarray  # shape (nbins_x, nbins_y), transposed for imshow
+    extent: list[float]  # [xmin, xmax, ymin, ymax] in scaled units
+    x_label: str
+    y_label: str
+
+    # Slice statistics curves (on secondary y-axis)
+    slice_x: np.ndarray  # scaled slice positions
+    slice_curves: list[SliceCurve]
+    slice_y_label: str
+    slice_y_factor: float
+
+    # Slice density overlay (normalized to fit on the stat axis)
+    slice_density: np.ndarray  # scaled to overlay on stat axis
+
+
+def prepare_density_and_slice_plot(
+    particle_group: ParticleGroup,
+    key1: str = "t",
+    key2: str = "p",
+    stat_keys: list[str] | None = None,
+    bins: int = 100,
+    n_slice: int = 30,
+    tex: bool = True,
+) -> DensityAndSlicePlotData:
+    """
+    Prepare data for a combined 2D density + slice statistics plot.
+    """
+    if stat_keys is None:
+        stat_keys = ["norm_emit_x", "norm_emit_y"]
+
+    from .statistics import slice_statistics as _slice_statistics
+
+    # Scale to nice units
+    x, f1, p1, xmin, xmax = plottable_array(particle_group[key1])
+    y, f2, p2, ymin, ymax = plottable_array(particle_group[key2])
+    w = particle_group["weight"]
+
+    u1 = particle_group.units(key1).unitSymbol
+    u2 = particle_group.units(key2).unitSymbol
+    ux = p1 + u1
+    uy = p2 + u2
+
+    x_label = mathlabel(key1, units=ux, tex=tex)
+    y_label = mathlabel(key2, units=uy, tex=tex)
+
+    # 2D histogram
+    H, xedges, yedges = np.histogram2d(x, y, weights=w, bins=bins)
+    extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+
+    # Slice data
+    slice_dat = _slice_statistics(
+        particle_group,
+        n_slice=n_slice,
+        slice_key=key1,
+        keys=stat_keys + ["ptp_" + key1, "mean_" + key1, "charge"],
+    )
+    slice_dat["density"] = slice_dat["charge"] / slice_dat["ptp_" + key1]
+
+    slice_x = slice_dat["mean_" + key1] / f1
+
+    # Stat curves scaling
+    ulist = [particle_group.units(k).unitSymbol for k in stat_keys]
+    u2_stat = ulist[0]
+    max2 = max(np.ptp(slice_dat[k]) for k in stat_keys)
+    f3, p3 = nice_scale_prefix(max2)
+    u2_stat = p3 + u2_stat
+    slice_y_label = mathlabel(*stat_keys, units=u2_stat, tex=tex)
+
+    curves = []
+    for k in stat_keys:
+        label = mathlabel(k, units=u2_stat, tex=tex)
+        curves.append(SliceCurve(key=k, label=label, values=slice_dat[k] / f3))
+
+    # Density overlay normalized to fit on the stat axis
+    density_raw = slice_dat["density"]
+    density_scaled = density_raw * max2 / density_raw.max() / f3 / 2
+
+    return DensityAndSlicePlotData(
+        hist2d=H,
+        extent=extent,
+        x_label=x_label,
+        y_label=y_label,
+        slice_x=slice_x,
+        slice_curves=curves,
+        slice_y_label=slice_y_label,
+        slice_y_factor=f3,
+        slice_density=density_scaled,
+    )
+
+
 def calculate_marginal(
     data_scaled: np.ndarray,
     weights: np.ndarray,
@@ -341,8 +436,8 @@ def prepare_marginal_plot(
     key2: str = "p",
     bins: int | None = None,
     *,
-    xlim: tuple[float, float] | None = None,
-    ylim: tuple[float, float] | None = None,
+    xlim: Limit | None = None,
+    ylim: Limit | None = None,
     nice: bool = True,
     ellipse: bool = False,
 ) -> MarginalPlotData:

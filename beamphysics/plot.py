@@ -20,15 +20,14 @@ from .labels import mathlabel
 from .plot_base import (
     Limit,
     PlotPreparationError,
+    prepare_density_and_slice_plot,
     prepare_density_plot,
     prepare_marginal_plot,
     prepare_slice_plot,
     prepare_wakefield_plot,
 )
-from .statistics import slice_statistics
 from .units import (
     nice_array,
-    nice_scale_prefix,
     pg_units,
     plottable_array,
     pmd_unit,
@@ -344,81 +343,72 @@ def density_and_slice_plot(
     particle_group,
     key1="t",
     key2="p",
-    stat_keys=["norm_emit_x", "norm_emit_y"],
+    stat_keys=None,
     bins=100,
     n_slice=30,
     tex=True,
+    **kwargs,
 ):
     """
-    Density plot and projections
+    2D density plot with overlaid slice statistics.
 
-    Example:
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+        The object to plot.
+    key1 : str, default = 't'
+        Key for x-axis (also used as slice key).
+    key2 : str, default = 'p'
+        Key for y-axis (density).
+    stat_keys : list of str, optional
+        Slice statistics to overlay. Default: ``['norm_emit_x', 'norm_emit_y']``.
+    bins : int, default = 100
+        Number of bins for the 2D histogram.
+    n_slice : int, default = 30
+        Number of slices.
+    tex : bool, default = True
+        Use TeX for labels.
 
-        marginal_plot(P, 't', 'energy', bins=200)
-
+    Returns
+    -------
+    matplotlib.figure.Figure
     """
-
-    # Scale to nice units and get the factor, unit prefix
-    x, f1, p1, xmin, xmax = plottable_array(particle_group[key1])
-    y, f2, p2, ymin, ymax = plottable_array(particle_group[key2])
-    w = particle_group["weight"]
-
-    u1 = particle_group.units(key1).unitSymbol
-    u2 = particle_group.units(key2).unitSymbol
-    ux = p1 + u1
-    uy = p2 + u2
-
-    labelx = mathlabel(key1, units=ux, tex=tex)
-    labely = mathlabel(key2, units=uy, tex=tex)
-
-    fig, ax = plt.subplots()
-
-    ax.set_xlabel(labelx)
-    ax.set_ylabel(labely)
-
-    # Proper weighting
-    # ax_joint.hexbin(x, y, C=w, reduce_C_function=np.sum, gridsize=bins, cmap=cmap, vmin=1e-15)
-
-    # Manual histogramming version
-    H, xedges, yedges = np.histogram2d(x, y, weights=w, bins=bins)
-    extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
-    ax.imshow(H.T, cmap=CMAP0, vmin=1e-16, origin="lower", extent=extent, aspect="auto")
-
-    # Slice data
-    slice_dat = slice_statistics(
+    pdata = prepare_density_and_slice_plot(
         particle_group,
+        key1=key1,
+        key2=key2,
+        stat_keys=stat_keys,
+        bins=bins,
         n_slice=n_slice,
-        slice_key=key1,
-        keys=stat_keys + ["ptp_" + key1, "mean_" + key1, "charge"],
+        tex=tex,
     )
 
-    slice_dat["density"] = slice_dat["charge"] / slice_dat["ptp_" + key1]
+    fig, ax = plt.subplots(**kwargs)
 
-    #
+    ax.set_xlabel(pdata.x_label)
+    ax.set_ylabel(pdata.y_label)
+
+    ax.imshow(
+        pdata.hist2d.T,
+        cmap=CMAP0,
+        vmin=1e-16,
+        origin="lower",
+        extent=pdata.extent,
+        aspect="auto",
+    )
+
+    # Slice statistics on secondary y-axis
     ax2 = ax.twinx()
-    # ax2.set_ylim(0, 1e-6)
-    x2 = slice_dat["mean_" + key1] / f1
-    ulist = [particle_group.units(k).unitSymbol for k in stat_keys]
-
-    max2 = max([np.ptp(slice_dat[k]) for k in stat_keys])
-
-    f3, p3 = nice_scale_prefix(max2)
-
-    u2 = ulist[0]
-    assert all([u == u2 for u in ulist])
-    u2 = p3 + u2
-    labely2 = mathlabel(*stat_keys, units=u2, tex=tex)
-    for k in stat_keys:
-        label = mathlabel(k, units=u2, tex=tex)
-        ax2.plot(x2, slice_dat[k] / f3, label=label)
+    for curve in pdata.slice_curves:
+        ax2.plot(pdata.slice_x, curve.values, label=curve.label)
     ax2.legend()
-    ax2.set_ylabel(labely2)
+    ax2.set_ylabel(pdata.slice_y_label)
     ax2.set_ylim(bottom=0)
 
-    # Add density
-    y2 = slice_dat["density"]
-    y2 = y2 * max2 / y2.max() / f3 / 2
-    ax2.fill_between(x2, 0, y2, color="black", alpha=0.1)
+    # Density overlay
+    ax2.fill_between(pdata.slice_x, 0, pdata.slice_density, color="black", alpha=0.1)
+
+    return fig
 
 
 # -------------------------------------

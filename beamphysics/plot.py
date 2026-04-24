@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from copy import copy
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -135,12 +135,12 @@ def slice_plot(
 def density_plot(
     particle_group,
     key: str = "x",
-    bins: Optional[Union[int, str]] = None,
+    bins: int | str | None = None,
     *,
-    xlim: Optional[Tuple[float, float]] = None,
+    xlim: tuple[float, float] | None = None,
     tex: bool = True,
     nice: bool = True,
-    ax: Optional[Axes] = None,
+    ax: Axes | None = None,
     color="grey",
     alpha=1,
     **kwargs,
@@ -878,28 +878,28 @@ def plot_fieldmesh_rectangular_2d(
 
 
 def plot_1d_density(
-    x: Union[str, np.ndarray],
-    y: Union[str, np.ndarray],
+    x: str | np.ndarray,
+    y: str | np.ndarray,
     x_name: str = "",
-    y_name: Optional[str] = None,
-    x_units: Optional[str] = None,
-    y_units: Optional[str] = None,
-    figsize: Tuple[float, float] = (6, 4),
+    y_name: str | None = None,
+    x_units: str | None = None,
+    y_units: str | None = None,
+    figsize: tuple[float, float] = (6, 4),
     log_scale_y: bool = False,
     show_cdf: bool = False,
     cdf_label: str = "CDF",
-    cdf_style: Optional[Dict[str, Union[str, float]]] = None,
+    cdf_style: dict[str, str | float] | None = None,
     kind: str = "bar",
-    plot_style: Optional[Dict[str, Union[str, float]]] = None,
-    xlim: Optional[Tuple[float, float]] = None,
-    ylim: Optional[Tuple[float, float]] = (0, None),
-    ax: Optional[plt.Axes] = None,
+    plot_style: dict[str, str | float] | None = None,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = (0, None),
+    ax: plt.Axes | None = None,
     nice: bool = True,
     auto_label: bool = False,
     tex: bool = True,
-    data: Optional[Dict[str, np.ndarray]] = None,
+    data: dict[str, np.ndarray] | None = None,
     return_axes: bool = False,
-) -> Optional[Tuple[plt.Figure, Dict[str, plt.Axes]]]:
+) -> tuple[plt.Figure, dict[str, plt.Axes]] | None:
     """
     Plot a 1D density distribution with optional cumulative distribution function (CDF).
 
@@ -1175,35 +1175,33 @@ def plot_1d_density(
 
 def plot_2d_density_with_marginals(
     data: np.ndarray,
-    dx: Optional[float] = 1,
-    dy: Optional[float] = 1,
-    xmin: Optional[float] = None,
-    ymin: Optional[float] = None,
+    dx: float | None = 1,
+    dy: float | None = 1,
+    xmin: float | None = None,
+    ymin: float | None = None,
     x_name: str = "",
     y_name: str = "",
     z_name: str = "",
-    x_units: Optional[str] = None,
-    y_units: Optional[str] = None,
-    z_units: Optional[str] = None,
+    x_units: str | None = None,
+    y_units: str | None = None,
+    z_units: str | None = None,
     cmap: str = "inferno",
-    figsize: Tuple[float, float] = (5, 5),
+    figsize: tuple[float, float] = (5, 5),
     log_scale_z: bool = False,
     log_scale_marginals: bool = False,
-    marginal_titles: Tuple[Optional[str], Optional[str]] = (None, None),
-    highlight_regions: Optional[
-        List[Dict[str, Union[float, Tuple[float, float]]]]
-    ] = None,
-    marginal_style: Optional[Dict[str, Union[str, float]]] = None,
+    marginal_titles: tuple[str | None, str | None] = (None, None),
+    highlight_regions: None | (list[dict[str, float | tuple[float, float]]]) = None,
+    marginal_style: dict[str, str | float] | None = None,
     show_stats: bool = False,
     show_colorbar: bool = True,
-    xlim: Tuple[float, float] = None,
-    ylim: Tuple[float, float] = None,
-    vmin: Optional[float] = None,
-    vcenter: Optional[float] = None,
-    vmax: Optional[float] = None,
-    aspect: Optional[str] = "auto",
+    xlim: tuple[float, float] = None,
+    ylim: tuple[float, float] = None,
+    vmin: float | None = None,
+    vcenter: float | None = None,
+    vmax: float | None = None,
+    aspect: str | None = "auto",
     return_axes: bool = False,
-) -> Optional[Tuple[plt.Figure, Dict[str, plt.Axes]]]:
+) -> tuple[plt.Figure, dict[str, plt.Axes]] | None:
     """
     Basic plot for a 2D density map with marginal histograms.
 
@@ -1357,13 +1355,13 @@ def plot_2d_density_with_marginals(
 def wakefield_plot(
     particle_group,
     wake,
-    key: Optional[str] = None,
+    key: str | None = None,
     nice: bool = True,
-    ax: Optional[Axes] = None,
-    xlim: Optional[Tuple[float, float]] = None,
-    ylim: Optional[Tuple[float, float]] = None,
+    ax: Axes | None = None,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
     tex: bool = True,
-    bins: Optional[Union[int, str]] = None,
+    bins: int | str | None = None,
     **kwargs,
 ) -> Figure:
     """

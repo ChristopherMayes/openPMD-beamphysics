@@ -1139,7 +1139,7 @@ def plot_2d_density_with_marginals(
 
     if show_colorbar:
         cbar_label = f"{z_name} ({z_units})" if z_units else z_name
-        color_bar = ColorBar(color_mapper=mapper, label=cbar_label, location=(0, 0))
+        color_bar = ColorBar(color_mapper=mapper, title=cbar_label, location=(0, 0))
         fig_main.add_layout(color_bar, "left")
 
     if title:

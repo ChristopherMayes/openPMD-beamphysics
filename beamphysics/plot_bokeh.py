@@ -24,6 +24,7 @@ from bokeh.plotting import figure
 from .labels import mathlabel
 from .plot_base import (
     Limit,
+    prepare_density_and_slice_plot,
     prepare_density_plot,
     prepare_marginal_plot,
     prepare_slice_plot,
@@ -844,6 +845,138 @@ def wakefield_plot(
     if sizing_mode is not None:
         fig.sizing_mode = sizing_mode
 
+    fig.toolbar.logo = None
+
+    return _maybe_show(fig, kwargs)
+
+
+def density_and_slice_plot(
+    particle_group,
+    key1: str = "t",
+    key2: str = "p",
+    stat_keys: list[str] | None = None,
+    bins: int = 100,
+    n_slice: int = 30,
+    tex: bool = False,
+    width: int = 700,
+    height: int = 450,
+    sizing_mode: SizingModeType | None = None,
+    title: str | None = None,
+    density_alpha: float = 0.1,
+    palette: Palette = Viridis256,
+    **kwargs,
+) -> LayoutDOM:
+    """
+    2D density plot with overlaid slice statistics using Bokeh.
+
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+        The object to plot.
+    key1 : str, default = 't'
+        Key for x-axis (also used as slice key).
+    key2 : str, default = 'p'
+        Key for y-axis (density).
+    stat_keys : list of str, optional
+        Slice statistics to overlay.
+    bins : int, default = 100
+        Number of bins for the 2D histogram.
+    n_slice : int, default = 30
+        Number of slices.
+    width, height : int
+        Figure dimensions in pixels.
+
+    Returns
+    -------
+    LayoutDOM
+    """
+    pdata = prepare_density_and_slice_plot(
+        particle_group,
+        key1=key1,
+        key2=key2,
+        stat_keys=stat_keys,
+        bins=bins,
+        n_slice=n_slice,
+        tex=tex,
+    )
+
+    ext = pdata.extent  # [xmin, xmax, ymin, ymax]
+
+    # Color mapper for the 2D histogram
+    H = pdata.hist2d
+    h_min = float(np.min(H[H > 0])) if np.any(H > 0) else 0
+    h_max = float(np.max(H)) if np.any(H) else 1
+
+    mapper = LinearColorMapper(
+        palette=palette,
+        low=h_min,
+        high=h_max,
+        low_color="#ffffff00",
+    )
+
+    fig = figure(
+        width=width,
+        height=height,
+        x_axis_label=mathjax_fix(pdata.x_label),
+        y_axis_label=mathjax_fix(pdata.y_label),
+        x_range=(ext[0], ext[1]),
+        y_range=(ext[2], ext[3]),
+        tools="pan,wheel_zoom,box_zoom,save,reset",
+        toolbar_location="right",
+    )
+
+    fig.image(
+        image=[H.T],
+        x=ext[0],
+        y=ext[2],
+        dw=ext[1] - ext[0],
+        dh=ext[3] - ext[2],
+        color_mapper=mapper,
+    )
+
+    # Slice statistics on secondary y-axis
+    stat_max = (
+        max(float(np.max(c.values)) for c in pdata.slice_curves)
+        if pdata.slice_curves
+        else 1.0
+    )
+    fig.extra_y_ranges["stats"] = Range1d(start=0, end=stat_max * 1.1)
+    fig.add_layout(
+        LinearAxis(
+            y_range_name="stats",
+            axis_label=mathjax_fix(pdata.slice_y_label),
+        ),
+        "right",
+    )
+
+    for i, curve in enumerate(pdata.slice_curves):
+        color = _BOKEH_COLORS[i % len(_BOKEH_COLORS)]
+        fig.line(
+            pdata.slice_x,
+            curve.values,
+            y_range_name="stats",
+            legend_label=curve.label,
+            color=color,
+            line_width=2,
+        )
+
+    if len(pdata.slice_curves) > 1:
+        fig.legend.click_policy = "hide"
+
+    # Density overlay
+    fig.varea(
+        x=pdata.slice_x,
+        y1=0,
+        y2=pdata.slice_density,
+        y_range_name="stats",
+        fill_color="black",
+        fill_alpha=density_alpha,
+    )
+
+    if title:
+        fig.title.text = title
+    if sizing_mode is not None:
+        fig.sizing_mode = sizing_mode
     fig.toolbar.logo = None
 
     return _maybe_show(fig, kwargs)

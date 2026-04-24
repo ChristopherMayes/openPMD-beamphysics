@@ -53,9 +53,9 @@ def initialize_jupyter():
     output_notebook()
 
 
-def _maybe_show(layout: LayoutDOM, kwargs: dict) -> LayoutDOM:
-    """Pop ``show`` from *kwargs* and display the layout if truthy (default: True)."""
-    if kwargs.pop("show", True):
+def _maybe_show(layout: LayoutDOM, show: bool = True) -> LayoutDOM:
+    """Call ``bokeh.io.show`` on *layout* if *show* is truthy."""
+    if show:
         _bokeh_show(layout)
     return layout
 
@@ -206,6 +206,7 @@ def density_plot(
     alpha: float = 0.7,
     sizing_mode: SizingModeType | None = None,
     title: str | None = None,
+    show: bool = True,
     **kwargs,
 ) -> LayoutDOM:
     """
@@ -225,14 +226,13 @@ def density_plot(
         Use nice unit scaling.
     width, height : int
         Figure dimensions in pixels.
+    show : bool, default = True
+        Display the plot.
 
     Returns
     -------
     LayoutDOM
     """
-
-    if kwargs:
-        logger.warning(f"Unsupported kwargs: {kwargs}")
     pdata = prepare_density_plot(
         particle_group, key=key, bins=bins, xlim=xlim, nice=nice, tex=tex
     )
@@ -267,7 +267,7 @@ def density_plot(
 
     fig.toolbar.logo = None
 
-    return _maybe_show(fig, kwargs)
+    return _maybe_show(fig, show)
 
 
 def marginal_plot(
@@ -291,6 +291,7 @@ def marginal_plot(
     text: str | None = None,
     title: str | None = None,
     font_settings: MarginalFontSettings | None = None,
+    show: bool = True,
     **kwargs,
 ) -> LayoutDOM:
     """
@@ -598,7 +599,7 @@ def marginal_plot(
             toolbar_location="left",
         )
 
-    return _maybe_show(layout, kwargs)
+    return _maybe_show(layout, show)
 
 
 # Default Bokeh color cycle for multi-curve plots
@@ -630,6 +631,7 @@ def slice_plot(
     sizing_mode: SizingModeType | None = None,
     title: str | None = None,
     density_alpha: float = 0.2,
+    show: bool = True,
     **kwargs,
 ) -> LayoutDOM:
     """
@@ -733,7 +735,7 @@ def slice_plot(
 
     fig.toolbar.logo = None
 
-    return _maybe_show(fig, kwargs)
+    return _maybe_show(fig, show)
 
 
 def wakefield_plot(
@@ -751,6 +753,7 @@ def wakefield_plot(
     title: str | None = None,
     density_alpha: float = 0.3,
     scatter_size: float = 2,
+    show: bool = True,
     **kwargs,
 ) -> LayoutDOM:
     """
@@ -847,7 +850,7 @@ def wakefield_plot(
 
     fig.toolbar.logo = None
 
-    return _maybe_show(fig, kwargs)
+    return _maybe_show(fig, show)
 
 
 def density_and_slice_plot(
@@ -864,6 +867,7 @@ def density_and_slice_plot(
     title: str | None = None,
     density_alpha: float = 0.1,
     palette: Palette = Viridis256,
+    show: bool = True,
     **kwargs,
 ) -> LayoutDOM:
     """
@@ -979,7 +983,7 @@ def density_and_slice_plot(
         fig.sizing_mode = sizing_mode
     fig.toolbar.logo = None
 
-    return _maybe_show(fig, kwargs)
+    return _maybe_show(fig, show)
 
 
 # ---------------------------------------------------------------------------
@@ -1009,6 +1013,7 @@ def plot_1d_density(
     height: int = 400,
     sizing_mode: SizingModeType | None = None,
     title: str | None = None,
+    show: bool = True,
     **kwargs,
 ) -> LayoutDOM:
     """
@@ -1178,7 +1183,7 @@ def plot_1d_density(
         fig.sizing_mode = sizing_mode
     fig.toolbar.logo = None
 
-    return _maybe_show(fig, kwargs)
+    return _maybe_show(fig, show)
 
 
 def plot_2d_density_with_marginals(
@@ -1206,6 +1211,7 @@ def plot_2d_density_with_marginals(
     palette: Palette = Viridis256,
     sizing_mode: SizingModeType | None = None,
     title: str | None = None,
+    show: bool = True,
     **kwargs,
 ) -> LayoutDOM:
     """
@@ -1356,6 +1362,7 @@ def plot_2d_density_with_marginals(
 
     if sizing_mode is not None:
         fig_main.sizing_mode = "scale_both"
+        # fig_main.aspect_ratio = main_h / main_w
         p_top.sizing_mode = "stretch_width"
         p_right.sizing_mode = "stretch_height"
         left_col = column(p_top, fig_main, sizing_mode=sizing_mode)
@@ -1373,4 +1380,4 @@ def plot_2d_density_with_marginals(
             toolbar_location="left",
         )
 
-    return _maybe_show(layout, kwargs)
+    return _maybe_show(layout, show)

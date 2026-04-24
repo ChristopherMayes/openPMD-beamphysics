@@ -156,14 +156,14 @@ def test_slice_plot_multi_keys():
 
 def test_density_and_slice_plot():
     be = get_backend("bokeh")
-    result = be.density_and_slice_plot(P, key1="t", key2="p")
+    result = be.density_and_slice_plot(P, key1="t", key2="p", return_figure=True)
     assert isinstance(result, LayoutDOM)
 
 
 def test_density_and_slice_plot_custom_keys():
     be = get_backend("bokeh")
     result = be.density_and_slice_plot(
-        P, key1="t", key2="energy", stat_keys=["sigma_x", "sigma_y"]
+        P, key1="t", key2="energy", stat_keys=["sigma_x", "sigma_y"], return_figure=True
     )
     assert isinstance(result, LayoutDOM)
 
@@ -206,7 +206,9 @@ def test_plot_1d_density_bar():
     be = get_backend("bokeh")
     x = np.linspace(0, 10, 50)
     y = np.exp(-x)
-    result = be.plot_1d_density(x, y, x_name="x", y_name="f(x)", kind="bar")
+    result = be.plot_1d_density(
+        x, y, x_name="x", y_name="f(x)", kind="bar", return_figure=True
+    )
     assert isinstance(result, LayoutDOM)
     # Artifact saved automatically by _bokeh_show_to_save fixture
     # _save_bokeh(result,"plot_1d_density_bar")
@@ -216,7 +218,9 @@ def test_plot_1d_density_line():
     be = get_backend("bokeh")
     x = np.linspace(0, 10, 50)
     y = np.exp(-x)
-    result = be.plot_1d_density(x, y, x_name="x", y_name="f(x)", kind="line")
+    result = be.plot_1d_density(
+        x, y, x_name="x", y_name="f(x)", kind="line", return_figure=True
+    )
     assert isinstance(result, LayoutDOM)
     # Artifact saved automatically by _bokeh_show_to_save fixture
     # _save_bokeh(result,"plot_1d_density_line")
@@ -225,7 +229,9 @@ def test_plot_1d_density_line():
 def test_plot_1d_density_with_data_dict():
     be = get_backend("bokeh")
     data = {"time": np.linspace(0, 1, 100), "signal": np.random.randn(100)}
-    result = be.plot_1d_density("time", "signal", data=data, kind="line")
+    result = be.plot_1d_density(
+        "time", "signal", data=data, kind="line", return_figure=True
+    )
     assert isinstance(result, LayoutDOM)
     # Artifact saved automatically by _bokeh_show_to_save fixture
     # _save_bokeh(result,"plot_1d_density_data_dict")
@@ -235,7 +241,7 @@ def test_plot_1d_density_with_cdf():
     be = get_backend("bokeh")
     x = np.linspace(0, 10, 50)
     y = np.exp(-x)
-    result = be.plot_1d_density(x, y, show_cdf=True)
+    result = be.plot_1d_density(x, y, show_cdf=True, return_figure=True)
     assert isinstance(result, LayoutDOM)
     # Artifact saved automatically by _bokeh_show_to_save fixture
     # _save_bokeh(result,"plot_1d_density_cdf")
@@ -250,7 +256,7 @@ def test_plot_2d_density_with_marginals():
     be = get_backend("bokeh")
     data = np.random.rand(50, 50)
     result = be.plot_2d_density_with_marginals(
-        data, dx=0.1, dy=0.1, x_name="x", y_name="y"
+        data, dx=0.1, dy=0.1, x_name="x", y_name="y", return_figure=True
     )
     assert isinstance(result, LayoutDOM)
     # Artifact saved automatically by _bokeh_show_to_save fixture
@@ -261,7 +267,12 @@ def test_plot_2d_density_with_log_scale():
     be = get_backend("bokeh")
     data = np.random.rand(50, 50) + 0.01
     result = be.plot_2d_density_with_marginals(
-        data, dx=0.1, dy=0.1, log_scale_z=True, log_scale_marginals=True
+        data,
+        dx=0.1,
+        dy=0.1,
+        log_scale_z=True,
+        log_scale_marginals=True,
+        return_figure=True,
     )
     assert isinstance(result, LayoutDOM)
     # Artifact saved automatically by _bokeh_show_to_save fixture
@@ -288,7 +299,7 @@ def _make_wavefront():
 @pytest.mark.filterwarnings("ignore:.*identical low and high.*:UserWarning")
 def test_wavefront_plot_power():
     W = _make_wavefront()
-    result = W.plot_power(backend="bokeh")
+    result = W.plot_power(backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
     # Artifact saved automatically by _bokeh_show_to_save fixture
     # _save_bokeh(result,"wavefront_plot_power")
@@ -296,7 +307,7 @@ def test_wavefront_plot_power():
 
 def test_wavefront_plot_fluence():
     W = _make_wavefront()
-    result = W.plot_fluence(backend="bokeh")
+    result = W.plot_fluence(backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
     # Artifact saved automatically by _bokeh_show_to_save fixture
     # _save_bokeh(result,"wavefront_plot_fluence")
@@ -304,7 +315,7 @@ def test_wavefront_plot_fluence():
 
 def test_wavefront_plot2():
     W = _make_wavefront()
-    result = W.plot2(backend="bokeh")
+    result = W.plot2(backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
     # Artifact saved automatically by _bokeh_show_to_save fixture
     # _save_bokeh(result,"wavefront_plot2")
@@ -313,7 +324,7 @@ def test_wavefront_plot2():
 def test_wavefront_plot_spectral_intensity():
     W = _make_wavefront()
     Wk = W.to_kspace()
-    result = Wk.plot_spectral_intensity(backend="bokeh")
+    result = Wk.plot_spectral_intensity(backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
     # Artifact saved automatically by _bokeh_show_to_save fixture
     # _save_bokeh(result,"wavefront_plot_spectral_intensity")
@@ -322,7 +333,7 @@ def test_wavefront_plot_spectral_intensity():
 def test_wavefront_plot_photon_energy_spectrum():
     W = _make_wavefront()
     Wk = W.to_kspace()
-    result = Wk.plot_photon_energy_spectrum(backend="bokeh")
+    result = Wk.plot_photon_energy_spectrum(backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
     # Artifact saved automatically by _bokeh_show_to_save fixture
     # _save_bokeh(result,"wavefront_plot_photon_energy_spectrum")

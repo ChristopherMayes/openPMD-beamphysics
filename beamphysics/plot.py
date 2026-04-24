@@ -890,9 +890,10 @@ def plot_1d_density(
     auto_label: bool = False,
     tex: bool = True,
     data: dict[str, np.ndarray] | None = None,
+    return_figure: bool = False,
     return_axes: bool = False,
     **kwargs,
-) -> tuple[plt.Figure, dict[str, plt.Axes]] | None:
+) -> tuple[plt.Figure, dict[str, plt.Axes]] | plt.Figure | None:
     """
     Plot a 1D density distribution with optional cumulative distribution function (CDF).
 
@@ -1161,9 +1162,10 @@ def plot_1d_density(
 
         axes["cdf"] = ax_cdf
 
-    # Return axes if requested
     if return_axes:
         return fig, axes
+    if return_figure:
+        return fig
 
 
 def plot_2d_density_with_marginals(
@@ -1193,9 +1195,10 @@ def plot_2d_density_with_marginals(
     vcenter: float | None = None,
     vmax: float | None = None,
     aspect: str | None = "auto",
+    return_figure: bool = False,
     return_axes: bool = False,
     **kwargs,
-) -> tuple[plt.Figure, dict[str, plt.Axes]] | None:
+) -> tuple[plt.Figure, dict[str, plt.Axes]] | plt.Figure | None:
     """
     Basic plot for a 2D density map with marginal histograms.
 
@@ -1341,9 +1344,10 @@ def plot_2d_density_with_marginals(
     ax_main.set_ylim(ylim)
     ax_right.set_ylim(ylim)
 
-    # Return axes if requested
     if return_axes:
         return fig, axes
+    if return_figure:
+        return fig
 
 
 def wakefield_plot(

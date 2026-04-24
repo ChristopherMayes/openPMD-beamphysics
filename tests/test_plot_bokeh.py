@@ -147,8 +147,25 @@ def test_slice_plot(stat_key):
 def test_slice_plot_multi_keys():
     result = P.slice_plot("sigma_x", "sigma_y", backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"slice_plot_sigma_x_sigma_y")
+
+
+# ---------------------------------------------------------------------------
+# ParticleGroup density_and_slice_plot
+# ---------------------------------------------------------------------------
+
+
+def test_density_and_slice_plot():
+    be = get_backend("bokeh")
+    result = be.density_and_slice_plot(P, key1="t", key2="p")
+    assert isinstance(result, LayoutDOM)
+
+
+def test_density_and_slice_plot_custom_keys():
+    be = get_backend("bokeh")
+    result = be.density_and_slice_plot(
+        P, key1="t", key2="energy", stat_keys=["sigma_x", "sigma_y"]
+    )
+    assert isinstance(result, LayoutDOM)
 
 
 # ---------------------------------------------------------------------------

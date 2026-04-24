@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 
 import numpy as np
 from bokeh.core.enums import SizingModeType
@@ -27,6 +28,8 @@ from .plot_base import (
     prepare_wakefield_plot,
 )
 from .units import c_light
+
+logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
@@ -175,6 +178,7 @@ def density_plot(
     alpha: float = 0.7,
     sizing_mode: SizingModeType | None = None,
     title: str | None = None,
+    **kwargs,
 ) -> LayoutDOM:
     """
     1D density histogram with Bokeh.
@@ -198,6 +202,9 @@ def density_plot(
     -------
     LayoutDOM
     """
+
+    if kwargs:
+        logger.warning(f"Unsupported kwargs: {kwargs}")
     pdata = prepare_density_plot(
         particle_group, key=key, bins=bins, xlim=xlim, nice=nice, tex=tex
     )
@@ -256,6 +263,7 @@ def marginal_plot(
     text: str | None = None,
     title: str | None = None,
     font_settings: MarginalFontSettings | None = None,
+    **kwargs,
 ) -> LayoutDOM:
     """
     Density plot and projections with bokeh.
@@ -311,6 +319,8 @@ def marginal_plot(
     >>> obj = marginal_plot(P, 't', 'energy', bins=200)
     >>> bokeh.io.save(obj, "t_vs_energy.html")
     """
+    if kwargs:
+        logger.warning(f"Unsupported kwargs: {kwargs}")
     if font_settings is None:
         font_settings = MarginalFontSettings()
 
@@ -591,6 +601,7 @@ def slice_plot(
     sizing_mode: SizingModeType | None = None,
     title: str | None = None,
     density_alpha: float = 0.2,
+    **kwargs,
 ) -> LayoutDOM:
     """
     Slice statistics plot with Bokeh.
@@ -619,6 +630,8 @@ def slice_plot(
     -------
     LayoutDOM
     """
+    if kwargs:
+        logger.warning(f"Unsupported kwargs: {kwargs}")
 
     pdata = prepare_slice_plot(
         particle_group,
@@ -735,8 +748,9 @@ def wakefield_plot(
     -------
     LayoutDOM
     """
-    from bokeh.models import LinearAxis, Range1d
 
+    if kwargs:
+        logger.warning(f"Unsupported kwargs: {kwargs}")
     pdata = prepare_wakefield_plot(
         particle_group,
         wake,
@@ -866,8 +880,9 @@ def plot_1d_density(
     -------
     LayoutDOM
     """
-    from bokeh.models import LinearAxis, Range1d
 
+    if kwargs:
+        logger.warning(f"Unsupported kwargs: {kwargs}")
     from .units import pg_units, plottable_array
 
     # Resolve data dict
@@ -1060,6 +1075,8 @@ def plot_2d_density_with_marginals(
     -------
     LayoutDOM
     """
+    if kwargs:
+        logger.warning(f"Unsupported kwargs: {kwargs}")
     nx, ny = data.shape
 
     if xmin is None:

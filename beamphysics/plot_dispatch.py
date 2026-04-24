@@ -1,0 +1,292 @@
+from __future__ import annotations
+
+import os
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Protocol
+
+import numpy as np
+
+from .plot_base import Limit
+
+import functools
+import logging
+import sys
+
+logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from .particles import ParticleGroup
+
+
+# ---------------------------------------------------------------------------
+# Protocols – common parameter signatures for each plot function
+# ---------------------------------------------------------------------------
+
+
+class DensityPlotFn(Protocol):
+    """1D density histogram of a single particle key."""
+
+    def __call__(
+        self,
+        particle_group: ParticleGroup,
+        key: str = ...,
+        bins: int | str | None = ...,
+        *,
+        xlim: Limit | None = ...,
+        nice: bool = ...,
+        **kwargs: Any,
+    ) -> Any: ...
+
+
+class MarginalPlotFn(Protocol):
+    """2D density with marginal histograms."""
+
+    def __call__(
+        self,
+        particle_group: ParticleGroup,
+        key1: str = ...,
+        key2: str = ...,
+        bins: int | None = ...,
+        *,
+        xlim: Limit | None = ...,
+        ylim: Limit | None = ...,
+        nice: bool = ...,
+        ellipse: bool = ...,
+        **kwargs: Any,
+    ) -> Any: ...
+
+
+class SlicePlotFn(Protocol):
+    """Slice statistics with density overlay."""
+
+    def __call__(
+        self,
+        particle_group: ParticleGroup,
+        *keys: str,
+        n_slice: int = ...,
+        slice_key: str | None = ...,
+        xlim: Limit | None = ...,
+        ylim: Limit | None = ...,
+        nice: bool = ...,
+        **kwargs: Any,
+    ) -> Any: ...
+
+
+class WakefieldPlotFn(Protocol):
+    """Wakefield kicks scatter with density overlay."""
+
+    def __call__(
+        self,
+        particle_group: ParticleGroup,
+        wake: Any,
+        key: str | None = ...,
+        nice: bool = ...,
+        xlim: Limit | None = ...,
+        ylim: Limit | None = ...,
+        **kwargs: Any,
+    ) -> Any: ...
+
+
+class Plot1dDensityFn(Protocol):
+    """Generic 1D density distribution plot."""
+
+    def __call__(
+        self,
+        x: str | np.ndarray,
+        y: str | np.ndarray,
+        *,
+        nice: bool = ...,
+        xlim: Limit | None = ...,
+        ylim: Limit | None = ...,
+        **kwargs: Any,
+    ) -> Any: ...
+
+
+class Plot2dDensityWithMarginalsFn(Protocol):
+    """Generic 2D density map with marginal histograms."""
+
+    def __call__(
+        self,
+        data: np.ndarray,
+        dx: float = ...,
+        dy: float = ...,
+        **kwargs: Any,
+    ) -> Any: ...
+
+
+class DensityAndSlicePlotFn(Protocol):
+    """2D density with overlaid slice statistics."""
+
+    def __call__(
+        self,
+        particle_group: ParticleGroup,
+        key1: str = ...,
+        key2: str = ...,
+        stat_keys: list[str] = ...,
+        bins: int = ...,
+        n_slice: int = ...,
+        **kwargs: Any,
+    ) -> Any: ...
+
+
+# ---------------------------------------------------------------------------
+# PlotBackend – holds one callable per plot type
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PlotBackend:
+    """
+    Container for a set of plot functions from a single backend.
+
+    Instantiated lazily on first access via `get_backend`.
+    """
+
+    name: str
+    density_plot: DensityPlotFn
+    marginal_plot: MarginalPlotFn
+    slice_plot: SlicePlotFn
+    wakefield_plot: WakefieldPlotFn
+    density_and_slice_plot: DensityAndSlicePlotFn
+    plot_1d_density: Plot1dDensityFn
+    plot_2d_density_with_marginals: Plot2dDensityWithMarginalsFn
+
+
+# ---------------------------------------------------------------------------
+# Module-level default and resolution
+# ---------------------------------------------------------------------------
+
+_default_backend: str = os.environ.get("BEAMPHYSICS_PLOT", "mpl")
+_backend_cache: dict[str, PlotBackend] = {}
+
+
+def set_default_backend(name: str) -> None:
+    """
+    Set the module-level default plot backend.
+
+    Parameters
+    ----------
+    name : str
+        ``"mpl"`` for Matplotlib or ``"bokeh"`` for Bokeh.
+    """
+    global _default_backend
+    if name not in ("mpl", "bokeh"):
+        raise ValueError(f"Unknown backend {name!r}. Choose 'mpl' or 'bokeh'.")
+    _default_backend = name
+
+
+def get_default_backend() -> str:
+    """Return the current module-level default backend name."""
+    return _default_backend
+
+
+def resolve_backend(backend: str | None = None, obj: Any = None) -> str:
+    """
+    Determine which backend to use.
+
+    Priority: explicit *backend* argument > ``obj.plot_backend`` > module default.
+    """
+    if backend is not None:
+        return backend
+    if obj is not None:
+        obj_backend = getattr(obj, "plot_backend", None)
+        if obj_backend is not None:
+            return obj_backend
+    return _default_backend
+
+
+@functools.cache
+def is_jupyter() -> bool:
+    """
+    Determine if we're in a Jupyter notebook session.
+
+    This works by way of interacting with IPython display and seeing what
+    choice it makes regarding reprs.
+
+    Returns
+    -------
+    bool
+    """
+    if "IPython" not in sys.modules or "IPython.display" not in sys.modules:
+        return False
+
+    from IPython.display import display
+
+    class ReprCheck:
+        def _repr_html_(self) -> str:
+            self.mode = "jupyter"
+            logger.info("Detected Jupyter. Using the notebook graph backend.")
+            return "<!-- Detected Jupyter. -->"
+
+        def __repr__(self) -> str:
+            self.mode = "console"
+            return ""
+
+    check = ReprCheck()
+    display(check)
+    return check.mode == "jupyter"
+
+
+def _load_mpl_backend() -> PlotBackend:
+    from . import plot as mod
+
+    return PlotBackend(
+        name="mpl",
+        density_plot=mod.density_plot,
+        marginal_plot=mod.marginal_plot,
+        slice_plot=mod.slice_plot,
+        wakefield_plot=mod.wakefield_plot,
+        density_and_slice_plot=mod.density_and_slice_plot,
+        plot_1d_density=mod.plot_1d_density,
+        plot_2d_density_with_marginals=mod.plot_2d_density_with_marginals,
+    )
+
+
+def _load_bokeh_backend() -> PlotBackend:
+    from . import plot_bokeh as mod
+
+    backend = PlotBackend(
+        name="bokeh",
+        density_plot=mod.density_plot,
+        marginal_plot=mod.marginal_plot,
+        slice_plot=mod.slice_plot,
+        wakefield_plot=mod.wakefield_plot,
+        density_and_slice_plot=mod.density_and_slice_plot,
+        plot_1d_density=mod.plot_1d_density,
+        plot_2d_density_with_marginals=mod.plot_2d_density_with_marginals,
+    )
+
+    if is_jupyter():
+        mod.initialize_jupyter()
+    return backend
+
+
+_backend_loaders = {
+    "mpl": _load_mpl_backend,
+    "bokeh": _load_bokeh_backend,
+}
+
+
+def get_backend(backend: str | None = None, obj: Any = None) -> PlotBackend:
+    """
+    Resolve the backend name and return a :class:`PlotBackend`.
+
+    The backend module is lazy-loaded on first access and cached.
+
+    Parameters
+    ----------
+    backend : str or None
+        Explicit backend name (``"mpl"`` or ``"bokeh"``).
+        If ``None``, falls through to *obj* and then the module default.
+    obj : object, optional
+        An object with an optional ``plot_backend`` attribute
+        (e.g. a :class:`ParticleGroup`).
+    """
+    name = resolve_backend(backend, obj)
+    if name not in _backend_cache:
+        loader = _backend_loaders.get(name)
+        if loader is None:
+            raise ValueError(f"Unknown backend {name!r}. Choose 'mpl' or 'bokeh'.")
+        _backend_cache[name] = loader()
+    return _backend_cache[name]

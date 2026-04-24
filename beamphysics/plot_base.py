@@ -129,7 +129,7 @@ def prepare_density_plot(
     """
     if bins is None:
         n = len(particle_group)
-        bins = int(n / 100)
+        bins = max(1, int(n / 100))
 
     x, f1, ux, xmin, xmax = plottable_array_and_units(
         particle_group[key], particle_group.units(key), nice=nice, lim=xlim

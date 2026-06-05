@@ -7,6 +7,7 @@ For more advanced units, use a package like Pint:
 
 from __future__ import annotations
 
+import math
 import re
 import warnings
 from typing import Optional, Sequence
@@ -324,31 +325,51 @@ class pmd_unit:
 
     def simplify(self, named_units=None) -> pmd_unit:
         """
-        Tries to simplify a unit by searching from a list of named units
-        for the same unitDimension and unitSI.
-        """
+        Search for a simpler equivalent symbol with the same dimension and
+        SI value as this unit.
 
-        # Use default
+        The search proceeds in two passes:
+
+        1. **Atomic match.** Look for a single entry in ``named_units`` whose
+           dimension matches ``self.unitDimension`` and whose ``unitSI``
+           equals ``self.unitSI`` (optionally up to a single SI prefix
+           factor from :data:`SHORT_PREFIX_FACTOR`). Comparisons use
+           ``math.isclose`` so factors built from arithmetic are matched
+           reliably.
+        2. **Compound match.** If no atomic match is found, look for an
+           ``a*b`` or ``a/b`` combination of two named units (both with
+           nonzero dimension) whose product/quotient matches ``self`` exactly.
+
+        Among candidates, the one with the simplest symbol is returned
+        (no operators preferred; then shortest; then lexicographic).
+        If nothing matches, ``self`` is returned unchanged.
+
+        Parameters
+        ----------
+        named_units : sequence of pmd_unit, optional
+            Pool of named units to search. Defaults to :data:`NAMED_UNITS`.
+
+        Returns
+        -------
+        pmd_unit
+            A simplified unit, or ``self`` if no simplification was found.
+        """
         if named_units is None:
             named_units = NAMED_UNITS
 
-        unitDimension = self.unitDimension
-        unitSI = self.unitSI
+        target_dim = self.unitDimension
+        target_si = self.unitSI
 
-        # find any dimensional matches
-        matches = [u0 for u0 in named_units if unitDimension == u0.unitDimension]
-        # Look for exact unit
-        for match in matches:
-            factor = unitSI / match.unitSI
-            if factor == 1:
-                return match
-            if factor in SHORT_PREFIX:
-                p = SHORT_PREFIX[factor]
-                return pmd_unit(
-                    p + match.unitSymbol, factor * match.unitSI, match.unitDimension
-                )
+        # Pass 1: single named-unit match (optionally with an SI prefix).
+        atomic = _best_atomic_match(target_dim, target_si, named_units)
+        if atomic is not None:
+            return atomic
 
-        # No match, cannot simplify
+        # Pass 2: a*b or a/b compound match (exact SI, no extra prefix).
+        compound = _best_compound_match(target_dim, target_si, named_units)
+        if compound is not None:
+            return compound
+
         return self
 
 
@@ -364,6 +385,114 @@ def is_identity(u: pmd_unit) -> bool:
     if not isinstance(u, pmd_unit):
         raise ValueError("`u` is not a pmd_unit instance")
     return u.unitSI == 1 and u.unitDimension == (0, 0, 0, 0, 0, 0, 0)
+
+
+_SIMPLIFY_REL_TOL = 1e-9
+_DIMENSIONLESS: Dimension = (0, 0, 0, 0, 0, 0, 0)
+
+
+def _symbol_complexity(symbol: str) -> tuple[int, int, str]:
+    """Sort key: prefer no operators, then shorter, then lexicographic."""
+    has_ops = any(c in symbol for c in "*/^")
+    return (int(has_ops), len(symbol), symbol)
+
+
+def _closest_prefix(factor: float) -> tuple[str, float] | None:
+    """
+    Return ``(prefix, prefix_factor)`` from :data:`SHORT_PREFIX_FACTOR` if
+    ``factor`` matches a known SI prefix within :data:`_SIMPLIFY_REL_TOL`,
+    else ``None``.
+    """
+    if math.isclose(factor, 1.0, rel_tol=_SIMPLIFY_REL_TOL):
+        return ("", 1.0)
+    for prefix, pf in SHORT_PREFIX_FACTOR.items():
+        if math.isclose(factor, pf, rel_tol=_SIMPLIFY_REL_TOL):
+            return (prefix, pf)
+    return None
+
+
+def _best_atomic_match(
+    target_dim: Dimension,
+    target_si: float,
+    named_units: Sequence[pmd_unit],
+) -> pmd_unit | None:
+    """
+    Find the simplest named unit (optionally with an SI prefix) whose
+    dimension and SI value match the target.
+    """
+    candidates: list[tuple[int, tuple[int, int, str], pmd_unit, str, float]] = []
+    for u in named_units:
+        if u.unitDimension != target_dim or u.unitSI == 0:
+            continue
+        prefix_match = _closest_prefix(target_si / u.unitSI)
+        if prefix_match is None:
+            continue
+        prefix, pf = prefix_match
+        out_symbol = prefix + u.unitSymbol
+        # Priority: exact match (priority 0) beats prefixed match (priority 1).
+        priority = 0 if prefix == "" else 1
+        candidates.append((priority, _symbol_complexity(out_symbol), u, prefix, pf))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda c: (c[0], c[1]))
+    _, _, u, prefix, pf = candidates[0]
+    if prefix == "":
+        return u
+    return pmd_unit(prefix + u.unitSymbol, pf * u.unitSI, u.unitDimension)
+
+
+def _best_compound_match(
+    target_dim: Dimension,
+    target_si: float,
+    named_units: Sequence[pmd_unit],
+) -> pmd_unit | None:
+    """
+    Find the simplest ``a*b`` or ``a/b`` of two named units that matches
+    the target dimension and SI value exactly. Dimensionless factors are
+    skipped to avoid trivial decorations like ``"m*1"``.
+    """
+    dim_index: dict[Dimension, list[pmd_unit]] = {}
+    for u in named_units:
+        if u.unitDimension == _DIMENSIONLESS or u.unitSI == 0:
+            continue
+        dim_index.setdefault(u.unitDimension, []).append(u)
+
+    if not dim_index or target_si == 0:
+        return None
+
+    best: pmd_unit | None = None
+    best_key: tuple[int, int, str] | None = None
+
+    for a in (u for group in dim_index.values() for u in group):
+        a_si = a.unitSI
+
+        # self = a * b  =>  b_dim = target - a_dim, b_si = target / a
+        mul_dim = tuple(td - ad for td, ad in zip(target_dim, a.unitDimension))
+        mul_target_si = target_si / a_si
+        for b in dim_index.get(mul_dim, ()):
+            if not math.isclose(b.unitSI, mul_target_si, rel_tol=_SIMPLIFY_REL_TOL):
+                continue
+            sym = f"{a.unitSymbol}*{b.unitSymbol}"
+            key = _symbol_complexity(sym)
+            if best_key is None or key < best_key:
+                best = pmd_unit(sym, a_si * b.unitSI, target_dim)
+                best_key = key
+
+        # self = a / b  =>  b_dim = a_dim - target, b_si = a / target
+        div_dim = tuple(ad - td for ad, td in zip(a.unitDimension, target_dim))
+        div_target_si = a_si / target_si
+        for b in dim_index.get(div_dim, ()):
+            if not math.isclose(b.unitSI, div_target_si, rel_tol=_SIMPLIFY_REL_TOL):
+                continue
+            sym = f"{a.unitSymbol}/{b.unitSymbol}"
+            key = _symbol_complexity(sym)
+            if best_key is None or key < best_key:
+                best = pmd_unit(sym, a_si / b.unitSI, target_dim)
+                best_key = key
+
+    return best
 
 
 def multiply_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
@@ -543,7 +672,7 @@ DIMENSION: dict[str, Dimension] = {
     #
     "charge": (0, 0, 1, 1, 0, 0, 0),
     "electric_field": (1, 1, -3, -1, 0, 0, 0),
-    "electric_potential": (1, 2, -3, -1, 0, 0, 0),
+    "electric_potential": (2, 1, -3, -1, 0, 0, 0),
     "magnetic_field": (0, 1, -2, -1, 0, 0, 0),
     "velocity": (1, 0, -1, 0, 0, 0, 0),
     "energy": (2, 1, -2, 0, 0, 0, 0),
@@ -624,7 +753,6 @@ NAMED_UNITS = [
     pmd_unit("W/rad^2", 1, (2, 1, -3, 0, 0, 0, 0)),
     pmd_unit("W/m^2", 1, (0, 1, -3, 0, 0, 0, 0)),
     pmd_unit("T", 1, "magnetic_field"),
-    pmd_unit("T/m", 1, (-1, 1, -2, -1, 0, 0, 0)),
     pmd_unit("Hz", 1, (0, 0, -1, 0, 0, 0, 0)),
 ]
 

@@ -624,6 +624,8 @@ NAMED_UNITS = [
     pmd_unit("W/rad^2", 1, (2, 1, -3, 0, 0, 0, 0)),
     pmd_unit("W/m^2", 1, (0, 1, -3, 0, 0, 0, 0)),
     pmd_unit("T", 1, "magnetic_field"),
+    pmd_unit("T/m", 1, (-1, 1, -2, -1, 0, 0, 0)),
+    pmd_unit("Hz", 1, (0, 0, -1, 0, 0, 0, 0)),
 ]
 
 # Populate the module-level known_unit dict
@@ -634,6 +636,7 @@ known_unit.update(
         "1": pmd_unit("", 1, "1"),
         "charge_num": pmd_unit("charge #", 1, "charge"),
         "c_light": pmd_unit("vel/c", c_light, "velocity"),
+        "deg": known_unit["degree"],
     }
 )
 

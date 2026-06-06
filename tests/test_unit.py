@@ -149,6 +149,42 @@ def test_simplify_prefixed_output_round_trips() -> None:
         assert _round_trips(simplified), simplified.unitSymbol
 
 
+def test_simplify_dimensionless_ratio_not_compound() -> None:
+    # Regression: a pure-number ratio must not be "simplified" into a same-
+    # dimension compound like "kg/g" (mass/mass == 1000). It has no meaningful
+    # named form, so simplify returns it unchanged.
+    u = pmd_unit("mrad/µrad")  # 1000, dimensionless
+    s = u.simplify()
+    assert s.unitDimension == (0, 0, 0, 0, 0, 0, 0)
+    assert s.unitSymbol == u.unitSymbol  # unchanged
+    assert s.unitSI == u.unitSI  # value preserved exactly
+    # An exact-1 dimensionless still collapses to the empty symbol.
+    assert pmd_unit("r", 1.0, (0,) * 7).simplify().unitSymbol == ""
+
+
+def test_ohm_unit_and_alias() -> None:
+    ohm = pmd_unit("Ω")
+    assert ohm.unitDimension == (2, 1, -3, -2, 0, 0, 0)  # V/A
+    assert math.isclose(ohm.unitSI, 1.0)
+    # ASCII alias resolves to the same dimension/value.
+    alias = pmd_unit("Ohm")
+    assert alias.unitDimension == ohm.unitDimension
+    assert math.isclose(alias.unitSI, ohm.unitSI)
+    # simplify recognizes V/A as the ohm, and prefixes/compounds work.
+    assert (pmd_unit("V") / pmd_unit("A")).simplify().unitSymbol == "Ω"
+    assert math.isclose(pmd_unit("kΩ").unitSI, 1e3)
+    assert pmd_unit("Ω/m").unitDimension == (1, 1, -3, -2, 0, 0, 0)
+
+
+@pytest.mark.parametrize(
+    "symbol",
+    # Unit strings documented/plotted in the wakefields module must all parse.
+    ["V/C/m", "V/C", "Ohm/m", "Ω/m", "V/pC/m", "MV/m", "1/mm"],
+)
+def test_wakefield_unit_strings_parse(symbol: str) -> None:
+    assert _round_trips(pmd_unit(symbol))
+
+
 def test_sqrt_unit_halves_dimension() -> None:
     # Regression: sqrt_unit used integer floor division (x // 2), so sqrt(m)
     # collapsed to dimensionless instead of m^0.5.

@@ -25,7 +25,7 @@ readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "pytest-benchmark", "pyyaml"]
+dev = ["pytest", "pytest-cov", "pytest-benchmark", "pyyaml", "pint"]
 doc = [
   "mkdocs",
   "mkdocs-jupyter",

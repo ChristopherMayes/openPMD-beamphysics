@@ -488,7 +488,14 @@ def _best_compound_match(
     ``"a/b/c"`` reads back as ``a/(b*c)``). The ``a/b`` form therefore only
     accepts an operator-free divisor; the ``a*b`` form is unaffected because
     a product chain is associative under the parser's grouping.
+
+    A dimensionless target is never matched: it is a pure number, and any
+    ``a*b`` / ``a/b`` reaching it would pair two same-dimension units (e.g.
+    ``kg/g`` for a ratio of 1000), which is meaningless as a unit symbol.
     """
+    if target_dim == _DIMENSIONLESS:
+        return None
+
     dim_index: dict[Dimension, list[pmd_unit]] = {}
     for u in named_units:
         if u.unitDimension == _DIMENSIONLESS or u.unitSI == 0:
@@ -794,6 +801,7 @@ NAMED_UNITS = [
     pmd_unit("W/m^2", 1, (0, 1, -3, 0, 0, 0, 0)),
     pmd_unit("T", 1, "magnetic_field"),
     pmd_unit("Hz", 1, (0, 0, -1, 0, 0, 0, 0)),
+    pmd_unit("Ω", 1, (2, 1, -3, -2, 0, 0, 0)),  # ohm = V/A; used for impedance
 ]
 
 # Populate the module-level known_unit dict
@@ -805,6 +813,7 @@ known_unit.update(
         "charge_num": pmd_unit("charge #", 1, "charge"),
         "c_light": pmd_unit("vel/c", c_light, "velocity"),
         "deg": known_unit["degree"],
+        "Ohm": known_unit["Ω"],  # ASCII alias for the ohm
     }
 )
 

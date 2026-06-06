@@ -10,6 +10,7 @@ from beamphysics.units import (
     dimension,
     nice_array,
     nice_scale_prefix,
+    pg_units,
     plottable_array,
     pmd_unit,
     unit as deprecated_unit,
@@ -93,6 +94,81 @@ def test_simplify_never_breaks_round_trip() -> None:
             assert _round_trips(
                 u.simplify()
             ), f"{u.unitSymbol} -> {u.simplify().unitSymbol}"
+
+
+@pytest.mark.parametrize(
+    ("symbol", "expected_si", "base_symbol"),
+    [
+        ("keV", 1e3, "eV"),
+        ("MeV", 1e6, "eV"),
+        ("meV", 1e-3, "eV"),
+        ("mm", 1e-3, "m"),
+        ("cm", 1e-2, "m"),
+        ("kV", 1e3, "V"),
+        ("mg", 1e-3, "g"),  # milli-gram: 1e-3 * gram(1e-3 kg) = 1e-6 kg
+        ("GHz", 1e9, "Hz"),
+        ("mrad", 1e-3, "rad"),
+        ("mA", 1e-3, "A"),
+    ],
+)
+def test_si_prefix_parsing(symbol: str, expected_si: float, base_symbol: str) -> None:
+    base = pmd_unit(base_symbol)
+    u = pmd_unit(symbol)
+    assert u.unitDimension == base.unitDimension
+    assert math.isclose(u.unitSI, expected_si * base.unitSI, rel_tol=1e-12)
+
+
+@pytest.mark.parametrize("symbol", ["k", "M", "da", "k1", "min", "Pa", "xyz"])
+def test_bare_prefix_and_junk_rejected(symbol: str) -> None:
+    # A bare SI prefix is not a unit, and the prefix fallback must not parse
+    # arbitrary strings (the remainder has to be a known unit).
+    with pytest.raises(ValueError):
+        pmd_unit(symbol)
+
+
+def test_prefix_does_not_shadow_base_units() -> None:
+    # Prefix letters that collide with unit symbols must still resolve to the
+    # unit (lookup happens before the prefix fallback): c=speed of light (not
+    # centi), T=tesla (not tera), g=gram, cd=candela.
+    assert math.isclose(pmd_unit("c").unitSI, 299792458.0)
+    assert pmd_unit("c").unitDimension == dimension("velocity")
+    assert pmd_unit("T").unitDimension == dimension("magnetic_field")
+    assert pmd_unit("g").unitDimension == dimension("mass")
+    assert pmd_unit("cd").unitDimension == (0, 0, 0, 0, 0, 0, 1)
+
+
+def test_simplify_prefixed_output_round_trips() -> None:
+    # simplify() emits prefixed atomic symbols (e.g. "mg", "kV"); the parser
+    # must read them back to the same unit.
+    for u in (
+        pmd_unit("g") * pmd_unit("g") / pmd_unit("kg"),  # 1e-6 kg -> "mg"
+        pmd_unit("ratio_v", 1e3, dimension("electric_potential")),  # -> "kV"
+        pmd_unit("ratio_m", 1e-6, dimension("mass")),  # -> "mg"
+    ):
+        simplified = u.simplify()
+        assert _round_trips(simplified), simplified.unitSymbol
+
+
+def test_sqrt_unit_halves_dimension() -> None:
+    # Regression: sqrt_unit used integer floor division (x // 2), so sqrt(m)
+    # collapsed to dimensionless instead of m^0.5.
+    from beamphysics.units import sqrt_unit
+
+    root_m = sqrt_unit(pmd_unit("m"))
+    assert root_m.unitDimension == (0.5, 0, 0, 0, 0, 0, 0)
+    assert math.isclose(root_m.unitSI, 1.0)
+    # x_bar/px_bar are defined via sqrt_unit and document units of sqrt(m).
+    assert pg_units("x_bar").unitDimension == (0.5, 0, 0, 0, 0, 0, 0)
+
+
+def test_cov_units_with_prefixed_subkey() -> None:
+    # Regression: pg_units used key.strip("cov_"), which strips the char set
+    # {c,o,v,_} and mangled subkeys like "charge" -> "harge" (KeyError).
+    u = pg_units("cov_charge__x")
+    assert u.unitDimension == (1, 0, 1, 1, 0, 0, 0)  # charge * length
+    # Order independence and the common case still work.
+    assert pg_units("cov_x__charge").unitDimension == (1, 0, 1, 1, 0, 0, 0)
+    assert pg_units("cov_x__px").unitDimension == (2, 1, -1, 0, 0, 0, 0)
 
 
 def test_parsing_compound_does_not_mutate_named_units() -> None:

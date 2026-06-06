@@ -234,8 +234,10 @@ class pmd_unit:
             result._unitSymbol = unitSymbol
             return result
 
-        # Not found anywhere
-        raise ValueError(f"Unknown unitSymbol: {unitSymbol}")
+        # Single token, not directly known: delegate to _parse_single_unit,
+        # which handles power/sqrt notation and the SI-prefix fallback (and
+        # raises "Unknown unitSymbol" if it is genuinely unparseable).
+        return cls._parse_single_unit(unitSymbol)
 
     @classmethod
     def _parse_single_unit(cls, part: str) -> pmd_unit:
@@ -287,6 +289,24 @@ class pmd_unit:
             # Recursively parse base (could be sqrt(m)^2)
             base_unit = cls._parse_single_unit(base_symbol)
             return power_unit(base_unit, power)
+
+        # SI-prefix fallback: e.g. "keV" -> kilo + "eV", "mm" -> milli + "m",
+        # "mrad" -> milli + "rad". Only matches when the remainder is itself a
+        # known unit; a bare prefix ("k", "M") or a prefixed dimensionless
+        # identity ("k1") is not a valid unit. Longest prefixes first so "da"
+        # (deca) wins over "d" (deci). This is the inverse of the prefixed
+        # symbols simplify() emits, so those always round-trip.
+        for prefix in sorted(SHORT_PREFIX_FACTOR, key=len, reverse=True):
+            if prefix == "" or not part.startswith(prefix):
+                continue
+            remainder = part[len(prefix) :]
+            if remainder in ("", "1") or remainder not in known_unit:
+                continue
+            base = known_unit[remainder]
+            factor = SHORT_PREFIX_FACTOR[prefix]
+            return cls(
+                part, unitSI=factor * base.unitSI, unitDimension=base.unitDimension
+            )
 
         # Unknown unit
         raise ValueError(f"Unknown unitSymbol: {part}")
@@ -618,14 +638,15 @@ def sqrt_unit(u: pmd_unit) -> pmd_unit:
     if not isinstance(u, pmd_unit):
         raise ValueError("`u` is not a pmd_unit instance")
 
+    # Delegate to power_unit(0.5): it halves the dimension exponents with true
+    # division (e.g. m -> m^0.5) and bypasses make_dimension, so fractional
+    # dimensions survive. (Building via pmd_unit(...) instead would route
+    # through make_dimension, which int()-truncates 0.5 back to 0.)
+    result = power_unit(u, 0.5)
     symbol = u.unitSymbol
     if symbol not in ["", "1"]:
-        symbol = rf"\sqrt{{ {symbol} }}"
-
-    unitSI = np.sqrt(u.unitSI)
-    dim = tuple(x // 2 for x in u.unitDimension)
-
-    return pmd_unit(unitSymbol=symbol, unitSI=unitSI, unitDimension=dim)
+        result._unitSymbol = rf"\sqrt{{ {symbol} }}"
+    return result
 
 
 def power_unit(u: pmd_unit, power: float) -> pmd_unit:
@@ -1063,7 +1084,10 @@ def pg_units(key: str) -> pmd_unit:
             return pg_units(nkey)
 
     if key.startswith("cov_"):
-        subkeys = key.strip("cov_").split("__")
+        # NB: removeprefix, not strip("cov_") -- str.strip removes any leading/
+        # trailing chars in the set {c,o,v,_}, which mangles subkeys like
+        # "charge" (-> "harge"). removeprefix drops exactly the "cov_" prefix.
+        subkeys = key.removeprefix("cov_").split("__")
         unit0 = PARTICLEGROUP_UNITS[subkeys[0]]
 
         unit1 = PARTICLEGROUP_UNITS[subkeys[1]]

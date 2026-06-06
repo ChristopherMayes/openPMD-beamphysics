@@ -119,8 +119,10 @@ class pmd_unit:
         unitSI: int | float = 0,
         unitDimension: str | Dimension | tuple[int, ...] = (0, 0, 0, 0, 0, 0, 0),
     ):
-        # If unitSI is provided explicitly, use it directly
-        if unitSI != 0:
+        # Use the provided values directly when unitSI is given explicitly, or
+        # while NAMED_UNITS is still being built (known_unit not yet populated).
+        # Otherwise look the symbol up / parse it.
+        if unitSI != 0 or not known_unit:
             self._unitSymbol = unitSymbol
             self._unitSI = unitSI
             if isinstance(unitDimension, str):
@@ -128,22 +130,25 @@ class pmd_unit:
             else:
                 self._unitDimension = make_dimension(unitDimension)
         else:
-            # unitSI == 0: try to lookup/parse the symbol
-            # Check if known_unit dict has been populated (it won't during NAMED_UNITS construction)
-            if not known_unit:
-                # During NAMED_UNITS construction - just use what's provided
-                self._unitSymbol = unitSymbol
-                self._unitSI = unitSI
-                if isinstance(unitDimension, str):
-                    self._unitDimension = dimension(unitDimension)
-                else:
-                    self._unitDimension = make_dimension(unitDimension)
-            else:
-                # known_unit exists - delegate to from_symbol for lookup/parsing
-                u = self.from_symbol(unitSymbol)
-                self._unitSymbol = u._unitSymbol
-                self._unitSI = u._unitSI
-                self._unitDimension = u._unitDimension
+            u = self.from_symbol(unitSymbol)
+            self._unitSymbol = u._unitSymbol
+            self._unitSI = u._unitSI
+            self._unitDimension = u._unitDimension
+
+    @classmethod
+    def _raw(cls, unitSymbol: str, unitSI: float, unitDimension: Dimension) -> pmd_unit:
+        """
+        Construct a unit directly from its parts, bypassing ``make_dimension``.
+
+        Used by the arithmetic helpers (``multiply_units`` / ``divide_units`` /
+        ``power_unit``) where the dimension is already computed and may be
+        fractional (which ``make_dimension`` would truncate to ``int``).
+        """
+        u = object.__new__(cls)
+        u._unitSymbol = unitSymbol
+        u._unitSI = unitSI
+        u._unitDimension = unitDimension
+        return u
 
     @classmethod
     def from_symbol(cls, unitSymbol: str) -> pmd_unit:
@@ -577,13 +582,7 @@ def multiply_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
     dim = tuple(sum(x) for x in zip(d1, d2))
     unitSI = u1.unitSI * u2.unitSI
 
-    # Bypass make_dimension to preserve fractional dimensions
-    result = object.__new__(pmd_unit)
-    result._unitSymbol = symbol
-    result._unitSI = unitSI
-    result._unitDimension = dim
-
-    return result
+    return pmd_unit._raw(symbol, unitSI, dim)
 
 
 def divide_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
@@ -620,13 +619,7 @@ def divide_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
     dim = tuple(a - b for a, b in zip(d1, d2))
     unitSI = u1.unitSI / u2.unitSI
 
-    # Bypass make_dimension to preserve fractional dimensions
-    result = object.__new__(pmd_unit)
-    result._unitSymbol = symbol
-    result._unitSI = unitSI
-    result._unitDimension = dim
-
-    return result
+    return pmd_unit._raw(symbol, unitSI, dim)
 
 
 def sqrt_unit(u: pmd_unit) -> pmd_unit:
@@ -695,14 +688,7 @@ def power_unit(u: pmd_unit, power: float) -> pmd_unit:
     # Scale each dimension by the power (preserves fractional dimensions)
     dim = tuple(d * power for d in u.unitDimension)
 
-    # Create unit object without going through make_dimension
-    # to preserve fractional dimensions
-    result = object.__new__(pmd_unit)
-    result._unitSymbol = new_symbol
-    result._unitSI = unitSI
-    result._unitDimension = dim
-
-    return result
+    return pmd_unit._raw(new_symbol, unitSI, dim)
 
 
 # length mass time current temperature mol luminous
@@ -1054,9 +1040,9 @@ for k in ["power"]:
 for k in ["norm_emit_x", "norm_emit_y"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("m")
 for k in ["norm_emit_4d"]:
-    PARTICLEGROUP_UNITS[k] = multiply_units(pmd_unit("m"), pmd_unit("m"))
+    PARTICLEGROUP_UNITS[k] = pmd_unit("m") * pmd_unit("m")
 for k in ["Lz"]:
-    PARTICLEGROUP_UNITS[k] = multiply_units(pmd_unit("m"), pmd_unit("eV/c"))
+    PARTICLEGROUP_UNITS[k] = pmd_unit("m") * pmd_unit("eV/c")
 for k in ["xp", "yp"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("rad")
 for k in ["x_bar", "px_bar", "y_bar", "py_bar"]:
@@ -1072,9 +1058,7 @@ for plane in ("x", "y"):
     for k in ("beta", "eta", "emit", "norm_emit"):
         PARTICLEGROUP_UNITS[f"twiss_{k}_{plane}"] = pmd_unit("m")
     for k in ("gamma",):
-        PARTICLEGROUP_UNITS[f"twiss_{k}_{plane}"] = divide_units(
-            pmd_unit("1"), pmd_unit("m")
-        )
+        PARTICLEGROUP_UNITS[f"twiss_{k}_{plane}"] = pmd_unit("1") / pmd_unit("m")
 
 
 def pg_units(key: str) -> pmd_unit:
@@ -1097,11 +1081,7 @@ def pg_units(key: str) -> pmd_unit:
         # trailing chars in the set {c,o,v,_}, which mangles subkeys like
         # "charge" (-> "harge"). removeprefix drops exactly the "cov_" prefix.
         subkeys = key.removeprefix("cov_").split("__")
-        unit0 = PARTICLEGROUP_UNITS[subkeys[0]]
-
-        unit1 = PARTICLEGROUP_UNITS[subkeys[1]]
-
-        return multiply_units(unit0, unit1)
+        return PARTICLEGROUP_UNITS[subkeys[0]] * PARTICLEGROUP_UNITS[subkeys[1]]
 
     # Fields
     if key.startswith("electricField"):
@@ -1220,7 +1200,7 @@ def read_dataset_and_unit_h5(h5, expected_unit=None, convert=True):
         expected_unit = pmd_unit(expected_unit)
 
     # Check dimensions
-    du = divide_units(u, expected_unit)
+    du = u / expected_unit
 
     assert du.unitDimension == (0, 0, 0, 0, 0, 0, 0), "incompatible units"
 

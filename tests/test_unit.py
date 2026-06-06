@@ -1,7 +1,11 @@
 from __future__ import annotations
 import numpy as np
 import pytest
+import itertools
+import math
+
 from beamphysics.units import (
+    NAMED_UNITS,
     SHORT_PREFIX_FACTOR,
     dimension,
     nice_array,
@@ -15,6 +19,91 @@ from beamphysics.units import (
 def test_deprecated_unit():
     with pytest.deprecated_call():
         assert deprecated_unit("T") == pmd_unit("T")
+
+
+def _round_trips(u: pmd_unit) -> bool:
+    """A unit round-trips if re-parsing its symbol reproduces it."""
+    try:
+        reparsed = pmd_unit(u.unitSymbol)
+    except (ValueError, KeyError):
+        return False
+    return reparsed.unitDimension == u.unitDimension and (
+        reparsed.unitSI == u.unitSI
+        or math.isclose(reparsed.unitSI, u.unitSI, rel_tol=1e-9)
+    )
+
+
+@pytest.mark.parametrize(
+    ("build", "expected_symbol"),
+    [
+        # Atomic matches (the float-tolerant path).
+        pytest.param(lambda: pmd_unit("eV/c") * pmd_unit("c"), "eV", id="eV/c*c->eV"),
+        pytest.param(lambda: pmd_unit("J") / pmd_unit("C"), "V", id="J/C->V"),
+        pytest.param(lambda: pmd_unit("V") * pmd_unit("A"), "W", id="V*A->W"),
+        # Compound matches.
+        pytest.param(lambda: pmd_unit("T") * pmd_unit("m"), "T*m", id="T*m"),
+        pytest.param(
+            lambda: pmd_unit("T") / pmd_unit("m") / pmd_unit("m") * pmd_unit("m"),
+            "T/m",
+            id="T/m",
+        ),
+    ],
+)
+def test_simplify_examples(build, expected_symbol: str) -> None:
+    assert build().simplify().unitSymbol == expected_symbol
+
+
+def test_simplify_electric_potential_volt() -> None:
+    # V = J/C = kg*m^2*s^-3*A^-1
+    assert pmd_unit("V").unitDimension == (2, 1, -3, -1, 0, 0, 0)
+
+
+def test_simplify_division_by_compound_round_trips() -> None:
+    # Regression: a compound divisor (e.g. "W") must not be emitted as a
+    # bare "a/b/c" string that the flat, left-associative parser regroups.
+    simplified = (pmd_unit("V/m") / pmd_unit("W")).simplify()
+    assert _round_trips(simplified)
+
+
+@pytest.mark.parametrize("si", [1e-3, 1e3, 1e-6, 2.0])
+def test_simplify_dimensionless_never_bare_prefix(si: float) -> None:
+    # Regression: an SI prefix on a dimensionless unit produced bogus symbols
+    # like "m" (re-parses as metres) or "k" (unparseable). The result must
+    # stay dimensionless and never be a bare SI prefix.
+    result = pmd_unit("ratio", si, (0, 0, 0, 0, 0, 0, 0)).simplify()
+    assert result.unitDimension == (0, 0, 0, 0, 0, 0, 0)
+    assert result.unitSymbol not in SHORT_PREFIX_FACTOR
+    try:
+        reparsed = pmd_unit(result.unitSymbol)
+    except (ValueError, KeyError):
+        # No simplification found: self returned with its placeholder symbol.
+        return
+    # If the symbol is parseable, it must not re-parse to a dimensioned unit.
+    assert reparsed.unitDimension == (0, 0, 0, 0, 0, 0, 0)
+
+
+def test_simplify_never_breaks_round_trip() -> None:
+    # Across every product/quotient of named units, simplify() must never
+    # turn a round-tripping unit into a non-round-tripping one.
+    named = [u for u in NAMED_UNITS if u.unitSymbol]
+    for a, b in itertools.product(named, named):
+        for u in (a * b, a / b):
+            if not _round_trips(u):
+                continue  # construction already mangled the symbol; not our concern
+            assert _round_trips(
+                u.simplify()
+            ), f"{u.unitSymbol} -> {u.simplify().unitSymbol}"
+
+
+def test_parsing_compound_does_not_mutate_named_units() -> None:
+    # Regression: parsing a compound whose first token is a known unit used to
+    # mutate the shared NAMED_UNITS entry in place (e.g. parsing "m*rad" rewrote
+    # the global "m" symbol to "m*rad"), corrupting all later simplify() calls.
+    before = [(u.unitSymbol, u.unitSI, u.unitDimension) for u in NAMED_UNITS]
+    for symbol in ("m*rad", "rad*s", "rad*eV", "m/rad", "T*m", "kg*m/s"):
+        pmd_unit(symbol)
+    after = [(u.unitSymbol, u.unitSI, u.unitDimension) for u in NAMED_UNITS]
+    assert before == after
 
 
 def test_smoke_properties() -> None:

@@ -253,9 +253,12 @@ class pmd_unit:
         pmd_unit
             The parsed unit object.
         """
-        # Check if it's a known unit first
+        # Check if it's a known unit first. Return a copy, never the shared
+        # cached object: callers (e.g. from_symbol) reassign ``_unitSymbol`` on
+        # the result, which would otherwise mutate the global NAMED_UNITS entry.
         if part in known_unit:
-            return known_unit[part]
+            u = known_unit[part]
+            return cls(part, unitSI=u.unitSI, unitDimension=u.unitDimension)
 
         # Check for sqrt() notation
         sqrt_match = re.match(r"^sqrt\((.+)\)$", part)
@@ -428,6 +431,12 @@ def _best_atomic_match(
         if prefix_match is None:
             continue
         prefix, pf = prefix_match
+        # A prefix on a dimensionless unit is meaningless: the empty symbol
+        # becomes a bare prefix ("" -> "m", which re-parses as metres), and
+        # "mrad"/"krad" would imply an angle for a pure-number ratio. Only an
+        # exact (unprefixed) dimensionless match is valid.
+        if prefix != "" and u.unitDimension == _DIMENSIONLESS:
+            continue
         out_symbol = prefix + u.unitSymbol
         # Priority: exact match (priority 0) beats prefixed match (priority 1).
         priority = 0 if prefix == "" else 1
@@ -452,6 +461,13 @@ def _best_compound_match(
     Find the simplest ``a*b`` or ``a/b`` of two named units that matches
     the target dimension and SI value exactly. Dimensionless factors are
     skipped to avoid trivial decorations like ``"m*1"``.
+
+    The symbol parser is flat and left-associative (``a/b/c`` means
+    ``(a/b)/c``), so a divisor that itself contains ``*`` or ``/`` would be
+    regrouped when the symbol is re-parsed (``a/(b/c)`` written as
+    ``"a/b/c"`` reads back as ``a/(b*c)``). The ``a/b`` form therefore only
+    accepts an operator-free divisor; the ``a*b`` form is unaffected because
+    a product chain is associative under the parser's grouping.
     """
     dim_index: dict[Dimension, list[pmd_unit]] = {}
     for u in named_units:
@@ -484,6 +500,9 @@ def _best_compound_match(
         div_dim = tuple(ad - td for ad, td in zip(a.unitDimension, target_dim))
         div_target_si = a_si / target_si
         for b in dim_index.get(div_dim, ()):
+            # An operator-containing divisor would be regrouped on re-parse.
+            if any(op in b.unitSymbol for op in "*/"):
+                continue
             if not math.isclose(b.unitSI, div_target_si, rel_tol=_SIMPLIFY_REL_TOL):
                 continue
             sym = f"{a.unitSymbol}/{b.unitSymbol}"

@@ -22,16 +22,28 @@ def test_deprecated_unit():
         assert deprecated_unit("T") == pmd_unit("T")
 
 
+def assert_round_trip(u: pmd_unit) -> None:
+    """Re-parsing the unit's symbol must reproduce its dimension and SI value.
+
+    Parse / dimension / SI failures all surface as pytest errors with the
+    offending symbol in the message — no try/except swallowing them.
+    """
+    reparsed = pmd_unit(u.unitSymbol)
+    assert (
+        reparsed.unitDimension == u.unitDimension
+    ), f"{u.unitSymbol!r}: dimension {reparsed.unitDimension} != {u.unitDimension}"
+    assert reparsed.unitSI == u.unitSI or math.isclose(
+        reparsed.unitSI, u.unitSI, rel_tol=1e-9
+    ), f"{u.unitSymbol!r}: SI {reparsed.unitSI} != {u.unitSI}"
+
+
 def _round_trips(u: pmd_unit) -> bool:
-    """A unit round-trips if re-parsing its symbol reproduces it."""
+    """Bool predicate wrapping ``assert_round_trip`` for use as a test guard."""
     try:
-        reparsed = pmd_unit(u.unitSymbol)
-    except (ValueError, KeyError):
+        assert_round_trip(u)
+    except (AssertionError, ValueError, KeyError):
         return False
-    return reparsed.unitDimension == u.unitDimension and (
-        reparsed.unitSI == u.unitSI
-        or math.isclose(reparsed.unitSI, u.unitSI, rel_tol=1e-9)
-    )
+    return True
 
 
 @pytest.mark.parametrize(
@@ -63,7 +75,7 @@ def test_simplify_division_by_compound_round_trips() -> None:
     # Regression: a compound divisor (e.g. "W") must not be emitted as a
     # bare "a/b/c" string that the flat, left-associative parser regroups.
     simplified = (pmd_unit("V/m") / pmd_unit("W")).simplify()
-    assert _round_trips(simplified)
+    assert_round_trip(simplified)
 
 
 @pytest.mark.parametrize("si", [1e-3, 1e3, 1e-6, 2.0])
@@ -91,9 +103,7 @@ def test_simplify_never_breaks_round_trip() -> None:
         for u in (a * b, a / b):
             if not _round_trips(u):
                 continue  # construction already mangled the symbol; not our concern
-            assert _round_trips(
-                u.simplify()
-            ), f"{u.unitSymbol} -> {u.simplify().unitSymbol}"
+            assert_round_trip(u.simplify())
 
 
 @pytest.mark.parametrize(
@@ -145,8 +155,7 @@ def test_simplify_prefixed_output_round_trips() -> None:
         pmd_unit("ratio_v", 1e3, dimension("electric_potential")),  # -> "kV"
         pmd_unit("ratio_m", 1e-6, dimension("mass")),  # -> "mg"
     ):
-        simplified = u.simplify()
-        assert _round_trips(simplified), simplified.unitSymbol
+        assert_round_trip(u.simplify())
 
 
 def test_simplify_dimensionless_ratio_not_compound() -> None:
@@ -182,7 +191,7 @@ def test_ohm_unit_and_alias() -> None:
     ["V/C/m", "V/C", "Ohm/m", "Ω/m", "V/pC/m", "MV/m", "1/mm"],
 )
 def test_wakefield_unit_strings_parse(symbol: str) -> None:
-    assert _round_trips(pmd_unit(symbol))
+    assert_round_trip(pmd_unit(symbol))
 
 
 def test_sqrt_unit_halves_dimension() -> None:

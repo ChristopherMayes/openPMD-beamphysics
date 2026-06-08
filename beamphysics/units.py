@@ -447,8 +447,13 @@ def _best_atomic_match(
     """
     Find the simplest named unit (optionally with an SI prefix) whose
     dimension and SI value match the target.
+
+    Sort key: exact match beats prefixed, then no operators preferred, then
+    shorter, then lexicographic.
     """
-    candidates: list[tuple[int, tuple[int, int, str], pmd_unit, str, float]] = []
+    best: pmd_unit | None = None
+    best_key: tuple[int, int, int, str] | None = None
+
     for u in named_units:
         if u.unitDimension != target_dim or u.unitSI == 0:
             continue
@@ -462,19 +467,19 @@ def _best_atomic_match(
         # exact (unprefixed) dimensionless match is valid.
         if prefix != "" and u.unitDimension == _DIMENSIONLESS:
             continue
+
         out_symbol = prefix + u.unitSymbol
-        # Priority: exact match (priority 0) beats prefixed match (priority 1).
         priority = 0 if prefix == "" else 1
-        candidates.append((priority, _symbol_complexity(out_symbol), u, prefix, pf))
+        key = (priority, *_symbol_complexity(out_symbol))
+        if best_key is not None and key >= best_key:
+            continue
 
-    if not candidates:
-        return None
+        best = (
+            u if prefix == "" else pmd_unit(out_symbol, pf * u.unitSI, u.unitDimension)
+        )
+        best_key = key
 
-    candidates.sort(key=lambda c: (c[0], c[1]))
-    _, _, u, prefix, pf = candidates[0]
-    if prefix == "":
-        return u
-    return pmd_unit(prefix + u.unitSymbol, pf * u.unitSI, u.unitDimension)
+    return best
 
 
 def _best_compound_match(

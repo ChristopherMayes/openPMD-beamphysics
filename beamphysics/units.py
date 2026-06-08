@@ -168,6 +168,13 @@ class pmd_unit:
         ValueError
             If the symbol is not found in known_unit dict or cannot be parsed.
         """
+        # Strip outer whitespace so users can write "  eV/c" or "kg*m / s".
+        # Per-token whitespace inside the operator-split branch below is also
+        # stripped. We do not split on whitespace (no implicit space-as-*),
+        # which would conflict with multi-token named units like "charge #"
+        # and with the SI-prefix fallback ("k eV" vs "keV").
+        unitSymbol = unitSymbol.strip()
+
         # Check if known_unit dict has been populated
         if not known_unit:
             raise ValueError(
@@ -219,6 +226,7 @@ class pmd_unit:
                     current += char
 
             parts.append(current)  # Don't forget the last part
+            parts = [p.strip() for p in parts]
 
             # Parse the first part (may include ^power)
             result = cls._parse_single_unit(parts[0])
@@ -576,10 +584,12 @@ def multiply_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
 
     s1 = u1.unitSymbol
     s2 = u2.unitSymbol
-    if s1 == s2:
-        symbol = f"({s1})^2"
-    else:
-        symbol = s1 + "*" + s2
+    # No special case for s1 == s2: writing "s1^2" would be wrong when s1 is
+    # itself compound (e.g. "kg*m^2" parses as kg*(m^2), not (kg*m)^2), and
+    # wrapping in parens ("(s1)^2") produces a symbol the parser cannot read
+    # back. The plain "s1*s2" form always round-trips and yields the correct
+    # dimension regardless of whether either operand is atomic or compound.
+    symbol = s1 + "*" + s2
     d1 = u1.unitDimension
     d2 = u2.unitDimension
     dim = tuple(sum(x) for x in zip(d1, d2))
@@ -721,9 +731,11 @@ def make_dimension(dim: Sequence[int | float]) -> Dimension:
     The openPMD standard defines ``unitDimension`` as an array of 7
     ``float64`` values, so floats are used uniformly here. This also lets
     fractional exponents (e.g. from :func:`sqrt_unit`) share a single
-    representation with integer ones.
+    representation with integer ones. Negative zeros (from e.g. ``-1.0 * 0.0``
+    inside :func:`power_unit`) are normalized to positive ``0.0`` so the
+    ``repr`` is stable and exponent tuples compare cleanly as dict keys.
     """
-    dim = tuple(float(d) for d in dim)
+    dim = tuple(0.0 if d == 0 else float(d) for d in dim)
     if len(dim) != 7:
         raise ValueError("Dimensions must be 7 elements.")
     return dim
@@ -787,6 +799,11 @@ NAMED_UNITS = [
     pmd_unit("eV", e_charge, "energy"),
     pmd_unit("J", 1, "energy"),
     pmd_unit("eV/c", e_charge / c_light, "momentum"),
+    # The Newton as the force (dimension L M T^-2) is intentionally represented as eV/m and J/m
+    # rather than N: the accelerator-physics convention writes accelerating
+    # gradients as eV/m or MV/m, and adding "N" here would beat them in
+    # _symbol_complexity (shorter symbol wins) and change existing simplify()
+    # output.
     pmd_unit("eV/m", e_charge, (1, 1, -2, 0, 0, 0, 0)),
     pmd_unit("J/m", 1, (1, 1, -2, 0, 0, 0, 0)),
     pmd_unit("W", 1, (2, 1, -3, 0, 0, 0, 0)),

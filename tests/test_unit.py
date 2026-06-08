@@ -255,6 +255,57 @@ def test_multiply() -> None:
     assert momentum.unitDimension == dimension("momentum")
 
 
+def test_multiply_same_symbol_round_trips() -> None:
+    """``m * m`` (and longer chains) must produce a re-parseable symbol.
+
+    Previously the s1 == s2 branch emitted ``"(m)^2"``, which the parser
+    rejected because bare parentheses are not a supported grouping.
+    """
+    squared = pmd_unit("m") * pmd_unit("m")
+    assert squared.unitDimension == (2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    assert_round_trip(squared)
+
+    cubed = pmd_unit("m") * pmd_unit("m") * pmd_unit("m")
+    assert cubed.unitDimension == (3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    assert_round_trip(cubed)
+
+
+def test_negative_power_normalizes_negative_zero() -> None:
+    """Negative exponents must not produce ``-0.0`` in the dimension tuple.
+
+    ``-1.0 * 0.0 == -0.0`` in IEEE float; while equality and hashing still
+    work, the repr is noisy and dict-key behavior across construction paths
+    is less robust if some tuples carry ``-0.0`` and others ``0.0``.
+    """
+    inv_hz = pmd_unit("1") / pmd_unit("Hz")
+    for i, d in enumerate(inv_hz.unitDimension):
+        assert (
+            math.copysign(1.0, d) == 1.0
+        ), f"dimension index {i} is signed-negative: {d!r}"
+
+
+@pytest.mark.parametrize(
+    "symbol",
+    ["eV / c", " eV/c", "eV/c ", "kg * m / s", "kg*m / s", " V/m "],
+)
+def test_whitespace_around_operators_tolerated(symbol: str) -> None:
+    """Whitespace around operators (and leading/trailing) must parse the same
+    as the unspaced form. Internal whitespace inside a token is not allowed —
+    multi-token named units (e.g. ``"charge #"``) are looked up verbatim."""
+    canonical = pmd_unit(symbol.replace(" ", ""))
+    assert pmd_unit(symbol).unitDimension == canonical.unitDimension
+    assert pmd_unit(symbol).unitSI == canonical.unitSI
+
+
+def test_legacy_multitoken_name_still_parses() -> None:
+    """The ``"charge #"`` legacy entry must still resolve via direct lookup,
+    even though it contains an internal space.
+    """
+    u = pmd_unit("charge #")
+    assert u.unitDimension == dimension("charge")
+    assert u.unitSI == 1
+
+
 @pytest.mark.parametrize(
     ("symbol", "expected_unit"),
     [

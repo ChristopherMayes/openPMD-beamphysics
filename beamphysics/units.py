@@ -25,7 +25,12 @@ epsilon_0 = 1 / (mu_0 * c_light**2)  # F/m
 Z0 = mu_0 * c_light  # Omh = V^2/W
 
 Limit = tuple[Optional[float], Optional[float]]
-Dimension = tuple[int, int, int, int, int, int, int]
+# 7-tuple of base-SI exponents (length, mass, time, current, temperature,
+# mol, luminous). The openPMD standard specifies ``unitDimension`` as an
+# array of 7 float64 values, so we store floats uniformly — this also lets
+# fractional powers (e.g. from sqrt_unit) round-trip through the same code
+# path as integer ones. Equality with int tuples still works (``1.0 == 1``).
+Dimension = tuple[float, float, float, float, float, float, float]
 
 # Module-level dict that will be populated after NAMED_UNITS is created
 # This avoids the globals() check chicken-and-egg problem
@@ -86,24 +91,25 @@ class pmd_unit:
     Define that an eV is 1.602176634e-19 of base units m^2 kg/s^2, which is a Joule (J):
 
     >>> pmd_unit('eV', 1.602176634e-19, (2, 1, -2, 0, 0, 0, 0))
+    pmd_unit('eV', 1.602176634e-19, (2.0, 1.0, -2.0, 0.0, 0.0, 0.0, 0.0))
 
     If unitSI=0 (default), `pmd_unit` may be initialized with a known symbol:
 
     >>> pmd_unit('T')
-    pmd_unit('T', 1, (0, 1, -2, -1, 0, 0, 0))
+    pmd_unit('T', 1, (0.0, 1.0, -2.0, -1.0, 0.0, 0.0, 0.0))
 
     Compound units can be created using * and / operators in the symbol string:
 
     >>> pmd_unit('eV/c')
-    pmd_unit('eV/c', 5.344286295439521e-28, (1, 1, -1, 0, 0, 0, 0))
+    pmd_unit('eV/c', 5.344286295439521e-28, (1.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0))
 
     >>> pmd_unit('kg*m/s')
-    pmd_unit('kg*m/s', 1, (1, 1, -1, 0, 0, 0, 0))
+    pmd_unit('kg*m/s', 1, (1.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0))
 
     Alternatively, use the `from_symbol` class method for explicit symbol lookup:
 
     >>> pmd_unit.from_symbol('A*s')
-    pmd_unit('A*s', 1, (0, 0, 1, 1, 0, 0, 0))
+    pmd_unit('A*s', 1, (0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0))
 
     Simple equalities are possible:
 
@@ -117,7 +123,7 @@ class pmd_unit:
         self,
         unitSymbol: str = "",
         unitSI: int | float = 0,
-        unitDimension: str | Dimension | tuple[int, ...] = (0, 0, 0, 0, 0, 0, 0),
+        unitDimension: str | Sequence[int | float] = (0, 0, 0, 0, 0, 0, 0),
     ):
         # Use the provided values directly when unitSI is given explicitly, or
         # while NAMED_UNITS is still being built (known_unit not yet populated).
@@ -134,21 +140,6 @@ class pmd_unit:
             self._unitSymbol = u._unitSymbol
             self._unitSI = u._unitSI
             self._unitDimension = u._unitDimension
-
-    @classmethod
-    def _raw(cls, unitSymbol: str, unitSI: float, unitDimension: Dimension) -> pmd_unit:
-        """
-        Construct a unit directly from its parts, bypassing ``make_dimension``.
-
-        Used by the arithmetic helpers (``multiply_units`` / ``divide_units`` /
-        ``power_unit``) where the dimension is already computed and may be
-        fractional (which ``make_dimension`` would truncate to ``int``).
-        """
-        u = object.__new__(cls)
-        u._unitSymbol = unitSymbol
-        u._unitSI = unitSI
-        u._unitDimension = unitDimension
-        return u
 
     @classmethod
     def from_symbol(cls, unitSymbol: str) -> pmd_unit:
@@ -587,7 +578,7 @@ def multiply_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
     dim = tuple(sum(x) for x in zip(d1, d2))
     unitSI = u1.unitSI * u2.unitSI
 
-    return pmd_unit._raw(symbol, unitSI, dim)
+    return pmd_unit(symbol, unitSI=unitSI, unitDimension=dim)
 
 
 def divide_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
@@ -624,7 +615,7 @@ def divide_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
     dim = tuple(a - b for a, b in zip(d1, d2))
     unitSI = u1.unitSI / u2.unitSI
 
-    return pmd_unit._raw(symbol, unitSI, dim)
+    return pmd_unit(symbol, unitSI=unitSI, unitDimension=dim)
 
 
 def sqrt_unit(u: pmd_unit) -> pmd_unit:
@@ -643,10 +634,6 @@ def sqrt_unit(u: pmd_unit) -> pmd_unit:
     if not isinstance(u, pmd_unit):
         raise ValueError("`u` is not a pmd_unit instance")
 
-    # Delegate to power_unit(0.5): it halves the dimension exponents with true
-    # division (e.g. m -> m^0.5) and bypasses make_dimension, so fractional
-    # dimensions survive. (Building via pmd_unit(...) instead would route
-    # through make_dimension, which int()-truncates 0.5 back to 0.)
     result = power_unit(u, 0.5)
     symbol = u.unitSymbol
     if symbol not in ["", "1"]:
@@ -673,10 +660,10 @@ def power_unit(u: pmd_unit, power: float) -> pmd_unit:
     Examples
     --------
     >>> power_unit(pmd_unit("m"), 2)
-    pmd_unit('m^2', 1, (2, 0, 0, 0, 0, 0, 0))
+    pmd_unit('m^2', 1, (2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
 
     >>> power_unit(pmd_unit("m"), 0.5)
-    pmd_unit('m^0.5', 1, (0.5, 0, 0, 0, 0, 0, 0))
+    pmd_unit('m^0.5', 1.0, (0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
     """
     if not isinstance(u, pmd_unit):
         raise ValueError("`u` is not a pmd_unit instance")
@@ -690,10 +677,9 @@ def power_unit(u: pmd_unit, power: float) -> pmd_unit:
         new_symbol = f"{symbol}^{power}"
 
     unitSI = u.unitSI**power
-    # Scale each dimension by the power (preserves fractional dimensions)
     dim = tuple(d * power for d in u.unitDimension)
 
-    return pmd_unit._raw(new_symbol, unitSI, dim)
+    return pmd_unit(new_symbol, unitSI=unitSI, unitDimension=dim)
 
 
 # length mass time current temperature mol luminous
@@ -720,8 +706,17 @@ DIMENSION: dict[str, Dimension] = {
 DIMENSION_NAME: dict[Dimension, str] = {v: k for k, v in DIMENSION.items()}
 
 
-def make_dimension(dim: Sequence[int]) -> Dimension:
-    dim = tuple(int(d) for d in dim)
+def make_dimension(dim: Sequence[int | float]) -> Dimension:
+    """
+    Coerce a 7-element sequence of base-SI exponents into the canonical
+    ``Dimension`` form: a 7-tuple of floats.
+
+    The openPMD standard defines ``unitDimension`` as an array of 7
+    ``float64`` values, so floats are used uniformly here. This also lets
+    fractional exponents (e.g. from :func:`sqrt_unit`) share a single
+    representation with integer ones.
+    """
+    dim = tuple(float(d) for d in dim)
     if len(dim) != 7:
         raise ValueError("Dimensions must be 7 elements.")
     return dim

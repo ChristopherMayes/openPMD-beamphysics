@@ -7,6 +7,7 @@ For more advanced units, use a package like Pint:
 
 from __future__ import annotations
 
+import copy
 import math
 import re
 import warnings
@@ -176,9 +177,13 @@ class pmd_unit:
 
         # known_unit exists - check if it's already a known unit (priority)
         if unitSymbol in known_unit:
-            # Copy internals from known unit
-            u = known_unit[unitSymbol]
-            return cls(unitSymbol, unitSI=u.unitSI, unitDimension=u.unitDimension)
+            # Shallow copy preserves the cached dimension/SI without
+            # re-coercing through make_dimension, while still letting callers
+            # reassign _unitSymbol without mutating the shared NAMED_UNITS
+            # entry. (All three slots are immutable: str, float, tuple.)
+            result = copy.copy(known_unit[unitSymbol])
+            result._unitSymbol = unitSymbol
+            return result
 
         # Handle sqrt() notation: sqrt(X) = X^0.5
         sqrt_match = re.match(r"^sqrt\((.+)\)$", unitSymbol)
@@ -251,12 +256,14 @@ class pmd_unit:
         pmd_unit
             The parsed unit object.
         """
-        # Check if it's a known unit first. Return a copy, never the shared
-        # cached object: callers (e.g. from_symbol) reassign ``_unitSymbol`` on
-        # the result, which would otherwise mutate the global NAMED_UNITS entry.
+        # Check if it's a known unit first. Return a shallow copy, never the
+        # shared cached object: callers (e.g. from_symbol) reassign
+        # ``_unitSymbol`` on the result, which would otherwise mutate the
+        # global NAMED_UNITS entry.
         if part in known_unit:
-            u = known_unit[part]
-            return cls(part, unitSI=u.unitSI, unitDimension=u.unitDimension)
+            result = copy.copy(known_unit[part])
+            result._unitSymbol = part
+            return result
 
         # Check for sqrt() notation
         sqrt_match = re.match(r"^sqrt\((.+)\)$", part)

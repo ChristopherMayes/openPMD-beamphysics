@@ -112,11 +112,17 @@ class pmd_unit:
     >>> pmd_unit.from_symbol('A*s')
     pmd_unit('A*s', 1, (0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0))
 
-    Simple equalities are possible:
+    Equality follows the openPMD standard: the symbol is presentational and
+    two units are equal when they share the same ``unitDimension`` and
+    ``unitSI`` (compared with a small relative tolerance):
 
     >>> pmd_unit("T") == pmd_unit("T")
     True
     >>> pmd_unit("eV") == pmd_unit("T")
+    False
+    >>> pmd_unit("1/s") == pmd_unit("Hz")
+    True
+    >>> pmd_unit("J/m") == pmd_unit("eV/m")  # different SI scales, unequal
     False
     """
 
@@ -126,6 +132,17 @@ class pmd_unit:
         unitSI: int | float = 0,
         unitDimension: str | Sequence[int | float] = (0, 0, 0, 0, 0, 0, 0),
     ):
+        # The openPMD standard defines unitSI as a positive conversion factor
+        # to the corresponding SI unit. Negative scales would invert the sign
+        # of every value an instrument writes through this unit, so they are
+        # rejected here. (unitSI=0 is permitted as the sentinel that triggers
+        # symbol lookup below.)
+        if unitSI < 0:
+            raise ValueError(
+                f"unitSI must be non-negative (got {unitSI!r}). "
+                "The openPMD standard defines unitSI as a conversion factor to SI."
+            )
+
         # Use the provided values directly when unitSI is given explicitly, or
         # while NAMED_UNITS is still being built (known_unit not yet populated).
         # Otherwise look the symbol up / parse it.
@@ -192,41 +209,29 @@ class pmd_unit:
             result._unitSymbol = unitSymbol
             return result
 
-        # Handle sqrt() notation: sqrt(X) = X^0.5
-        sqrt_match = re.match(r"^sqrt\((.+)\)$", unitSymbol)
+        # Handle sqrt() notation: sqrt(X) = X^0.5. The stored symbol is
+        # always the canonical, whitespace-free "sqrt(<inner>)" form so that
+        # "sqrt( m )", "sqrt(m)", and "  sqrt(m)" all compare equal and hash
+        # identically.
+        sqrt_match = re.match(r"^sqrt\(\s*(.+?)\s*\)$", unitSymbol)
         if sqrt_match:
             inner = sqrt_match.group(1)
             base_unit = cls.from_symbol(inner)
             result = power_unit(base_unit, 0.5)
-            # Preserve the original sqrt notation in the symbol
-            result._unitSymbol = unitSymbol
+            result._unitSymbol = f"sqrt({base_unit.unitSymbol})"
             return result
 
         # Not in known_unit - try operator parsing (e.g., "A*s", "kg*m/s", "m^2")
         if "*" in unitSymbol or "/" in unitSymbol or "^" in unitSymbol:
-            # Tokenize: split by * and / but not inside parentheses
-            # This allows m^(-3/2) to remain intact
-            parts = []
-            operators = []
-            current = ""
-            paren_depth = 0
+            parts, operators = _tokenize_compound(unitSymbol)
 
-            for char in unitSymbol:
-                if char == "(":
-                    paren_depth += 1
-                    current += char
-                elif char == ")":
-                    paren_depth -= 1
-                    current += char
-                elif char in "*/" and paren_depth == 0:
-                    parts.append(current)
-                    operators.append(char)
-                    current = ""
-                else:
-                    current += char
-
-            parts.append(current)  # Don't forget the last part
-            parts = [p.strip() for p in parts]
+            # Reject malformed compound input (empty operand around an
+            # operator). Previously these silently parsed because the empty
+            # token resolved to the identity (""): "m*" -> m*1 = m, "/m" -> 1/m.
+            if any(p == "" for p in parts):
+                raise ValueError(
+                    f"Malformed unit symbol {unitSymbol!r}: empty operand around an operator."
+                )
 
             # Parse the first part (may include ^power)
             result = cls._parse_single_unit(parts[0])
@@ -239,8 +244,10 @@ class pmd_unit:
                 elif op == "/":
                     result = result / unit_obj
 
-            # Preserve the original symbol but keep computed dimension
-            result._unitSymbol = unitSymbol
+            # Canonical symbol: stripped tokens joined by the original
+            # operators with no whitespace. So "eV / c" and "eV/c" share a
+            # symbol (and therefore compare equal / hash identically).
+            result._unitSymbol = _join_compound(parts, operators)
             return result
 
         # Single token, not directly known: delegate to _parse_single_unit,
@@ -264,6 +271,10 @@ class pmd_unit:
         pmd_unit
             The parsed unit object.
         """
+        # Strip whitespace around the token and around any "^" so callers can
+        # write "m ^ 2" or "  m^2" interchangeably with "m^2".
+        part = re.sub(r"\s*\^\s*", "^", part.strip())
+
         # Check if it's a known unit first. Return a shallow copy, never the
         # shared cached object: callers (e.g. from_symbol) reassign
         # ``_unitSymbol`` on the result, which would otherwise mutate the
@@ -273,13 +284,14 @@ class pmd_unit:
             result._unitSymbol = part
             return result
 
-        # Check for sqrt() notation
-        sqrt_match = re.match(r"^sqrt\((.+)\)$", part)
+        # Check for sqrt() notation. Whitespace inside the parens is stripped
+        # and the stored symbol is canonicalized to "sqrt(<inner>)".
+        sqrt_match = re.match(r"^sqrt\(\s*(.+?)\s*\)$", part)
         if sqrt_match:
             inner = sqrt_match.group(1)
             base_unit = cls._parse_single_unit(inner)
             result = power_unit(base_unit, 0.5)
-            result._unitSymbol = part
+            result._unitSymbol = f"sqrt({base_unit.unitSymbol})"
             return result
 
         # Check for power notation with parenthesized fraction: m^(-3/2)
@@ -323,7 +335,12 @@ class pmd_unit:
         raise ValueError(f"Unknown unitSymbol: {part}")
 
     def __hash__(self) -> int:
-        return hash((self.unitSymbol, self.unitSI, self.unitDimension))
+        # The openPMD standard defines a unit by (unitSI, unitDimension); the
+        # symbol is presentational. Hash on unitDimension alone so that any
+        # two equal units (per __eq__'s isclose comparison on unitSI) share a
+        # hash bucket — preserving the hash/eq invariant even when unitSI
+        # values arrived via slightly different arithmetic paths.
+        return hash(self.unitDimension)
 
     @property
     def unitSymbol(self) -> str:
@@ -344,9 +361,19 @@ class pmd_unit:
         return divide_units(self, other)
 
     def __eq__(self, other) -> bool:
-        if isinstance(other, self.__class__):
-            return self.__dict__ == other.__dict__
-        return False
+        # Per the openPMD standard, a unit is defined by (unitSI,
+        # unitDimension); the symbol is a presentational hint. Two units are
+        # equal when both fields match, with math.isclose on unitSI to
+        # absorb floating-point drift from arithmetic like
+        # (eV/c) * c -> eV (the eV value reconstructed through c_light
+        # round-tripping may differ from e_charge by 1 ULP).
+        if not isinstance(other, self.__class__):
+            return False
+        if self.unitDimension != other.unitDimension:
+            return False
+        return math.isclose(
+            self.unitSI, other.unitSI, rel_tol=_SIMPLIFY_REL_TOL, abs_tol=0.0
+        )
 
     def __ne__(self, other) -> bool:
         return not self.__eq__(other)
@@ -406,6 +433,81 @@ class pmd_unit:
 
         return self
 
+    def to_tex(self) -> str:
+        """Render the stored unit symbol as a matplotlib-mathtext string.
+
+        The translation is purely structural — no algebraic simplification
+        or reordering. Each atomic unit name is wrapped in ``\\mathrm{...}``
+        (so it renders upright), ``*`` becomes ``{\\cdot}``, ``/`` is kept
+        as ``/``, ``^N`` becomes ``^{N}``, and ``sqrt(X)`` becomes
+        ``\\sqrt{...}`` (recursing on the inner expression).
+
+        The result is intended to be embedded inside an ``$...$`` mathtext
+        block by the caller. The identity / empty symbol returns ``""``.
+
+        Returns
+        -------
+        str
+            A TeX fragment equivalent to :attr:`unitSymbol`.
+
+        Examples
+        --------
+        >>> pmd_unit("eV/c").to_tex()
+        '\\\\mathrm{eV}/\\\\mathrm{c}'
+
+        >>> pmd_unit("kg*m/s").to_tex()
+        '\\\\mathrm{kg}{\\\\cdot}\\\\mathrm{m}/\\\\mathrm{s}'
+
+        >>> pmd_unit("m^2").to_tex()
+        '\\\\mathrm{m}^{2}'
+
+        >>> pmd_unit("sqrt(m)").to_tex()
+        '\\\\sqrt{\\\\mathrm{m}}'
+        """
+        return _symbol_to_tex(self._unitSymbol)
+
+
+def _symbol_to_tex(symbol: str) -> str:
+    """Recursive worker for :meth:`pmd_unit.to_tex`."""
+    if symbol == "":
+        return ""
+    if symbol == "1":
+        return "1"
+
+    # Top-level compound (``a*b``, ``a/b``, ``sqrt(a)*b``). Tokenize first so
+    # the recursion handles nested ``sqrt(...)`` and per-token powers.
+    if "*" in symbol or "/" in symbol:
+        parts, operators = _tokenize_compound(symbol)
+        if len(parts) > 1:
+            tex_parts = [_symbol_to_tex(p) for p in parts]
+            out = tex_parts[0]
+            for op, p in zip(operators, tex_parts[1:]):
+                out += r"{\cdot}" + p if op == "*" else "/" + p
+            return out
+
+    # sqrt(X) -> \sqrt{ <recursed X> }
+    sqrt_match = re.match(r"^sqrt\((.+)\)$", symbol)
+    if sqrt_match:
+        inner = _symbol_to_tex(sqrt_match.group(1))
+        return rf"\sqrt{{{inner}}}"
+
+    # base^(n/d) -> \mathrm{base}^{n/d}
+    paren_power_match = _TOKEN_PAREN_POWER_RE.match(symbol)
+    if paren_power_match:
+        base = _symbol_to_tex(paren_power_match.group(1))
+        num = paren_power_match.group(2)
+        den = paren_power_match.group(3)
+        return rf"{base}^{{{num}/{den}}}"
+
+    # base^N -> \mathrm{base}^{N}
+    power_match = _TOKEN_POWER_RE.match(symbol)
+    if power_match:
+        base = _symbol_to_tex(power_match.group(1))
+        return f"{base}^{{{power_match.group(2)}}}"
+
+    # Atomic name (possibly with internal whitespace, e.g. "charge #").
+    return rf"\mathrm{{{symbol}}}"
+
 
 def is_dimensionless(u: pmd_unit) -> bool:
     """Checks if the unit is dimensionless"""
@@ -423,6 +525,49 @@ def is_identity(u: pmd_unit) -> bool:
 
 _SIMPLIFY_REL_TOL = 1e-9
 _DIMENSIONLESS: Dimension = (0, 0, 0, 0, 0, 0, 0)
+
+
+def _tokenize_compound(symbol: str) -> tuple[list[str], list[str]]:
+    """Split ``symbol`` on top-level ``*`` and ``/`` (respecting parentheses).
+
+    Returns ``(parts, operators)`` where each part is whitespace-stripped and
+    ``operators[i]`` joins ``parts[i]`` to ``parts[i+1]``. Used by both the
+    parser and :func:`power_unit` (for distributing an exponent across a
+    compound symbol).
+    """
+    parts: list[str] = []
+    operators: list[str] = []
+    current = ""
+    paren_depth = 0
+    for char in symbol:
+        if char == "(":
+            paren_depth += 1
+            current += char
+        elif char == ")":
+            paren_depth -= 1
+            current += char
+        elif char in "*/" and paren_depth == 0:
+            parts.append(current)
+            operators.append(char)
+            current = ""
+        else:
+            current += char
+    parts.append(current)
+    return [p.strip() for p in parts], operators
+
+
+def _join_compound(parts: Sequence[str], operators: Sequence[str]) -> str:
+    """Inverse of :func:`_tokenize_compound`: re-emit a flat compound symbol."""
+    out = parts[0]
+    for op, p in zip(operators, parts[1:]):
+        out += op + p
+    return out
+
+
+def _is_atomic_symbol(symbol: str) -> bool:
+    """True if the symbol has no top-level ``*`` or ``/`` (parens are kept)."""
+    parts, _ = _tokenize_compound(symbol)
+    return len(parts) == 1
 
 
 def _symbol_complexity(symbol: str) -> tuple[int, int, str]:
@@ -495,15 +640,16 @@ def _best_compound_match(
 ) -> pmd_unit | None:
     """
     Find the simplest ``a*b`` or ``a/b`` of two named units that matches
-    the target dimension and SI value exactly. Dimensionless factors are
-    skipped to avoid trivial decorations like ``"m*1"``.
+    the target dimension and SI value exactly. Both ``a`` and ``b`` must be
+    atomic (no ``*`` or ``/`` in the symbol):
 
-    The symbol parser is flat and left-associative (``a/b/c`` means
-    ``(a/b)/c``), so a divisor that itself contains ``*`` or ``/`` would be
-    regrouped when the symbol is re-parsed (``a/(b/c)`` written as
-    ``"a/b/c"`` reads back as ``a/(b*c)``). The ``a/b`` form therefore only
-    accepts an operator-free divisor; the ``a*b`` form is unaffected because
-    a product chain is associative under the parser's grouping.
+    * A compound divisor would be regrouped under the parser's flat,
+      left-associative grouping (``a/(b/c)`` written as ``"a/b/c"`` reads
+      back as ``a/(b*c)``).
+    * A compound numerator parses correctly but reads as something else to
+      a human (``"J/m*s"`` left-associates to ``(J/m)*s`` -- correct, but
+      looks like ``J/(m*s)``). Restricting to atomic operands keeps the
+      emitted symbol unambiguous to readers.
 
     A dimensionless target is never matched: it is a pure number, and any
     ``a*b`` / ``a/b`` reaching it would pair two same-dimension units (e.g.
@@ -515,6 +661,8 @@ def _best_compound_match(
     dim_index: dict[Dimension, list[pmd_unit]] = {}
     for u in named_units:
         if u.unitDimension == _DIMENSIONLESS or u.unitSI == 0:
+            continue
+        if not _is_atomic_symbol(u.unitSymbol):
             continue
         dim_index.setdefault(u.unitDimension, []).append(u)
 
@@ -543,9 +691,6 @@ def _best_compound_match(
         div_dim = tuple(ad - td for ad, td in zip(a.unitDimension, target_dim))
         div_target_si = a_si / target_si
         for b in dim_index.get(div_dim, ()):
-            # An operator-containing divisor would be regrouped on re-parse.
-            if any(op in b.unitSymbol for op in "*/"):
-                continue
             if not math.isclose(b.unitSI, div_target_si, rel_tol=_SIMPLIFY_REL_TOL):
                 continue
             sym = f"{a.unitSymbol}/{b.unitSymbol}"
@@ -639,6 +784,9 @@ def sqrt_unit(u: pmd_unit) -> pmd_unit:
     """
     Returns the square root of a unit.
 
+    The emitted symbol uses the canonical ``sqrt(<inner>)`` form (no
+    whitespace, no LaTeX wrapping) so it round-trips through the parser.
+
     Parameters
     ----------
     u : pmd_unit
@@ -654,7 +802,7 @@ def sqrt_unit(u: pmd_unit) -> pmd_unit:
     result = power_unit(u, 0.5)
     symbol = u.unitSymbol
     if symbol not in ["", "1"]:
-        result._unitSymbol = rf"\sqrt{{ {symbol} }}"
+        result._unitSymbol = f"sqrt({symbol})"
     return result
 
 
@@ -688,15 +836,62 @@ def power_unit(u: pmd_unit, power: float) -> pmd_unit:
     symbol = u.unitSymbol
     if symbol in ["", "1"]:
         new_symbol = symbol
-    elif power == int(power):
-        new_symbol = f"{symbol}^{int(power)}"
+    elif "*" in symbol or "/" in symbol:
+        # Distribute the exponent across a compound symbol. Naively writing
+        # "compound^n" is wrong: the parser is flat and left-associative, so
+        # "eV*s^2" parses as eV*(s^2), not (eV*s)^2. Instead, multiply each
+        # token's own exponent by ``power`` and re-emit.
+        new_symbol = _distribute_power_in_symbol(symbol, power)
     else:
-        new_symbol = f"{symbol}^{power}"
+        new_symbol = _format_power(symbol, power)
 
     unitSI = u.unitSI**power
     dim = tuple(d * power for d in u.unitDimension)
 
     return pmd_unit(new_symbol, unitSI=unitSI, unitDimension=dim)
+
+
+_TOKEN_PAREN_POWER_RE = re.compile(r"^(.+)\^\((-?\d+)/(\d+)\)$")
+_TOKEN_POWER_RE = re.compile(r"^(.+)\^(-?\d+(?:\.\d+)?)$")
+
+
+def _format_power(base: str, power: float) -> str:
+    """Render ``base^power`` with an integer exponent where possible."""
+    if power == 1:
+        return base
+    if power == int(power):
+        return f"{base}^{int(power)}"
+    return f"{base}^{power}"
+
+
+def _combine_token_power(token: str, factor: float) -> str:
+    """Multiply a token's existing exponent by ``factor``.
+
+    ``m`` with factor 2 becomes ``m^2``; ``s^2`` with factor 2 becomes
+    ``s^4``; ``m^(1/2)`` with factor 2 becomes ``m^1`` (i.e. ``m``).
+    Unknown / nested forms (e.g. ``sqrt(m)``) are wrapped as
+    ``sqrt(m)^factor`` and resolved by the parser's recursion.
+    """
+    paren_match = _TOKEN_PAREN_POWER_RE.match(token)
+    if paren_match:
+        base = paren_match.group(1)
+        existing = int(paren_match.group(2)) / int(paren_match.group(3))
+    else:
+        power_match = _TOKEN_POWER_RE.match(token)
+        if power_match:
+            base = power_match.group(1)
+            existing = float(power_match.group(2))
+        else:
+            base = token
+            existing = 1.0
+    return _format_power(base, existing * factor)
+
+
+def _distribute_power_in_symbol(symbol: str, power: float) -> str:
+    """Distribute an exponent across a compound symbol (e.g. ``(eV*s)^2``)."""
+    parts, operators = _tokenize_compound(symbol)
+    new_parts = [_combine_token_power(p, power) for p in parts]
+    return _join_compound(new_parts, operators)
 
 
 # length mass time current temperature mol luminous
@@ -799,11 +994,15 @@ NAMED_UNITS = [
     pmd_unit("eV", e_charge, "energy"),
     pmd_unit("J", 1, "energy"),
     pmd_unit("eV/c", e_charge / c_light, "momentum"),
-    # The Newton as the force (dimension L M T^-2) is intentionally represented as eV/m and J/m
-    # rather than N: the accelerator-physics convention writes accelerating
-    # gradients as eV/m or MV/m, and adding "N" here would beat them in
-    # _symbol_complexity (shorter symbol wins) and change existing simplify()
-    # output.
+    # The Newton (dimension L M T^-2, unitSI=1) is intentionally omitted.
+    # It does *not* conflict with eV/m / MeV/m (those have unitSI = n *
+    # e_charge, which is not within rel_tol=1e-9 of any SI-prefix factor
+    # times N=1, so the atomic-match prefix fallback never reaches N). It
+    # *does* however generate an "N/A" compound for the magnetic-rigidity
+    # dimension (T*m), which would beat the conventional "T*m" output of
+    # simplify() under the lexicographic tiebreaker. Until we have a way
+    # to prefer accelerator-physics-familiar spellings in the compound
+    # matcher, we leave SI-magnitude forces as "J/m".
     pmd_unit("eV/m", e_charge, (1, 1, -2, 0, 0, 0, 0)),
     pmd_unit("J/m", 1, (1, 1, -2, 0, 0, 0, 0)),
     pmd_unit("W", 1, (2, 1, -3, 0, 0, 0, 0)),

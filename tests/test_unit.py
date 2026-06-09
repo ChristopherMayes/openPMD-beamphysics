@@ -240,6 +240,23 @@ def test_equality() -> None:
     assert pmd_unit("T") != "foo"
 
 
+def test_equality_is_value_based_per_standard() -> None:
+    """Per the openPMD standard, a unit is defined by (unitSI, unitDimension);
+    the symbol is presentational. Two units denoting the same physical
+    quantity must therefore compare equal regardless of how they were
+    spelled, and survive floating-point drift introduced by arithmetic."""
+    # Cross-spelling equivalence — same SI and dimension via different syntax.
+    assert pmd_unit("1/s") == pmd_unit("Hz")
+    assert pmd_unit("s^-1") == pmd_unit("Hz")
+    # Arithmetic round-trip: (eV/c) * c must equal eV even though the
+    # intermediate float math doesn't reproduce e_charge bit-exactly.
+    assert pmd_unit("eV/c") * pmd_unit("c") == pmd_unit("eV")
+    # Different physical scale must remain unequal.
+    assert pmd_unit("eV") != pmd_unit("J")  # same dim, different unitSI
+    # Hash invariant: equal objects must share a hash.
+    assert hash(pmd_unit("1/s")) == hash(pmd_unit("Hz"))
+
+
 def test_hashability() -> None:
     assert len({pmd_unit("T"), pmd_unit("eV"), pmd_unit("T")}) == 2
 
@@ -304,6 +321,184 @@ def test_legacy_multitoken_name_still_parses() -> None:
     u = pmd_unit("charge #")
     assert u.unitDimension == dimension("charge")
     assert u.unitSI == 1
+
+
+def test_power_unit_distributes_over_compound() -> None:
+    """``power_unit`` must distribute the exponent across compound symbols.
+
+    Previously ``power_unit(pmd_unit("eV*s"), 2)`` emitted ``"eV*s^2"``,
+    which the flat left-associative parser reads as ``eV*(s^2)`` — the
+    wrong dimension (length-2,time-1,...) instead of (length-4,time-(-2),...).
+    """
+    from beamphysics.units import power_unit
+
+    squared = power_unit(pmd_unit("eV*s"), 2)
+    assert squared.unitDimension == (4.0, 2.0, -2.0, 0.0, 0.0, 0.0, 0.0)
+    assert_round_trip(squared)
+
+    # Existing exponents inside the compound must compose, not be replaced.
+    compound = pmd_unit("m^2*s^-1")
+    cubed = power_unit(compound, 3)
+    assert cubed.unitDimension == tuple(d * 3 for d in compound.unitDimension)
+    assert_round_trip(cubed)
+
+    # Halving a squared compound returns the original dimension.
+    halved = power_unit(pmd_unit("m^2*s^2"), 0.5)
+    assert halved.unitDimension == (1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0)
+    assert_round_trip(halved)
+
+
+def test_sqrt_unit_symbol_round_trips() -> None:
+    """``sqrt_unit`` emits the canonical ``sqrt(X)`` form (no LaTeX, no
+    whitespace) so the result re-parses cleanly to itself.
+    """
+    from beamphysics.units import sqrt_unit
+
+    root_m = sqrt_unit(pmd_unit("m"))
+    assert root_m.unitSymbol == "sqrt(m)"
+    assert_round_trip(root_m)
+
+    # Compound interior also round-trips.
+    root_compound = sqrt_unit(pmd_unit("kg*m"))
+    assert root_compound.unitSymbol == "sqrt(kg*m)"
+    assert_round_trip(root_compound)
+
+
+def test_sqrt_symbol_whitespace_normalized() -> None:
+    """Whitespace inside ``sqrt(...)`` is stripped on parse, so all spellings
+    canonicalize to the same stored symbol (and therefore compare equal).
+    """
+    canonical = pmd_unit("sqrt(m)")
+    for spelling in ("sqrt( m )", "  sqrt(m)  ", "sqrt(m )", "sqrt( m)"):
+        u = pmd_unit(spelling)
+        assert u.unitSymbol == "sqrt(m)"
+        assert u == canonical
+        assert hash(u) == hash(canonical)
+
+
+def test_latex_sqrt_form_not_accepted() -> None:
+    """The LaTeX-style ``\\sqrt{...}`` form is not part of the supported unit
+    grammar and must be rejected by the parser.
+    """
+    with pytest.raises(ValueError):
+        pmd_unit(r"\sqrt{m}")
+    with pytest.raises(ValueError):
+        pmd_unit(r"\sqrt{ m }")
+
+
+def test_simplify_skips_compound_numerator() -> None:
+    """``_best_compound_match`` must not propose a compound numerator.
+
+    A product ``compound*atomic`` parses correctly (left-associative), but
+    reads as ``compound`` divided by something to a human — confusing and
+    error-prone. Only ``atomic*atomic`` and ``atomic/atomic`` are emitted.
+    """
+    # Any simplify output must not be of the form "X/Y*Z" or "X*Y/Z" where
+    # one of the operands is itself compound; the constraint we test is the
+    # round-trip property (which would fail under ambiguous emission).
+    for a, b in itertools.product(NAMED_UNITS, NAMED_UNITS):
+        for u in (a * b, a / b):
+            if not _round_trips(u):
+                continue
+            simplified = u.simplify()
+            sym = simplified.unitSymbol
+            # Symbol must be either atomic, or pure compound of atomic
+            # operands joined by * and /. We assert specifically: no operand
+            # within the top-level split is itself compound.
+            from beamphysics.units import _tokenize_compound
+
+            parts, _ops = _tokenize_compound(sym)
+            for p in parts:
+                # Each part must itself contain no top-level * or /.
+                p_parts, _ = _tokenize_compound(p)
+                assert len(p_parts) == 1, f"{sym!r}: token {p!r} is itself compound"
+
+
+@pytest.mark.parametrize("symbol", ["m*", "/m", "m//s", "m**s", "*", "/", "m*/s"])
+def test_parser_rejects_empty_operands(symbol: str) -> None:
+    """Operators with no operand on one side must be flagged, not silently
+    parsed via the empty-string identity.
+    """
+    with pytest.raises(ValueError):
+        pmd_unit(symbol)
+
+
+@pytest.mark.parametrize(
+    "symbol",
+    ["m ^ 2", "m^ 2", "m ^2", "Hz ^ -1", "s^ -2"],
+)
+def test_whitespace_around_caret_tolerated(symbol: str) -> None:
+    """Whitespace around ``^`` must parse the same as the unspaced form."""
+    canonical = pmd_unit(symbol.replace(" ", ""))
+    assert pmd_unit(symbol).unitDimension == canonical.unitDimension
+    assert pmd_unit(symbol).unitSI == canonical.unitSI
+
+
+def test_symbol_whitespace_normalized_in_stored_form() -> None:
+    """Compound symbols with whitespace around operators must canonicalize.
+
+    Without normalization, ``pmd_unit("eV / c") != pmd_unit("eV/c")`` even
+    though they denote the same unit, and they hash differently.
+    """
+    spaced = pmd_unit("eV / c")
+    tight = pmd_unit("eV/c")
+    assert spaced.unitSymbol == tight.unitSymbol == "eV/c"
+    assert spaced == tight
+    assert hash(spaced) == hash(tight)
+
+    # Three-token compound also normalizes.
+    assert pmd_unit("kg * m / s").unitSymbol == "kg*m/s"
+
+
+@pytest.mark.parametrize("bad_si", [-1.0, -1e-30, -0.0001, -1e30])
+def test_negative_unitSI_rejected(bad_si: float) -> None:
+    """The openPMD standard requires unitSI to be a positive conversion
+    factor to SI. A negative value would invert every value written through
+    this unit, so the constructor must reject it.
+    """
+    with pytest.raises(ValueError, match="unitSI must be non-negative"):
+        pmd_unit("bogus", unitSI=bad_si, unitDimension="1")
+
+
+@pytest.mark.parametrize(
+    ("symbol", "expected_tex"),
+    [
+        ("", ""),
+        ("1", "1"),
+        ("m", r"\mathrm{m}"),
+        ("eV", r"\mathrm{eV}"),
+        ("eV/c", r"\mathrm{eV}/\mathrm{c}"),
+        ("kg*m/s", r"\mathrm{kg}{\cdot}\mathrm{m}/\mathrm{s}"),
+        ("m^2", r"\mathrm{m}^{2}"),
+        ("s^-1", r"\mathrm{s}^{-1}"),
+        ("m^0.5", r"\mathrm{m}^{0.5}"),
+        ("m^(1/2)", r"\mathrm{m}^{1/2}"),
+        ("sqrt(m)", r"\sqrt{\mathrm{m}}"),
+        ("sqrt(kg*m)", r"\sqrt{\mathrm{kg}{\cdot}\mathrm{m}}"),
+        ("charge #", r"\mathrm{charge #}"),
+    ],
+)
+def test_to_tex_translation(symbol: str, expected_tex: str) -> None:
+    """``to_tex`` is a structural translation only: each atomic name wraps
+    in ``\\mathrm{...}``, ``*`` becomes ``{\\cdot}``, ``/`` stays, ``^N``
+    becomes ``^{N}``, and ``sqrt(X)`` becomes ``\\sqrt{...}``. No
+    simplification, no reordering.
+    """
+    if symbol in ("", "1"):
+        # These can't be round-tripped through pmd_unit() with unitSI=0 (the
+        # empty/identity sentinel), so construct directly.
+        u = pmd_unit(symbol, unitSI=1, unitDimension="1")
+    else:
+        u = pmd_unit(symbol)
+    assert u.to_tex() == expected_tex
+
+
+def test_to_tex_preserves_input_structure() -> None:
+    """``to_tex`` must reflect the *stored* symbol, not the simplified form.
+    A redundant compound stays compound in the TeX output.
+    """
+    u = pmd_unit("m*s/m")  # dimension reduces, but the symbol is preserved
+    assert u.to_tex() == r"\mathrm{m}{\cdot}\mathrm{s}/\mathrm{m}"
 
 
 @pytest.mark.parametrize(

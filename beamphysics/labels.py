@@ -1,4 +1,4 @@
-from .units import nice_array, parse_bunching_str
+from .units import nice_array, parse_bunching_str, pmd_unit
 
 TEXLABEL = {
     # 'status'
@@ -163,19 +163,29 @@ def mathlabel(*keys, units=None, tex=True):
     --------
         mathlabel('x_bar', 'sigma_x', units='µC')
         returns:
-        '$\\overline{x}, \\sigma_{ x }~(\\mathrm{ µC } )$'
+        '$\\overline{x}, \\sigma_{ x }~(\\mathrm{µC})$'
 
     """
-    # Cast to str
-    if units:
-        units = str(units)
+    # Translate units to a TeX fragment up front. For a pmd_unit, route
+    # through ``to_tex`` so compound symbols (eV/c, kg*m/s, sqrt(m), m^2)
+    # render correctly. For a str, try to parse it the same way; if it
+    # isn't a parseable unit symbol, fall back to wrapping the raw string
+    # in \mathrm{...}.
+    units_tex: str | None = None
+    if units is not None and units != "":
+        if isinstance(units, pmd_unit):
+            units_tex = units.to_tex()
+        else:
+            try:
+                units_tex = pmd_unit(str(units)).to_tex()
+            except (ValueError, KeyError):
+                units_tex = rf"\mathrm{{ {units} }}"
 
     if tex:
         label_list = [texlabel(key) or rf"\mathrm{{ {key} }}" for key in keys]
         label = ", ".join(label_list)
-        if units:
-            units = units.replace("*", r"{\cdot}")
-            label = rf"{label}~(\mathrm{{ {units} }} )"
+        if units_tex:
+            label = rf"{label}~({units_tex})"
 
         return rf"${label}$"
 

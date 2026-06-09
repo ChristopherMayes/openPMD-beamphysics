@@ -179,7 +179,8 @@ def mathlabel(*keys, units=None, tex=True):
             try:
                 units_tex = pmd_unit(str(units)).to_tex()
             except (ValueError, KeyError):
-                units_tex = rf"\mathrm{{ {units} }}"
+                fallback = str(units).replace("*", r"{\cdot}")
+                units_tex = rf"\mathrm{{ {fallback} }}"
 
     if tex:
         label_list = [texlabel(key) or rf"\mathrm{{ {key} }}" for key in keys]
@@ -192,7 +193,10 @@ def mathlabel(*keys, units=None, tex=True):
     else:
         label = ", ".join(keys)
 
-        if units:
-            label = rf"{label} ({units})"
+        # Compare via str(): a pmd_unit object is always truthy, but a
+        # dimensionless unit has an empty symbol and should add no "()".
+        units_str = "" if units is None else str(units)
+        if units_str:
+            label = rf"{label} ({units_str})"
 
         return label

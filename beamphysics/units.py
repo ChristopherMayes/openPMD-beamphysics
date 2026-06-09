@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import math
 import re
+import unicodedata
 import warnings
 from typing import Optional, Sequence
 
@@ -32,6 +33,11 @@ Limit = tuple[Optional[float], Optional[float]]
 # fractional powers (e.g. from sqrt_unit) round-trip through the same code
 # path as integer ones. Equality with int tuples still works (``1.0 == 1``).
 Dimension = tuple[float, float, float, float, float, float, float]
+
+# Homoglyph folding applied to symbols on parse (after NFC normalization,
+# which already folds U+2126 OHM SIGN into U+03A9 GREEK CAPITAL OMEGA):
+# GREEK SMALL MU -> MICRO SIGN, the codepoint SHORT_PREFIX_FACTOR uses.
+_HOMOGLYPH_TRANSLATION = str.maketrans({"μ": "µ"})
 
 # Module-level dict that will be populated after NAMED_UNITS is created
 # This avoids the globals() check chicken-and-egg problem
@@ -190,7 +196,17 @@ class pmd_unit:
         # stripped. We do not split on whitespace (no implicit space-as-*),
         # which would conflict with multi-token named units like "charge #"
         # and with the SI-prefix fallback ("k eV" vs "keV").
-        unitSymbol = unitSymbol.strip()
+        #
+        # Unicode homoglyphs are folded to the codepoints used by the unit
+        # tables: NFC maps U+2126 OHM SIGN to U+03A9 GREEK CAPITAL OMEGA
+        # (the codepoint Unicode itself recommends, and the one NAMED_UNITS
+        # uses), and GREEK SMALL MU (U+03BC) is translated to MICRO SIGN
+        # (U+00B5), which is what SHORT_PREFIX_FACTOR keys on.
+        unitSymbol = (
+            unicodedata.normalize("NFC", unitSymbol)
+            .translate(_HOMOGLYPH_TRANSLATION)
+            .strip()
+        )
 
         # Check if known_unit dict has been populated
         if not known_unit:
@@ -877,7 +893,19 @@ def divide_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
     if s1 == s2:
         symbol = "1"
     else:
-        symbol = s1 + "/" + s2
+        # The parser is flat and left-associative ("a/b/c" means (a/b)/c), so
+        # writing f"{s1}/{s2}" with a *compound* divisor would regroup:
+        # V/(eV/c) emitted as "V/eV/c" reads back as V/(eV*c). Distribute the
+        # division across the divisor's tokens instead, inverting each of its
+        # operators: a/(b*c) -> a/b/c and a/(b/c) -> a/b*c. A compound
+        # numerator needs no such care — appended operators apply to the whole
+        # accumulated value under left association. An empty numerator symbol
+        # (the dimensionless identity) is emitted as "1" so the result does
+        # not start with a bare operator.
+        numerator = s1 if s1 else "1"
+        parts, ops = _tokenize_compound(s2)
+        inverted = ["/"] + ["*" if op == "/" else "/" for op in ops]
+        symbol = numerator + "".join(op + p for op, p in zip(inverted, parts))
     d1 = u1.unitDimension
     d2 = u2.unitDimension
     dim = tuple(a - b for a, b in zip(d1, d2))

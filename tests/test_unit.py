@@ -365,6 +365,49 @@ def test_multiply_same_symbol_round_trips() -> None:
     assert_round_trip(cubed)
 
 
+@pytest.mark.parametrize(
+    ("numerator", "divisor"),
+    [
+        ("V/m", "eV/c"),
+        ("V", "m*s"),
+        ("W", "m^2*s^-1"),
+        ("T", "kg*m/s"),
+        ("eV/c", "eV/c/s"),
+    ],
+)
+def test_divide_by_compound_divisor_round_trips(numerator: str, divisor: str) -> None:
+    """Regression: dividing by a compound unit must distribute the division
+    across the divisor's tokens (inverting its operators), because the flat,
+    left-associative parser regroups a naive ``"a/b/c"`` emission:
+    ``V/(eV/c)`` written as ``"V/eV/c"`` reads back as ``V/(eV*c)``.
+    """
+    assert_round_trip(pmd_unit(numerator) / pmd_unit(divisor))
+
+
+def test_divide_with_empty_numerator_symbol() -> None:
+    """The dimensionless identity (empty symbol) as numerator must emit
+    ``"1/..."``, not a malformed symbol starting with a bare operator."""
+    inv_m = pmd_unit("") / pmd_unit("m")
+    assert inv_m.unitSymbol == "1/m"
+    assert_round_trip(inv_m)
+
+
+def test_unicode_homoglyphs_normalized() -> None:
+    """U+2126 OHM SIGN folds (via NFC) into U+03A9 GREEK CAPITAL OMEGA -- the
+    codepoint NAMED_UNITS uses -- and GREEK SMALL MU (U+03BC) is translated to
+    MICRO SIGN (U+00B5), which SHORT_PREFIX_FACTOR keys on. Users pasting
+    either variant get the same unit. Explicit escapes are used here because
+    the variants are visually indistinguishable in source.
+    """
+    assert pmd_unit("\u2126") == pmd_unit("\u03a9")  # OHM SIGN == GREEK OMEGA
+    assert pmd_unit("\u2126").unitSymbol == "\u03a9"
+    assert math.isclose(pmd_unit("k\u2126").unitSI, 1e3)
+    assert pmd_unit("\u03bcm") == pmd_unit("\u00b5m")  # Greek mu == micro sign
+    assert pmd_unit("\u03bcm").unitSymbol == "\u00b5m"
+    assert math.isclose(pmd_unit("\u03bcm").unitSI, 1e-6)
+    assert math.isclose(pmd_unit("\u03bcrad").unitSI, 1e-6)
+
+
 def test_negative_power_normalizes_negative_zero() -> None:
     """Negative exponents must not produce ``-0.0`` in the dimension tuple.
 

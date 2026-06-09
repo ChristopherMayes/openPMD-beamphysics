@@ -206,6 +206,16 @@ def test_sqrt_unit_halves_dimension() -> None:
     assert pg_units("x_bar").unitDimension == (0.5, 0, 0, 0, 0, 0, 0)
 
 
+def test_norm_emit_4d_stored_as_m_squared() -> None:
+    """``norm_emit_4d`` is area-like (m^2). The stored symbol should be
+    ``m^2`` rather than the equivalent-but-clumsy ``m*m`` so plot labels
+    render cleanly."""
+    u = pg_units("norm_emit_4d")
+    assert u.unitSymbol == "m^2"
+    assert u.unitDimension == (2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    assert u.unitSI == 1
+
+
 def test_cov_units_with_prefixed_subkey() -> None:
     # Regression: pg_units used key.strip("cov_"), which strips the char set
     # {c,o,v,_} and mangled subkeys like "charge" -> "harge" (KeyError).
@@ -259,6 +269,61 @@ def test_equality_is_value_based_per_standard() -> None:
 
 def test_hashability() -> None:
     assert len({pmd_unit("T"), pmd_unit("eV"), pmd_unit("T")}) == 2
+
+
+def test_pow_operator_matches_power_unit() -> None:
+    """``u ** n`` is sugar for ``power_unit(u, n)`` and must agree on the
+    stored symbol, SI factor, and dimension for both integer and fractional
+    exponents (including compound bases that need distribution)."""
+    from beamphysics.units import power_unit
+
+    for base, exp in [
+        (pmd_unit("m"), 2),
+        (pmd_unit("m"), 0.5),
+        (pmd_unit("eV*s"), 2),
+        (pmd_unit("m^2*s^-1"), 3),
+    ]:
+        via_op = base**exp
+        via_fn = power_unit(base, exp)
+        assert via_op.unitSymbol == via_fn.unitSymbol
+        assert via_op.unitSI == via_fn.unitSI
+        assert via_op.unitDimension == via_fn.unitDimension
+
+
+def test_compatible_with_is_dimension_only() -> None:
+    """``compatible_with`` is a pure-dimension check: equal-dimension units
+    are compatible regardless of SI scale, and non-pmd_unit operands raise."""
+    # Equal dimension, different SI scale -> still compatible.
+    assert pmd_unit("eV").compatible_with(pmd_unit("J"))
+    assert pmd_unit("J").compatible_with(pmd_unit("eV"))
+    # Different syntax, same physical unit.
+    assert pmd_unit("Hz").compatible_with(pmd_unit("1/s"))
+    # Different dimensions -> incompatible.
+    assert not pmd_unit("m").compatible_with(pmd_unit("s"))
+    # Reflexive and symmetric.
+    u = pmd_unit("T*m")
+    assert u.compatible_with(u)
+    # Type guard.
+    with pytest.raises(TypeError):
+        pmd_unit("m").compatible_with("m")
+
+
+def test_conversion_factor_to_round_trips_and_rejects_mismatch() -> None:
+    """``conversion_factor_to`` returns ``self.unitSI / other.unitSI`` after
+    a dimension check; multiplying a value by it must move it from ``self``
+    to ``other``. Incompatible dimensions raise ``ValueError``."""
+    # Same-dimension conversion: 1 eV in joules == e_charge.
+    fac = pmd_unit("eV").conversion_factor_to(pmd_unit("J"))
+    assert fac == pmd_unit("eV").unitSI / pmd_unit("J").unitSI
+    # Round-trip: km -> m -> km.
+    km, m = pmd_unit("km"), pmd_unit("m")
+    assert km.conversion_factor_to(m) == 1000.0
+    assert m.conversion_factor_to(km) == 0.001
+    # Equal units yield factor 1.
+    assert pmd_unit("Hz").conversion_factor_to(pmd_unit("1/s")) == 1.0
+    # Incompatible dimensions raise.
+    with pytest.raises(ValueError, match="Incompatible units"):
+        pmd_unit("m").conversion_factor_to(pmd_unit("s"))
 
 
 def test_divide() -> None:

@@ -360,6 +360,81 @@ class pmd_unit:
     def __truediv__(self, other) -> pmd_unit:
         return divide_units(self, other)
 
+    def __pow__(self, power: float) -> pmd_unit:
+        return power_unit(self, power)
+
+    def compatible_with(self, other: pmd_unit) -> bool:
+        """Return ``True`` when ``other`` has the same dimension as ``self``.
+
+        Compatibility is a pure-dimension check: two units are compatible
+        iff a value expressed in one can be converted to the other by a
+        single multiplicative SI factor (see :meth:`conversion_factor_to`).
+        It does *not* require equal :attr:`unitSI`, so e.g. ``eV`` and
+        ``J`` are compatible.
+
+        Parameters
+        ----------
+        other : pmd_unit
+            The unit to compare against.
+
+        Returns
+        -------
+        bool
+            ``True`` iff ``self.unitDimension == other.unitDimension``.
+
+        Examples
+        --------
+        >>> pmd_unit("eV").compatible_with(pmd_unit("J"))
+        True
+        >>> pmd_unit("Hz").compatible_with(pmd_unit("1/s"))
+        True
+        >>> pmd_unit("m").compatible_with(pmd_unit("s"))
+        False
+        """
+        if not isinstance(other, pmd_unit):
+            raise TypeError(
+                f"compatible_with expects a pmd_unit, got {type(other).__name__}"
+            )
+        return self.unitDimension == other.unitDimension
+
+    def conversion_factor_to(self, other: pmd_unit) -> float:
+        """Return the factor that converts a value in ``self`` to ``other``.
+
+        For a value ``x`` measured in ``self``, the value in ``other`` is
+        ``x * self.conversion_factor_to(other)``. Equivalent to
+        ``self.unitSI / other.unitSI`` after a dimension check.
+
+        Parameters
+        ----------
+        other : pmd_unit
+            The target unit. Must have the same :attr:`unitDimension` as
+            ``self``.
+
+        Returns
+        -------
+        float
+            Multiplicative factor mapping values in ``self`` to ``other``.
+
+        Raises
+        ------
+        ValueError
+            If ``other`` is not dimensionally :meth:`compatible_with` ``self``.
+
+        Examples
+        --------
+        >>> pmd_unit("eV").conversion_factor_to(pmd_unit("J"))
+        1.602176634e-19
+        >>> pmd_unit("km").conversion_factor_to(pmd_unit("m"))
+        1000.0
+        """
+        if not self.compatible_with(other):
+            raise ValueError(
+                f"Incompatible units: {self.unitSymbol!r} (dimension "
+                f"{self.unitDimension}) cannot be converted to "
+                f"{other.unitSymbol!r} (dimension {other.unitDimension})."
+            )
+        return self.unitSI / other.unitSI
+
     def __eq__(self, other) -> bool:
         # Per the openPMD standard, a unit is defined by (unitSI,
         # unitDimension); the symbol is a presentational hint. Two units are
@@ -1263,7 +1338,7 @@ for k in ["power"]:
 for k in ["norm_emit_x", "norm_emit_y"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("m")
 for k in ["norm_emit_4d"]:
-    PARTICLEGROUP_UNITS[k] = pmd_unit("m") * pmd_unit("m")
+    PARTICLEGROUP_UNITS[k] = pmd_unit("m") ** 2
 for k in ["Lz"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("m") * pmd_unit("eV/c")
 for k in ["xp", "yp"]:
@@ -1422,13 +1497,16 @@ def read_dataset_and_unit_h5(h5, expected_unit=None, convert=True):
         # Try to get unit
         expected_unit = pmd_unit(expected_unit)
 
-    # Check dimensions
-    du = u / expected_unit
-
-    assert du.unitDimension == (0, 0, 0, 0, 0, 0, 0), "incompatible units"
+    if not u.compatible_with(expected_unit):
+        raise ValueError(
+            f"Incompatible units: file unit {u.unitSymbol!r} (dimension "
+            f"{u.unitDimension}) does not match expected "
+            f"{expected_unit.unitSymbol!r} (dimension "
+            f"{expected_unit.unitDimension})."
+        )
 
     if convert:
-        fac = du.unitSI
+        fac = u.conversion_factor_to(expected_unit)
         return fac * np.array(h5), expected_unit
     else:
         return np.array(h5), u

@@ -113,6 +113,12 @@ class pmd_unit:
     >>> pmd_unit('kg*m/s')
     pmd_unit('kg*m/s', 1, (1.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0))
 
+    Parsing is left-associative ('V/eV/c' means '(V/eV)/c'); parentheses
+    group a sub-expression into a single operand:
+
+    >>> pmd_unit('V/(eV/c)')
+    pmd_unit('V/(eV/c)', 1.8711573470618972e+27, (1.0, 0.0, -2.0, -1.0, 0.0, 0.0, 0.0))
+
     Alternatively, use the `from_symbol` class method for explicit symbol lookup:
 
     >>> pmd_unit.from_symbol('A*s')
@@ -241,20 +247,18 @@ class pmd_unit:
         if "*" in unitSymbol or "/" in unitSymbol or "^" in unitSymbol:
             parts, operators = _tokenize_compound(unitSymbol)
 
-            # Reject malformed compound input (empty operand around an
-            # operator). Previously these silently parsed because the empty
-            # token resolved to the identity (""): "m*" -> m*1 = m, "/m" -> 1/m.
+            # Reject empty operands around an operator ("m*", "/m", "m**s").
             if any(p == "" for p in parts):
                 raise ValueError(
                     f"Malformed unit symbol {unitSymbol!r}: empty operand around an operator."
                 )
 
-            # Parse the first part (may include ^power)
-            result = cls._parse_single_unit(parts[0])
-
-            # Process remaining parts
-            for op, part in zip(operators, parts[1:]):
-                unit_obj = cls._parse_single_unit(part)
+            # Parse every token, then combine. A parenthesized token like
+            # "(eV/c)" recursively parses its inner expression as a unit of
+            # its own.
+            token_units = [cls._parse_single_unit(p) for p in parts]
+            result = token_units[0]
+            for op, unit_obj in zip(operators, token_units[1:]):
                 if op == "*":
                     result = result * unit_obj
                 elif op == "/":
@@ -262,8 +266,18 @@ class pmd_unit:
 
             # Canonical symbol: stripped tokens joined by the original
             # operators with no whitespace. So "eV / c" and "eV/c" share a
-            # symbol (and therefore compare equal / hash identically).
-            result._unitSymbol = _join_compound(parts, operators)
+            # symbol (and therefore compare equal / hash identically). A
+            # parenthesized token is re-emitted from its parsed unit, so
+            # "( eV / c )" canonicalizes to "(eV/c)" — and the parens are
+            # dropped entirely when the group is atomic ("(m)" -> "m").
+            canonical_parts = []
+            for p, u in zip(parts, token_units):
+                if p.startswith("(") and p.endswith(")") and _parens_balanced(p[1:-1]):
+                    s = u.unitSymbol
+                    canonical_parts.append(s if _is_atomic_symbol(s) else f"({s})")
+                else:
+                    canonical_parts.append(p)
+            result._unitSymbol = _join_compound(canonical_parts, operators)
             return result
 
         # Single token, not directly known: delegate to _parse_single_unit,
@@ -309,6 +323,16 @@ class pmd_unit:
             result = power_unit(base_unit, 0.5)
             result._unitSymbol = f"sqrt({base_unit.unitSymbol})"
             return result
+
+        # Parenthesized grouping: "(eV/c)" parses the inner expression as a
+        # unit of its own, so "V/(eV/c)" divides by the whole group and
+        # "(eV*s)^2" exponentiates it (via the power branches below, whose
+        # base recursion lands back here). The balanced-parens guard keeps
+        # adjacent groups with no operator, like "(a)(b)", from matching as
+        # one group with inner "a)(b".
+        paren_group_match = re.match(r"^\((.+)\)$", part)
+        if paren_group_match and _parens_balanced(paren_group_match.group(1)):
+            return cls.from_symbol(paren_group_match.group(1))
 
         # Check for power notation with parenthesized fraction: m^(-3/2)
         paren_power_match = re.match(r"^(.+)\^\((-?\d+)/(\d+)\)$", part)
@@ -530,8 +554,9 @@ class pmd_unit:
         The translation is purely structural — no algebraic simplification
         or reordering. Each atomic unit name is wrapped in ``\\mathrm{...}``
         (so it renders upright), ``*`` becomes ``{\\cdot}``, ``/`` is kept
-        as ``/``, ``^N`` becomes ``^{N}``, and ``sqrt(X)`` becomes
-        ``\\sqrt{...}`` (recursing on the inner expression).
+        as ``/``, ``^N`` becomes ``^{N}``, ``sqrt(X)`` becomes
+        ``\\sqrt{...}``, and a parenthesized group ``(X)`` keeps its parens
+        (recursing on the inner expression in both cases).
 
         The result is intended to be embedded inside an ``$...$`` mathtext
         block by the caller. The identity / empty symbol returns ``""``.
@@ -581,6 +606,13 @@ def _symbol_to_tex(symbol: str) -> str:
     if sqrt_match:
         inner = _symbol_to_tex(sqrt_match.group(1))
         return rf"\sqrt{{{inner}}}"
+
+    # Parenthesized group: "(X)" -> ( <recursed X> ). The balanced guard
+    # mirrors the parser's, so "(a)(b)" falls through to the atomic fallback
+    # rather than matching as one group.
+    paren_group_match = re.match(r"^\((.+)\)$", symbol)
+    if paren_group_match and _parens_balanced(paren_group_match.group(1)):
+        return "(" + _symbol_to_tex(paren_group_match.group(1)) + ")"
 
     # base^(n/d) -> \mathrm{base}^{n/d}
     paren_power_match = _TOKEN_PAREN_POWER_RE.match(symbol)
@@ -678,8 +710,21 @@ def _tokenize_compound(symbol: str) -> tuple[list[str], list[str]]:
     return [p.strip() for p in parts], operators
 
 
+def _parens_balanced(symbol: str) -> bool:
+    """True if parentheses in ``symbol`` are balanced and never close early."""
+    depth = 0
+    for char in symbol:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth < 0:
+                return False
+    return depth == 0
+
+
 def _join_compound(parts: Sequence[str], operators: Sequence[str]) -> str:
-    """Inverse of :func:`_tokenize_compound`: re-emit a flat compound symbol."""
+    """Inverse of :func:`_tokenize_compound`: re-emit a compound symbol."""
     out = parts[0]
     for op, p in zip(operators, parts[1:]):
         out += op + p
@@ -763,15 +808,8 @@ def _best_compound_match(
     """
     Find the simplest ``a*b`` or ``a/b`` of two named units that matches
     the target dimension and SI value exactly. Both ``a`` and ``b`` must be
-    atomic (no ``*`` or ``/`` in the symbol):
-
-    * A compound divisor would be regrouped under the parser's flat,
-      left-associative grouping (``a/(b/c)`` written as ``"a/b/c"`` reads
-      back as ``a/(b*c)``).
-    * A compound numerator parses correctly but reads as something else to
-      a human (``"J/m*s"`` left-associates to ``(J/m)*s`` -- correct, but
-      looks like ``J/(m*s)``). Restricting to atomic operands keeps the
-      emitted symbol unambiguous to readers.
+    atomic (no ``*`` or ``/`` in the symbol) — a readability rule for
+    simplify's output: ``T*m`` is a simplification, ``(J/m)*s`` is not.
 
     A dimensionless target is never matched: it is a pure number, and any
     ``a*b`` / ``a/b`` reaching it would pair two same-dimension units (e.g.
@@ -851,11 +889,8 @@ def multiply_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
 
     s1 = u1.unitSymbol
     s2 = u2.unitSymbol
-    # No special case for s1 == s2: writing "s1^2" would be wrong when s1 is
-    # itself compound (e.g. "kg*m^2" parses as kg*(m^2), not (kg*m)^2), and
-    # wrapping in parens ("(s1)^2") produces a symbol the parser cannot read
-    # back. The plain "s1*s2" form always round-trips and yields the correct
-    # dimension regardless of whether either operand is atomic or compound.
+    # Products never need grouping: appended operators apply to the whole
+    # accumulated value, so "s1*s2" round-trips for any operand structure.
     symbol = s1 + "*" + s2
     d1 = u1.unitDimension
     d2 = u2.unitDimension
@@ -893,19 +928,14 @@ def divide_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
     if s1 == s2:
         symbol = "1"
     else:
-        # The parser is flat and left-associative ("a/b/c" means (a/b)/c), so
-        # writing f"{s1}/{s2}" with a *compound* divisor would regroup:
-        # V/(eV/c) emitted as "V/eV/c" reads back as V/(eV*c). Distribute the
-        # division across the divisor's tokens instead, inverting each of its
-        # operators: a/(b*c) -> a/b/c and a/(b/c) -> a/b*c. A compound
-        # numerator needs no such care — appended operators apply to the whole
-        # accumulated value under left association. An empty numerator symbol
-        # (the dimensionless identity) is emitted as "1" so the result does
-        # not start with a bare operator.
+        # A compound divisor is parenthesized so the symbol keeps its
+        # grouping when re-parsed ("a/b/c" means (a/b)/c, not a/(b/c)).
+        # The numerator never needs parens: appended operators apply to the
+        # whole accumulated value. An empty numerator symbol (the
+        # dimensionless identity) is emitted as "1".
         numerator = s1 if s1 else "1"
-        parts, ops = _tokenize_compound(s2)
-        inverted = ["/"] + ["*" if op == "/" else "/" for op in ops]
-        symbol = numerator + "".join(op + p for op, p in zip(inverted, parts))
+        divisor = s2 if _is_atomic_symbol(s2) else f"({s2})"
+        symbol = f"{numerator}/{divisor}"
     d1 = u1.unitDimension
     d2 = u2.unitDimension
     dim = tuple(a - b for a, b in zip(d1, d2))
@@ -971,10 +1001,9 @@ def power_unit(u: pmd_unit, power: float) -> pmd_unit:
     if symbol in ["", "1"]:
         new_symbol = symbol
     elif "*" in symbol or "/" in symbol:
-        # Distribute the exponent across a compound symbol. Naively writing
-        # "compound^n" is wrong: the parser is flat and left-associative, so
-        # "eV*s^2" parses as eV*(s^2), not (eV*s)^2. Instead, multiply each
-        # token's own exponent by ``power`` and re-emit.
+        # Distribute the exponent across the tokens of a compound symbol:
+        # (eV*s)^2 -> "eV^2*s^2". The distributed form is the conventional
+        # spelling and composes with existing per-token exponents.
         new_symbol = _distribute_power_in_symbol(symbol, power)
     else:
         new_symbol = _format_power(symbol, power)

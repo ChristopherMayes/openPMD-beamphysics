@@ -72,17 +72,17 @@ def test_simplify_electric_potential_volt() -> None:
 
 
 def test_simplify_division_by_compound_round_trips() -> None:
-    # Regression: a compound divisor (e.g. "W") must not be emitted as a
-    # bare "a/b/c" string that the flat, left-associative parser regroups.
+    # simplify() output must re-parse to the same unit, including when the
+    # input was built by dividing by a compound unit.
     simplified = (pmd_unit("V/m") / pmd_unit("W")).simplify()
     assert_round_trip(simplified)
 
 
 @pytest.mark.parametrize("si", [1e-3, 1e3, 1e-6, 2.0])
 def test_simplify_dimensionless_never_bare_prefix(si: float) -> None:
-    # Regression: an SI prefix on a dimensionless unit produced bogus symbols
-    # like "m" (re-parses as meters) or "k" (unparseable). The result must
-    # stay dimensionless and never be a bare SI prefix.
+    # A simplified dimensionless unit must stay dimensionless and must never
+    # be a bare SI prefix (which would be unparseable, or collide with a
+    # named unit like "m").
     result = pmd_unit("ratio", si, (0, 0, 0, 0, 0, 0, 0)).simplify()
     assert result.unitDimension == (0, 0, 0, 0, 0, 0, 0)
     assert result.unitSymbol not in SHORT_PREFIX_FACTOR
@@ -159,9 +159,8 @@ def test_simplify_prefixed_output_round_trips() -> None:
 
 
 def test_simplify_dimensionless_ratio_not_compound() -> None:
-    # Regression: a pure-number ratio must not be "simplified" into a same-
-    # dimension compound like "kg/g" (mass/mass == 1000). It has no meaningful
-    # named form, so simplify returns it unchanged.
+    # A pure-number ratio has no meaningful named form: simplify must return
+    # it unchanged, never a same-dimension compound like "kg/g" (== 1000).
     u = pmd_unit("mrad/µrad")  # 1000, dimensionless
     s = u.simplify()
     assert s.unitDimension == (0, 0, 0, 0, 0, 0, 0)
@@ -195,8 +194,7 @@ def test_wakefield_unit_strings_parse(symbol: str) -> None:
 
 
 def test_sqrt_unit_halves_dimension() -> None:
-    # Regression: sqrt_unit used integer floor division (x // 2), so sqrt(m)
-    # collapsed to dimensionless instead of m^0.5.
+    # sqrt(m) has dimension m^0.5, carried as a fractional exponent.
     from beamphysics.units import sqrt_unit
 
     root_m = sqrt_unit(pmd_unit("m"))
@@ -217,8 +215,9 @@ def test_norm_emit_4d_stored_as_m_squared() -> None:
 
 
 def test_cov_units_with_prefixed_subkey() -> None:
-    # Regression: pg_units used key.strip("cov_"), which strips the char set
-    # {c,o,v,_} and mangled subkeys like "charge" -> "harge" (KeyError).
+    # The "cov_" prefix must be removed exactly (removeprefix, not
+    # strip("cov_"), which strips the char set {c,o,v,_} and would mangle
+    # subkeys like "charge").
     u = pg_units("cov_charge__x")
     assert u.unitDimension == (1, 0, 1, 1, 0, 0, 0)  # charge * length
     # Order independence and the common case still work.
@@ -227,9 +226,8 @@ def test_cov_units_with_prefixed_subkey() -> None:
 
 
 def test_parsing_compound_does_not_mutate_named_units() -> None:
-    # Regression: parsing a compound whose first token is a known unit used to
-    # mutate the shared NAMED_UNITS entry in place (e.g. parsing "m*rad" rewrote
-    # the global "m" symbol to "m*rad"), corrupting all later simplify() calls.
+    # Parsing must be side-effect-free: the shared NAMED_UNITS entries stay
+    # untouched no matter what symbols are parsed.
     before = [(u.unitSymbol, u.unitSI, u.unitDimension) for u in NAMED_UNITS]
     for symbol in ("m*rad", "rad*s", "rad*eV", "m/rad", "T*m", "kg*m/s"):
         pmd_unit(symbol)
@@ -351,11 +349,7 @@ def test_multiply() -> None:
 
 
 def test_multiply_same_symbol_round_trips() -> None:
-    """``m * m`` (and longer chains) must produce a re-parseable symbol.
-
-    Previously the s1 == s2 branch emitted ``"(m)^2"``, which the parser
-    rejected because bare parentheses are not a supported grouping.
-    """
+    """``m * m`` (and longer chains) must produce a re-parseable symbol."""
     squared = pmd_unit("m") * pmd_unit("m")
     assert squared.unitDimension == (2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     assert_round_trip(squared)
@@ -376,12 +370,56 @@ def test_multiply_same_symbol_round_trips() -> None:
     ],
 )
 def test_divide_by_compound_divisor_round_trips(numerator: str, divisor: str) -> None:
-    """Regression: dividing by a compound unit must distribute the division
-    across the divisor's tokens (inverting its operators), because the flat,
-    left-associative parser regroups a naive ``"a/b/c"`` emission:
-    ``V/(eV/c)`` written as ``"V/eV/c"`` reads back as ``V/(eV*c)``.
-    """
+    """Dividing by a compound unit parenthesizes the divisor, so the symbol
+    re-parses to the same unit (``"a/b/c"`` means ``(a/b)/c``, a different
+    grouping)."""
     assert_round_trip(pmd_unit(numerator) / pmd_unit(divisor))
+
+
+def test_parenthesized_grouping_parses() -> None:
+    """``(expr)`` groups: ``V/(eV/c)`` divides by the whole group, while
+    ``V/eV/c`` means ``(V/eV)/c``."""
+    u = pmd_unit("V/(eV/c)")
+    assert u == pmd_unit("V") / pmd_unit("eV/c")
+    assert u.unitSymbol == "V/(eV/c)"
+    assert_round_trip(u)
+    assert u != pmd_unit("V/eV/c")  # grouping matters
+
+    # Nested groups.
+    nested = pmd_unit("W/(V/(eV/c))")
+    assert nested == pmd_unit("W") / (pmd_unit("V") / pmd_unit("eV/c"))
+    assert_round_trip(nested)
+
+    # Redundant parens around an atomic token are dropped.
+    assert pmd_unit("V/(m)").unitSymbol == "V/m"
+
+    # Whitespace inside a group canonicalizes.
+    assert pmd_unit("V / ( eV / c )").unitSymbol == "V/(eV/c)"
+
+
+def test_parenthesized_group_with_power() -> None:
+    """A group can carry an exponent: ``(eV*s)^2`` is ``(eV*s)`` squared,
+    not ``eV*(s^2)``. Fractional exponents work through the same branch."""
+    assert pmd_unit("(eV*s)^2") == pmd_unit("eV*s") ** 2
+    assert_round_trip(pmd_unit("(eV*s)^2"))
+    assert pmd_unit("(eV/c)^2") == pmd_unit("eV/c") ** 2
+    assert pmd_unit("(m^2*s^2)^(1/2)") == pmd_unit("m*s")
+    # power_unit distribution emits paren-power tokens that re-parse.
+    assert_round_trip(pmd_unit("V/(eV/c)") ** 2)
+
+
+@pytest.mark.parametrize("symbol", ["()", "V/()", "(m", "m)", "(a)(b)", "(m*)"])
+def test_malformed_parens_rejected(symbol: str) -> None:
+    with pytest.raises(ValueError):
+        pmd_unit(symbol)
+
+
+def test_divide_units_emits_parenthesized_divisor() -> None:
+    """Dividing by a compound unit wraps the divisor in parens — readable and
+    round-trips now that the parser understands grouping."""
+    u = pmd_unit("V/m") / pmd_unit("eV/c")
+    assert u.unitSymbol == "V/m/(eV/c)"
+    assert_round_trip(u)
 
 
 def test_divide_with_empty_numerator_symbol() -> None:
@@ -445,12 +483,9 @@ def test_legacy_multitoken_name_still_parses() -> None:
 
 
 def test_power_unit_distributes_over_compound() -> None:
-    """``power_unit`` must distribute the exponent across compound symbols.
-
-    Previously ``power_unit(pmd_unit("eV*s"), 2)`` emitted ``"eV*s^2"``,
-    which the flat left-associative parser reads as ``eV*(s^2)`` — the
-    wrong dimension (length-2,time-1,...) instead of (length-4,time-(-2),...).
-    """
+    """``power_unit`` distributes the exponent across compound symbols:
+    ``(eV*s)^2`` emits ``eV^2*s^2``, matching the dimension and round-tripping
+    through the parser."""
     from beamphysics.units import power_unit
 
     squared = power_unit(pmd_unit("eV*s"), 2)
@@ -508,12 +543,8 @@ def test_latex_sqrt_form_not_accepted() -> None:
 
 
 def test_simplify_skips_compound_numerator() -> None:
-    """``_best_compound_match`` must not propose a compound numerator.
-
-    A product ``compound*atomic`` parses correctly (left-associative), but
-    reads as ``compound`` divided by something to a human — confusing and
-    error-prone. Only ``atomic*atomic`` and ``atomic/atomic`` are emitted.
-    """
+    """``simplify`` emits only ``atomic*atomic`` and ``atomic/atomic``
+    compounds — a compound operand is not a simplification."""
     # Any simplify output must not be of the form "X/Y*Z" or "X*Y/Z" where
     # one of the operands is itself compound; the constraint we test is the
     # round-trip property (which would fail under ambiguous emission).
@@ -597,6 +628,8 @@ def test_negative_unitSI_rejected(bad_si: float) -> None:
         ("sqrt(m)", r"\sqrt{\mathrm{m}}"),
         ("sqrt(kg*m)", r"\sqrt{\mathrm{kg}{\cdot}\mathrm{m}}"),
         ("charge #", r"\mathrm{charge #}"),
+        ("V/(eV/c)", r"\mathrm{V}/(\mathrm{eV}/\mathrm{c})"),
+        ("(eV/c)^2", r"(\mathrm{eV}/\mathrm{c})^{2}"),
     ],
 )
 def test_to_tex_translation(symbol: str, expected_tex: str) -> None:

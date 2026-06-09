@@ -20,17 +20,16 @@ def test_mathlabel_parses_unit_strings() -> None:
 
 
 def test_mathlabel_unparseable_string_fallback_keeps_cdot() -> None:
-    # Regression: the fallback for strings that are not valid unit symbols
-    # must still replace "*" with {\cdot} (as the pre-to_tex code did).
+    # The fallback for strings that are not valid unit symbols still
+    # replaces "*" with {\cdot}.
     label = mathlabel("x", units="foo*bar")
     assert r"{\cdot}" in label
     assert "*" not in label
 
 
 def test_mathlabel_dimensionless_unit_adds_no_parens() -> None:
-    # Regression: a pmd_unit is always truthy, so the non-TeX branch used to
-    # emit "x ()" for a dimensionless unit (empty symbol). Both branches must
-    # omit the unit annotation entirely.
+    # A dimensionless unit (empty symbol) adds no "()" annotation in either
+    # branch. (A pmd_unit is always truthy, so the check must use its str.)
     dimensionless = pmd_unit("1")
     assert mathlabel("x", units=pmd_unit(""), tex=False) == "x"
     assert mathlabel("x", units=pmd_unit(""), tex=True) == "$x$"

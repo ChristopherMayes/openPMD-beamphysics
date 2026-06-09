@@ -144,6 +144,11 @@ COMPOUND_SYMBOLS = [
     "W/m^2",
     "eV/c",
     "kg/m^3",
+    # Parenthesized grouping (pint parses parens natively).
+    "V/(eV/c)",
+    "J/(A*s)",  # = V
+    "(eV*s)^2",
+    "W/(V/(eV/c))",  # nested group
 ]
 
 

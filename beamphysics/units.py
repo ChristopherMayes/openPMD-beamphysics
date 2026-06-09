@@ -1064,7 +1064,6 @@ NAMED_UNITS = [
     pmd_unit("V/m", 1, "electric_field"),
     pmd_unit("V", 1, "electric_potential"),
     pmd_unit("c", c_light, "velocity"),  # Speed of light
-    pmd_unit("vel/c", c_light, "velocity"),
     pmd_unit("m/s", 1, "velocity"),
     pmd_unit("eV", e_charge, "energy"),
     pmd_unit("J", 1, "energy"),
@@ -1095,7 +1094,7 @@ known_unit.update(
     {
         "1": pmd_unit("", 1, "1"),
         "charge_num": pmd_unit("charge #", 1, "charge"),
-        "c_light": pmd_unit("vel/c", c_light, "velocity"),
+        "c_light": known_unit["c"],
         "deg": known_unit["degree"],
         "Ohm": known_unit["Ω"],  # ASCII alias for the ohm
     }

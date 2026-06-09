@@ -50,7 +50,6 @@ SYMBOL_TO_PINT = {
     "rad": "radian",
     "degree": "degree",
     "c": "speed_of_light",  # declared: dim velocity, unitSI = c_light
-    "vel/c": "speed_of_light",  # ditto (a normalized-velocity label)
     "charge #": "coulomb",  # declared: dim charge, unitSI = 1
     "W/rad^2": "W / radian**2",
     "W/m^2": "W / m**2",

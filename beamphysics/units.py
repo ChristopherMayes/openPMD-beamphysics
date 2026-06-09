@@ -335,12 +335,13 @@ class pmd_unit:
         raise ValueError(f"Unknown unitSymbol: {part}")
 
     def __hash__(self) -> int:
-        # The openPMD standard defines a unit by (unitSI, unitDimension); the
-        # symbol is presentational. Hash on unitDimension alone so that any
-        # two equal units (per __eq__'s isclose comparison on unitSI) share a
-        # hash bucket — preserving the hash/eq invariant even when unitSI
-        # values arrived via slightly different arithmetic paths.
-        return hash(self.unitDimension)
+        # The openPMD standard defines a unit by its dimension and conversion
+        # factor; the symbol is only presentational and is excluded here. Both
+        # defining fields contribute to the hash, using the same rounded
+        # conversion factor that __eq__ compares, so equal units always hash
+        # alike while units that merely share a dimension (such as eV and J)
+        # fall into different buckets.
+        return hash((self.unitDimension, _canonical_unitSI(self.unitSI)))
 
     @property
     def unitSymbol(self) -> str:
@@ -436,19 +437,18 @@ class pmd_unit:
         return self.unitSI / other.unitSI
 
     def __eq__(self, other) -> bool:
-        # Per the openPMD standard, a unit is defined by (unitSI,
-        # unitDimension); the symbol is a presentational hint. Two units are
-        # equal when both fields match, with math.isclose on unitSI to
-        # absorb floating-point drift from arithmetic like
-        # (eV/c) * c -> eV (the eV value reconstructed through c_light
-        # round-tripping may differ from e_charge by 1 ULP).
+        # Per the openPMD standard, a unit is defined by its conversion factor
+        # and dimension; the symbol is only a presentational hint. Two units
+        # are therefore equal when their dimensions match and their conversion
+        # factors agree once rounded to the canonical precision. Rounding lets
+        # values that differ only by the rounding error of arithmetic such as
+        # (eV/c) * c -> eV still compare equal, and keeps this comparison
+        # consistent with __hash__.
         if not isinstance(other, self.__class__):
             return False
         if self.unitDimension != other.unitDimension:
             return False
-        return math.isclose(
-            self.unitSI, other.unitSI, rel_tol=_SIMPLIFY_REL_TOL, abs_tol=0.0
-        )
+        return _canonical_unitSI(self.unitSI) == _canonical_unitSI(other.unitSI)
 
     def __ne__(self, other) -> bool:
         return not self.__eq__(other)
@@ -601,6 +601,37 @@ def is_identity(u: pmd_unit) -> bool:
 _SIMPLIFY_REL_TOL = 1e-9
 _DIMENSIONLESS: Dimension = (0, 0, 0, 0, 0, 0, 0)
 
+# Number of significant figures to which unitSI is rounded before it is
+# compared or hashed. Twelve figures is precise enough to keep genuinely
+# different conversion factors apart (for example eV versus J, or meters
+# versus kilometers) while remaining coarse enough to ignore the tiny
+# rounding error that ordinary unit arithmetic introduces -- reconstructing
+# eV via (eV/c) * c, for instance, lands within roughly one part in 1e16 of
+# the original value.
+_UNITSI_SIG_FIGS = 12
+
+
+def _canonical_unitSI(unitSI: float) -> float:
+    """Round ``unitSI`` to a canonical value used by both ``__eq__`` and ``__hash__``.
+
+    Two units are considered equal when they share a dimension and their
+    rounded conversion factors are identical. Rounding to a fixed precision is
+    deliberate: it makes equality transitive, which ``math.isclose`` is not. A
+    transitive equality is what lets ``__hash__`` safely depend on the
+    conversion factor as well as the dimension. Were the hash to use the raw
+    factor, two units that compare equal but whose factors differ in their last
+    bits could hash differently and break the rule that equal objects must
+    share a hash. Folding the factor into the key (instead of hashing on the
+    dimension alone) keeps units of the same dimension but different scale,
+    such as ``eV`` and ``J``, in separate hash buckets.
+
+    Zero and non-finite factors are returned unchanged, since they have no
+    meaningful significant-figure representation.
+    """
+    if unitSI == 0 or not math.isfinite(unitSI):
+        return unitSI
+    return float(f"{unitSI:.{_UNITSI_SIG_FIGS - 1}e}")
+
 
 def _tokenize_compound(symbol: str) -> tuple[list[str], list[str]]:
     """Split ``symbol`` on top-level ``*`` and ``/`` (respecting parentheses).
@@ -688,7 +719,7 @@ def _best_atomic_match(
             continue
         prefix, pf = prefix_match
         # A prefix on a dimensionless unit is meaningless: the empty symbol
-        # becomes a bare prefix ("" -> "m", which re-parses as metres), and
+        # becomes a bare prefix ("" -> "m", which re-parses as meters), and
         # "mrad"/"krad" would imply an angle for a pure-number ratio. Only an
         # exact (unprefixed) dimensionless match is valid.
         if prefix != "" and u.unitDimension == _DIMENSIONLESS:

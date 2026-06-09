@@ -81,7 +81,7 @@ def test_simplify_division_by_compound_round_trips() -> None:
 @pytest.mark.parametrize("si", [1e-3, 1e3, 1e-6, 2.0])
 def test_simplify_dimensionless_never_bare_prefix(si: float) -> None:
     # Regression: an SI prefix on a dimensionless unit produced bogus symbols
-    # like "m" (re-parses as metres) or "k" (unparseable). The result must
+    # like "m" (re-parses as meters) or "k" (unparseable). The result must
     # stay dimensionless and never be a bare SI prefix.
     result = pmd_unit("ratio", si, (0, 0, 0, 0, 0, 0, 0)).simplify()
     assert result.unitDimension == (0, 0, 0, 0, 0, 0, 0)
@@ -265,6 +265,19 @@ def test_equality_is_value_based_per_standard() -> None:
     assert pmd_unit("eV") != pmd_unit("J")  # same dim, different unitSI
     # Hash invariant: equal objects must share a hash.
     assert hash(pmd_unit("1/s")) == hash(pmd_unit("Hz"))
+
+
+def test_hash_distinguishes_same_dimension_units() -> None:
+    """__hash__ keys on (dimension, canonical unitSI), not dimension alone, so
+    distinct same-dimension scales land in distinct buckets instead of all
+    colliding. The hash/eq invariant (equal -> same hash) is preserved."""
+    energy = [pmd_unit("eV"), pmd_unit("J"), pmd_unit("keV"), pmd_unit("MeV")]
+    # All share the energy dimension but are pairwise unequal (different SI).
+    assert len({hash(u) for u in energy}) == len(energy)
+    # Invariant still holds for an arithmetic-drifted equal pair.
+    rebuilt = pmd_unit("eV/c") * pmd_unit("c")
+    assert rebuilt == pmd_unit("eV")
+    assert hash(rebuilt) == hash(pmd_unit("eV"))
 
 
 def test_hashability() -> None:

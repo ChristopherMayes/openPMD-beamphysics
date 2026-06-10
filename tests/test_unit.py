@@ -266,9 +266,10 @@ def test_equality_is_value_based_per_standard() -> None:
 
 
 def test_hash_distinguishes_same_dimension_units() -> None:
-    """__hash__ keys on (dimension, canonical unitSI), not dimension alone, so
-    distinct same-dimension scales land in distinct buckets instead of all
-    colliding. The hash/eq invariant (equal -> same hash) is preserved."""
+    """The hash includes the rounded unitSI, not just the dimension, so
+    units that share a dimension but differ in scale (eV, keV, J) get
+    different hashes instead of all colliding in one bucket. Equal units
+    still hash equal."""
     energy = [pmd_unit("eV"), pmd_unit("J"), pmd_unit("keV"), pmd_unit("MeV")]
     # All share the energy dimension but are pairwise unequal (different SI).
     assert len({hash(u) for u in energy}) == len(energy)
@@ -431,11 +432,12 @@ def test_divide_with_empty_numerator_symbol() -> None:
 
 
 def test_unicode_homoglyphs_normalized() -> None:
-    """U+2126 OHM SIGN folds (via NFC) into U+03A9 GREEK CAPITAL OMEGA -- the
-    codepoint NAMED_UNITS uses -- and GREEK SMALL MU (U+03BC) is translated to
-    MICRO SIGN (U+00B5), which SHORT_PREFIX_FACTOR keys on. Users pasting
-    either variant get the same unit. Explicit escapes are used here because
-    the variants are visually indistinguishable in source.
+    """A pasted Ω or µ must parse no matter which of its visually identical
+    Unicode twins it is: OHM SIGN (U+2126) is converted to GREEK CAPITAL
+    OMEGA (U+03A9, the character in NAMED_UNITS), and GREEK SMALL MU
+    (U+03BC) to MICRO SIGN (U+00B5, the character in SHORT_PREFIX_FACTOR).
+    Explicit escapes are used here because the twins look the same in
+    source code.
     """
     assert pmd_unit("\u2126") == pmd_unit("\u03a9")  # OHM SIGN == GREEK OMEGA
     assert pmd_unit("\u2126").unitSymbol == "\u03a9"
@@ -639,8 +641,8 @@ def test_to_tex_translation(symbol: str, expected_tex: str) -> None:
     simplification, no reordering.
     """
     if symbol in ("", "1"):
-        # These can't be round-tripped through pmd_unit() with unitSI=0 (the
-        # empty/identity sentinel), so construct directly.
+        # pmd_unit("") and pmd_unit("1") with the default unitSI=0 would go
+        # through symbol lookup; construct directly to control the symbol.
         u = pmd_unit(symbol, unitSI=1, unitDimension="1")
     else:
         u = pmd_unit(symbol)
@@ -733,3 +735,98 @@ def test_plottable_array_smoke(value: float | list[float]) -> None:
     ]:
         res, *_ = plottable_array(value, lim=lim, nice=nice)
         np.testing.assert_allclose(actual=res, desired=value)
+
+
+def test_named_units_are_float_typed() -> None:
+    """Every construction path yields float dimension tuples and a float
+    unitSI, per the openPMD standard (float64 attributes). The string-name
+    dimension path must coerce the same way the tuple path does."""
+    for u in NAMED_UNITS:
+        assert all(isinstance(d, float) for d in u.unitDimension), u
+        assert isinstance(u.unitSI, float), u
+    assert all(isinstance(d, float) for d in pmd_unit("T").unitDimension)
+    assert isinstance(pmd_unit("m").unitSI, float)
+
+
+def test_write_unit_h5_emits_float64_and_reads_back_bytes() -> None:
+    """write_unit_h5 writes float64 unitSI/unitDimension; read_unit_h5
+    decodes bytes unitSymbol attrs (as written by older fixed-length-string
+    writers) so unit arithmetic works on the result."""
+    h5py = pytest.importorskip("h5py")
+    import io
+
+    from beamphysics.units import read_unit_h5, write_unit_h5
+
+    bio = io.BytesIO()
+    with h5py.File(bio, "w") as f:
+        g = f.create_group("g")
+        write_unit_h5(g, pmd_unit("T"))
+        assert f["g"].attrs["unitDimension"].dtype == np.float64
+        assert isinstance(f["g"].attrs["unitSI"], float)
+
+        gb = f.create_group("gb")
+        gb.attrs["unitSI"] = 1.0
+        gb.attrs["unitDimension"] = (1, 0, 0, 0, 0, 0, 0)
+        gb.attrs["unitSymbol"] = np.bytes_("m")  # legacy bytes encoding
+        u = read_unit_h5(gb)
+        assert u.unitSymbol == "m"
+        assert (u * pmd_unit("s")).unitSymbol == "m*s"  # arithmetic works
+
+
+def test_sqrt_product_parses() -> None:
+    """The whole-string sqrt() match must not swallow a product of sqrts:
+    the final ')' of 'sqrt(m)*sqrt(m)' is not the partner of the first '('."""
+    u = pmd_unit("sqrt(m)*sqrt(m)")
+    assert u.unitDimension == (1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    assert u.simplify().unitSymbol == "m"
+    assert_round_trip(u)
+    # Nested sqrt still parses.
+    assert pmd_unit("sqrt(sqrt(m))").unitDimension == (0.25, 0, 0, 0, 0, 0, 0)
+
+
+def test_slice_statistic_keys_have_units() -> None:
+    """The keys slice_statistics emits ('current', 'density') resolve."""
+    assert pg_units("current") == pmd_unit("A")
+    assert pg_units("density") == pmd_unit("C") / pmd_unit("m")
+
+
+def test_nice_scale_prefix_returns_python_float() -> None:
+    """No numpy scalar leakage in the public API."""
+    f, p = nice_scale_prefix(2e-10)
+    assert type(f) is float and (f, p) == (1e-12, "p")
+    f, p = nice_scale_prefix(0)
+    assert type(f) is float and p == ""
+
+
+def test_units_module_doctests() -> None:
+    """Keep the docstring examples in beamphysics.units honest."""
+    import doctest
+
+    import beamphysics.units as units_module
+
+    results = doctest.testmod(units_module)
+    assert results.failed == 0, f"{results.failed} doctest failure(s)"
+
+
+def test_sqrt_of_compound_inside_expression() -> None:
+    """All notation must work uniformly at any recursion depth: the parser
+    has a single recursive entry point (from_symbol), so a sqrt-of-compound
+    token behaves the same alone and inside a larger expression."""
+    alone = pmd_unit("sqrt(kg*m)")
+    for s in ("sqrt(kg*m)*s", "s*sqrt(kg*m)", "V/sqrt(kg*m)", "sqrt(kg*m)^2"):
+        u = pmd_unit(s)
+        assert_round_trip(u)
+    assert pmd_unit("sqrt(kg*m)*s").unitDimension == tuple(
+        a + b for a, b in zip(alone.unitDimension, pmd_unit("s").unitDimension)
+    )
+    assert pmd_unit("sqrt(kg*m)^2") == pmd_unit("kg*m")
+
+
+def test_single_token_spelling_preserved() -> None:
+    """A lone token keeps the user's spelling as the stored symbol; the
+    parsed value is canonical regardless."""
+    assert pmd_unit("m^(1/2)").unitSymbol == "m^(1/2)"
+    assert pmd_unit("(eV/c)^2").unitSymbol == "(eV/c)^2"
+    assert pmd_unit("(eV/c)").unitSymbol == "(eV/c)"
+    assert pmd_unit("(m)").unitSymbol == "m"  # redundant parens drop
+    assert pmd_unit("m^(1/2)") == pmd_unit("m^0.5")

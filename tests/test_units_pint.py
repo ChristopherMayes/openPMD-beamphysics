@@ -301,7 +301,8 @@ _PG_EXPECTED_GROUPS = {
         "twiss_norm_emit_y",
     ],
     "C": ["charge", "species_charge", "weight"],
-    "A": ["average_current"],
+    "A": ["average_current", "current"],
+    "C/m": ["density"],  # slice statistics: charge per slice length
     "W": ["power"],
     "m**2": ["norm_emit_4d"],
     "m*kg*m/s": ["Lz"],  # angular momentum = length * momentum

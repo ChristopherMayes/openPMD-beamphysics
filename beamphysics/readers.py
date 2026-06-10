@@ -133,7 +133,7 @@ def is_constant_component(h5):
     """
     Constant record component should have 'value' and 'shape'
     """
-    return "value" and "shape" in h5.attrs
+    return "value" in h5.attrs and "shape" in h5.attrs
 
 
 def constant_component_value(h5):
@@ -323,8 +323,14 @@ def component_str(particle_group, name):
     record_name = name.split("/")[0]
     expected_dimension = expected_record_unit_dimension[record_name]
     this_dimension = component_unit_dimension(g)
-    dname = dimension_name(this_dimension)
-    symbol = SI_symbol[dname]
+    # A file may carry a dimension this package has no name for (e.g. from
+    # another openPMD extension); describe it rather than raising KeyError.
+    try:
+        dname = dimension_name(this_dimension)
+        symbol = SI_symbol[dname]
+    except KeyError:
+        dname = str(tuple(this_dimension))
+        symbol = "?"
 
     s = name + " "
 

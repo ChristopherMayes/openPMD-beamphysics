@@ -34,9 +34,14 @@ Limit = tuple[Optional[float], Optional[float]]
 # path as integer ones. Equality with int tuples still works (``1.0 == 1``).
 Dimension = tuple[float, float, float, float, float, float, float]
 
-# Homoglyph folding applied to symbols on parse (after NFC normalization,
-# which already folds U+2126 OHM SIGN into U+03A9 GREEK CAPITAL OMEGA):
-# GREEK SMALL MU -> MICRO SIGN, the codepoint SHORT_PREFIX_FACTOR uses.
+# Some characters have look-alike twins in Unicode: the Greek letter µ and
+# the "micro sign", the Greek letter Ω and the "ohm sign". A pasted symbol
+# may contain either twin, and they are visually indistinguishable. The
+# parser converts each pair to the single character the unit tables use.
+# NFC normalization already converts OHM SIGN (U+2126) to GREEK CAPITAL
+# OMEGA (U+03A9); this table handles the mu pair, which NFC leaves alone:
+# GREEK SMALL MU (U+03BC) becomes MICRO SIGN (U+00B5), the character in
+# SHORT_PREFIX_FACTOR (and what Option-m types on a Mac).
 _HOMOGLYPH_TRANSLATION = str.maketrans({"μ": "µ"})
 
 # Module-level dict that will be populated after NAMED_UNITS is created
@@ -103,15 +108,15 @@ class pmd_unit:
     If unitSI=0 (default), `pmd_unit` may be initialized with a known symbol:
 
     >>> pmd_unit('T')
-    pmd_unit('T', 1, (0.0, 1.0, -2.0, -1.0, 0.0, 0.0, 0.0))
+    pmd_unit('T', 1.0, (0.0, 1.0, -2.0, -1.0, 0.0, 0.0, 0.0))
 
     Compound units can be created using * and / operators in the symbol string:
 
     >>> pmd_unit('eV/c')
-    pmd_unit('eV/c', 5.344286295439521e-28, (1.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0))
+    pmd_unit('eV/c', 5.344285992678308e-28, (1.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0))
 
     >>> pmd_unit('kg*m/s')
-    pmd_unit('kg*m/s', 1, (1.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0))
+    pmd_unit('kg*m/s', 1.0, (1.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0))
 
     Parsing is left-associative ('V/eV/c' means '(V/eV)/c'); parentheses
     group a sub-expression into a single operand:
@@ -122,11 +127,11 @@ class pmd_unit:
     Alternatively, use the `from_symbol` class method for explicit symbol lookup:
 
     >>> pmd_unit.from_symbol('A*s')
-    pmd_unit('A*s', 1, (0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0))
+    pmd_unit('A*s', 1.0, (0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0))
 
-    Equality follows the openPMD standard: the symbol is presentational and
-    two units are equal when they share the same ``unitDimension`` and
-    ``unitSI`` (compared with a small relative tolerance):
+    Equality follows the openPMD standard: the symbol is only a display
+    label, and two units are equal when they share the same ``unitDimension``
+    and ``unitSI`` (compared with a small relative tolerance):
 
     >>> pmd_unit("T") == pmd_unit("T")
     True
@@ -147,8 +152,8 @@ class pmd_unit:
         # The openPMD standard defines unitSI as a positive conversion factor
         # to the corresponding SI unit. Negative scales would invert the sign
         # of every value an instrument writes through this unit, so they are
-        # rejected here. (unitSI=0 is permitted as the sentinel that triggers
-        # symbol lookup below.)
+        # rejected here. (unitSI=0 is permitted: it means "not given", and
+        # the symbol is looked up instead, below.)
         if unitSI < 0:
             raise ValueError(
                 f"unitSI must be non-negative (got {unitSI!r}). "
@@ -160,7 +165,8 @@ class pmd_unit:
         # Otherwise look the symbol up / parse it.
         if unitSI != 0 or not known_unit:
             self._unitSymbol = unitSymbol
-            self._unitSI = unitSI
+            # float, per the openPMD standard (unitSI is a float64 attribute).
+            self._unitSI = float(unitSI)
             if isinstance(unitDimension, str):
                 self._unitDimension = dimension(unitDimension)
             else:
@@ -176,11 +182,18 @@ class pmd_unit:
         """
         Create a pmd_unit from a symbol string, with automatic lookup and parsing.
 
-        This method handles:
-        - Simple known units (e.g., 'eV', 'm', 'T')
-        - Compound expressions with operators (e.g., 'eV/c', 'kg*m/s')
-        - Power notation (e.g., 'm^2', 'eV^2', 's^-1')
-        - Square root notation (e.g., 'sqrt(m)')
+        This is the single, recursive parser. It handles:
+
+        - Known units ('eV', 'm', 'T') and aliases ('Ohm', 'deg')
+        - Compound expressions ('eV/c', 'kg*m/s') — each token recurses here
+        - Parenthesized grouping ('V/(eV/c)', '(eV*s)^2')
+        - Power notation ('m^2', 's^-1', 'm^(-3/2)')
+        - Square root notation ('sqrt(m)', 'sqrt(kg*m)')
+        - SI-prefixed known units ('keV', 'mm', 'mrad')
+
+        Every recursive call parses a strictly shorter string (a token, a
+        sqrt/group inner expression, or a power base) — never the unchanged
+        input — so parsing always terminates.
 
         Parameters
         ----------
@@ -197,21 +210,24 @@ class pmd_unit:
         ValueError
             If the symbol is not found in known_unit dict or cannot be parsed.
         """
-        # Strip outer whitespace so users can write "  eV/c" or "kg*m / s".
-        # Per-token whitespace inside the operator-split branch below is also
-        # stripped. We do not split on whitespace (no implicit space-as-*),
-        # which would conflict with multi-token named units like "charge #"
-        # and with the SI-prefix fallback ("k eV" vs "keV").
+        # Canonicalize the input:
         #
-        # Unicode homoglyphs are folded to the codepoints used by the unit
-        # tables: NFC maps U+2126 OHM SIGN to U+03A9 GREEK CAPITAL OMEGA
-        # (the codepoint Unicode itself recommends, and the one NAMED_UNITS
-        # uses), and GREEK SMALL MU (U+03BC) is translated to MICRO SIGN
-        # (U+00B5), which is what SHORT_PREFIX_FACTOR keys on.
-        unitSymbol = (
+        # - Look-alike Unicode characters are converted to the ones the
+        #   unit tables use, so a pasted Ω or µ parses no matter which of
+        #   its visually identical twins it actually is. NFC normalization
+        #   handles the ohm/omega pair; _HOMOGLYPH_TRANSLATION handles
+        #   Greek mu vs the micro sign (see its definition for details).
+        # - Outer whitespace and whitespace around "^" are stripped, so
+        #   "  eV/c", "kg*m / s", and "m ^ 2" parse like their tight forms.
+        #   We do not split on whitespace (no implicit space-as-*), which
+        #   would conflict with multi-token named units like "charge #" and
+        #   with the SI-prefix fallback ("k eV" vs "keV").
+        unitSymbol = re.sub(
+            r"\s*\^\s*",
+            "^",
             unicodedata.normalize("NFC", unitSymbol)
             .translate(_HOMOGLYPH_TRANSLATION)
-            .strip()
+            .strip(),
         )
 
         # Check if known_unit dict has been populated
@@ -221,42 +237,26 @@ class pmd_unit:
                 "Use pmd_unit(unitSymbol, unitSI, unitDimension) with explicit parameters instead."
             )
 
-        # known_unit exists - check if it's already a known unit (priority)
+        # Known unit (or alias) lookup has priority. Return a shallow copy,
+        # never the shared cached object: callers reassign ``_unitSymbol`` on
+        # the result, which would otherwise mutate the global NAMED_UNITS
+        # entry. (All three slots are immutable: str, float, tuple.)
         if unitSymbol in known_unit:
-            # Shallow copy preserves the cached dimension/SI without
-            # re-coercing through make_dimension, while still letting callers
-            # reassign _unitSymbol without mutating the shared NAMED_UNITS
-            # entry. (All three slots are immutable: str, float, tuple.)
             result = copy.copy(known_unit[unitSymbol])
             result._unitSymbol = unitSymbol
             return result
 
-        # Handle sqrt() notation: sqrt(X) = X^0.5. The stored symbol is
-        # always the canonical, whitespace-free "sqrt(<inner>)" form so that
-        # "sqrt( m )", "sqrt(m)", and "  sqrt(m)" all compare equal and hash
-        # identically.
-        sqrt_match = re.match(r"^sqrt\(\s*(.+?)\s*\)$", unitSymbol)
-        if sqrt_match:
-            inner = sqrt_match.group(1)
-            base_unit = cls.from_symbol(inner)
-            result = power_unit(base_unit, 0.5)
-            result._unitSymbol = f"sqrt({base_unit.unitSymbol})"
-            return result
-
-        # Not in known_unit - try operator parsing (e.g., "A*s", "kg*m/s", "m^2")
-        if "*" in unitSymbol or "/" in unitSymbol or "^" in unitSymbol:
-            parts, operators = _tokenize_compound(unitSymbol)
-
+        # Compound expression: split on top-level "*" and "/" (parentheses
+        # protect their contents) and recurse on each token.
+        parts, operators = _tokenize_compound(unitSymbol)
+        if len(parts) > 1:
             # Reject empty operands around an operator ("m*", "/m", "m**s").
             if any(p == "" for p in parts):
                 raise ValueError(
                     f"Malformed unit symbol {unitSymbol!r}: empty operand around an operator."
                 )
 
-            # Parse every token, then combine. A parenthesized token like
-            # "(eV/c)" recursively parses its inner expression as a unit of
-            # its own.
-            token_units = [cls._parse_single_unit(p) for p in parts]
+            token_units = [cls.from_symbol(p) for p in parts]
             result = token_units[0]
             for op, unit_obj in zip(operators, token_units[1:]):
                 if op == "*":
@@ -280,46 +280,17 @@ class pmd_unit:
             result._unitSymbol = _join_compound(canonical_parts, operators)
             return result
 
-        # Single token, not directly known: delegate to _parse_single_unit,
-        # which handles power/sqrt notation and the SI-prefix fallback (and
-        # raises "Unknown unitSymbol" if it is genuinely unparseable).
-        return cls._parse_single_unit(unitSymbol)
+        # --- Single token from here on. ---
 
-    @classmethod
-    def _parse_single_unit(cls, part: str) -> pmd_unit:
-        """
-        Parse a single unit that may include a power (e.g., 'm^2', 'eV', 's^-1')
-        or sqrt notation (e.g., 'sqrt(m)').
-
-        Parameters
-        ----------
-        part : str
-            A single unit token, optionally with power or sqrt notation.
-
-        Returns
-        -------
-        pmd_unit
-            The parsed unit object.
-        """
-        # Strip whitespace around the token and around any "^" so callers can
-        # write "m ^ 2" or "  m^2" interchangeably with "m^2".
-        part = re.sub(r"\s*\^\s*", "^", part.strip())
-
-        # Check if it's a known unit first. Return a shallow copy, never the
-        # shared cached object: callers (e.g. from_symbol) reassign
-        # ``_unitSymbol`` on the result, which would otherwise mutate the
-        # global NAMED_UNITS entry.
-        if part in known_unit:
-            result = copy.copy(known_unit[part])
-            result._unitSymbol = part
-            return result
-
-        # Check for sqrt() notation. Whitespace inside the parens is stripped
-        # and the stored symbol is canonicalized to "sqrt(<inner>)".
-        sqrt_match = re.match(r"^sqrt\(\s*(.+?)\s*\)$", part)
-        if sqrt_match:
-            inner = sqrt_match.group(1)
-            base_unit = cls._parse_single_unit(inner)
+        # sqrt() notation: sqrt(X) = X^0.5. The stored symbol is always the
+        # canonical, whitespace-free "sqrt(<inner>)" form so that "sqrt( m )"
+        # and "sqrt(m)" compare equal and hash identically. The
+        # balanced-parens guard keeps a product like "sqrt(m)*sqrt(m)" (whose
+        # final ")" is not the partner of the first "(") from being consumed
+        # as one sqrt.
+        sqrt_match = re.match(r"^sqrt\(\s*(.+?)\s*\)$", unitSymbol)
+        if sqrt_match and _parens_balanced(sqrt_match.group(1)):
+            base_unit = cls.from_symbol(sqrt_match.group(1))
             result = power_unit(base_unit, 0.5)
             result._unitSymbol = f"sqrt({base_unit.unitSymbol})"
             return result
@@ -330,28 +301,36 @@ class pmd_unit:
         # base recursion lands back here). The balanced-parens guard keeps
         # adjacent groups with no operator, like "(a)(b)", from matching as
         # one group with inner "a)(b".
-        paren_group_match = re.match(r"^\((.+)\)$", part)
+        paren_group_match = re.match(r"^\((.+)\)$", unitSymbol)
         if paren_group_match and _parens_balanced(paren_group_match.group(1)):
-            return cls.from_symbol(paren_group_match.group(1))
+            result = cls.from_symbol(paren_group_match.group(1))
+            # Preserve the grouping in the stored symbol unless it is
+            # redundant: "(eV/c)" stays, "(m)" canonicalizes to "m".
+            s = result.unitSymbol
+            if not _is_atomic_symbol(s):
+                result._unitSymbol = f"({s})"
+            return result
 
-        # Check for power notation with parenthesized fraction: m^(-3/2)
-        paren_power_match = re.match(r"^(.+)\^\((-?\d+)/(\d+)\)$", part)
+        # Power notation with a parenthesized fraction: m^(-3/2)
+        paren_power_match = re.match(r"^(.+)\^\((-?\d+)/(\d+)\)$", unitSymbol)
         if paren_power_match:
-            base_symbol = paren_power_match.group(1)
-            numerator = int(paren_power_match.group(2))
-            denominator = int(paren_power_match.group(3))
-            power = numerator / denominator
-            base_unit = cls._parse_single_unit(base_symbol)
-            return power_unit(base_unit, power)
+            power = int(paren_power_match.group(2)) / int(paren_power_match.group(3))
+            base_unit = cls.from_symbol(paren_power_match.group(1))
+            result = power_unit(base_unit, power)
+            # Preserve the user's spelling ("m^(1/2)", not "m^0.5").
+            result._unitSymbol = unitSymbol
+            return result
 
-        # Check for power notation: m^2, m^-1, m^0.5
-        power_match = re.match(r"^(.+)\^(-?\d+(?:\.\d+)?)$", part)
+        # Power notation: m^2, m^-1, m^0.5 (the base recurses, so sqrt(m)^2
+        # and (eV*s)^2 work)
+        power_match = re.match(r"^(.+)\^(-?\d+(?:\.\d+)?)$", unitSymbol)
         if power_match:
-            base_symbol = power_match.group(1)
-            power = float(power_match.group(2))
-            # Recursively parse base (could be sqrt(m)^2)
-            base_unit = cls._parse_single_unit(base_symbol)
-            return power_unit(base_unit, power)
+            base_unit = cls.from_symbol(power_match.group(1))
+            result = power_unit(base_unit, float(power_match.group(2)))
+            # Preserve the user's spelling ("(eV*s)^2", not the distributed
+            # "eV^2*s^2" that power_unit emits).
+            result._unitSymbol = unitSymbol
+            return result
 
         # SI-prefix fallback: e.g. "keV" -> kilo + "eV", "mm" -> milli + "m",
         # "mrad" -> milli + "rad". Only matches when the remainder is itself a
@@ -360,27 +339,28 @@ class pmd_unit:
         # (deca) wins over "d" (deci). This is the inverse of the prefixed
         # symbols simplify() emits, so those always round-trip.
         for prefix in sorted(SHORT_PREFIX_FACTOR, key=len, reverse=True):
-            if prefix == "" or not part.startswith(prefix):
+            if prefix == "" or not unitSymbol.startswith(prefix):
                 continue
-            remainder = part[len(prefix) :]
+            remainder = unitSymbol[len(prefix) :]
             if remainder in ("", "1") or remainder not in known_unit:
                 continue
             base = known_unit[remainder]
             factor = SHORT_PREFIX_FACTOR[prefix]
             return cls(
-                part, unitSI=factor * base.unitSI, unitDimension=base.unitDimension
+                unitSymbol,
+                unitSI=factor * base.unitSI,
+                unitDimension=base.unitDimension,
             )
 
         # Unknown unit
-        raise ValueError(f"Unknown unitSymbol: {part}")
+        raise ValueError(f"Unknown unitSymbol: {unitSymbol}")
 
     def __hash__(self) -> int:
         # The openPMD standard defines a unit by its dimension and conversion
-        # factor; the symbol is only presentational and is excluded here. Both
-        # defining fields contribute to the hash, using the same rounded
-        # conversion factor that __eq__ compares, so equal units always hash
-        # alike while units that merely share a dimension (such as eV and J)
-        # fall into different buckets.
+        # factor; the symbol is only a display label and is excluded here.
+        # The hash uses the same rounded conversion factor that __eq__
+        # compares, so equal units always hash alike, while units that merely
+        # share a dimension (such as eV and J) hash differently.
         return hash((self.unitDimension, _canonical_unitSI(self.unitSI)))
 
     @property
@@ -477,13 +457,13 @@ class pmd_unit:
         return self.unitSI / other.unitSI
 
     def __eq__(self, other) -> bool:
-        # Per the openPMD standard, a unit is defined by its conversion factor
-        # and dimension; the symbol is only a presentational hint. Two units
+        # Per the openPMD standard, a unit is defined by its conversion
+        # factor and dimension; the symbol is only a display label. Two units
         # are therefore equal when their dimensions match and their conversion
-        # factors agree once rounded to the canonical precision. Rounding lets
-        # values that differ only by the rounding error of arithmetic such as
-        # (eV/c) * c -> eV still compare equal, and keeps this comparison
-        # consistent with __hash__.
+        # factors agree after rounding (_canonical_unitSI, shared with
+        # __hash__). The rounding lets results of arithmetic like
+        # (eV/c) * c -> eV compare equal to eV despite tiny floating-point
+        # differences.
         if not isinstance(other, self.__class__):
             return False
         if self.unitDimension != other.unitDimension:
@@ -664,14 +644,16 @@ def _canonical_unitSI(unitSI: float) -> float:
 
     Two units are considered equal when they share a dimension and their
     rounded conversion factors are identical. Rounding to a fixed precision is
-    deliberate: it makes equality transitive, which ``math.isclose`` is not. A
-    transitive equality is what lets ``__hash__`` safely depend on the
-    conversion factor as well as the dimension. Were the hash to use the raw
-    factor, two units that compare equal but whose factors differ in their last
-    bits could hash differently and break the rule that equal objects must
-    share a hash. Folding the factor into the key (instead of hashing on the
-    dimension alone) keeps units of the same dimension but different scale,
-    such as ``eV`` and ``J``, in separate hash buckets.
+    deliberate: it makes equality transitive (if a == b and b == c then
+    a == c), which a tolerance comparison like ``math.isclose`` cannot
+    guarantee — two values can each be within tolerance of a middle value but
+    not of each other. Transitivity is what lets ``__hash__`` include the
+    conversion factor: were the hash to use the raw factor, two units that
+    compare equal but differ in the last few bits could hash differently,
+    breaking the rule that equal objects must hash equal. Including the
+    factor in the hash (rather than hashing on the dimension alone) keeps
+    units of the same dimension but different scale, such as ``eV`` and
+    ``J``, from all colliding.
 
     Zero and non-finite factors are returned unchanged, since they have no
     meaningful significant-figure representation.
@@ -889,8 +871,9 @@ def multiply_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
 
     s1 = u1.unitSymbol
     s2 = u2.unitSymbol
-    # Products never need grouping: appended operators apply to the whole
-    # accumulated value, so "s1*s2" round-trips for any operand structure.
+    # Products never need parentheses: an operator appended on the right
+    # acts on everything to its left, so "s1*s2" reads back correctly no
+    # matter what s1 and s2 contain.
     symbol = s1 + "*" + s2
     d1 = u1.unitDimension
     d2 = u2.unitDimension
@@ -928,11 +911,11 @@ def divide_units(u1: pmd_unit, u2: pmd_unit) -> pmd_unit:
     if s1 == s2:
         symbol = "1"
     else:
-        # A compound divisor is parenthesized so the symbol keeps its
-        # grouping when re-parsed ("a/b/c" means (a/b)/c, not a/(b/c)).
-        # The numerator never needs parens: appended operators apply to the
-        # whole accumulated value. An empty numerator symbol (the
-        # dimensionless identity) is emitted as "1".
+        # A divisor that itself contains operators must be parenthesized,
+        # because "a/b/c" reads back as (a/b)/c, not a/(b/c). The numerator
+        # never needs parens: an operator appended on the right acts on
+        # everything to its left. A numerator with an empty symbol (the
+        # dimensionless unit) is written as "1".
         numerator = s1 if s1 else "1"
         divisor = s2 if _is_atomic_symbol(s2) else f"({s2})"
         symbol = f"{numerator}/{divisor}"
@@ -989,7 +972,7 @@ def power_unit(u: pmd_unit, power: float) -> pmd_unit:
     Examples
     --------
     >>> power_unit(pmd_unit("m"), 2)
-    pmd_unit('m^2', 1, (2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+    pmd_unit('m^2', 1.0, (2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
 
     >>> power_unit(pmd_unit("m"), 0.5)
     pmd_unit('m^0.5', 1.0, (0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
@@ -1101,7 +1084,9 @@ def make_dimension(dim: Sequence[int | float]) -> Dimension:
 
 def dimension(name: str) -> Dimension | None:
     try:
-        return DIMENSION[name]
+        # Coerce to the canonical float form so every construction path
+        # (string name or explicit tuple) yields the same Dimension type.
+        return make_dimension(DIMENSION[name])
     except KeyError:
         options = ", ".join(DIMENSION)
         raise ValueError(
@@ -1201,13 +1186,13 @@ def unit(symbol: str) -> pmd_unit:
 
     Examples
     --------
-    Old style (deprecated):
+    Old style (deprecated)::
 
-        >>> unit("eV/c")
+        unit("eV/c")
 
-    New style (preferred):
+    New style (preferred)::
 
-        >>> pmd_unit("eV/c")
+        pmd_unit("eV/c")
     """
     warnings.warn(
         "unit() is deprecated. Use pmd_unit() directly instead.",
@@ -1296,7 +1281,7 @@ def nice_scale_prefix(scale: float) -> tuple[float, str]:
     """
 
     if scale == 0:
-        return 1, ""
+        return 1.0, ""
 
     p10 = np.log10(abs(scale))
 
@@ -1309,6 +1294,8 @@ def nice_scale_prefix(scale: float) -> tuple[float, str]:
     else:
         f = 1
 
+    # Plain Python float (np.log10 produces np.float64 otherwise).
+    f = float(f)
     return f, SHORT_PREFIX[f]
 
 
@@ -1418,8 +1405,10 @@ for k in ["theta", "bunching_phase"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("rad")
 for k in ["charge", "species_charge", "weight"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("C")
-for k in ["average_current"]:
+for k in ["average_current", "current"]:  # 'current' appears in slice statistics
     PARTICLEGROUP_UNITS[k] = pmd_unit("A")
+for k in ["density"]:  # slice statistics: charge per slice length
+    PARTICLEGROUP_UNITS[k] = pmd_unit("C") / pmd_unit("m")
 for k in ["power"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("W")
 for k in ["norm_emit_x", "norm_emit_y"]:
@@ -1497,7 +1486,8 @@ def parse_bunching_str(s):
     wavelength: float
 
     """
-    assert s.startswith("bunching_")
+    if not s.startswith("bunching_"):
+        raise ValueError(f"Invalid bunching key: {s!r} (must start with 'bunching_')")
 
     # Remove bunching and phase prefixes
     s = s.replace("bunching_", "")
@@ -1533,11 +1523,14 @@ def parse_bunching_str(s):
 
 def write_unit_h5(h5, u):
     """
-    Writes an pmd_unit to an h5 handle
+    Writes a pmd_unit to an h5 handle.
+
+    ``unitSI`` and ``unitDimension`` are written as float64 per the openPMD
+    standard; ``unitSymbol`` as a UTF-8 string (it may contain e.g. 'Ω', 'µ').
     """
 
-    h5.attrs["unitSI"] = u.unitSI
-    h5.attrs["unitDimension"] = u.unitDimension
+    h5.attrs["unitSI"] = float(u.unitSI)
+    h5.attrs["unitDimension"] = np.asarray(u.unitDimension, dtype=np.float64)
     h5.attrs["unitSymbol"] = u.unitSymbol
 
 
@@ -1553,6 +1546,11 @@ def read_unit_h5(h5):
         unitSymbol = "unknown"
     else:
         unitSymbol = a["unitSymbol"]
+        # Files written with fixed-length/bytes string attrs (e.g. via
+        # np.bytes_) yield bytes here; a str symbol is required for unit
+        # arithmetic and to_tex.
+        if isinstance(unitSymbol, bytes):
+            unitSymbol = unitSymbol.decode("utf-8")
 
     return pmd_unit(unitSymbol=unitSymbol, unitSI=unitSI, unitDimension=unitDimension)
 

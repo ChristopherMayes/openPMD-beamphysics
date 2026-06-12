@@ -557,7 +557,7 @@ class FieldMesh:
                 **kwargs,
             )
         elif self.geometry == "rectangular":
-            plot_fieldmesh_rectangular_2d(
+            return plot_fieldmesh_rectangular_2d(
                 self,
                 component=component,
                 time=time,
@@ -1129,14 +1129,17 @@ def load_field_data_h5(h5, verbose=True):
 
             # Check dimensions
             dim = h5[name].attrs["unitDimension"]
-            assert np.all(
-                dim == required_dim
-            ), f"{name} with dimension {required_dim} expected for {name}, found: {dim}"
+            if not np.all(dim == required_dim):
+                raise ValueError(
+                    f"{name}: expected unitDimension {tuple(required_dim)}, "
+                    f"found {tuple(dim)}"
+                )
 
             # Check shape
             s1 = tuple(attrs["gridSize"])
             s2 = cdat.shape
-            assert s1 == s2, f"Expected shape: {s1} != found shape: {s2}"
+            if s1 != s2:
+                raise ValueError(f"{name}: expected shape {s1}, found {s2}")
 
             # Static fields should be real
             if attrs["harmonic"] == 0:
@@ -1171,7 +1174,8 @@ def load_field_data_dict(data_dict, verbose=True):
             comp[k] = v
         elif k in component_from_alias:
             k = component_from_alias[k]
-            assert k not in data
+            if k in comp:
+                raise ValueError(f"Duplicate component: {k}")
             comp[k] = v
         else:
             raise ValueError(f"Unallowed component: {k}")

@@ -114,7 +114,7 @@ def matched_particles(
     particle_group, beta=None, alpha=None, plane="x", p0c=None, inplace=False
 ):
     """
-    Perfoms simple Twiss 'matching' by applying a linear transformation to
+    Performs simple Twiss 'matching' by applying a linear transformation to
         x, px if plane == 'x', or y, py if plane == 'y'
 
     Returns a new ParticleGroup

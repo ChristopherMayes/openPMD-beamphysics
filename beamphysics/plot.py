@@ -793,6 +793,8 @@ def plot_fieldmesh_rectangular_1d(
 
     if not axes:
         fig, axes = plt.subplots(**kwargs)
+    else:
+        fig = axes.get_figure()
 
     # Use recursion to plot multiple field components
     if isinstance(field_component, list):
@@ -906,6 +908,8 @@ def plot_fieldmesh_rectangular_2d(
 
     if not axes:
         fig, axes = plt.subplots(**kwargs)
+    else:
+        fig = axes.get_figure()
 
     if not cmap:
         cmap = CMAP1

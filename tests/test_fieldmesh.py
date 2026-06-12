@@ -66,3 +66,28 @@ def test_fieldmesh_limits(fm_dipole_corrector):
     FM.zmin = 100
     L3 = FM.zmax - FM.zmin
     assert L1 == L3
+
+
+def test_duplicate_component_alias_rejected():
+    """A data dict containing both a canonical component name and its alias
+    must raise, not silently overwrite one with the other."""
+    from beamphysics.fields.fieldmesh import load_field_data_dict
+
+    arr = np.ones((2, 2, 2))
+    attrs = {
+        "eleAnchorPt": "beginning",
+        "gridGeometry": "rectangular",
+        "axisLabels": ("x", "y", "z"),
+        "gridLowerBound": (0, 0, 0),
+        "gridOriginOffset": (0.0, 0.0, 0.0),
+        "gridSpacing": (0.01, 0.01, 0.01),
+        "gridSize": (2, 2, 2),
+        "harmonic": 0,
+        "fundamentalFrequency": 0,
+    }
+    data = {
+        "attrs": attrs,
+        "components": {"electricField/z": arr, "Ez": 2 * arr},
+    }
+    with pytest.raises(ValueError, match="Duplicate component"):
+        load_field_data_dict(data, verbose=False)

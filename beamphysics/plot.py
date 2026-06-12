@@ -156,7 +156,7 @@ def slice_plot(
         raise ValueError(f"Incompatible units: {[u.unitSymbol for u in ulist]}")
     uy = u0.unitSymbol
 
-    ymin = max([slice_dat[k].min() for k in keys])
+    ymin = min([slice_dat[k].min() for k in keys])
     ymax = max([slice_dat[k].max() for k in keys])
 
     _, f2, uy, ymin, ymax = plottable_array_and_units(
@@ -1024,6 +1024,9 @@ def plot_fieldmesh_rectangular_2d(
         orientation="vertical",
         label=llabel,
     )
+
+    if return_figure:
+        return fig
 
 
 def plot_1d_density(

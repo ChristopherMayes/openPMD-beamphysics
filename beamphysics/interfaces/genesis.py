@@ -199,7 +199,7 @@ def genesis2_dpa_to_data(dpa, *, xlamds, current, zsep=1, species="electron"):
     y = dpa[:, 3, :].flatten()
     px = dpa[:, 4, :].flatten() * mc2
     py = dpa[:, 5, :].flatten() * mc2
-    pz = np.sqrt((gamma**2 - 1) * mc2**2 - px**2 - py * 2)
+    pz = np.sqrt((gamma**2 - 1) * mc2**2 - px**2 - py**2)
 
     i0 = np.arange(nslice)
     i_slice = np.repeat(i0[:, np.newaxis], n1, axis=1).flatten()
@@ -495,12 +495,9 @@ def genesis4_par_to_data(h5, species="electron", smear=True):
     ]
 
     params = {}
-    units = {}
     for k in scalars:
         assert len(h5[k]) == 1
         params[k] = h5[k][0]
-        if "unit" in h5[k].attrs:
-            units[k] = h5[k].attrs["unit"].decode("utf-8")
 
     # Useful local variables
     ds_slice = params["slicelength"]  # single slice length

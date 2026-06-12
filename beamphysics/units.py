@@ -160,10 +160,9 @@ class pmd_unit:
                 "The openPMD standard defines unitSI as a conversion factor to SI."
             )
 
-        # Use the provided values directly when unitSI is given explicitly, or
-        # while NAMED_UNITS is still being built (known_unit not yet populated).
-        # Otherwise look the symbol up / parse it.
-        if unitSI != 0 or not known_unit:
+        # Use the provided values directly when unitSI is given explicitly;
+        # otherwise look the symbol up / parse it.
+        if unitSI != 0:
             self._unitSymbol = unitSymbol
             # float, per the openPMD standard (unitSI is a float64 attribute).
             self._unitSI = float(unitSI)
@@ -470,9 +469,6 @@ class pmd_unit:
             return False
         return _canonical_unitSI(self.unitSI) == _canonical_unitSI(other.unitSI)
 
-    def __ne__(self, other) -> bool:
-        return not self.__eq__(other)
-
     def __str__(self) -> str:
         return self.unitSymbol
 
@@ -561,6 +557,50 @@ class pmd_unit:
         '\\\\sqrt{\\\\mathrm{m}}'
         """
         return _symbol_to_tex(self._unitSymbol)
+
+    def scaled_symbol(self, factor: float) -> str:
+        """Display symbol for ``factor`` times this unit.
+
+        The spelling is kept whenever an SI prefix can express the factor
+        directly on it: ``pmd_unit("eV/c").scaled_symbol(1e-3)`` is
+        ``'meV/c'``. When it cannot, the scaled value is matched against
+        the named units (``1e-6 * mA*s`` scales to ``'nC'``, ``1e3 * 1/s``
+        to ``'kHz'``), and failing that the factor is written out:
+        ``pmd_unit("m^2").scaled_symbol(1e-3)`` is ``'1e-3 m^2'`` (a glued
+        ``'mm^2'`` would read as ``(mm)^2``, the wrong value).
+
+        ``factor`` is typically a power of ten from :func:`nice_array`,
+        :func:`nice_scale_prefix`, or :func:`plottable_array`.
+        """
+        if factor == 1:
+            return self.unitSymbol
+        if self.unitSymbol in ("", "1"):
+            # Dimensionless: the scale is a pure number.
+            return _format_scale(factor)
+
+        # Keep the spelling: glue an SI prefix when the combined string
+        # reads back as the same unit scaled by the factor.
+        prefix = SHORT_PREFIX.get(float(factor))
+        if prefix:
+            try:
+                candidate = pmd_unit(prefix + self.unitSymbol)
+                if candidate.compatible_with(self) and math.isclose(
+                    candidate.unitSI,
+                    factor * self.unitSI,
+                    rel_tol=_SIMPLIFY_REL_TOL,
+                ):
+                    return prefix + self.unitSymbol
+            except (ValueError, KeyError):
+                pass
+
+        # Re-spell: the scaled value may be a named or prefixed unit.
+        scaled = pmd_unit(
+            "<scaled>", factor * self.unitSI, self.unitDimension
+        ).simplify()
+        if scaled.unitSymbol != "<scaled>":
+            return scaled.unitSymbol
+
+        return f"{_format_scale(factor)} {self.unitSymbol}"
 
 
 def _symbol_to_tex(symbol: str) -> str:
@@ -1082,7 +1122,7 @@ def make_dimension(dim: Sequence[int | float]) -> Dimension:
     return dim
 
 
-def dimension(name: str) -> Dimension | None:
+def dimension(name: str) -> Dimension:
     try:
         # Coerce to the canonical float form so every construction path
         # (string name or explicit tuple) yields the same Dimension type.
@@ -1202,32 +1242,7 @@ def unit(symbol: str) -> pmd_unit:
     return pmd_unit(symbol)
 
 
-# Dicts for prefixes
-PREFIX_FACTOR: dict[str, float] = {
-    "yocto-": 1e-24,
-    "zepto-": 1e-21,
-    "atto-": 1e-18,
-    "femto-": 1e-15,
-    "pico-": 1e-12,
-    "nano-": 1e-9,
-    "micro-": 1e-6,
-    "milli-": 1e-3,
-    "centi-": 1e-2,
-    "deci-": 1e-1,
-    "deca-": 1e1,
-    "hecto-": 1e2,
-    "kilo-": 1e3,
-    "mega-": 1e6,
-    "giga-": 1e9,
-    "tera-": 1e12,
-    "peta-": 1e15,
-    "exa-": 1e18,
-    "zetta-": 1e21,
-    "yotta-": 1e24,
-}
-# Inverse
-PREFIX: dict[float, str] = dict((v, k) for k, v in PREFIX_FACTOR.items())
-
+# SI prefixes
 SHORT_PREFIX_FACTOR: dict[str, float] = {
     "y": 1e-24,
     "z": 1e-21,
@@ -1256,6 +1271,15 @@ SHORT_PREFIX: dict[float, str] = dict((v, k) for k, v in SHORT_PREFIX_FACTOR.ite
 
 
 # Nice scaling
+
+
+def _format_scale(factor: float) -> str:
+    """'1e-3' for powers of ten, plain '%g' formatting otherwise."""
+    if factor > 0:
+        n = round(math.log10(factor))
+        if math.isclose(factor, 10.0**n, rel_tol=1e-12):
+            return f"1e{n}"
+    return f"{factor:g}"
 
 
 def nice_scale_prefix(scale: float) -> tuple[float, str]:
@@ -1377,6 +1401,54 @@ def plottable_array(x: np.ndarray, nice: bool = True, lim: Limit | None = None):
         factor, p1 = 1, ""
 
     return x / factor, factor, p1, xmin, xmax
+
+
+def plottable_array_and_units(
+    x: np.ndarray, units=None, nice: bool = True, lim: Limit | None = None
+):
+    """
+    Scale an array for plotting and return its display units in one step.
+
+    Combines :func:`plottable_array` with :meth:`pmd_unit.scaled_symbol`,
+    so the caller never handles a bare SI prefix: the array comes back
+    scaled and the units string already says what the scaled values mean
+    ('µm', 'keV/c', '1e-3 m^2'). A string that is not a parseable unit
+    symbol is kept verbatim with the factor written out ('1e3 counts').
+
+    Parameters
+    ----------
+    x : array-like
+    units : pmd_unit or str, optional
+        The unit of the raw values. If None, the units string is the bare
+        prefix (or None when there is no scaling).
+    nice : bool, default = True
+        Scale array by some nice factor.
+    lim : tuple, default = None
+        Limits to consider for the scaling, as in :func:`plottable_array`.
+
+    Returns
+    -------
+    scaled_array : np.ndarray
+    factor : float
+    units_str : str or None
+        Display units of the scaled values.
+    xmin : float
+    xmax : float
+    """
+    x, factor, prefix, xmin, xmax = plottable_array(x, nice=nice, lim=lim)
+    if units is None or str(units) == "":
+        units_str = prefix or None
+    else:
+        try:
+            u = units if isinstance(units, pmd_unit) else pmd_unit(str(units))
+        except (ValueError, KeyError):
+            # Not a unit symbol: keep the text, note the scale.
+            units_str = (
+                str(units) if factor == 1 else f"{_format_scale(factor)} {units}"
+            )
+        else:
+            units_str = u.scaled_symbol(factor)
+    return x, factor, units_str, xmin, xmax
 
 
 # -------------------------

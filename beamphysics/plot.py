@@ -22,6 +22,7 @@ from .units import (
     nice_scale_prefix,
     pg_units,
     plottable_array,
+    plottable_array_and_units,
     pmd_unit,
 )
 
@@ -29,6 +30,32 @@ CMAP0 = copy(plt.get_cmap("viridis"))
 CMAP0.set_under("white")
 
 CMAP1 = copy(plt.get_cmap("plasma"))
+
+
+def _charge_density_units_str(
+    x_unit, axis_units, hist_f: float, axis_f: float = 1.0
+) -> str:
+    """
+    Units string for a histogram density: charge per displayed axis unit.
+
+    The denominator is the axis unit exactly as the axis label shows it,
+    prefix included, and the histogram's own scale becomes a prefix on the
+    C: 'nC/µm', 'pC/(keV/c)'. A time axis is special-cased to amps
+    (C/s = A), which folds the histogram and axis scales into one prefix.
+
+    ``x_unit`` is the coordinate's pmd_unit, ``axis_units`` its displayed
+    label string, ``hist_f`` the factor the density values were divided by,
+    and ``axis_f`` the factor the coordinate was divided by.
+    """
+    if (pmd_unit("C") / x_unit).simplify() == pmd_unit("A"):
+        return pmd_unit("A").scaled_symbol(hist_f / axis_f)
+
+    numerator = pmd_unit("C").scaled_symbol(hist_f)
+    try:
+        return (pmd_unit(numerator) / pmd_unit(str(axis_units))).unitSymbol
+    except (ValueError, KeyError):
+        # Axis units in the explicit power-of-ten form ('1e-3 sqrt(m)').
+        return f"{numerator}/({axis_units})"
 
 
 def plt_histogram(a, weights=None, bins=40):
@@ -104,7 +131,6 @@ def slice_plot(
         has_delta_prefix = False
 
     # Get all data
-    x_key = "mean_" + slice_key
     slice_dat = particle_group.slice_statistics(
         *keys, n_slice=n_slice, slice_key=slice_key
     )
@@ -117,22 +143,25 @@ def slice_plot(
         x -= particle_group["mean_" + slice_key]
         slice_key = "delta_" + slice_key  # restore
 
-    x, f1, p1, xmin, xmax = plottable_array(x, nice=nice, lim=xlim)
-    ux = p1 + str(particle_group.units(slice_key))
+    x, f1, ux, xmin, xmax = plottable_array_and_units(
+        x, particle_group.units(slice_key), nice=nice, lim=xlim
+    )
 
     # Y-axis
 
-    # Units check
-    ulist = [particle_group.units(k).unitSymbol for k in keys]
-    uy = ulist[0]
-    if not all([u == uy for u in ulist]):
-        raise ValueError(f"Incompatible units: {ulist}")
+    # Units check (value-based: 'Hz' == '1/s')
+    ulist = [particle_group.units(k) for k in keys]
+    u0 = ulist[0]
+    if not all(u == u0 for u in ulist):
+        raise ValueError(f"Incompatible units: {[u.unitSymbol for u in ulist]}")
+    uy = u0.unitSymbol
 
     ymin = max([slice_dat[k].min() for k in keys])
     ymax = max([slice_dat[k].max() for k in keys])
 
-    _, f2, p2, ymin, ymax = plottable_array(np.array([ymin, ymax]), nice=nice, lim=ylim)
-    uy = p2 + uy
+    _, f2, uy, ymin, ymax = plottable_array_and_units(
+        np.array([ymin, ymax]), uy, nice=nice, lim=ylim
+    )
 
     # Form Figure
     fig, ax = plt.subplots(**kwargs)
@@ -150,13 +179,11 @@ def slice_plot(
         ax.legend()
 
     # Density on r.h.s
-    y2, _, prey2, _, _ = plottable_array(slice_dat[y2_key], nice=nice, lim=None)
+    y2, fy2, _, _, _ = plottable_array(slice_dat[y2_key], nice=nice, lim=None)
 
-    # Convert to Amps if possible
-    y2_units = f"C/{particle_group.units(x_key)}"
-    if y2_units == "C/s":
-        y2_units = "A"
-    y2_units = prey2 + y2_units
+    # Charge per (unprefixed) slice coordinate; a time axis displays as amps
+    slice_unit = particle_group.units(slice_key)
+    y2_units = _charge_density_units_str(slice_unit, slice_unit, fy2)
 
     # Labels
     labelx = mathlabel(slice_key, units=ux, tex=tex)
@@ -235,10 +262,10 @@ def density_plot(
         n = len(particle_group)
         bins = int(n / 100)
 
-    x, f1, p1, xmin, xmax = plottable_array(particle_group[key], nice=nice, lim=xlim)
+    x, f1, ux, xmin, xmax = plottable_array_and_units(
+        particle_group[key], particle_group.units(key), nice=nice, lim=xlim
+    )
     w = particle_group["weight"]
-    u1 = particle_group.units(key).unitSymbol
-    ux = p1 + u1
 
     labelx = mathlabel(key, units=ux, tex=tex)
 
@@ -250,17 +277,14 @@ def density_plot(
     hist, bin_edges = np.histogram(x, bins=bins, weights=w)
     hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
     hist_width = np.diff(bin_edges)
-    hist_y, hist_f, hist_prefix, _hist_xmin, _hist_xmax = plottable_array(
+    hist_y, hist_f, _, _hist_xmin, _hist_xmax = plottable_array(
         hist / hist_width, nice=nice
     )
 
     ax.bar(hist_x, hist_y, hist_width, color=color, alpha=alpha)
 
-    if u1 == "s":
-        _, hist_prefix = nice_scale_prefix(hist_f / f1)
-        ax.set_ylabel(f" density ({hist_prefix}A)")
-    else:
-        ax.set_ylabel(f"{hist_prefix}C/{ux}")
+    density_units = _charge_density_units_str(particle_group.units(key), ux, hist_f, f1)
+    ax.set_ylabel(f"density ({density_units})")
 
     if hasattr(ax, "get_shared_x_axes") and ax.get_shared_x_axes().joined(
         ax, ax.figure.axes[0]
@@ -355,16 +379,15 @@ def marginal_plot(
             else:
                 ylim = tuple(sorted((0.9 * y0, 1.1 * y0)))
 
-    # Form nice arrays
-    x, f1, p1, xmin, xmax = plottable_array(x, nice=nice, lim=xlim)
-    y, f2, p2, ymin, ymax = plottable_array(y, nice=nice, lim=ylim)
+    # Form nice arrays with display units
+    x, f1, ux, xmin, xmax = plottable_array_and_units(
+        x, particle_group.units(key1), nice=nice, lim=xlim
+    )
+    y, f2, uy, ymin, ymax = plottable_array_and_units(
+        y, particle_group.units(key2), nice=nice, lim=ylim
+    )
 
     w = particle_group["weight"]
-
-    u1 = particle_group.units(key1).unitSymbol
-    u2 = particle_group.units(key2).unitSymbol
-    ux = p1 + u1
-    uy = p2 + u2
 
     # Handle labels.
     labelx = mathlabel(key1, units=ux, tex=tex)
@@ -420,14 +443,12 @@ def marginal_plot(
     hist, bin_edges = np.histogram(x, bins=bins, weights=w)
     hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
     hist_width = np.diff(bin_edges)
-    hist_y, hist_f, hist_prefix = nice_array(hist / hist_width)
+    hist_y, hist_f, _ = nice_array(hist / hist_width)
     ax_marg_x.bar(hist_x, hist_y, hist_width, color="gray")
-    # Special label for C/s = A
-    if u1 == "s":
-        _, hist_prefix = nice_scale_prefix(hist_f / f1)
-        ax_marg_x.set_ylabel(f"{hist_prefix}A")
-    else:
-        ax_marg_x.set_ylabel(f"{hist_prefix}" + mathlabel(f"C/{ux}"))  # Always use tex
+    density_units = _charge_density_units_str(
+        particle_group.units(key1), ux, hist_f, f1
+    )
+    ax_marg_x.set_ylabel(mathlabel(units=density_units, tex=tex))
 
     # Side histogram
     # Old method:
@@ -436,9 +457,12 @@ def marginal_plot(
     hist, bin_edges = np.histogram(y, bins=bins, weights=w)
     hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
     hist_width = np.diff(bin_edges)
-    hist_y, hist_f, hist_prefix = nice_array(hist / hist_width)
+    hist_y, hist_f, _ = nice_array(hist / hist_width)
     ax_marg_y.barh(hist_x, hist_y, hist_width, color="gray")
-    ax_marg_y.set_xlabel(f"{hist_prefix}" + mathlabel(f"C/{uy}"))  # Always use tex
+    density_units = _charge_density_units_str(
+        particle_group.units(key2), uy, hist_f, f2
+    )
+    ax_marg_y.set_xlabel(mathlabel(units=density_units, tex=tex))
 
     # Turn off tick labels on marginals
     plt.setp(ax_marg_x.get_xticklabels(), visible=False)
@@ -479,14 +503,13 @@ def density_and_slice_plot(
     """
 
     # Scale to nice units and get the factor, unit prefix
-    x, f1, p1, xmin, xmax = plottable_array(particle_group[key1])
-    y, f2, p2, ymin, ymax = plottable_array(particle_group[key2])
+    x, f1, ux, xmin, xmax = plottable_array_and_units(
+        particle_group[key1], particle_group.units(key1)
+    )
+    y, f2, uy, ymin, ymax = plottable_array_and_units(
+        particle_group[key2], particle_group.units(key2)
+    )
     w = particle_group["weight"]
-
-    u1 = particle_group.units(key1).unitSymbol
-    u2 = particle_group.units(key2).unitSymbol
-    ux = p1 + u1
-    uy = p2 + u2
 
     labelx = mathlabel(key1, units=ux, tex=tex)
     labely = mathlabel(key2, units=uy, tex=tex)
@@ -518,15 +541,16 @@ def density_and_slice_plot(
     ax2 = ax.twinx()
     # ax2.set_ylim(0, 1e-6)
     x2 = slice_dat["mean_" + key1] / f1
-    ulist = [particle_group.units(k).unitSymbol for k in stat_keys]
+    ulist = [particle_group.units(k) for k in stat_keys]
 
     max2 = max([np.ptp(slice_dat[k]) for k in stat_keys])
 
-    f3, p3 = nice_scale_prefix(max2)
+    f3, _ = nice_scale_prefix(max2)
 
-    u2 = ulist[0]
-    assert all([u == u2 for u in ulist])
-    u2 = p3 + u2
+    u0 = ulist[0]
+    if not all(u == u0 for u in ulist):
+        raise ValueError(f"Incompatible units: {[u.unitSymbol for u in ulist]}")
+    u2 = u0.scaled_symbol(f3)
     labely2 = mathlabel(*stat_keys, units=u2, tex=tex)
     for k in stat_keys:
         label = mathlabel(k, units=u2, tex=tex)
@@ -799,7 +823,13 @@ def plot_fieldmesh_rectangular_1d(
 
     field_unit = fm.units(fieldmesh_component)
 
-    ylabel = r"$" + field_component[0] + "_" + field_component[1] + rf"$ ({field_unit})"
+    ylabel = (
+        r"$"
+        + field_component[0]
+        + "_"
+        + field_component[1]
+        + rf"~({field_unit.to_tex()})$"
+    )
     label = r"$" + field_component[0] + "_" + field_component[1] + "(x=y=0, z)$"
 
     z, field0 = fm.axis_values("z", field_component)
@@ -946,9 +976,9 @@ def plot_fieldmesh_rectangular_2d(
         field_2d = interpolated_values.reshape(len(x), len(y))
 
     if nice:
-        field_2d, _, prefix = nice_array(field_2d)
+        field_2d, field_f, _ = nice_array(field_2d)
     else:
-        prefix = ""
+        field_f = 1
 
     dmin = field_2d.min()
     dmax = field_2d.max()
@@ -961,11 +991,8 @@ def plot_fieldmesh_rectangular_2d(
     axes.set_ylabel(ylabel)
 
     # Add legend
-    llabel = (
-        r"$"
-        + f"{component[0]}_{component[1]}({plane})"
-        + rf"$ ({prefix}{unit.unitSymbol})"
-    )
+    units_str = unit.scaled_symbol(field_f)
+    llabel = r"$" + f"{component[0]}_{component[1]}({plane})" + rf"$ ({units_str})"
 
     if np.all(np.isclose(np.imag(field_2d), 0)):  # Close to real
         axes.imshow(
@@ -975,7 +1002,7 @@ def plot_fieldmesh_rectangular_2d(
         dmax = np.real(field_2d.max())
 
         if not fm.is_static:
-            llabel = "Re" + llabel + "]"
+            llabel = "Re[" + llabel + "]"
 
     elif np.all(np.isclose(np.real(field_2d), 0)):  # Close to imag
         axes.imshow(
@@ -985,7 +1012,7 @@ def plot_fieldmesh_rectangular_2d(
         dmax = np.imag(field_2d.max())
 
         if not fm.is_static:
-            llabel = "Im" + llabel
+            llabel = "Im[" + llabel + "]"
 
     else:
         raise ValueError("Complex components not supported")
@@ -1176,20 +1203,13 @@ def plot_1d_density(
     x_units_base = str(x_units) if x_units else None
     y_units_base = str(y_units) if y_units else None
 
-    # Form nice arrays
-    x, f1, p1, x_min, x_max = plottable_array(x, nice=nice, lim=xlim)
-    y, f2, p2, y_min, y_max = plottable_array(y, nice=nice, lim=ylim)
-
-    # Update units with prefixes
-    if x_units:
-        x_units = p1 + str(x_units)
-    else:
-        x_units = p1 if p1 else None
-
-    if y_units:
-        y_units = p2 + str(y_units)
-    else:
-        y_units = p2 if p2 else None
+    # Form nice arrays with display units (bare prefix when units unknown)
+    x, f1, x_units, x_min, x_max = plottable_array_and_units(
+        x, x_units, nice=nice, lim=xlim
+    )
+    y, f2, y_units, y_min, y_max = plottable_array_and_units(
+        y, y_units, nice=nice, lim=ylim
+    )
 
     # Compute bar widths from x spacing for continuous bars
     if len(x) > 1:
@@ -1253,7 +1273,7 @@ def plot_1d_density(
         # Note: cdf has units of y * widths (density * position)
         cdf = np.cumsum(y * widths) * f1 * f2
 
-        cdf_scaled, _, cdf_prefix, _, _ = plottable_array(cdf, nice=nice)
+        cdf_scaled, cdf_f, cdf_prefix, _, _ = plottable_array(cdf, nice=nice)
 
         # Default CDF style
         if cdf_style is None:
@@ -1265,10 +1285,11 @@ def plot_1d_density(
         # CDF has units of y_base * x_base with combined prefix
         if x_units_base and y_units_base:
             try:
-                cdf_units_base = (
-                    pmd_unit(y_units_base) * pmd_unit(x_units_base)
-                ).simplify()
-                cdf_units_str = cdf_prefix + str(cdf_units_base)
+                # Fold the display scale into the unit value before
+                # simplifying, so e.g. 1e-6 * (mA*s) labels as 'µC' rather
+                # than a double-prefixed 'µmC'.
+                cdf_units_base = pmd_unit(y_units_base) * pmd_unit(x_units_base)
+                cdf_units_str = cdf_units_base.simplify().scaled_symbol(cdf_f)
                 ax_cdf.set_ylabel(f"{cdf_label} ({cdf_units_str})")
             except (ValueError, KeyError, TypeError) as e:
                 # If unit parsing/multiplication fails, fall back to simpler label
@@ -1560,19 +1581,18 @@ def wakefield_plot(
         z = -c_light * np.asarray(particle_group.t)
     kicks = wake.particle_kicks(z=z, weight=particle_group.weight)
 
-    x, f1, p1, xmin, xmax = plottable_array(x_raw, nice=nice, lim=xlim)
-    y, f2, p2, ymin, ymax = plottable_array(kicks, nice=nice, lim=ylim)
+    x, f1, ux, xmin, xmax = plottable_array_and_units(
+        x_raw, particle_group.units(key), nice=nice, lim=xlim
+    )
+    y, f2, uy, ymin, ymax = plottable_array_and_units(
+        kicks, "eV/m", nice=nice, lim=ylim
+    )
 
     ax.scatter(x, y, marker=".", color="black", s=0.5)
 
     # Labels
-    ux = p1 + particle_group.units(key).unitSymbol
-    labelx = mathlabel(key, units=ux, tex=tex)
-    ax.set_xlabel(labelx)
-
-    uy = p2 + "eV/m"
-    labely = mathlabel("W_z", units=uy, tex=tex)
-    ax.set_ylabel(labely)
+    ax.set_xlabel(mathlabel(key, units=ux, tex=tex))
+    ax.set_ylabel(mathlabel("W_z", units=uy, tex=tex))
 
     # Limits
     if xlim:

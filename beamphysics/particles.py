@@ -401,7 +401,7 @@ class ParticleGroup:
 
     @property
     def n_dead(self):
-        """Number of alive particles, defined by status != 1"""
+        """Number of dead particles, defined by status != 1"""
         return self.n_particle - self.n_alive
 
     def units(self, key: str) -> pmd_unit:
@@ -766,7 +766,7 @@ class ParticleGroup:
 
     @property
     def norm_emit_y(self):
-        """Normalized emittance in the x plane"""
+        """Normalized emittance in the y plane"""
         return norm_emit_calc(self, planes=["y"])
 
     @property
@@ -799,7 +799,7 @@ class ParticleGroup:
         """
 
         return matched_particles(
-            self, beta=beta, alpha=alpha, plane=plane, inplace=inplace
+            self, beta=beta, alpha=alpha, plane=plane, p0c=p0c, inplace=inplace
         )
 
     @property
@@ -822,7 +822,7 @@ class ParticleGroup:
     def average_current(self):
         """
         Simple average `current = charge / dt` in [A], with `dt =  (max_t - min_t)`
-        If particles are in $t$ coordinates, will try` dt = (max_z - min_z)*c_light*beta_z`
+        If particles are in $t$ coordinates, will try `dt = (max_z - min_z) / (c_light * beta_z)`
         """
         dt = np.ptp(self.t)  # ptp 'peak to peak' is max - min
         if dt == 0:
@@ -1024,7 +1024,7 @@ class ParticleGroup:
         """
         Drifts all particles to the same t.
 
-        If no z is given, particles will be drifted to the average t
+        If no t is given, particles will be drifted to the average t
         """
         if t is None:
             t = self.avg("t")
@@ -1832,9 +1832,18 @@ class ParticleGroup:
         return True if item in self._data else False
 
     def __eq__(self, other):
-        """Check equality of internal data"""
+        """Check equality of species and internal data"""
         if isinstance(other, ParticleGroup):
-            for key in ["x", "px", "y", "py", "z", "pz", "t", "status", "weight", "id"]:
+            if self.species != other.species:
+                return False
+            # Only compare ids that already exist: accessing self["id"] would
+            # otherwise *assign* fresh ids to both operands as a side effect.
+            if ("id" in self._data) != ("id" in other._data):
+                return False
+            keys = ["x", "px", "y", "py", "z", "pz", "t", "status", "weight"]
+            if "id" in self._data:
+                keys.append("id")
+            for key in keys:
                 if not np.allclose(self[key], other[key]):
                     return False
             return True
@@ -1935,9 +1944,9 @@ class ParticleGroup:
         xc : float
             Center of rotation, x coordinate. Default to zero
         yc : float
-            Center of rotation, x coordinate. Default to zero
+            Center of rotation, y coordinate. Default to zero
         zc : float
-            Center of rotation, x coordinate. Default to zero
+            Center of rotation, z coordinate. Default to zero
 
         Notes
         -----

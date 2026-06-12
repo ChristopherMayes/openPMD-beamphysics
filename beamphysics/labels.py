@@ -1,4 +1,4 @@
-from .units import nice_array, parse_bunching_str
+from .units import nice_array, parse_bunching_str, pmd_unit
 
 TEXLABEL = {
     # 'status'
@@ -80,8 +80,9 @@ def texlabel(key: str):
 
     Returns
     -------
-    tex: str or None
-        A TeX string if applicable, otherwise will return None
+    tex: str
+        A TeX fragment: a curated label when the key is known, otherwise
+        the key itself wrapped in ``\\mathrm{...}``.
 
 
     Examples
@@ -113,6 +114,8 @@ def texlabel(key: str):
                 return rf"\left|{tex0}\right|"
             if prefix in ("min", "max"):
                 return f"\\{prefix}({tex0})"
+            if prefix == "ptp":
+                return rf"\mathrm{{ptp}}({tex0})"
             if prefix == "sigma":
                 return rf"\sigma_{{ {tex0} }}"
             if prefix == "delta":
@@ -136,10 +139,10 @@ def texlabel(key: str):
 
 def mathlabel(*keys, units=None, tex=True):
     """
-    Helper function to return label with optional units
-    from an arbitrary number of keys
+    Axis/legend label for one or more attribute keys, with optional units.
 
-
+    With no keys, the label is the units alone — useful for axes that show
+    a bare quantity of known units, like the marginal histograms.
 
     Parameters
     ----------
@@ -147,7 +150,11 @@ def mathlabel(*keys, units=None, tex=True):
         any beamphysics attributes
 
     units : pmd_unit or str or None
-        units to be cast to str.
+        Units to append in parentheses. A ``pmd_unit``, or a string that
+        parses as a unit symbol, renders via ``pmd_unit.to_tex()`` (so
+        compound symbols like eV/c, sqrt(m), m^2, and parenthesized groups
+        come out right); any other string is shown as-is, with ``*`` as a
+        dot.
 
     tex : bool, default=True
         if True, a mathtext (TeX) string wrapped in $$ will be returned.
@@ -156,33 +163,47 @@ def mathlabel(*keys, units=None, tex=True):
     Returns
     -------
     label: str
-        A TeX string if applicable, otherwise will return None
+        A mathtext string when ``tex`` is True, otherwise a plain-text label.
 
 
     Examples
     --------
         mathlabel('x_bar', 'sigma_x', units='µC')
         returns:
-        '$\\overline{x}, \\sigma_{ x }~(\\mathrm{ µC } )$'
+        '$\\overline{x}, \\sigma_{ x }~(\\mathrm{µC})$'
+
+        mathlabel(units='fC/µm')
+        returns:
+        '$\\mathrm{fC}/\\mathrm{µm}$'
 
     """
-    # Cast to str
-    if units:
-        units = str(units)
-
-    if tex:
-        label_list = [texlabel(key) or rf"\mathrm{{ {key} }}" for key in keys]
-        label = ", ".join(label_list)
-        if units:
-            units = units.replace("*", r"{\cdot}")
-            label = rf"{label}~(\mathrm{{ {units} }} )"
-
-        return rf"${label}$"
-
-    else:
+    if not tex:
+        # Compare via str(): a pmd_unit object is always truthy, but a
+        # dimensionless unit has an empty symbol and should add no "()".
+        units_str = "" if units is None else str(units)
+        if not keys:
+            return units_str
         label = ", ".join(keys)
-
-        if units:
-            label = rf"{label} ({units})"
-
+        if units_str:
+            label = rf"{label} ({units_str})"
         return label
+
+    # Units -> TeX fragment ('' when there are none).
+    if units is None or str(units) == "":
+        units_frag = ""
+    elif isinstance(units, pmd_unit):
+        units_frag = units.to_tex()
+    else:
+        try:
+            units_frag = pmd_unit(str(units)).to_tex()
+        except (ValueError, KeyError):
+            fallback = str(units).replace("*", r"{\cdot}")
+            units_frag = rf"\mathrm{{ {fallback} }}"
+
+    if not keys:
+        return rf"${units_frag}$" if units_frag else ""
+
+    label = ", ".join(texlabel(key) for key in keys)
+    if units_frag:
+        label = rf"{label}~({units_frag})"
+    return rf"${label}$"

@@ -2,7 +2,7 @@ import numpy as np
 
 from .readers import component_from_alias, load_field_attrs
 from .tools import encode_attrs, fstr
-from .units import pg_units
+from .units import pg_units, write_unit_h5
 
 
 def pmd_init(h5, basePath="/data/%T/", particlesPath="./"):
@@ -145,8 +145,6 @@ def write_component_data(h5, name, data, unit=None):
         g = h5[name]
 
     if unit:
-        g.attrs["unitSI"] = unit.unitSI
-        g.attrs["unitDimension"] = unit.unitDimension
-        g.attrs["unitSymbol"] = fstr(unit.unitSymbol)
+        write_unit_h5(g, unit)
 
     return g

@@ -4,7 +4,7 @@ import numpy as np
 from h5py import File, Group
 
 from ..statistics import twiss_calc
-from ..units import Z0, c_light, mec2, unit, write_unit_h5
+from ..units import Z0, c_light, mec2, pmd_unit, write_unit_h5
 
 # Genesis 1.3
 # -------------
@@ -276,14 +276,14 @@ def genesis4_beam_data(pg, n_slice=None):
         if g2key not in g2data:
             continue
         data[g4key] = g2data[g2key]
-        units[g4key] = unit(u)
+        units[g4key] = pmd_unit(u)
 
     # Re-calculate these
     data["betax"] = data["gamma"] * data.pop("sigma_x") ** 2 / data["ex"]
     data["betay"] = data["gamma"] * data.pop("sigma_y") ** 2 / data["ey"]
 
-    units["betax"] = unit("m")
-    units["betay"] = unit("m")
+    units["betax"] = pmd_unit("m")
+    units["betay"] = pmd_unit("m")
 
     if "s" in data:
         data["s"] -= data["s"].min()

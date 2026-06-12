@@ -271,7 +271,7 @@ def astra_1d_fieldmap_data(fm):
         iangle = np.unique(np.mod(np.angle(fz), np.pi))
 
         # Make sure there is only one
-        assert len(iangle) == 1, print(iangle)
+        assert len(iangle) == 1, f"Expected exactly one angle, found: {iangle}"
         iangle = iangle[0]
 
         if iangle != 0:

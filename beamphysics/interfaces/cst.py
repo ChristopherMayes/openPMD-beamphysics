@@ -35,6 +35,7 @@ def get_scale(unit):
         return 1
     elif unit == "[A/m]":
         return mu0
+    raise ValueError(f"Unknown unit in CST file: {unit!r}")
 
 
 def get_vec(x):
@@ -185,6 +186,9 @@ def read_cst_ascii_3d_field(filePath, n_header=2):
         Fx = dat[:, 3].reshape(shape, order="F") * get_scale(units[3])
         Fy = dat[:, 4].reshape(shape, order="F") * get_scale(units[4])
         Fz = dat[:, 5].reshape(shape, order="F") * get_scale(units[5])
+
+    else:
+        raise ValueError(f"Expected 6 or 9 columns in CST file, found {len(columns)}")
 
     attrs = {}
     attrs["gridOriginOffset"] = (xmin, ymin, zmin)

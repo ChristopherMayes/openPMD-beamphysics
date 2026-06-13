@@ -1170,14 +1170,14 @@ def load_field_data_dict(data_dict, verbose=True):
     # Go through components. Allow aliases
     comp = data["components"] = {}
     for k, v in data_dict["components"].items():
-        if k in component_alias:
-            comp[k] = v
-        elif k in component_from_alias:
+        if k in component_from_alias:
             k = component_from_alias[k]
-            if k in comp:
-                raise ValueError(f"Duplicate component: {k}")
-            comp[k] = v
-        else:
+        elif k not in component_alias:
             raise ValueError(f"Unallowed component: {k}")
+        # Canonical and alias spellings of the same component collide here,
+        # regardless of which order the dict provides them in.
+        if k in comp:
+            raise ValueError(f"Duplicate component: {k}")
+        comp[k] = v
 
     return data

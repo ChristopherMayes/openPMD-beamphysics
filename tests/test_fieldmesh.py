@@ -68,9 +68,17 @@ def test_fieldmesh_limits(fm_dipole_corrector):
     assert L1 == L3
 
 
-def test_duplicate_component_alias_rejected():
+@pytest.mark.parametrize(
+    "component_keys",
+    [
+        ("electricField/z", "Ez"),  # canonical first
+        ("Ez", "electricField/z"),  # alias first
+    ],
+)
+def test_duplicate_component_alias_rejected(component_keys):
     """A data dict containing both a canonical component name and its alias
-    must raise, not silently overwrite one with the other."""
+    must raise, not silently overwrite one with the other — regardless of
+    dict insertion order."""
     from beamphysics.fields.fieldmesh import load_field_data_dict
 
     arr = np.ones((2, 2, 2))
@@ -85,9 +93,10 @@ def test_duplicate_component_alias_rejected():
         "harmonic": 0,
         "fundamentalFrequency": 0,
     }
+    k1, k2 = component_keys
     data = {
         "attrs": attrs,
-        "components": {"electricField/z": arr, "Ez": 2 * arr},
+        "components": {k1: arr, k2: 2 * arr},
     }
     with pytest.raises(ValueError, match="Duplicate component"):
         load_field_data_dict(data, verbose=False)

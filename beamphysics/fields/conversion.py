@@ -15,15 +15,18 @@ def fieldmesh_rectangular_to_cylindrically_symmetric_data(fieldmesh):
 
     """
 
-    assert fieldmesh.geometry == "rectangular"
+    if fieldmesh.geometry != "rectangular":
+        raise ValueError(f"Requires rectangular geometry, got: {fieldmesh.geometry}")
 
     # Find central slice x=0, y=0
     ix = np.where(fieldmesh.coord_vec("x") == 0)[0]
-    assert len(ix) == 1
+    if len(ix) != 1:
+        raise ValueError("Grid must contain exactly one x = 0 point")
     ix = ix[0]
 
     iy = np.where(fieldmesh.coord_vec("y") == 0)[0]
-    assert len(iy) == 1
+    if len(iy) != 1:
+        raise ValueError("Grid must contain exactly one y = 0 point")
     iy = iy[0]
 
     # Form components

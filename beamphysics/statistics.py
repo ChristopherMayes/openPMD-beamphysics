@@ -527,7 +527,7 @@ def resample_particles(particle_group, n=0, equal_weights=False):
         weight = np.full(n, particle_group.charge / n)
 
     else:
-        assert n == n_old
+        assert n == n_old, f"Internal error: expected n == n_old, got {n} != {n_old}"
         ixlist = np.random.choice(n_old, n, replace=False)
         weight = weight[ixlist]  # just scramble
 

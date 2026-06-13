@@ -612,7 +612,8 @@ def create_impact_solrf_fieldmap_derivatives(
         zmax: float
 
     """
-    assert field_mesh.geometry == "cylindrical"
+    if field_mesh.geometry != "cylindrical":
+        raise ValueError(f"Requires cylindrical geometry, got: {field_mesh.geometry}")
     if method != "spline":
         raise NotImplementedError(f"Unknown method '{method}', must be 'spline'")
 
@@ -630,7 +631,8 @@ def create_impact_solrf_fieldmap_derivatives(
         fz = field_mesh[component][0, 0, :]
 
         fz = np.real_if_close(fz)
-        assert all(np.imag(fz) == 0)
+        if not all(np.imag(fz) == 0):
+            raise ValueError(f"On-axis {component} field must be real")
 
         field[component] = {
             "z0": 0,  # Force

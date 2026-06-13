@@ -604,7 +604,8 @@ def plot_fieldmesh_cylindrical_2d(
 
     """
 
-    assert fm.geometry == "cylindrical"
+    if fm.geometry != "cylindrical":
+        raise ValueError(f"Requires cylindrical geometry, got: {fm.geometry}")
 
     if mirror not in (None, "r"):
         raise ValueError("mirror must be None or 'r'")
@@ -890,7 +891,8 @@ def plot_fieldmesh_rectangular_2d(
 
     """
 
-    assert fm.geometry == "rectangular"
+    if fm.geometry != "rectangular":
+        raise ValueError(f"Requires rectangular geometry, got: {fm.geometry}")
 
     valid_coordinates = set(fm.axis_labels)
     coordinate_value = None

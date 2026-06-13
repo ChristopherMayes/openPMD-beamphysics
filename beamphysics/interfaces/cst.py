@@ -270,9 +270,12 @@ def read_cst_ascii_3d_complex_fields(efile, hfile, frequency, harmonic=1):
     e_attrs, e_components = read_cst_ascii_3d_field(efile)
     b_attrs, b_components = read_cst_ascii_3d_field(hfile)
 
-    assert e_attrs["gridOriginOffset"] == b_attrs["gridOriginOffset"]
-    assert e_attrs["gridSpacing"] == b_attrs["gridSpacing"]
-    assert e_attrs["gridSize"] == b_attrs["gridSize"]
+    for attr in ("gridOriginOffset", "gridSpacing", "gridSize"):
+        if e_attrs[attr] != b_attrs[attr]:
+            raise ValueError(
+                f"E and B field grids disagree on {attr}: "
+                f"{e_attrs[attr]} != {b_attrs[attr]}"
+            )
 
     components = {**e_components, **b_components}
 

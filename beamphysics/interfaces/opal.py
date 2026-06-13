@@ -75,7 +75,8 @@ def opal_to_data(h5):
     rref = D["RefPartR"]
 
     n = len(ptypes)
-    assert all(h5["ptype"][:] == 0)
+    if not all(h5["ptype"][:] == 0):
+        raise ValueError("Only ptype == 0 (electron) is supported")
     species = "electron"
     status = 1
     data = {

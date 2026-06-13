@@ -2154,7 +2154,10 @@ def _scalar_maybe_from_array(value):
     if np.isscalar(value):
         return value
 
-    assert len(value) == 1
+    if len(value) != 1:
+        raise ValueError(
+            f"Expected a scalar or length-1 array, got length {len(value)}"
+        )
     return value[0]
 
 

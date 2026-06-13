@@ -272,7 +272,8 @@ def expand_fieldmesh_from_onaxis(
     if not inplace:
         fieldmesh = fieldmesh.copy()
 
-    assert fieldmesh.geometry == "cylindrical"
+    if fieldmesh.geometry != "cylindrical":
+        raise ValueError(f"Requires cylindrical geometry, got: {fieldmesh.geometry}")
 
     has_Ez = "electricField/z" in fieldmesh.components
     has_Bz = "magneticField/z" in fieldmesh.components
@@ -293,7 +294,8 @@ def expand_fieldmesh_from_onaxis(
     frequency = fieldmesh.frequency
 
     # Get real field
-    assert all(np.isreal(fz))
+    if not all(np.isreal(fz)):
+        raise ValueError("On-axis field must be real for expansion")
     fz = np.real(fz)
 
     zvec = fieldmesh.coord_vec("z")

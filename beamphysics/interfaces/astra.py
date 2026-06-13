@@ -466,7 +466,10 @@ def write_astra_3d_fieldmaps(fieldmesh_object, common_filePath):
         base[0:2] == "3D" or base[3:5] == "3D"
     ), "The base filename must begin with 3D or have 3D starting at the fourth character, according to Astra"
 
-    assert fieldmesh_object.geometry == "rectangular"
+    if fieldmesh_object.geometry != "rectangular":
+        raise ValueError(
+            f"Requires rectangular geometry, got: {fieldmesh_object.geometry}"
+        )
 
     nx, ny, nz = fieldmesh_object.shape
 

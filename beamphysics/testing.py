@@ -103,7 +103,9 @@ def assert_pg_close(pg_test, pg_ref, atol=1e-7, rtol=0, err_msg=""):
     err_msg : str, optional
         Error message to emit when failed, by default ""
     """
-    assert pg_test.species == pg_ref.species
+    assert (
+        pg_test.species == pg_ref.species
+    ), f"species differ: {pg_test.species} != {pg_ref.species}"
     for key in ["x", "px", "y", "py", "z", "pz", "t"]:
         np.testing.assert_allclose(
             pg_ref[key], pg_test[key], rtol=rtol, atol=atol, err_msg=err_msg

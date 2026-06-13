@@ -333,7 +333,7 @@ class PseudomodeWakefield(WakefieldBase):
                 zi = z_sorted[i]
                 qi = weight_sorted[i]
 
-                # Kick from trailing particles
+                # Kick from the particles already accumulated in b (those ahead)
                 delta_E[i] -= np.imag(c * np.exp(s * zi) * b)
 
                 # Add this particle to accumulator

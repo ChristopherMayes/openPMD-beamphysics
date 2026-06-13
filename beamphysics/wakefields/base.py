@@ -141,7 +141,7 @@ class WakefieldBase(ABC):
         Returns
         -------
         integrated_wake : np.ndarray
-            Integrated longitudinal wakefield [V].
+            Integrated longitudinal wakefield [V/m].
         """
         from scipy.signal import correlate
 

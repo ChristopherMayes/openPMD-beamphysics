@@ -1180,7 +1180,7 @@ def plot_maxwell_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
         +np.real(DyEz - DzEy)[ix, iy, :],
         label=r"$\Re\left[\frac{\partial E_z}{\partial y} - \frac{\partial E_y}{\partial z}\right]$",
     )
-    axs[0, 0].plot(z, +np.real(1j * w * Bx[ix, iy, :]), label=r"$-\Re[i\omega B_x]$")
+    axs[0, 0].plot(z, +np.real(1j * w * Bx[ix, iy, :]), label=r"$\Re[i\omega B_x]$")
     axs[0, 0].set_xlabel("z (m)")
     axs[0, 0].set_ylabel(r"($\vec\nabla\times\vec{E})_x$ $(\text{V/m}^2)$")
     axs[0, 0].legend()
@@ -1207,7 +1207,7 @@ def plot_maxwell_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
         +np.real(DzEx - DxEz)[ix, iy, :],
         label=r"$\Re\left[\frac{\partial E_x}{\partial z} - \frac{\partial E_z}{\partial x}\right]$",
     )
-    axs[1, 0].plot(z, +np.real(1j * w * By[ix, iy, :]), label=r"$-\Re[i\omega B_y]$")
+    axs[1, 0].plot(z, +np.real(1j * w * By[ix, iy, :]), label=r"$\Re[i\omega B_y]$")
     axs[1, 0].set_xlabel("z (m)")
     axs[1, 0].set_ylabel(r"($\vec\nabla\times\vec{E})_y$ $(\text{V/m}^2)$")
     axs[1, 0].legend()
@@ -1229,7 +1229,7 @@ def plot_maxwell_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
         +np.real(DxEy - DyEx)[ix, iy, :],
         label=r"$\Re\left[\frac{\partial E_y}{\partial x} - \frac{\partial E_x}{\partial y}\right]$",
     )
-    axs[2, 0].plot(z, +np.real(1j * w * Bz[ix, iy, :]), label=r"$-\Re[i\omega B_z]$")
+    axs[2, 0].plot(z, +np.real(1j * w * Bz[ix, iy, :]), label=r"$\Re[i\omega B_z]$")
     axs[2, 0].set_xlabel("z (m)")
     axs[2, 0].set_ylabel(r"($\vec\nabla\times\vec{E})_z$ $(\text{V/m}^2)$")
     axs[2, 0].legend()
@@ -1336,8 +1336,8 @@ def plot_maxwell_curl_equations_cartesian(FM, ix=None, iy=None, plot_diff=True):
             color="black",
             alpha=0.15,
         )
-        axs[1, 1].set_zorder(ax202.get_zorder() + 1)  # Bring primary axis to the front
-        axs[1, 1].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
+        axs[2, 1].set_zorder(ax212.get_zorder() + 1)  # Bring primary axis to the front
+        axs[2, 1].patch.set_visible(False)  # Hide the 'canvas' of the primary axis
         ax212.set_ylabel(r"$\Delta$ ($\text{V/m}^3$)")
 
     fig.suptitle(rf"Fields evaluated at $x=${x[ix]:0.6f}, $y=${y[iy]:0.6f} meters.")
@@ -1390,8 +1390,8 @@ def solenoid_analysis(z0, Bz0):
     B0 = Bz0.max()
 
     Bz0 = Bz0 / B0
-    BL = np.trapezoid(Bz0, z0)
-    B2L = np.trapezoid(Bz0**2, z0)
+    BL = trapezoid(Bz0, z0)
+    B2L = trapezoid(Bz0**2, z0)
     d = {}
     d["B0"] = B0
     d["int_BL"] = BL * B0

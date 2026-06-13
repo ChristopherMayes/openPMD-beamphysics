@@ -79,7 +79,7 @@ def fish_complex_to_real_fields(fm, verbose=False):
     iangle = np.unique(np.mod(np.angle(Ez), np.pi))
 
     # Make sure there is only one
-    assert len(iangle) == 1, print(iangle)
+    assert len(iangle) == 1, f"Expected exactly one angle, found: {iangle}"
     iangle = iangle[0]
 
     if iangle != 0:

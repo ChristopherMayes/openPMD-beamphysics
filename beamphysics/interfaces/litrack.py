@@ -26,7 +26,8 @@ def write_litrack(particle_group, outfile="litrack.zd", p0c=None, verbose=False)
 
     P = particle_group  # convenience
 
-    assert P.species == "electron"  # TODO: add more species
+    if P.species != "electron":  # TODO: add more species
+        raise ValueError(f"Only electron is supported, got: {P.species}")
 
     assert np.all(P.weight > 0), "ParticleGroup.weight must be > 0"
 

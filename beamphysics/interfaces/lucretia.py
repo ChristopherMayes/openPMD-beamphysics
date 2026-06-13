@@ -192,8 +192,10 @@ def write_lucretia(
         stop_ix = np.zeros(Np)
     else:
         if len(stop_ix) != Np:
-            print("Error: Length of stop_ix must equal to # particles !!")
-        return
+            raise ValueError(
+                f"Length of stop_ix ({len(stop_ix)}) must equal the number "
+                f"of particles ({Np})"
+            )
 
     # Form the lowest level of field structure
     l1 = np.array([x_luc, px_luc, y_luc, py_luc, z_luc, ptot])

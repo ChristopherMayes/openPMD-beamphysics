@@ -82,7 +82,7 @@ def elegant_h5_to_data(h5, group="page1", species="electron"):
 
     Elegant h5 has datasets:
 
-    x, xp, y, xp, p=beta*gamma, t
+    x, xp, y, yp, p=beta*gamma, t
     m,  1,   m, 1, 1, s
 
     Momentum are reconstructed as:
@@ -215,7 +215,7 @@ def elegant_to_data(
 
     Columns in the file should be:
 
-    x, xp, y, xp, p=beta*gamma, t
+    x, xp, y, yp, p=beta*gamma, t
     m,  1,   m, 1, 1, s
 
     Momentum are reconstructed as:

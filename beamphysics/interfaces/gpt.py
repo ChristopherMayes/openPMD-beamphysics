@@ -61,7 +61,7 @@ def write_gpt(particle_group, outfile, asci2gdf_bin=None, verbose=False):
         run_asci2gdf(outfile, asci2gdf_bin)
     else:
         print(
-            f"ASCII particles written. Convert to GDF using: asci2df -o particles.gdf {outfile}"
+            f"ASCII particles written. Convert to GDF using: asci2gdf -o particles.gdf {outfile}"
         )
 
 
@@ -137,7 +137,6 @@ def write_gpt_1d_fieldmap(fm, outfile, asci2gdf_bin=None, verbose=False):
             dat["Bz"] = np.real(fm["Bz"][0, 0, :])
         elif fm.is_pure_electric:
             keys = ["Z", "Ez"]
-            dat["Er"] = np.real(fm["Er"][0, 0, :])
             dat["Ez"] = np.real(fm["Ez"][0, 0, :])
         else:
             raise ValueError("Mixed static field TODO")
@@ -166,7 +165,7 @@ def write_gpt_1d_fieldmap(fm, outfile, asci2gdf_bin=None, verbose=False):
         run_asci2gdf(outfile, asci2gdf_bin, verbose=verbose)
     elif verbose:
         print(
-            f"ASCII field data written. Convert to GDF using: asci2df -o field.gdf {outfile}"
+            f"ASCII field data written. Convert to GDF using: asci2gdf -o field.gdf {outfile}"
         )
 
     return outfile
@@ -227,7 +226,7 @@ def write_gpt_2d_fieldmap(fm, outfile, asci2gdf_bin=None, verbose=False):
 
     elif verbose:
         print(
-            f"ASCII field data written. Convert to GDF using: asci2df -o field.gdf {outfile}"
+            f"ASCII field data written. Convert to GDF using: asci2gdf -o field.gdf {outfile}"
         )
 
     return outfile
@@ -285,7 +284,7 @@ def write_gpt_3d_fieldmap(fm, outfile, asci2gdf_bin=None, verbose=False):
         run_asci2gdf(outfile, asci2gdf_bin, verbose=verbose)
     elif verbose:
         print(
-            f"ASCII field data written. Convert to GDF using: asci2df -o field.gdf {outfile}"
+            f"ASCII field data written. Convert to GDF using: asci2gdf -o field.gdf {outfile}"
         )
 
     return outfile

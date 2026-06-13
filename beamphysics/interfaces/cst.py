@@ -35,6 +35,7 @@ def get_scale(unit):
         return 1
     elif unit == "[A/m]":
         return mu0
+    raise ValueError(f"Unknown unit in CST file: {unit!r}")
 
 
 def get_vec(x):
@@ -186,6 +187,9 @@ def read_cst_ascii_3d_field(filePath, n_header=2):
         Fy = dat[:, 4].reshape(shape, order="F") * get_scale(units[4])
         Fz = dat[:, 5].reshape(shape, order="F") * get_scale(units[5])
 
+    else:
+        raise ValueError(f"Expected 6 or 9 columns in CST file, found {len(columns)}")
+
     attrs = {}
     attrs["gridOriginOffset"] = (xmin, ymin, zmin)
     attrs["gridSpacing"] = (dx, dy, dz)
@@ -266,9 +270,12 @@ def read_cst_ascii_3d_complex_fields(efile, hfile, frequency, harmonic=1):
     e_attrs, e_components = read_cst_ascii_3d_field(efile)
     b_attrs, b_components = read_cst_ascii_3d_field(hfile)
 
-    assert e_attrs["gridOriginOffset"] == b_attrs["gridOriginOffset"]
-    assert e_attrs["gridSpacing"] == b_attrs["gridSpacing"]
-    assert e_attrs["gridSize"] == b_attrs["gridSize"]
+    for attr in ("gridOriginOffset", "gridSpacing", "gridSize"):
+        if e_attrs[attr] != b_attrs[attr]:
+            raise ValueError(
+                f"E and B field grids disagree on {attr}: "
+                f"{e_attrs[attr]} != {b_attrs[attr]}"
+            )
 
     components = {**e_components, **b_components}
 

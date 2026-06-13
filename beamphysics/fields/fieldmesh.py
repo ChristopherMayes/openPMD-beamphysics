@@ -557,7 +557,7 @@ class FieldMesh:
                 **kwargs,
             )
         elif self.geometry == "rectangular":
-            plot_fieldmesh_rectangular_2d(
+            return plot_fieldmesh_rectangular_2d(
                 self,
                 component=component,
                 time=time,
@@ -1129,14 +1129,17 @@ def load_field_data_h5(h5, verbose=True):
 
             # Check dimensions
             dim = h5[name].attrs["unitDimension"]
-            assert np.all(
-                dim == required_dim
-            ), f"{name} with dimension {required_dim} expected for {name}, found: {dim}"
+            if not np.all(dim == required_dim):
+                raise ValueError(
+                    f"{name}: expected unitDimension {tuple(required_dim)}, "
+                    f"found {tuple(dim)}"
+                )
 
             # Check shape
             s1 = tuple(attrs["gridSize"])
             s2 = cdat.shape
-            assert s1 == s2, f"Expected shape: {s1} != found shape: {s2}"
+            if s1 != s2:
+                raise ValueError(f"{name}: expected shape {s1}, found {s2}")
 
             # Static fields should be real
             if attrs["harmonic"] == 0:
@@ -1167,13 +1170,14 @@ def load_field_data_dict(data_dict, verbose=True):
     # Go through components. Allow aliases
     comp = data["components"] = {}
     for k, v in data_dict["components"].items():
-        if k in component_alias:
-            comp[k] = v
-        elif k in component_from_alias:
+        if k in component_from_alias:
             k = component_from_alias[k]
-            assert k not in data
-            comp[k] = v
-        else:
+        elif k not in component_alias:
             raise ValueError(f"Unallowed component: {k}")
+        # Canonical and alias spellings of the same component collide here,
+        # regardless of which order the dict provides them in.
+        if k in comp:
+            raise ValueError(f"Duplicate component: {k}")
+        comp[k] = v
 
     return data

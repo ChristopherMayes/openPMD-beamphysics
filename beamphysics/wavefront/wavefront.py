@@ -1551,7 +1551,7 @@ class Wavefront(WavefrontBase):
                 dfl, param = load_genesis4_fields(h5)
 
         elif isinstance(file, h5py.Group):
-            dfl, param = load_genesis4_fields(h5)
+            dfl, param = load_genesis4_fields(file)
         else:
             raise ValueError(f"{file=} must be a str, pathlib.Path, or h5py.Group")
 

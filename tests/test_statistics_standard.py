@@ -186,11 +186,13 @@ class TestComputedStatistics:
         assert len(computed["statistics"]) > 0
 
     def test_computed_statistics_count(self, computed):
-        """Test that the expected number of statistics are generated."""
-        # 6 operators * 31 keys = 186 operator stats
-        # 31 * 31 = 961 covariance stats
-        # Total = 1147
-        assert len(computed["statistics"]) == 1147
+        """Test that the expected number of statistics are generated:
+        one stat per (operator, key) plus a covariance per key pair."""
+        from beamphysics.standards.statistics import ARRAY_KEYS, OPERATORS
+
+        n = len(ARRAY_KEYS)
+        expected = len(OPERATORS) * n + n * n
+        assert len(computed["statistics"]) == expected
 
     def test_computed_categories_exist(self, computed):
         """Test that computed statistics have categories."""

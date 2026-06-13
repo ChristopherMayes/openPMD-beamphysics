@@ -73,7 +73,7 @@ def read_ansys_ascii_3d_fields(efile, hfile, frequency=0):
     components = {}
     for k in components1:
         components[f"electricField/{k}"] = components1[k]
-    for k in components1:
+    for k in components2:
         components[f"magneticField/{k}"] = components2[k] * mu_0
 
     attrs = attrs1

@@ -114,8 +114,8 @@ def matched_particles(
     particle_group, beta=None, alpha=None, plane="x", p0c=None, inplace=False
 ):
     """
-    Perfoms simple Twiss 'matching' by applying a linear transformation to
-        x, px if plane == 'x', or x, py if plane == 'y'
+    Performs simple Twiss 'matching' by applying a linear transformation to
+        x, px if plane == 'x', or y, py if plane == 'y'
 
     Returns a new ParticleGroup
 
@@ -243,16 +243,16 @@ def particle_twiss_dispersion(particle_group, plane="x", fraction=1, p0c=None):
 
     x = P[plane]
     xp = P["p" + plane] / p0c
-    delta = P["p"] / P["mean_p"]  # - 1
+    delta = P["p"] / p0c  # - 1
 
-    # Form covariance matrix
-    np.cov([x, xp, delta], aweights=P.weight)
+    # Form weighted covariance matrix
+    sigma = np.cov([x, xp, delta], aweights=P.weight)
 
     # Actual calc
-    twiss = twiss_dispersion_calc(np.cov([x, xp, delta]))
+    twiss = twiss_dispersion_calc(sigma)
 
     # Add norm
-    twiss["norm_emit"] = twiss["emit"] * P["mean_p"] / P.mass
+    twiss["norm_emit"] = twiss["emit"] * p0c / P.mass
 
     # Add suffix
     out = {}
@@ -444,7 +444,6 @@ def slice_statistics(particle_group, keys=["mean_z"], n_slice=40, slice_key=None
     normal_keys = set()
 
     for k in keys:
-        sdat[k] = np.empty(n_slice)
         if k.startswith("twiss"):
             if k == "twiss" or k == "twiss_xy":
                 twiss_planes.add("x")
@@ -454,6 +453,7 @@ def slice_statistics(particle_group, keys=["mean_z"], n_slice=40, slice_key=None
                 assert plane in ("x", "y")
                 twiss_planes.add(plane)
         else:
+            sdat[k] = np.empty(n_slice)
             normal_keys.add(k)
 
     twiss_plane = "".join(twiss_planes)  # flatten
@@ -527,7 +527,7 @@ def resample_particles(particle_group, n=0, equal_weights=False):
         weight = np.full(n, particle_group.charge / n)
 
     else:
-        assert n == n_old
+        assert n == n_old, f"Internal error: expected n == n_old, got {n} != {n_old}"
         ixlist = np.random.choice(n_old, n, replace=False)
         weight = weight[ixlist]  # just scramble
 

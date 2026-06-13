@@ -22,7 +22,7 @@ def parse_impact_particles(
 
     Impact-T input/output particles distribions are ASCII files with columns:
     x (m)
-    GBy = gamma*beta_x (dimensionless)
+    GBx = gamma*beta_x (dimensionless)
     y (m)
     GBy = gamma*beta_y (dimensionless)
     z (m)
@@ -194,8 +194,9 @@ def write_impact(
         # Informational
         # output['Temission_mean'] = tout.mean()
 
-        # pz
-        pz = particle_group["pz"]
+        # pz (copy: the small-momentum shift below must not modify the
+        # caller's ParticleGroup)
+        pz = np.array(particle_group["pz"])
         # check for zero pz
         assert np.all(pz > 0), "pz must be positive"
 
@@ -466,10 +467,10 @@ def create_fourier_data(field_mesh, component, zmirror=False, n_coef=None):
 
     """
 
-    ir = np.where(field_mesh.r == 0)
+    ir = np.where(field_mesh.r == 0)[0]
     if len(ir) != 1:
         raise ValueError("No r=0 found")
-    ir = ir[0][0]
+    ir = ir[0]
 
     z0 = field_mesh.coord_vec("z")
 
@@ -611,7 +612,8 @@ def create_impact_solrf_fieldmap_derivatives(
         zmax: float
 
     """
-    assert field_mesh.geometry == "cylindrical"
+    if field_mesh.geometry != "cylindrical":
+        raise ValueError(f"Requires cylindrical geometry, got: {field_mesh.geometry}")
     if method != "spline":
         raise NotImplementedError(f"Unknown method '{method}', must be 'spline'")
 
@@ -629,7 +631,8 @@ def create_impact_solrf_fieldmap_derivatives(
         fz = field_mesh[component][0, 0, :]
 
         fz = np.real_if_close(fz)
-        assert all(np.imag(fz) == 0)
+        if not all(np.imag(fz) == 0):
+            raise ValueError(f"On-axis {component} field must be real")
 
         field[component] = {
             "z0": 0,  # Force

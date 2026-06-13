@@ -156,7 +156,7 @@ def slice_plot(
         raise ValueError(f"Incompatible units: {[u.unitSymbol for u in ulist]}")
     uy = u0.unitSymbol
 
-    ymin = max([slice_dat[k].min() for k in keys])
+    ymin = min([slice_dat[k].min() for k in keys])
     ymax = max([slice_dat[k].max() for k in keys])
 
     _, f2, uy, ymin, ymax = plottable_array_and_units(
@@ -604,7 +604,8 @@ def plot_fieldmesh_cylindrical_2d(
 
     """
 
-    assert fm.geometry == "cylindrical"
+    if fm.geometry != "cylindrical":
+        raise ValueError(f"Requires cylindrical geometry, got: {fm.geometry}")
 
     if mirror not in (None, "r"):
         raise ValueError("mirror must be None or 'r'")
@@ -793,6 +794,8 @@ def plot_fieldmesh_rectangular_1d(
 
     if not axes:
         fig, axes = plt.subplots(**kwargs)
+    else:
+        fig = axes.get_figure()
 
     # Use recursion to plot multiple field components
     if isinstance(field_component, list):
@@ -888,7 +891,8 @@ def plot_fieldmesh_rectangular_2d(
 
     """
 
-    assert fm.geometry == "rectangular"
+    if fm.geometry != "rectangular":
+        raise ValueError(f"Requires rectangular geometry, got: {fm.geometry}")
 
     valid_coordinates = set(fm.axis_labels)
     coordinate_value = None
@@ -906,6 +910,8 @@ def plot_fieldmesh_rectangular_2d(
 
     if not axes:
         fig, axes = plt.subplots(**kwargs)
+    else:
+        fig = axes.get_figure()
 
     if not cmap:
         cmap = CMAP1
@@ -1024,6 +1030,9 @@ def plot_fieldmesh_rectangular_2d(
         orientation="vertical",
         label=llabel,
     )
+
+    if return_figure:
+        return fig
 
 
 def plot_1d_density(

@@ -184,13 +184,15 @@ def genesis2_dpa_to_data(dpa, *, xlamds, current, zsep=1, species="electron"):
 
     """
 
-    assert species == "electron"
+    if species != "electron":
+        raise ValueError(f"Only electron is supported, got: {species}")
     mc2 = mec2
 
     dz = xlamds * zsep
 
     nslice, dims, n1 = dpa.shape  # n1 particles in a single slice
-    assert dims == 6
+    if dims != 6:
+        raise ValueError(f".dpa data must have 6 phase-space dimensions, found {dims}")
     n_particle = n1 * nslice
 
     gamma = dpa[:, 0, :].flatten()
@@ -199,7 +201,7 @@ def genesis2_dpa_to_data(dpa, *, xlamds, current, zsep=1, species="electron"):
     y = dpa[:, 3, :].flatten()
     px = dpa[:, 4, :].flatten() * mc2
     py = dpa[:, 5, :].flatten() * mc2
-    pz = np.sqrt((gamma**2 - 1) * mc2**2 - px**2 - py * 2)
+    pz = np.sqrt((gamma**2 - 1) * mc2**2 - px**2 - py**2)
 
     i0 = np.arange(nslice)
     i_slice = np.repeat(i0[:, np.newaxis], n1, axis=1).flatten()
@@ -495,12 +497,10 @@ def genesis4_par_to_data(h5, species="electron", smear=True):
     ]
 
     params = {}
-    units = {}
     for k in scalars:
-        assert len(h5[k]) == 1
+        if len(h5[k]) != 1:
+            raise ValueError(f"Expected a single value for {k}, found {len(h5[k])}")
         params[k] = h5[k][0]
-        if "unit" in h5[k].attrs:
-            units[k] = h5[k].attrs["unit"].decode("utf-8")
 
     # Useful local variables
     ds_slice = params["slicelength"]  # single slice length
@@ -523,7 +523,8 @@ def genesis4_par_to_data(h5, species="electron", smear=True):
             continue
 
         current = g["current"][:]  # I * s_spacing/c = Q
-        assert len(current) == 1
+        if len(current) != 1:
+            raise ValueError(f"Expected a single current value, found {len(current)}")
         # Skip zero current slices. These usually have nans in the particle data.
         if current == 0:
             i0 += sample

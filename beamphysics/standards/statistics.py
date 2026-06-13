@@ -63,7 +63,7 @@ p energy kinetic_energy xp yp higher_order_energy
 r theta pr ptheta
 Lz
 gamma beta beta_x beta_y beta_z
-x_bar px_bar Jx Jy
+x_bar px_bar y_bar py_bar Jx Jy
 """.split()
 
 # Operators and their properties for computed statistics
@@ -257,10 +257,13 @@ def validate_against_particlegroup(standard: Dict[str, Any]) -> List[str]:
         if label == "bunching":
             label = "bunching_1.23e-4"
 
-        # Try to access the attribute
+        # Access the attribute. Only the exceptions that ParticleGroup
+        # raises to signal "this is not a supported key" are treated as a
+        # validation finding; any other exception is a real bug in the
+        # lookup and is allowed to propagate rather than be hidden here.
         try:
             value = P[label]
-        except (AttributeError, KeyError, Exception) as e:
+        except (AttributeError, KeyError, ValueError) as e:
             warnings.append(f"Label '{label}' not accessible in ParticleGroup: {e}")
             continue
 
@@ -419,9 +422,10 @@ def generate_markdown(standard: Dict[str, Any]) -> str:
             if units:
                 try:
                     u = pmd_unit.from_symbol(units)
-                    lines.append(f"**unitSI:** `{u.unitSI}`")
+                    lines.append(f"**unitSI:** `{u.unitSI:g}`")
                     lines.append("")
-                    lines.append(f"**unitDimension:** `{u.unitDimension}`")
+                    dim = ", ".join(f"{d:g}" for d in u.unitDimension)
+                    lines.append(f"**unitDimension:** `({dim})`")
                     lines.append("")
                 except (ValueError, KeyError):
                     pass  # Skip if unit cannot be parsed
@@ -527,19 +531,9 @@ def get_category(
 
 
 def _multiply_units(unit1: str, unit2: str) -> str:
-    """Multiply two unit strings together."""
-    if unit1 == "1" and unit2 == "1":
-        return "1"
-    if unit1 == "1":
-        return unit2
-    if unit2 == "1":
-        return unit1
-
-    # Handle common simplifications
-    if unit1 == unit2:
-        return f"{unit1}^2"
-
-    return f"{unit1}*{unit2}"
+    """Multiply two unit strings, matching the units pg_units computes for
+    covariance keys (identity handling and round-trip-safe symbols included)."""
+    return (pmd_unit(unit1) * pmd_unit(unit2)).unitSymbol
 
 
 def _generate_computed_statistics_list(base_stats: Dict[str, Dict]) -> List[Dict]:

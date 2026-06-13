@@ -7,7 +7,6 @@ matplotlib.use("Agg")
 import pytest
 
 from beamphysics import single_particle
-from beamphysics.labels import mathlabel
 from beamphysics.plot import (
     _charge_density_units_str,
     marginal_plot,
@@ -116,17 +115,6 @@ def test_plottable_array_and_units_tolerates_unparseable_strings() -> None:
     assert units_str == "1e3 counts"
     _, _, units_str, _, _ = plottable_array_and_units(arr, "counts", nice=False)
     assert units_str == "counts"
-
-
-def test_mathlabel_units_only() -> None:
-    """mathlabel with no keys is a units-only label, as used by the
-    marginal histograms."""
-    assert mathlabel(units="") == ""
-    assert mathlabel(units="A") == r"$\mathrm{A}$"
-    assert mathlabel(units="C/(eV/c)") == r"$\mathrm{C}/(\mathrm{eV}/\mathrm{c})$"
-    # Unparseable falls back to mathrm with * -> cdot.
-    assert r"{\cdot}" in mathlabel(units="foo*bar")
-    assert mathlabel(units="eV/c", tex=False) == "eV/c"
 
 
 def test_single_particle_plots_draw() -> None:

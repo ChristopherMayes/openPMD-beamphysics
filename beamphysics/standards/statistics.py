@@ -257,10 +257,13 @@ def validate_against_particlegroup(standard: Dict[str, Any]) -> List[str]:
         if label == "bunching":
             label = "bunching_1.23e-4"
 
-        # Try to access the attribute
+        # Access the attribute. Only the exceptions that ParticleGroup
+        # raises to signal "this is not a supported key" are treated as a
+        # validation finding; any other exception is a real bug in the
+        # lookup and is allowed to propagate rather than be hidden here.
         try:
             value = P[label]
-        except Exception as e:
+        except (AttributeError, KeyError, ValueError) as e:
             warnings.append(f"Label '{label}' not accessible in ParticleGroup: {e}")
             continue
 

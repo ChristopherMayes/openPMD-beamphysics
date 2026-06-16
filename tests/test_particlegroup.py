@@ -136,6 +136,31 @@ def test_eq_checks_species_and_does_not_assign_ids():
     assert P != P3
 
 
+def test_eq_default_ids_match_missing_ids():
+    """A group whose explicit ids are the default 1..n must compare equal to an
+    otherwise-identical group that has no ids stored."""
+    P1 = P.copy()
+    P2 = P.copy()
+    P1._data.pop("id", None)
+    P2.assign_id()  # default ids: 1..n
+    assert np.array_equal(P2._data["id"], np.arange(1, len(P2) + 1))
+    assert P1 == P2
+    assert P2 == P1  # symmetric
+    assert "id" not in P1._data  # no side effect
+
+
+def test_eq_custom_ids_differ_from_missing_ids():
+    """A group with explicit non-default ids must not compare equal to an
+    otherwise-identical group that has no ids (which would default to 1..n)."""
+    P1 = P.copy()
+    P2 = P.copy()
+    P1._data.pop("id", None)
+    P2.id = np.arange(1, len(P2) + 1) + 100  # non-default ids
+    assert P1 != P2
+    assert P2 != P1  # symmetric
+    assert "id" not in P1._data  # no side effect
+
+
 def test_write_reload(tmp_path):
     h5file = os.path.join(tmp_path, "test.h5")
     P.write(h5file)

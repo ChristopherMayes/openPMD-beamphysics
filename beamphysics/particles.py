@@ -387,7 +387,7 @@ class ParticleGroup:
         """
         if "id" not in self._settable_array_keys:
             self._settable_array_keys.append("id")
-        self.id = np.arange(1, self["n_particle"] + 1)
+        self.id = default_id(self["n_particle"])
 
     @property
     def n_particle(self):
@@ -1836,16 +1836,20 @@ class ParticleGroup:
         if isinstance(other, ParticleGroup):
             if self.species != other.species:
                 return False
-            # Only compare ids that already exist: accessing self["id"] would
-            # otherwise *assign* fresh ids to both operands as a side effect.
-            if ("id" in self._data) != ("id" in other._data):
-                return False
             keys = ["x", "px", "y", "py", "z", "pz", "t", "status", "weight"]
-            if "id" in self._data:
-                keys.append("id")
             for key in keys:
                 if not np.allclose(self[key], other[key]):
                     return False
+
+            # Compare ids without triggering assign_id as a side effect. If only
+            # one operand has explicit ids, compare them against the default ids
+            # (1..n) that assign_id would otherwise produce for the other.
+            self_has_id = "id" in self._data
+            other_has_id = "id" in other._data
+            if self_has_id or other_has_id:
+                self_id = self._data["id"] if self_has_id else default_id(len(self))
+                other_id = other._data["id"] if other_has_id else default_id(len(other))
+                return np.array_equal(self_id, other_id)
             return True
 
         return NotImplemented
@@ -2211,6 +2215,23 @@ def load_bunch_data(h5):
         data["id"] = h5["id"][:]
 
     return data
+
+
+def default_id(n):
+    """
+    Return the default particle ids: integers from 1 to ``n``.
+
+    Parameters
+    ----------
+    n : int
+        Number of particles.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array ``[1, 2, ..., n]``.
+    """
+    return np.arange(1, n + 1)
 
 
 def full_array(n, val):

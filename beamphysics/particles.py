@@ -1849,8 +1849,7 @@ class ParticleGroup:
             if self_has_id or other_has_id:
                 self_id = self._data["id"] if self_has_id else default_id(len(self))
                 other_id = other._data["id"] if other_has_id else default_id(len(other))
-                if not np.array_equal(self_id, other_id):
-                    return False
+                return np.array_equal(self_id, other_id)
             return True
 
         return NotImplemented

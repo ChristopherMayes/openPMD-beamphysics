@@ -1,1 +1,1 @@
-::: pmd_beamphysics.ParticleGroup
+::: beamphysics.ParticleGroup

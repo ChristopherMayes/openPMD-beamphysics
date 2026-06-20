@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from pmd_beamphysics.fields.solenoid import C_full, cel, make_solenoid_fieldmesh
+from beamphysics.fields.solenoid import C_full, cel, make_solenoid_fieldmesh
 
 
 @pytest.mark.parametrize(

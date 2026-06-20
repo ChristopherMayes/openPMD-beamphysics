@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-from pmd_beamphysics.testing import pg_from_random_normal
+from beamphysics.testing import pg_from_random_normal
 
 
 @pytest.mark.parametrize("t_or_z", ["t", "z"])

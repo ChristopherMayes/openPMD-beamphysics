@@ -1,11 +1,13 @@
 import os
+import pathlib
 
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from pmd_beamphysics import ParticleGroup
-from pmd_beamphysics.particles import single_particle
+from beamphysics import ParticleGroup
+from beamphysics.particles import single_particle
 
 P = ParticleGroup("docs/examples/data/bmad_particles.h5")
 
@@ -79,6 +81,86 @@ def test_twiss():
     P.twiss("xy", fraction=0.95)
 
 
+def test_twiss_respects_weights():
+    """Twiss must use the weighted covariance: particles with (nearly) zero
+    weight should not influence the result."""
+    P2 = P.copy()
+    keep = np.arange(len(P2)) % 2 == 0
+    w = np.array(P2.weight, dtype=float).copy()
+    w[~keep] *= 1e-13  # effectively remove the odd-indexed particles
+    P2.weight = w
+
+    t_weighted = P2.twiss(plane="x")
+    t_subset = P[keep].twiss(plane="x")
+    assert t_weighted["beta_x"] == pytest.approx(t_subset["beta_x"], rel=1e-6)
+    # And the down-weighted group differs from the unmodified full group.
+    t_full = P.twiss(plane="x")
+    assert t_weighted["beta_x"] != pytest.approx(t_full["beta_x"], rel=1e-9)
+
+
+def test_twiss_match_forwards_p0c():
+    """twiss_match must forward p0c to matched_particles."""
+    from beamphysics.statistics import matched_particles
+
+    via_method = P.twiss_match(beta=10, alpha=0, plane="x", p0c=2 * P["mean_p"])
+    direct = matched_particles(P, beta=10, alpha=0, plane="x", p0c=2 * P["mean_p"])
+    np.testing.assert_allclose(via_method.px, direct.px)
+    # And a different p0c gives a different result.
+    other = P.twiss_match(beta=10, alpha=0, plane="x", p0c=P["mean_p"])
+    assert not np.allclose(via_method.px, other.px)
+
+
+def test_slice_statistics_twiss_keys_filled():
+    """Requesting twiss keys must return computed per-slice twiss values,
+    never an uninitialized array under the raw key."""
+    from beamphysics.statistics import slice_statistics
+
+    sdat = slice_statistics(P, keys=["mean_z", "twiss_x"], n_slice=5, slice_key="z")
+    assert "twiss_x" not in sdat  # expanded, not returned raw
+    assert "twiss_beta_x" in sdat
+    assert np.all(np.isfinite(sdat["twiss_beta_x"]))
+
+
+def test_eq_checks_species_and_does_not_assign_ids():
+    """Comparing two groups must not assign ids as a side effect, and
+    groups of different species must not compare equal."""
+    P1 = P.copy()
+    P2 = P.copy()
+    P1._data.pop("id", None)
+    P2._data.pop("id", None)
+    assert P1 == P2
+    assert "id" not in P1._data and "id" not in P2._data  # no side effect
+
+    P3 = P.copy()
+    P3._data["species"] = "positron"
+    assert P != P3
+
+
+def test_eq_default_ids_match_missing_ids():
+    """A group whose explicit ids are the default 1..n must compare equal to an
+    otherwise-identical group that has no ids stored."""
+    P1 = P.copy()
+    P2 = P.copy()
+    P1._data.pop("id", None)
+    P2.assign_id()  # default ids: 1..n
+    assert np.array_equal(P2._data["id"], np.arange(1, len(P2) + 1))
+    assert P1 == P2
+    assert P2 == P1  # symmetric
+    assert "id" not in P1._data  # no side effect
+
+
+def test_eq_custom_ids_differ_from_missing_ids():
+    """A group with explicit non-default ids must not compare equal to an
+    otherwise-identical group that has no ids (which would default to 1..n)."""
+    P1 = P.copy()
+    P2 = P.copy()
+    P1._data.pop("id", None)
+    P2.id = np.arange(1, len(P2) + 1) + 100  # non-default ids
+    assert P1 != P2
+    assert P2 != P1  # symmetric
+    assert "id" not in P1._data  # no side effect
+
+
 def test_write_reload(tmp_path):
     h5file = os.path.join(tmp_path, "test.h5")
     P.write(h5file)
@@ -89,6 +171,15 @@ def test_write_reload(tmp_path):
 
     P2.x += 1
     assert P != P2
+
+
+def test_write_reload_h5(tmp_path: pathlib.Path):
+    h5file = tmp_path / "test.h5"
+    with h5py.File(h5file, "w") as fp:
+        P.write(fp)
+
+    P2 = ParticleGroup(h5file)
+    assert P == P2
 
 
 def test_fractional_split():

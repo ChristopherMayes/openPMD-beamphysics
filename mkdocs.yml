@@ -20,6 +20,13 @@ nav:
           - examples/fields/field_conversion.ipynb
           - examples/fields/corrector_modeling.ipynb
           - examples/fields/solenoid_modeling.ipynb
+      - Wakefields:
+          - examples/wakefields/resistive_wall.ipynb
+          - examples/wakefields/impedance_wakefield.ipynb
+      - Wavefront:
+          - examples/wavefront/wavefront.ipynb
+          - examples/wavefront/advanced_drift.ipynb
+          - examples/wavefront/experimental_pytorch_wavefront.ipynb
       - Utilities:
           - examples/units.ipynb
           - examples/labels.ipynb
@@ -27,6 +34,14 @@ nav:
   - API:
       - Particles: api/particles.md
       - Fields: api/fields.md
+      - Wakefields: api/wakefields.md
+
+  - Standards:
+      - Statistics Standard: api/statistics_standard.md
+      - Computed Statistics: api/computed_statistics.md
+
+  - Contributing:
+      - Statistics Schema: statistics_schema.md
 
 theme:
   icon:
@@ -38,6 +53,7 @@ theme:
     - navigation.top
     - navigation.tabs
     - navigation.indexes
+    - content.code.copy
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -53,6 +69,7 @@ theme:
         name: Switch to light mode
 
 markdown_extensions:
+  - attr_list
   - pymdownx.highlight
   - pymdownx.superfences
   - pymdownx.arithmatex: # Enable MathJAX https://squidfunk.github.io/mkdocs-material/reference/mathjax/
@@ -77,37 +94,34 @@ plugins:
 
   - mkdocs-jupyter:
       include_source: True
-
   - mkdocstrings:
-      default_handler: python
       handlers:
         python:
           options:
-            filters:
-              - "!^_" # exclude all members starting with _
-              - "^__init__$" # but always include __init__ modules and methods
-            docstring_style: numpy
+            backlinks: tree
             docstring_options:
               ignore_init_summary: false
-            heading_level: 3
-            show_root_heading: true
-            show_root_toc_entry: true
-            show_root_full_path: true
-            show_root_members_full_path: false
-            show_object_full_path: true
-            show_category_heading: true
-            show_if_no_docstring: false
-            show_signature: true
-            signature_crossrefs: true
-            show_signature_annotations: false
-            separate_signature: true
+            docstring_style: numpy
+            docstring_section_style: list
+            filters: public
+            heading_level: 2
+            inherited_members: true
             line_length: 100
             merge_init_into_class: true
-            show_source: true
+            parameter_headings: false
+            relative_crossrefs: true
+            scoped_crossrefs: true
+            separate_signature: true
             show_bases: true
-            show_submodules: false
-            group_by_category: true
+            show_inheritance_diagram: true
+            show_root_full_path: false
+            show_root_heading: true
+            show_signature_annotations: true
+            show_signature_type_parameters: true
+            show_source: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            signature_crossrefs: true
+            summary: true
+            type_parameter_headings: true
             unwrap_annotated: true
-            import:
-              - https://docs.python.org/3/objects.inv
-              - https://docs.h5py.org/en/stable/objects.inv

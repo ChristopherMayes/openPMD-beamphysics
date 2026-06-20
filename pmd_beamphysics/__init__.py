@@ -1,20 +1,12 @@
-from .fields.fieldmesh import FieldMesh
-from .particles import ParticleGroup, single_particle
-from .readers import particle_paths
-from .status import ParticleStatus
-from .writers import pmd_init
+import sys
+import warnings
+from beamphysics import *  # noqa: F403
 
-try:
-    from ._version import __version__
-except ImportError:
-    __version__ = "0.0.0"
+sys.modules["pmd_beamphysics"] = sys.modules["beamphysics"]
 
-
-__all__ = [
-    "FieldMesh",
-    "ParticleGroup",
-    "ParticleStatus",
-    "particle_paths",
-    "pmd_init",
-    "single_particle",
-]
+warnings.warn(
+    "The 'pmd_beamphysics' package name is deprecated and will be removed in a future version. "
+    "Please use 'beamphysics' instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)

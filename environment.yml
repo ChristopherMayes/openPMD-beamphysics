@@ -1,9 +1,9 @@
 # conda env create -f environment.yml
-name: pmd_beamphysics-dev
+name: beamphysics-dev
 channels:
   - conda-forge
 dependencies:
-  - python>=3.9
+  - python>=3.10
   - numpy
   - scipy>=1.0.0
   - matplotlib
@@ -13,13 +13,16 @@ dependencies:
   - pytest
   - pytest-benchmark
   - pytest-cov
+  - pyyaml
+  - pint  # test-only: independent oracle for beamphysics.units
   - jupyterlab>=3
-  - pygments
-  - mkdocs==1.5.2
+  - nbconvert
+  # Documentation
+  - mkdocs
   - mkdocstrings
   - mkdocs-material
-  - mkdocs-jupyter==0.24.6
+  - mkdocs-jupyter
   - mkdocstrings-python
+  - pygments
+  - pymdown-extensions >=10.21.2
   - pip
-  - pip:
-      - mkdocstrings-python

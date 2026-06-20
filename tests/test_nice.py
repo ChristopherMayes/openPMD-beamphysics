@@ -1,4 +1,4 @@
-from pmd_beamphysics.units import nice_array
+from beamphysics.units import nice_array
 import numpy as np
 
 

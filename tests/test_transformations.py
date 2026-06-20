@@ -2,11 +2,11 @@ import numpy as np
 import pytest
 from unittest.mock import Mock
 
-from pmd_beamphysics.utils import get_rotation_matrix
-from pmd_beamphysics.testing import assert_pg_close, pg_from_random_normal
+from beamphysics.utils import get_rotation_matrix
+from beamphysics.testing import assert_pg_close, pg_from_random_normal
 
 # Load the test fixture
-pytest_plugins = ("pmd_beamphysics.testing",)
+pytest_plugins = ("beamphysics.testing",)
 
 
 transform_test_cases = [

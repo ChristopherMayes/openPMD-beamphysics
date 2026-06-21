@@ -442,7 +442,7 @@ def write_genesis4_distribution(particle_group, h5file, verbose=False):
 
 
 PARFILE_SLICE_FIELDS = ("x", "px", "y", "py", "gamma", "theta", "current")
-ParfileSliceData = namedtuple("RawSliceData", PARFILE_SLICE_FIELDS)
+ParfileSliceData = namedtuple("ParfileSliceData", PARFILE_SLICE_FIELDS)
 
 
 # Known scalars
@@ -662,12 +662,9 @@ def genesis4_par_to_data(
         # Single charge
         q1 = current * s_spacing / c_light / n1
 
-        # Skip subphysical particles
+        # Skip subphysical particles. This also skips zero-current slices,
+        # which usually have nans in the particle data.
         if q1 < cutoff:
-            continue
-
-        # Skip zero current slices. These usually have nans in the particle data.
-        if current == 0:
             continue
 
         # Calculate z
@@ -694,6 +691,12 @@ def genesis4_par_to_data(
         gammas.append(pdata.gamma)
         zs.append(z1)
         weights.append(np.full(n1, q1))
+
+    if not weights:
+        raise ValueError(
+            "No slices remain after filtering. All slices were empty, "
+            f"zero-current, or below the cutoff ({cutoff} C)."
+        )
 
     if equal_weights:
         # resample each slice

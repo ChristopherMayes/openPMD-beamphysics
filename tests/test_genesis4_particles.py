@@ -1,0 +1,241 @@
+from __future__ import annotations
+
+import pathlib
+
+import numpy as np
+import pytest
+
+from beamphysics import ParticleGroup
+from beamphysics.interfaces.genesis import (
+    genesis4_par_to_data,
+    genesis4_parfile_n_particle,
+    genesis4_parfile_scalars,
+    genesis4_parfile_slice_groups,
+)
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+DATA_DIR = REPO_ROOT / "docs" / "examples" / "data" / "genesis4"
+PARFILE = DATA_DIR / "end.par.h5"
+# one4one fixture: each macroparticle is a single electron, so per-slice particle
+# counts vary with the current and some slices are empty.
+ONE4ONE_PARFILE = DATA_DIR / "one4one.par.h5"
+
+# The fixtures are committed for convenience but are regenerable from the inputs
+# in docs/examples/data/genesis4/ by running Genesis4 (`genesis4 genesis4.in` and
+# `genesis4 one4one.in`; see run.sh and read_examples.ipynb).
+
+# Input beam was a 100 pC Gaussian (see genesis4.in)
+EXPECTED_CHARGE = 100e-12
+CHARGE_RTOL = 1e-3
+
+
+@pytest.fixture
+def parfile() -> str:
+    assert PARFILE.exists(), f"Missing test data: {PARFILE}"
+    return str(PARFILE)
+
+
+@pytest.fixture
+def one4one_parfile() -> str:
+    assert ONE4ONE_PARFILE.exists(), f"Missing test data: {ONE4ONE_PARFILE}"
+    return str(ONE4ONE_PARFILE)
+
+
+def test_parfile_scalars(parfile):
+    params = genesis4_parfile_scalars(parfile)
+    # slicespacing must be an integer multiple of slicelength (the 'sample')
+    sample = params["slicespacing"] / params["slicelength"]
+    assert np.isclose(sample, round(sample))
+    assert params["slicecount"] > 0
+
+
+def test_parfile_slice_groups(parfile):
+    groups = genesis4_parfile_slice_groups(parfile)
+    assert all(g.startswith("slice") for g in groups)
+    assert "Meta" not in groups
+    # Groups must be sorted
+    assert groups == sorted(groups)
+
+
+def test_from_genesis4_default_charge(parfile):
+    P = ParticleGroup.from_genesis4(parfile)
+    assert P.species == "electron"
+    assert np.all(P.weight > 0)
+    assert np.allclose(P.charge, EXPECTED_CHARGE, rtol=CHARGE_RTOL)
+
+
+def test_smear_preserves_charge_and_count(parfile):
+    P = ParticleGroup.from_genesis4(parfile)
+    P_smear = ParticleGroup.from_genesis4(parfile, smear=True, rng=0)
+    assert P_smear.n_particle == P.n_particle
+    assert np.allclose(P_smear.charge, P.charge, rtol=CHARGE_RTOL)
+
+
+def test_smear_is_reproducible_with_rng(parfile):
+    P1 = ParticleGroup.from_genesis4(parfile, smear=True, rng=42)
+    P2 = ParticleGroup.from_genesis4(parfile, smear=True, rng=42)
+    np.testing.assert_array_equal(P1.z, P2.z)
+
+
+def test_equal_weights_uniform_and_charge(parfile):
+    P = ParticleGroup.from_genesis4(parfile, smear=True, equal_weights=True, rng=1)
+    # All particles share a single weight
+    assert np.unique(P.weight).size == 1
+    # Charge is still preserved
+    assert np.allclose(P.charge, EXPECTED_CHARGE, rtol=CHARGE_RTOL)
+
+
+def test_z0_offsets_absolute_position(parfile):
+    z0 = 1.0
+    P = ParticleGroup.from_genesis4(parfile, z0=z0)
+    P_shifted = ParticleGroup.from_genesis4(parfile, z0=z0 + 5.0)
+    assert np.isclose(P_shifted.z.min() - P.z.min(), 5.0)
+
+
+def test_wrap_bounds_in_slice_position(parfile):
+    params = genesis4_parfile_scalars(parfile)
+    ds_slice = params["slicelength"]
+    s_spacing = params["slicespacing"]
+    P = ParticleGroup.from_genesis4(parfile, wrap=True)
+    # With wrapping, the in-slice offset is within one slice length
+    in_slice = P.z % s_spacing
+    assert in_slice.min() >= 0
+    assert in_slice.max() <= ds_slice + 1e-12
+
+
+def test_slices_selection(parfile):
+    selected = [10, 20, 30]
+    data = genesis4_par_to_data(parfile, slices=selected)
+    full = genesis4_par_to_data(parfile)
+    assert len(data["weight"]) < len(full["weight"])
+    # Selecting a single slice yields a contiguous z block within that slice
+    one = genesis4_par_to_data(parfile, slices=[10])
+    assert len(one["weight"]) > 0
+
+
+def test_cutoff_filters_subphysical_slices(parfile):
+    # A huge cutoff filters everything and raises a clear error
+    with pytest.raises(ValueError, match="No slices remain"):
+        genesis4_par_to_data(parfile, cutoff=1e10)
+    # A zero cutoff keeps at least as many particles as the default
+    small = genesis4_par_to_data(parfile, cutoff=0.0)
+    default = genesis4_par_to_data(parfile)
+    assert len(small["weight"]) >= len(default["weight"])
+
+
+# ----------------------------------------------------------------------------
+# one4one mode: each macroparticle is a single electron, so per-slice particle
+# counts vary and some slices are empty.
+# ----------------------------------------------------------------------------
+
+
+def test_one4one_has_variable_and_empty_slices(one4one_parfile):
+    params = genesis4_parfile_scalars(one4one_parfile)
+    assert params["one4one"] == 1
+    groups = genesis4_parfile_slice_groups(one4one_parfile)
+    import h5py
+
+    with h5py.File(one4one_parfile, "r") as h5:
+        counts = [h5[g]["x"].shape[0] for g in groups]
+    # The fixture must actually exercise the tricky cases
+    assert min(counts) == 0  # at least one empty slice
+    assert len(set(counts)) > 1  # variable per-slice counts
+
+
+def test_one4one_default_load(one4one_parfile):
+    # Variable/empty slice counts must not raise (no division by zero).
+    P = ParticleGroup.from_genesis4(one4one_parfile)
+    assert P.n_particle > 0
+    assert np.all(P.weight > 0)
+    # In one4one mode every macroparticle is a single electron, so all weights
+    # are exactly the elementary charge.
+    from scipy.constants import e as qe
+
+    assert np.unique(P.weight).size == 1
+    np.testing.assert_allclose(P.weight, qe, rtol=1e-12)
+
+
+def test_one4one_cutoff_does_not_drop_macroparticles(one4one_parfile):
+    # The qe-scale cutoff must NOT be applied to one4one beams. Each slice
+    # holds round(ne) particles for a smooth current, so the reconstructed
+    # weight q1 = ne*qe/round(ne) can fall just below qe; the default cutoff
+    # would otherwise silently drop those slices (~half the beam).
+    import h5py
+
+    from beamphysics.interfaces.genesis import load_parfile_slice_data
+
+    groups = genesis4_parfile_slice_groups(one4one_parfile)
+    with h5py.File(one4one_parfile, "r") as h5:
+        n_raw = sum(len(load_parfile_slice_data(h5[g]).x) for g in groups)
+
+    # The default load and a nonzero cutoff both keep every raw macroparticle.
+    assert ParticleGroup.from_genesis4(one4one_parfile).n_particle == n_raw
+    assert (
+        ParticleGroup.from_genesis4(one4one_parfile, cutoff=1.6e-19).n_particle == n_raw
+    )
+
+
+def test_one4one_smear_preserves_charge(one4one_parfile):
+    P = ParticleGroup.from_genesis4(one4one_parfile)
+    P_smear = ParticleGroup.from_genesis4(one4one_parfile, smear=True, rng=0)
+    assert P_smear.n_particle == P.n_particle
+    np.testing.assert_allclose(P_smear.charge, P.charge, rtol=1e-12)
+
+
+def test_one4one_equal_weights(one4one_parfile):
+    # Previously raised AssertionError because slices have unequal counts.
+    P = ParticleGroup.from_genesis4(one4one_parfile)
+    P_eq = ParticleGroup.from_genesis4(one4one_parfile, equal_weights=True, rng=0)
+    assert np.unique(P_eq.weight).size == 1
+    # Charge is preserved by the resampling.
+    np.testing.assert_allclose(P_eq.charge, P.charge, rtol=CHARGE_RTOL)
+
+
+def test_one4one_n_particle_subsamples_and_conserves_charge(one4one_parfile):
+    P = ParticleGroup.from_genesis4(one4one_parfile)
+    target = P.n_particle // 2
+
+    P_sub = ParticleGroup.from_genesis4(one4one_parfile, n_particle=target, rng=0)
+    # Subsampled to exactly the target count.
+    assert P_sub.n_particle == target
+    # Total charge is conserved exactly by the global up-weighting.
+    np.testing.assert_allclose(P_sub.charge, P.charge, rtol=1e-12)
+    # one4one weights stay uniform after subsampling.
+    assert np.unique(P_sub.weight).size == 1
+
+
+def test_one4one_fraction_subsamples_and_conserves_charge(one4one_parfile):
+    P = ParticleGroup.from_genesis4(one4one_parfile)
+    total = genesis4_parfile_n_particle(one4one_parfile)
+
+    # `fraction` was removed; the helper makes a fractional target trivial.
+    P_sub = ParticleGroup.from_genesis4(
+        one4one_parfile, n_particle=round(0.25 * total), rng=0
+    )
+    # Exactly round(0.25 * total) particles.
+    assert P_sub.n_particle == round(0.25 * P.n_particle)
+    # Total charge is conserved exactly.
+    np.testing.assert_allclose(P_sub.charge, P.charge, rtol=1e-12)
+    # one4one weights stay uniform after subsampling.
+    assert np.unique(P_sub.weight).size == 1
+
+
+def test_one4one_n_particle_over_total_is_noop(one4one_parfile):
+    P = ParticleGroup.from_genesis4(one4one_parfile)
+    # n_particle >= total leaves the beam untouched.
+    P_big = ParticleGroup.from_genesis4(
+        one4one_parfile, n_particle=P.n_particle * 10, rng=0
+    )
+    assert P_big.n_particle == P.n_particle
+    np.testing.assert_allclose(P_big.charge, P.charge, rtol=1e-12)
+
+
+def test_one4one_resample_argument_validation(one4one_parfile):
+    with pytest.raises(ValueError, match="n_particle"):
+        ParticleGroup.from_genesis4(one4one_parfile, n_particle=0)
+
+
+def test_parfile_n_particle_matches_full_load(one4one_parfile):
+    # The cheap count helper must agree with the actual loaded particle count.
+    P = ParticleGroup.from_genesis4(one4one_parfile)
+    assert genesis4_parfile_n_particle(one4one_parfile) == P.n_particle

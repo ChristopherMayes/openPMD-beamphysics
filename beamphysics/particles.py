@@ -1104,6 +1104,7 @@ class ParticleGroup:
         slices: Optional[list[int]] = None,
         equal_weights: bool = False,
         cutoff: float = 1.6e-19,
+        n_particle: Optional[int] = None,
         rng: Optional[np.random.Generator] = None,
     ) -> "ParticleGroup":
         """
@@ -1141,6 +1142,16 @@ class ParticleGroup:
         cutoff : float, default=1.6e-19
             Minimum per-particle weight in Coulombs. Slices resulting in
             sub-electron macroparticles are skipped to avoid numerical issues.
+            Ignored for one4one beams, where each macroparticle is a single
+            electron of weight exactly the elementary charge.
+
+        n_particle : int, optional
+            Subsample the beam to exactly this many particles as it is read,
+            thinning each slice in proportion to its particle count so the
+            charge profile and total charge are preserved. The full beam is
+            never held in memory — useful for very large one4one files. Values
+            >= the number of particles in the file are a no-op. Use
+            `genesis4_parfile_n_particle` to find the file's total count.
 
         rng : numpy.random.Generator or seed, optional
             Random number generator or seed used for smearing and resampling.
@@ -1159,6 +1170,7 @@ class ParticleGroup:
             slices=slices,
             equal_weights=equal_weights,
             cutoff=cutoff,
+            n_particle=n_particle,
             rng=rng,
         )
         return cls(data=data)

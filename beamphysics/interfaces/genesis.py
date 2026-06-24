@@ -7,7 +7,7 @@ import numpy as np
 from h5py import File, Group
 
 from ..statistics import twiss_calc
-from ..units import Z0, c_light, mec2, pmd_unit, write_unit_h5
+from ..units import Z0, c_light, e_charge, mec2, pmd_unit, write_unit_h5
 
 # Genesis 1.3
 # -------------
@@ -494,6 +494,37 @@ def genesis4_parfile_slice_groups(h5):
     )
 
 
+def genesis4_parfile_n_particle(h5):
+    """
+    Total number of particles in a Genesis4 .par file.
+
+    Reads only the slice dataset shapes (HDF5 metadata, no bulk particle data),
+    so it is cheap even for very large files. Useful for choosing an
+    `n_particle` subsample size for `genesis4_par_to_data` /
+    `ParticleGroup.from_genesis4`.
+
+    Parameters
+    ----------
+    h5 : str, Path, or h5py.File
+        Path to a Genesis4 `.par` file, or an open h5py file handle.
+
+    Returns
+    -------
+    int
+        Total particle count summed over all slices.
+    """
+    # Allow for opening a file
+    if isinstance(h5, (str, Path)):
+        assert os.path.exists(h5), f"File does not exist: {h5}"
+        h5 = File(h5, "r")
+
+    return sum(
+        h5[g]["x"].shape[0]
+        for g in genesis4_parfile_slice_groups(h5)
+        if isinstance(h5[g], Group) and "x" in h5[g]
+    )
+
+
 def load_parfile_slice_data(group):
     """
     Returns ParfileSliceData with Genesis4's named fields in a slice group.
@@ -514,6 +545,7 @@ def genesis4_par_to_data(
     slices: Optional[list[int]] = None,
     equal_weights: bool = False,
     cutoff: float = 1.6e-19,
+    n_particle: Optional[int] = None,
     rng: Optional[np.random.Generator] = None,
 ) -> dict:
     """
@@ -553,8 +585,20 @@ def genesis4_par_to_data(
         require uniform macroparticles.
 
     cutoff : float, default=1.6e-19
-        Minimum per-particle weight in Coulombs. Slices resulting in
-        sub-electron macroparticles are skipped to avoid numerical issues.
+        Minimum per-particle weight in Coulombs. Quiet-loaded slices whose
+        reconstructed weight falls below this value are skipped to avoid
+        numerical issues (this also removes zero-current slices, which usually
+        carry nans). The cutoff is ignored for one4one beams, where each
+        macroparticle is a single real electron with weight exactly equal to
+        the elementary charge.
+
+    n_particle : int, optional
+        Subsample the beam to exactly this many particles as it is read. Each
+        slice is thinned in proportion to its particle count, so the
+        longitudinal/charge profile is preserved and the total charge is
+        conserved exactly. Values >= the number of particles in the file are a
+        no-op (all particles are returned). Use `genesis4_parfile_n_particle`
+        to find the file's total count.
 
     rng : numpy.random.Generator or seed, optional
         Random number generator or seed used for smearing and resampling.
@@ -592,6 +636,11 @@ def genesis4_par_to_data(
 
     - Transverse momenta px and py are scaled by mec² to convert to eV/c.
 
+    - Both quiet-loading and one4one beams are supported. In one4one mode each
+      macroparticle represents a single electron, so the number of particles per
+      slice varies with the current and some slices may be empty; empty slices are
+      skipped and `equal_weights` handles the unequal per-slice counts.
+
     """
     # Allow for opening a file
     if isinstance(h5, (str, Path)):
@@ -622,6 +671,13 @@ def genesis4_par_to_data(
     ds_slice = params["slicelength"]  # single slice length
     s_spacing = params["slicespacing"]  # spacing between slices
     sample = round(s_spacing / ds_slice)  # This should be an integer
+    one4one = bool(params["one4one"])
+
+    # In one4one mode each macroparticle is a single real electron with weight
+    # exactly qe (see the weight assignment below), so the qe-scale cutoff would
+    # be meaningless and is disabled; the non-finite / non-positive guard still
+    # applies.
+    effective_cutoff = 0.0 if one4one else cutoff
 
     #
     xs = []
@@ -640,6 +696,35 @@ def genesis4_par_to_data(
 
     rng = np.random.default_rng(rng)
 
+    if n_particle is not None and n_particle <= 0:
+        raise ValueError(f"`n_particle` must be positive, got {n_particle}.")
+
+    # Optionally subsample on read to `n_particle` particles. The number to keep
+    # from each slice is decided up front from a cheap pre-pass over dataset
+    # shapes (HDF5 metadata only, no bulk particle data). Systematic
+    # (cumulative-rounding) apportionment keeps each slice's share in proportion
+    # to its size while hitting the requested total exactly. The full-beam
+    # charge is summed in the read loop and the kept weights are rescaled once
+    # at the end to conserve it exactly (and keep one4one weights uniform), so
+    # the full beam is never materialized.
+    keep_counts = None
+    if n_particle is not None:
+        names = [
+            s
+            for s in snames
+            if s in h5 and isinstance(h5[s], Group) and "current" in h5[s]
+        ]
+        counts = np.array([h5[s]["x"].shape[0] for s in names], dtype=np.int64)
+        total_count = int(counts.sum())
+        target = n_particle
+        if total_count and target < total_count:
+            # Round the running cumulative target; consecutive differences give
+            # each slice's keep count and sum exactly to round(target).
+            edges = np.round(np.cumsum(counts) / total_count * target).astype(np.int64)
+            keep_counts = dict(zip(names, np.diff(edges, prepend=0)))
+
+    full_charge = 0.0  # full-beam charge, before subsampling
+
     for sname in snames:
         ix = int(sname[5:])  # Extract slice index
 
@@ -657,18 +742,64 @@ def genesis4_par_to_data(
         current = pdata.current  # I * s_spacing/c = Q
         n1 = len(pdata.x)
 
-        # Convert current to weight (C)
-        # I * s_spacing/c = Q
-        # Single charge
-        q1 = current * s_spacing / c_light / n1
-
-        # Skip subphysical particles. This also skips zero-current slices,
-        # which usually have nans in the particle data.
-        if q1 < cutoff:
+        # Skip empty slices. In one4one mode the number of particles per slice
+        # varies with the current, and low-current slices can have no particles.
+        if n1 == 0:
             continue
 
+        # Convert current to weight (C)
+        if one4one:
+            # Each macroparticle is a single real electron, so its weight is
+            # exactly the elementary charge. Genesis4 stores the smooth
+            # requested current per slice, but populates it with round(ne)
+            # integer particles; reconstructing q1 = ne*qe/round(ne) would
+            # scatter the weights around qe. Genesis4's own &sort namelist
+            # resolves this by resetting each slice current to npart*qe, which
+            # is equivalent to assigning qe to every macroparticle here.
+            q1 = e_charge
+        else:
+            # I * s_spacing/c = Q distributed over the n1 macroparticles.
+            q1 = current * s_spacing / c_light / n1
+
+        # Skip subphysical or non-physical slices. The cutoff removes
+        # quiet-loaded slices whose reconstructed weight is below a single
+        # electron; zero-current slices (usually nans) and any non-finite
+        # weight are always dropped. For one4one beams effective_cutoff is 0
+        # and q1 == qe, so no slices are dropped here (empty slices were
+        # already skipped above).
+        if not np.isfinite(q1) or q1 <= 0 or q1 < effective_cutoff:
+            continue
+
+        # Accumulate the full-beam charge (before any subsampling) so the
+        # subsampled output can be rescaled to conserve it exactly.
+        full_charge += q1 * n1
+
+        # Subsample this slice on read using its pre-computed keep count.
+        # Dropped charge (including whole slices that keep zero) is restored by
+        # a single global rescale after the loop, so the total is conserved
+        # exactly and one4one weights stay uniform.
+        if keep_counts is not None:
+            n_keep = int(keep_counts.get(sname, 0))
+            if n_keep <= 0:
+                continue
+            sel = rng.choice(n1, n_keep, replace=False)
+            x1 = pdata.x[sel]
+            px1 = pdata.px[sel]
+            y1 = pdata.y[sel]
+            py1 = pdata.py[sel]
+            gamma1 = pdata.gamma[sel]
+            theta1 = pdata.theta[sel]
+            n1 = n_keep
+        else:
+            x1 = pdata.x
+            px1 = pdata.px
+            y1 = pdata.y
+            py1 = pdata.py
+            gamma1 = pdata.gamma
+            theta1 = pdata.theta
+
         # Calculate z
-        theta = pdata.theta
+        theta = theta1
 
         # Smear theta over sample slices
         irel = theta / (2 * np.pi)
@@ -684,11 +815,11 @@ def genesis4_par_to_data(
         z1 = z1 + (ix - 1) * s_spacing + z0  # set absolute z
 
         # Collect arrays
-        xs.append(pdata.x)
-        pxs.append(pdata.px * mec2)
-        ys.append(pdata.y)
-        pys.append(pdata.py * mec2)
-        gammas.append(pdata.gamma)
+        xs.append(x1)
+        pxs.append(px1 * mec2)
+        ys.append(y1)
+        pys.append(py1 * mec2)
+        gammas.append(gamma1)
         zs.append(z1)
         weights.append(np.full(n1, q1))
 
@@ -698,22 +829,22 @@ def genesis4_par_to_data(
             f"zero-current, or below the cutoff ({cutoff} C)."
         )
 
-    if equal_weights:
-        # resample each slice
-
+    if equal_weights and len({float(w[0]) for w in weights}) > 1:
+        # Resample each slice so that every output particle carries the same
+        # weight. Slices may have different particle counts (e.g. in one4one
+        # mode), so the sampling is done per slice. If every slice already has
+        # the same per-particle weight (e.g. an unsubsampled one4one beam), the
+        # output is already equal-weight and this block is skipped.
         n_slices = len(weights)
 
-        counts = list(set([len(w) for w in weights]))
-        assert (
-            len(counts) == 1
-        )  # All slices are supposed to have the same number of particles
-        n1 = counts[0]
-
+        counts = np.array([len(w) for w in weights])
         slice_charges = np.array([np.sum(w) for w in weights])
-        max_slice_charge = np.max(
-            slice_charges
-        )  # use this as an upper limit for sampling
-        n_samples = (n1 * slice_charges / max_slice_charge).astype(int)
+
+        # Highest feasible sampling rate (particles per Coulomb) that does not
+        # require more particles than any slice actually has.
+        rate = np.min(counts / slice_charges)
+        n_samples = np.floor(rate * slice_charges).astype(int)
+
         total_charge = np.sum(slice_charges)
         n_samples_total = np.sum(n_samples)
         weight1 = total_charge / n_samples_total  # new equal weight
@@ -721,7 +852,7 @@ def genesis4_par_to_data(
         # Loop over populated slices (note that some are skipped above)
         for i in range(n_slices):
             n_sample = n_samples[i]
-            samples = rng.choice(n1, n_sample, replace=False)
+            samples = rng.choice(counts[i], n_sample, replace=False)
             xs[i] = xs[i][samples]
             pxs[i] = pxs[i][samples]
             ys[i] = ys[i][samples]
@@ -738,6 +869,11 @@ def genesis4_par_to_data(
     gamma = np.hstack(gammas)
     z = np.hstack(zs)
     weight = np.hstack(weights)
+
+    # If the beam was subsampled, rescale the kept weights so the total charge
+    # exactly matches the full beam (this also keeps one4one weights uniform).
+    if keep_counts is not None and weight.sum() > 0:
+        weight = weight * (full_charge / weight.sum())
 
     # Form final particlegroup data
     n = len(weight)

@@ -117,10 +117,11 @@ def test_cutoff_filters_subphysical_slices(parfile):
     # A huge cutoff filters everything and raises a clear error
     with pytest.raises(ValueError, match="No slices remain"):
         genesis4_par_to_data(parfile, cutoff=1e10)
-    # A zero cutoff keeps at least as many particles as the default
-    small = genesis4_par_to_data(parfile, cutoff=0.0)
+    # The default keeps everything (cutoff defaults to 0.0); an explicit
+    # positive cutoff can only drop sub-physical slices, never add particles.
     default = genesis4_par_to_data(parfile)
-    assert len(small["weight"]) >= len(default["weight"])
+    filtered = genesis4_par_to_data(parfile, cutoff=1.6e-19)
+    assert len(filtered["weight"]) <= len(default["weight"])
 
 
 # ----------------------------------------------------------------------------

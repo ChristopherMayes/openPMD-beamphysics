@@ -544,7 +544,7 @@ def genesis4_par_to_data(
     z0: float = 0,
     slices: Optional[list[int]] = None,
     equal_weights: bool = False,
-    cutoff: float = 1.6e-19,
+    cutoff: float = 0.0,
     n_particle: Optional[int] = None,
     rng: Optional[np.random.Generator] = None,
 ) -> dict:
@@ -584,13 +584,16 @@ def genesis4_par_to_data(
         particles have equal charge weights. Useful for simulations that
         require uniform macroparticles.
 
-    cutoff : float, default=1.6e-19
+    cutoff : float, default=0.0
         Minimum per-particle weight in Coulombs. Quiet-loaded slices whose
-        reconstructed weight falls below this value are skipped to avoid
-        numerical issues (this also removes zero-current slices, which usually
-        carry nans). The cutoff is ignored for one4one beams, where each
-        macroparticle is a single real electron with weight exactly equal to
-        the elementary charge.
+        reconstructed weight falls below this value are skipped. By default
+        (0.0) nothing is dropped for being sub-physical, leaving the choice to
+        the user; pass a positive value (e.g. the elementary charge ~1.6e-19)
+        to discard slices whose macroparticles would carry less than a single
+        electron's charge. Zero-current and non-finite (nan) slices are always
+        removed regardless of this value. The cutoff is ignored for one4one
+        beams, where each macroparticle is a single real electron with weight
+        exactly equal to the elementary charge.
 
     n_particle : int, optional
         Subsample the beam to exactly this many particles as it is read. Each

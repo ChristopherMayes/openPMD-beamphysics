@@ -1103,7 +1103,7 @@ class ParticleGroup:
         z0: float = 0.0,
         slices: Optional[list[int]] = None,
         equal_weights: bool = False,
-        cutoff: float = 1.6e-19,
+        cutoff: float = 0.0,
         n_particle: Optional[int] = None,
         rng: Optional[np.random.Generator] = None,
     ) -> "ParticleGroup":
@@ -1139,11 +1139,14 @@ class ParticleGroup:
             particles have equal charge weights. Useful for simulations that
             require uniform macroparticles.
 
-        cutoff : float, default=1.6e-19
-            Minimum per-particle weight in Coulombs. Slices resulting in
-            sub-electron macroparticles are skipped to avoid numerical issues.
-            Ignored for one4one beams, where each macroparticle is a single
-            electron of weight exactly the elementary charge.
+        cutoff : float, default=0.0
+            Minimum per-particle weight in Coulombs. By default (0.0) nothing is
+            dropped for being sub-physical; pass a positive value (e.g. the
+            elementary charge ~1.6e-19) to discard slices whose macroparticles
+            would carry less than a single electron. Zero-current and non-finite
+            slices are always removed. Ignored for one4one beams, where each
+            macroparticle is a single electron of weight exactly the elementary
+            charge.
 
         n_particle : int, optional
             Subsample the beam to exactly this many particles as it is read,

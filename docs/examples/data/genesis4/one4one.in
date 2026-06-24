@@ -1,0 +1,37 @@
+&setup
+  rootname = one4one
+  lattice = genesis4.lat
+  beamline = LAT
+  gamma0 = 1000.0
+  lambda0 = 1e-07
+  delz = 0.026
+  seed = 123456
+  one4one = true
+&end
+
+&time
+  slen = 7.175993210500245e-05
+  sample = 10
+&end
+
+# Low charge so one4one is tractable; Gaussian tails give empty/small slices
+&profile_gauss
+  label = beamcurrent
+  c0 = 0.0015
+  s0 = 3.5879966052501225e-05
+  sig = 1.1959988684167075e-05
+&end
+
+&beam
+  gamma = 1000.0
+  delgam = 1.0
+  current = @beamcurrent
+&end
+
+&track
+  zstop = 1.0
+&end
+
+&write
+beam=one4one
+&end

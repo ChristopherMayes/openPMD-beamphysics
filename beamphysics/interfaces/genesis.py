@@ -471,7 +471,9 @@ def genesis4_parfile_scalars(h5):
 
     params = {}
     for k in _parfile_scalar_datasets:
-        if k not in h5 or h5[k].shape != (1,):
+        if k not in h5:
+            raise ValueError(f"Missing expected scalar dataset '{k}'")
+        if h5[k].shape != (1,):
             raise ValueError(
                 f"Expected scalar dataset '{k}' with shape (1,), got shape {h5[k].shape}"
             )

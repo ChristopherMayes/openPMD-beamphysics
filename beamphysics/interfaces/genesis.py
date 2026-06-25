@@ -533,7 +533,10 @@ def load_parfile_slice_data(group):
     """
     values = [group[field][:] for field in PARFILE_SLICE_FIELDS[:-1]]
     current = group["current"][:]  # This is really a scalar
-    assert len(current) == 1
+    if len(current) != 1:
+        raise ValueError(
+            f"Expected a single 'current' value in {group.name}, found {len(current)}"
+        )
     values.append(current[0])
     return ParfileSliceData(*values)
 

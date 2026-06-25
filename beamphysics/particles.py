@@ -1105,7 +1105,7 @@ class ParticleGroup:
         equal_weights: bool = False,
         cutoff: float = 0.0,
         n_particle: Optional[int] = None,
-        rng: Optional[np.random.Generator] = None,
+        rng: Optional[Union[int, np.random.Generator]] = None,
     ) -> "ParticleGroup":
         """
         Create a ParticleGroup from a Genesis4 `.par` HDF5 file.

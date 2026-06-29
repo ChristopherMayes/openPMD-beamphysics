@@ -734,7 +734,7 @@ def genesis4_par_to_data(
     full_charge = 0.0  # full-beam charge, before subsampling
 
     for sname in snames:
-        ix = int(sname[5:])  # Extract slice index
+        ix = int(sname.removeprefix("slice"))  # Extract slice index
 
         # Skip missing
         if sname not in h5:

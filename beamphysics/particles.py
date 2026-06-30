@@ -4,7 +4,7 @@ from copy import deepcopy
 from typing import Sequence, Union
 
 import numpy as np
-from h5py import File
+from h5py import File, Group
 
 from . import statistics
 from .interfaces import bmad
@@ -1356,16 +1356,24 @@ class ParticleGroup:
         """
         if isinstance(h5, (str, pathlib.Path)):
             fname = os.path.expandvars(h5)
-            g = File(fname, "w")
-            pmd_init(g, basePath="/", particlesPath="particles")
-            g = g.create_group("particles")
+            with File(fname, "w") as f:
+                pmd_init(f, basePath="/", particlesPath="particles")
+                g = f.create_group("particles")
+                write_pmd_bunch(g, self, name=name)
+
+        # Note: h5py.File is an h5py.Group so this check needs to be first
         elif isinstance(h5, File):
             pmd_init(h5, basePath="/", particlesPath="particles")
             g = h5.create_group("particles")
-        else:
-            g = h5
+            write_pmd_bunch(g, self, name=name)
 
-        write_pmd_bunch(g, self, name=name)
+        elif isinstance(h5, Group):
+            write_pmd_bunch(h5, self, name=name)
+
+        else:
+            raise ValueError(
+                f"Expected path, h5py.File, or h5py.Group. Got {type(h5)} instead."
+            )
 
     # Plotting
     # --------

@@ -1371,7 +1371,9 @@ class ParticleGroup:
             write_pmd_bunch(h5, self, name=name)
 
         else:
-            raise ValueError(f"Expected path, h5py.File, or h5py.Group. Got {type(h5)} instead.")
+            raise ValueError(
+                f"Expected path, h5py.File, or h5py.Group. Got {type(h5)} instead."
+            )
 
     # Plotting
     # --------

@@ -32,6 +32,7 @@ from .statistics import (
     particle_twiss_dispersion,
     resample_particles,
     slice_statistics,
+    stratified_resample_particles,
 )
 from .units import c_light, parse_bunching_str, pg_units, pmd_unit
 from .utils import get_rotation_matrix
@@ -1774,9 +1775,11 @@ class ParticleGroup:
         """
         return deepcopy(self)
 
-    def resample(self, n=0, equal_weights=False):
+    def resample(self, n=0, equal_weights=False, method="random", key="t", seed=0):
         """
-        Resample particles randomly.
+        Resample particles.
+
+        With ``method="random"`` (default):
 
         If n equals self.n_particle or n=0,
         particle indices will be scrambled.
@@ -1789,20 +1792,71 @@ class ParticleGroup:
         Note that this latter method can result in duplicate particles,
         and can be very slow for a large number of particles.
 
+        With ``method="stratified"``:
+
+        Only alive particles are used. They are sorted by ``key``, split into
+        ``n`` equal-count strata, and one particle is drawn per stratum. This
+        produces a smoother, lower-noise ("quiet") down-sample. See
+        [`stratified_resample`][beamphysics.ParticleGroup.stratified_resample].
+
         Parameters
         ----------
         n : int, default=0
             Number to resample.
-            If n=0, this will use all particles.
+            If n=0, this will use all particles (``method="random"`` only).
 
         equal_weights : bool, default=False
             If True, will ensure that all particles have equal weights.
+            Only used by ``method="random"``.
+
+        method : str, default="random"
+            Sampling method: ``"random"`` or ``"stratified"``.
+
+        key : str, default="t"
+            Coordinate to sort and stratify by. Only used by ``method="stratified"``.
+
+        seed : int or None, default=0
+            Seed for reproducible draws. Only used by ``method="stratified"``.
 
         Returns
         -------
         ParticleGroup
         """
-        data = resample_particles(self, n, equal_weights=equal_weights)
+        if method == "random":
+            data = resample_particles(self, n, equal_weights=equal_weights)
+        elif method == "stratified":
+            data = stratified_resample_particles(self, n, key=key, seed=seed)
+        else:
+            raise ValueError(
+                f"Invalid method: {method!r}. Must be 'random' or 'stratified'."
+            )
+        return ParticleGroup(data=data)
+
+    def stratified_resample(self, n, key="t", seed=0):
+        """
+        'Stratified' (quiet) down-sample of alive particles.
+
+        Sorts alive particles (``status == 1``) by ``key``, splits them into
+        ``n`` equal-count strata, and draws one particle per stratum. The total
+        charge is preserved and spread equally over the ``n`` returned
+        macroparticles. This is a lower-noise alternative to random resampling.
+
+        Parameters
+        ----------
+        n : int
+            Number of macroparticles to return (``1 <= n <= n_alive``).
+
+        key : str, default="t"
+            Coordinate used to sort and stratify the particles.
+
+        seed : int or None, default=0
+            Seed for reproducible draws. Pass ``None`` for nondeterministic sampling.
+
+        Returns
+        -------
+        ParticleGroup
+        """
+        data = stratified_resample_particles(self, n, key=key, seed=seed)
         return ParticleGroup(data=data)
 
     # Internal sorting

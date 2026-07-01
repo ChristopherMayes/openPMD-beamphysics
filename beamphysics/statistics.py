@@ -540,7 +540,7 @@ def resample_particles(particle_group, n=0, equal_weights=False):
     return data
 
 
-def stratified_resample_particles(particle_group, n, key="t", seed=0):
+def stratified_resample_particles(particle_group, n, key="t"):
     """
     'Stratified' (quiet) down-sampling of a ParticleGroup.
 
@@ -551,7 +551,9 @@ def stratified_resample_particles(particle_group, n, key="t", seed=0):
     have ``status == 1``.
 
     Compared to random resampling, this produces a smoother, lower-noise
-    ("quiet") representation of the phase space along ``key``.
+    ("quiet") representation of the phase space along ``key``. Note that,
+    unlike :func:`resample_particles`, dead particles (``status != 1``) are
+    dropped rather than sampled and carried through.
 
     Parameters
     ----------
@@ -560,10 +562,6 @@ def stratified_resample_particles(particle_group, n, key="t", seed=0):
 
     key: str, default = "t"
         Coordinate used to sort and stratify the particles (e.g. "t", "z", "pz").
-
-    seed: int or None, default = 0
-        Seed for ``numpy.random.default_rng``, giving reproducible draws.
-        Pass ``None`` for nondeterministic sampling.
 
     Returns
     -------
@@ -595,7 +593,7 @@ def stratified_resample_particles(particle_group, n, key="t", seed=0):
             f"({values.flat[0]})."
         )
 
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng()
     order = np.argsort(values)
     edges = np.linspace(0, m, n + 1).astype(int)
     offsets = (rng.random(n) * (edges[1:] - edges[:-1])).astype(int)

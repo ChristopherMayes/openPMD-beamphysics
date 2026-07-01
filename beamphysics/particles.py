@@ -1775,7 +1775,7 @@ class ParticleGroup:
         """
         return deepcopy(self)
 
-    def resample(self, n=0, equal_weights=False, method="random", key="t", seed=0):
+    def resample(self, n=0, equal_weights=False, method="random", key="t"):
         """
         Resample particles.
 
@@ -1798,6 +1798,7 @@ class ParticleGroup:
         ``n`` equal-count strata, and one particle is drawn per stratum. This
         produces a smoother, lower-noise ("quiet") down-sample. See
         [`stratified_resample`][beamphysics.ParticleGroup.stratified_resample].
+        Presently, this method only supports equal weight particles
 
         Parameters
         ----------
@@ -1815,9 +1816,6 @@ class ParticleGroup:
         key : str, default="t"
             Coordinate to sort and stratify by. Only used by ``method="stratified"``.
 
-        seed : int or None, default=0
-            Seed for reproducible draws. Only used by ``method="stratified"``.
-
         Returns
         -------
         ParticleGroup
@@ -1825,14 +1823,14 @@ class ParticleGroup:
         if method == "random":
             data = resample_particles(self, n, equal_weights=equal_weights)
         elif method == "stratified":
-            data = stratified_resample_particles(self, n, key=key, seed=seed)
+            data = stratified_resample_particles(self, n, key=key)
         else:
             raise ValueError(
                 f"Invalid method: {method!r}. Must be 'random' or 'stratified'."
             )
         return ParticleGroup(data=data)
 
-    def stratified_resample(self, n, key="t", seed=0):
+    def stratified_resample(self, n, key="t"):
         """
         'Stratified' (quiet) down-sample of alive particles.
 
@@ -1849,14 +1847,11 @@ class ParticleGroup:
         key : str, default="t"
             Coordinate used to sort and stratify the particles.
 
-        seed : int or None, default=0
-            Seed for reproducible draws. Pass ``None`` for nondeterministic sampling.
-
         Returns
         -------
         ParticleGroup
         """
-        data = stratified_resample_particles(self, n, key=key, seed=seed)
+        data = stratified_resample_particles(self, n, key=key)
         return ParticleGroup(data=data)
 
     # Internal sorting

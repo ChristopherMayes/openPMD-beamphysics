@@ -205,18 +205,16 @@ def test_stratified_resample():
     assert Q.t.max() <= alive.t.max()
 
 
-def test_stratified_resample_reproducible():
-    n = P.n_alive // 4
-    a = P.stratified_resample(n, seed=42)
-    b = P.stratified_resample(n, seed=42)
-    assert np.array_equal(a.t, b.t)
-
-
 def test_stratified_resample_via_resample_method():
-    n = P.n_alive // 4
-    a = P.resample(n, method="stratified", seed=7)
-    b = P.stratified_resample(n, seed=7)
-    assert np.array_equal(a.t, b.t)
+    # The resample() method with method="stratified" routes to the same
+    # implementation and honors its contract (size, alive, preserved charge).
+    alive = P.where(P.status == 1)
+    n = alive.n_particle // 4
+    Q = P.resample(n, method="stratified")
+    assert Q.n_particle == n
+    assert np.all(Q.status == 1)
+    assert np.isclose(Q.charge, alive.charge)
+    assert len(set(Q.weight)) == 1
 
 
 def test_stratified_resample_errors():

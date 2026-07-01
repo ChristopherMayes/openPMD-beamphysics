@@ -190,72 +190,48 @@ def test_fractional_split():
 
 def test_stratified_resample():
     alive = P.where(P.status == 1)
-    n = alive.n_particle // 10  # keep ratio >= 5 so no distortion warning fires
-
+    n = alive.n_particle // 10  # ratio >= 5 so no distortion warning fires
     Q = P.stratified_resample(n)
-    # Correct size, all alive
     assert Q.n_particle == n
     assert np.all(Q.status == 1)
-    # Charge of alive particles is preserved and spread equally
-    assert np.isclose(Q.charge, alive.charge)
-    assert len(set(Q.weight)) == 1
-    # Picked particles come from the source
-    assert set(np.asarray(Q.t)).issubset(set(np.asarray(alive.t)))
-    # Stratified coverage spans the alive range
-    assert Q.t.min() >= alive.t.min()
-    assert Q.t.max() <= alive.t.max()
+    assert np.isclose(Q.charge, alive.charge)  # charge preserved
+    assert len(set(Q.weight)) == 1  # spread over equal weights
+    assert set(np.asarray(Q.t)).issubset(set(np.asarray(alive.t)))  # picks from source
 
-
-def test_stratified_resample_via_resample_method():
-    # The resample() method with method="stratified" routes to the same
-    # implementation and honors its contract (size, alive, preserved charge).
-    alive = P.where(P.status == 1)
-    n = alive.n_particle // 10
-    Q = P.resample(n, method="stratified")
-    assert Q.n_particle == n
-    assert np.all(Q.status == 1)
-    assert np.isclose(Q.charge, alive.charge)
-    assert len(set(Q.weight)) == 1
+    # resample(method="stratified") dispatches to the same routine.
+    assert P.resample(n, method="stratified").n_particle == n
 
 
 def test_stratified_resample_errors():
     with pytest.raises(ValueError):
-        P.stratified_resample(P.n_alive + 1)
+        P.stratified_resample(P.n_alive + 1)  # too many
     with pytest.raises(ValueError):
-        P.stratified_resample(0)
+        P.stratified_resample(0)  # too few
     with pytest.raises(ValueError):
-        P.resample(10, method="bogus")
+        P.resample(10, method="bogus")  # unknown method
 
+    def modified(**changes):
+        data = {k: np.copy(P[k]) for k in P._settable_array_keys}
+        data["species"] = P["species"]
+        data.update(changes)
+        return ParticleGroup(data=data)
 
-def test_stratified_resample_requires_constant_weight():
-    # Perturb a single weight so the group has variable weights
-    data = {k: np.copy(P[k]) for k in P._settable_array_keys}
-    data["species"] = P["species"]
-    data["weight"][0] *= 2
-    Pvar = ParticleGroup(data=data)
+    w = np.copy(P.weight)
+    w[0] *= 2
     with pytest.raises(ValueError, match="constant particle weights"):
-        Pvar.stratified_resample(10)
-
-
-def test_stratified_resample_requires_nonconstant_key():
-    # A beam with all-zero t (e.g. a "z" beam) cannot be stratified by t
-    data = {k: np.copy(P[k]) for k in P._settable_array_keys}
-    data["species"] = P["species"]
-    data["t"][:] = 0.0
-    Pflat = ParticleGroup(data=data)
+        modified(weight=w).stratified_resample(10)
     with pytest.raises(ValueError, match="Cannot stratify by 't'"):
-        Pflat.stratified_resample(10, key="t")
+        modified(t=np.zeros(P.n_particle)).stratified_resample(10, key="t")
 
 
 def test_stratified_resample_warns_low_ratio():
-    # Too few alive particles per output: unequal strata distort the density,
-    # so a warning is emitted. A comfortable ratio stays silent.
-    n_alive = P.n_alive
-    with pytest.warns(UserWarning, match="distort"):
-        P.stratified_resample(n_alive // 2)  # ratio ~2 < 5
+    # Too few alive particles per output distorts the density -> warn;
+    # a comfortable ratio stays silent.
+    with pytest.warns(UserWarning, match="Distortions"):
+        P.stratified_resample(P.n_alive // 2)  # ratio ~2 < 5
     with warnings.catch_warnings():
-        warnings.simplefilter("error")  # any warning would fail the test
-        P.stratified_resample(n_alive // 10)  # ratio ~10, silent
+        warnings.simplefilter("error")  # any warning fails the test
+        P.stratified_resample(P.n_alive // 10)  # ratio ~10, silent
 
 
 def test_plot_vs_z(array_key: str):

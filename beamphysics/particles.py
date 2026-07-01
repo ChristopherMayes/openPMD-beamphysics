@@ -329,7 +329,7 @@ class ParticleGroup:
 
     @status.setter
     def status(self, val):
-        self._data["status"] = full_array(len(self), val)
+        self._data["status"] = full_array(len(self), val, dtype=int)
 
     @property
     def weight(self):
@@ -356,7 +356,7 @@ class ParticleGroup:
     def id(self, val):
         if "id" not in self._settable_array_keys:
             self._settable_array_keys.append("id")
-        self._data["id"] = full_array(len(self), val)
+        self._data["id"] = full_array(len(self), val, dtype=int)
 
     @property
     def species(self):
@@ -2234,20 +2234,20 @@ def default_id(n):
     return np.arange(1, n + 1)
 
 
-def full_array(n, val):
+def full_array(n, val, dtype=None):
     """
     Casts a value into a full array of length n
     """
     if np.isscalar(val):
-        return np.full(n, val)
+        return np.full(n, val, dtype=dtype)
     n_here = len(val)
 
     if n_here == 1:
-        return np.full(n, val[0])
+        return np.full(n, val[0], dtype=dtype)
     elif n_here != n:
         raise ValueError(f"Length mismatch: len(val)={n_here}, but requested n={n}")
     # Cast to array
-    return np.array(val)
+    return np.array(val, dtype=dtype)
 
 
 def full_data(data, exclude=None):

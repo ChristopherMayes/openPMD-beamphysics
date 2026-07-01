@@ -1,4 +1,3 @@
-import warnings
 from typing import Tuple
 
 import numpy as np
@@ -541,7 +540,9 @@ def resample_particles(particle_group, n=0, equal_weights=False):
     return data
 
 
-def stratified_resample_particles(particle_group, n, key="t"):
+def stratified_resample_particles(
+    particle_group, n, key="t", allow_bad_sampling_ratio=False
+):
     """
     'Stratified' (quiet) down-sampling of a ParticleGroup.
 
@@ -564,6 +565,11 @@ def stratified_resample_particles(particle_group, n, key="t"):
     key: str, default = "t"
         Coordinate used to sort and stratify the particles (e.g. "t", "z", "pz").
 
+    allow_bad_sampling_ratio: bool, default = False
+        When ``n_alive < 5 * n`` stratified sampling distorts the distribution
+        (see Notes). By default the routine then falls back to random resampling
+        of the alive particles. Set True to force stratified sampling anyway.
+
     Returns
     -------
     data: dict of ParticleGroup data
@@ -575,8 +581,9 @@ def stratified_resample_particles(particle_group, n, key="t"):
     multiple of ``n`` the strata differ in width by one particle, so the
     reconstructed charge density along ``key`` carries an ``O(n/n_alive)`` error.
     This is negligible when ``n_alive >> n`` (the intended regime) but grows
-    large as ``n`` approaches ``n_alive``; a warning is emitted when
-    ``n_alive < min_ratio * n``.
+    large as ``n`` approaches ``n_alive``. When ``n_alive < 5 * n`` the routine
+    therefore falls back to random resampling unless ``allow_bad_sampling_ratio``
+    is set.
 
     """
     alive = particle_group.where(particle_group.status == 1)
@@ -586,6 +593,11 @@ def stratified_resample_particles(particle_group, n, key="t"):
         raise ValueError(f"n must be >= 1, got {n}")
     if n > m:
         raise ValueError(f"Cannot stratified_resample {m} alive particles up to {n}")
+
+    # If the new population is not much smaller than the initial, stratified sampling distorts; fall back to random unless overridden
+    min_ratio = 5
+    if m < min_ratio * n and not allow_bad_sampling_ratio:
+        return resample_particles(alive, n, equal_weights=True)
 
     # Variable-weight resampling is not supported: stratifying by count assigns
     # each macroparticle an equal share of charge, which only represents the
@@ -602,15 +614,6 @@ def stratified_resample_particles(particle_group, n, key="t"):
         raise ValueError(
             f"Cannot stratify by {key!r}: all alive particles have the same value "
             f"({values.flat[0]})."
-        )
-
-    # If the new population is not much smaller than the initial population, stratified sampling can introduce distortions
-    min_ratio = 5
-    if m < min_ratio * n:
-        warnings.warn(
-            f"stratified_resample: only {m} alive particles for n={n} "
-            f"(ratio {m / n:.1f} < {min_ratio}). Distortions may result",
-            stacklevel=2,
         )
 
     rng = np.random.default_rng()

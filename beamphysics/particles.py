@@ -1775,7 +1775,14 @@ class ParticleGroup:
         """
         return deepcopy(self)
 
-    def resample(self, n=0, equal_weights=False, method="random", key="t"):
+    def resample(
+        self,
+        n=0,
+        equal_weights=False,
+        method="random",
+        key="t",
+        allow_bad_sampling_ratio=False,
+    ):
         """
         Resample particles.
 
@@ -1798,7 +1805,9 @@ class ParticleGroup:
         ``n`` equal-count strata, and one particle is drawn per stratum. This
         produces a smoother, lower-noise ("quiet") down-sample. See
         [`stratified_resample`][beamphysics.ParticleGroup.stratified_resample].
-        Presently, this method only supports equal weight particles
+        Presently, this method only supports equal weight particles. If
+        ``n_alive < 5 * n`` it falls back to random resampling unless
+        ``allow_bad_sampling_ratio=True``.
 
         Parameters
         ----------
@@ -1816,6 +1825,10 @@ class ParticleGroup:
         key : str, default="t"
             Coordinate to sort and stratify by. Only used by ``method="stratified"``.
 
+        allow_bad_sampling_ratio : bool, default=False
+            Force stratified sampling even when ``n_alive < 5 * n``, instead of
+            falling back to random. Only used by ``method="stratified"``.
+
         Returns
         -------
         ParticleGroup
@@ -1823,14 +1836,16 @@ class ParticleGroup:
         if method == "random":
             data = resample_particles(self, n, equal_weights=equal_weights)
         elif method == "stratified":
-            data = stratified_resample_particles(self, n, key=key)
+            data = stratified_resample_particles(
+                self, n, key=key, allow_bad_sampling_ratio=allow_bad_sampling_ratio
+            )
         else:
             raise ValueError(
                 f"Invalid method: {method!r}. Must be 'random' or 'stratified'."
             )
         return ParticleGroup(data=data)
 
-    def stratified_resample(self, n, key="t"):
+    def stratified_resample(self, n, key="t", allow_bad_sampling_ratio=False):
         """
         'Stratified' (quiet) down-sample of alive particles.
 
@@ -1847,11 +1862,18 @@ class ParticleGroup:
         key : str, default="t"
             Coordinate used to sort and stratify the particles.
 
+        allow_bad_sampling_ratio : bool, default=False
+            When ``n_alive < 5 * n`` stratified sampling distorts the
+            distribution, so by default it falls back to random resampling of
+            the alive particles. Set True to force stratified sampling anyway.
+
         Returns
         -------
         ParticleGroup
         """
-        data = stratified_resample_particles(self, n, key=key)
+        data = stratified_resample_particles(
+            self, n, key=key, allow_bad_sampling_ratio=allow_bad_sampling_ratio
+        )
         return ParticleGroup(data=data)
 
     # Internal sorting

@@ -1826,7 +1826,7 @@ class ParticleGroup:
             Coordinate to sort and stratify by. Only used by ``method="stratified"``.
 
         allow_bad_sampling_ratio : bool, default=False
-            Force stratified sampling even when ``n_alive < 5 * n``, instead of
+            Force stratified sampling even when ``n_alive < min_ratio * n``, instead of
             falling back to random. Only used by ``method="stratified"``.
 
         Returns
@@ -1863,7 +1863,7 @@ class ParticleGroup:
             Coordinate used to sort and stratify the particles.
 
         allow_bad_sampling_ratio : bool, default=False
-            When ``n_alive < 5 * n`` stratified sampling distorts the
+            When ``n_alive < min_ratio * n`` stratified sampling distorts the
             distribution, so by default it falls back to random resampling of
             the alive particles. Set True to force stratified sampling anyway.
 

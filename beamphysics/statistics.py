@@ -566,7 +566,7 @@ def stratified_resample_particles(
         Coordinate used to sort and stratify the particles (e.g. "t", "z", "pz").
 
     allow_bad_sampling_ratio: bool, default = False
-        When ``n_alive < 5 * n`` stratified sampling distorts the distribution
+        When ``n_alive < min_ratio * n`` stratified sampling distorts the distribution
         (see Notes). By default the routine then falls back to random resampling
         of the alive particles. Set True to force stratified sampling anyway.
 
@@ -581,7 +581,7 @@ def stratified_resample_particles(
     multiple of ``n`` the strata differ in width by one particle, so the
     reconstructed charge density along ``key`` carries an ``O(n/n_alive)`` error.
     This is negligible when ``n_alive >> n`` (the intended regime) but grows
-    large as ``n`` approaches ``n_alive``. When ``n_alive < 5 * n`` the routine
+    large as ``n`` approaches ``n_alive``. When ``n_alive < min_ratio * n`` the routine
     therefore falls back to random resampling unless ``allow_bad_sampling_ratio``
     is set.
 

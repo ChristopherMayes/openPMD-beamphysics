@@ -239,7 +239,15 @@ class ParticleGroup:
         self._settable_scalar_keys = ["species"]
         self._settable_keys = self._settable_array_keys + self._settable_scalar_keys
         # Internal data. Only allow settable keys
-        self._data = {k: data[k] for k in self._settable_keys}
+
+        def fix_dtype(key: str, arr: np.ndarray) -> np.ndarray:
+            if key in self._settable_scalar_keys:
+                return arr  # passthrough
+            if key in {"id", "status"}:
+                return np.asarray(arr, dtype=int)
+            return np.asarray(arr, dtype=float)
+
+        self._data = {key: fix_dtype(key, data[key]) for key in self._settable_keys}
 
     # -------------------------------------------------
     # Access to intrinsic coordinates

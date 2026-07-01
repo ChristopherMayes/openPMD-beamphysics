@@ -1,3 +1,4 @@
+import warnings
 from typing import Tuple
 
 import numpy as np
@@ -540,6 +541,12 @@ def resample_particles(particle_group, n=0, equal_weights=False):
     return data
 
 
+# Below this alive-to-output ratio (n_alive / n), the equal-count strata differ
+# enough in width that assigning every representative an equal charge noticeably
+# distorts the reconstructed density along the sort key.
+STRATIFIED_MIN_RATIO = 5
+
+
 def stratified_resample_particles(particle_group, n, key="t"):
     """
     'Stratified' (quiet) down-sampling of a ParticleGroup.
@@ -567,6 +574,16 @@ def stratified_resample_particles(particle_group, n, key="t"):
     -------
     data: dict of ParticleGroup data
 
+    Notes
+    -----
+    The strata hold equal *counts* of particles, but each returned macroparticle
+    is assigned the same charge ``charge/n``. When ``n_alive`` is not an exact
+    multiple of ``n`` the strata differ in width by one particle, so the
+    reconstructed charge density along ``key`` carries an ``O(n/n_alive)`` error.
+    This is negligible when ``n_alive >> n`` (the intended regime) but grows
+    large as ``n`` approaches ``n_alive``; a warning is emitted when
+    ``n_alive < STRATIFIED_MIN_RATIO * n``.
+
     """
     alive = particle_group.where(particle_group.status == 1)
     m = alive.n_particle
@@ -591,6 +608,15 @@ def stratified_resample_particles(particle_group, n, key="t"):
         raise ValueError(
             f"Cannot stratify by {key!r}: all alive particles have the same value "
             f"({values.flat[0]})."
+        )
+
+    if m < STRATIFIED_MIN_RATIO * n:
+        warnings.warn(
+            f"stratified_resample: only {m} alive particles for n={n} "
+            f"(ratio {m / n:.1f} < {STRATIFIED_MIN_RATIO}); unequal stratum "
+            f"widths will distort the reconstructed density along {key!r}. "
+            f"Use n <= n_alive / {STRATIFIED_MIN_RATIO} for a faithful result.",
+            stacklevel=2,
         )
 
     rng = np.random.default_rng()

@@ -1,5 +1,6 @@
 import os
 import pathlib
+import warnings
 
 import h5py
 import matplotlib.pyplot as plt
@@ -189,7 +190,7 @@ def test_fractional_split():
 
 def test_stratified_resample():
     alive = P.where(P.status == 1)
-    n = alive.n_particle // 4
+    n = alive.n_particle // 10  # keep ratio >= STRATIFIED_MIN_RATIO (no warning)
 
     Q = P.stratified_resample(n)
     # Correct size, all alive
@@ -209,7 +210,7 @@ def test_stratified_resample_via_resample_method():
     # The resample() method with method="stratified" routes to the same
     # implementation and honors its contract (size, alive, preserved charge).
     alive = P.where(P.status == 1)
-    n = alive.n_particle // 4
+    n = alive.n_particle // 10
     Q = P.resample(n, method="stratified")
     assert Q.n_particle == n
     assert np.all(Q.status == 1)
@@ -244,6 +245,17 @@ def test_stratified_resample_requires_nonconstant_key():
     Pflat = ParticleGroup(data=data)
     with pytest.raises(ValueError, match="Cannot stratify by 't'"):
         Pflat.stratified_resample(10, key="t")
+
+
+def test_stratified_resample_warns_low_ratio():
+    # Too few alive particles per output: unequal strata distort the density,
+    # so a warning is emitted. A comfortable ratio stays silent.
+    n_alive = P.n_alive
+    with pytest.warns(UserWarning, match="distort"):
+        P.stratified_resample(n_alive // 2)  # ratio ~2 < STRATIFIED_MIN_RATIO
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # any warning would fail the test
+        P.stratified_resample(n_alive // 10)  # ratio ~10, silent
 
 
 def test_plot_vs_z(array_key: str):

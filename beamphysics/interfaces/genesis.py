@@ -466,7 +466,6 @@ def genesis4_parfile_scalars(h5):
     """
     # Allow for opening a file
     if isinstance(h5, (str, Path)):
-        assert os.path.exists(h5), f"File does not exist: {h5}"
         h5 = File(h5, "r")
 
     params = {}
@@ -488,7 +487,6 @@ def genesis4_parfile_slice_groups(h5):
     """
     # Allow for opening a file
     if isinstance(h5, (str, Path)):
-        assert os.path.exists(h5), f"File does not exist: {h5}"
         h5 = File(h5, "r")
 
     return sorted(
@@ -517,7 +515,6 @@ def genesis4_parfile_n_particle(h5):
     """
     # Allow for opening a file
     if isinstance(h5, (str, Path)):
-        assert os.path.exists(h5), f"File does not exist: {h5}"
         h5 = File(h5, "r")
 
     return sum(
@@ -652,7 +649,6 @@ def genesis4_par_to_data(
     """
     # Allow for opening a file
     if isinstance(h5, (str, Path)):
-        assert os.path.exists(h5), f"File does not exist: {h5}"
         h5 = File(h5, "r")
 
     if species != "electron":

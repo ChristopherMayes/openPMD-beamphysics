@@ -203,3 +203,19 @@ def test_plot_single_particle_vs_z(array_key: str):
     Ps = single_particle(pz=10e6)
     Ps.plot("z", array_key)
     plt.show()
+
+
+def test_id_ensure_int():
+    data = single_particle().data
+    data.pop("status", None)
+    data.pop("id", None)
+
+    P = ParticleGroup(data={**data, "status": [0.1], "id": [0.0]})
+    np.testing.assert_array_equal(P.status, [0])
+    np.testing.assert_array_equal(P.id, [0])
+    assert np.issubdtype(P.status.dtype, int)
+    assert np.issubdtype(P.id.dtype, int)
+
+    for key in P._settable_array_keys:
+        if key not in {"id", "status"}:
+            assert np.issubdtype(getattr(P, key).dtype, float), key

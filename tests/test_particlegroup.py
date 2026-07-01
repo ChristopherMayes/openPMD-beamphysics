@@ -190,7 +190,7 @@ def test_fractional_split():
 
 def test_stratified_resample():
     alive = P.where(P.status == 1)
-    n = alive.n_particle // 10  # keep ratio >= STRATIFIED_MIN_RATIO (no warning)
+    n = alive.n_particle // 10  # keep ratio >= 5 so no distortion warning fires
 
     Q = P.stratified_resample(n)
     # Correct size, all alive
@@ -252,7 +252,7 @@ def test_stratified_resample_warns_low_ratio():
     # so a warning is emitted. A comfortable ratio stays silent.
     n_alive = P.n_alive
     with pytest.warns(UserWarning, match="distort"):
-        P.stratified_resample(n_alive // 2)  # ratio ~2 < STRATIFIED_MIN_RATIO
+        P.stratified_resample(n_alive // 2)  # ratio ~2 < 5
     with warnings.catch_warnings():
         warnings.simplefilter("error")  # any warning would fail the test
         P.stratified_resample(n_alive // 10)  # ratio ~10, silent

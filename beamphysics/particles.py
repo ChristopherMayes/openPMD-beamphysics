@@ -2257,8 +2257,15 @@ def _round_to_int_array(val):
 
 def full_array(n, val, dtype=None):
     """
-    Casts a value into a full array of length n
+    Casts a value into a full array of length n.
+
+    Special handling for `int` dtype rounds floating point values first, if
+    provided.
     """
+
+    if dtype is not None and np.issubdtype(dtype, np.integer):
+        val = np.round(val)
+
     if np.isscalar(val):
         return np.full(n, val, dtype=dtype)
     n_here = len(val)

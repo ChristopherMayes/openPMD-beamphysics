@@ -35,7 +35,7 @@ from .statistics import (
 )
 from .units import c_light, parse_bunching_str, pg_units, pmd_unit
 from .utils import get_rotation_matrix
-from .wakefields import WakefieldBase
+from .wakefields import TaylorWakefield, WakefieldBase
 from .writers import pmd_init, write_pmd_bunch
 
 # -----------------------------------------
@@ -1563,25 +1563,44 @@ class ParticleGroup:
 
     def apply_wakefield(
         self,
-        wakefield: WakefieldBase,
-        length: float,
+        wakefield: WakefieldBase | TaylorWakefield,
+        length: float | None = None,
         inplace: bool = False,
         include_self_kick: bool = True,
+        **kwargs,
     ):
         """
         Apply wakefield momentum kicks to this ParticleGroup.
 
+        Supports two kinds of wakefield objects:
+
+        - Longitudinal wakefields (`WakefieldBase` subclasses) providing
+          `particle_kicks(z, weight)` in [eV/m]. These require `length`,
+          and only `pz` is changed.
+        - 3D Taylor-expanded wakefields (`TaylorWakefield`) providing
+          `particle_kicks_3d(x, y, z, weight)` in [eV/c] for the whole
+          structure (the structure length is baked into the wake table).
+          These forbid `length`, and `px`, `py`, and `pz` are changed.
+
         Parameters
         ----------
-        wakefield : WakefieldBase
-            A wakefield object providing the `particle_kicks(z, weight)` method.
-        length : float
-            Length over which the wakefield acts [m].
+        wakefield : WakefieldBase or TaylorWakefield
+            The wakefield to apply.
+        length : float, optional
+            Length over which the wakefield acts [m]. Required for
+            longitudinal (1D) wakefields; must be None for 3D Taylor
+            wakefields.
         inplace : bool, optional
             If True, modifies in place. If False, returns a modified copy.
             Default is False.
         include_self_kick : bool, optional
             Whether to include the self-kick term. Default is True.
+            For 3D Taylor wakefields the half self-term is always
+            included, and False raises a ValueError.
+        **kwargs
+            Extra arguments passed to `particle_kicks_3d` for 3D
+            wakefields (e.g. `n_points`, `filter_order`, `factor`).
+            Not accepted for 1D wakefields.
 
         Returns
         -------
@@ -1595,6 +1614,10 @@ class ParticleGroup:
             from beamphysics.wakefields import ResistiveWallWakefield
             wake = ResistiveWallWakefield.from_material("copper-slac-pub-10707", radius=2.5e-3)
             P_after = P.apply_wakefield(wake, length=10.0)
+
+            from beamphysics.wakefields import TaylorWakefield
+            wake3d = TaylorWakefield.from_file("wake_table.dat")
+            P_after = P.apply_wakefield(wake3d)
         """
         if not inplace:
             P = self.copy()
@@ -1608,8 +1631,34 @@ class ParticleGroup:
             z = -c_light * np.asarray(P.t)
 
         weight = np.asarray(P.weight)
-        kicks = wakefield.particle_kicks(z, weight, include_self_kick=include_self_kick)
-        P.pz += kicks * length
+
+        if hasattr(wakefield, "particle_kicks_3d"):
+            if length is not None:
+                raise ValueError(
+                    "length must be None for 3D Taylor wakefields: "
+                    "the structure length is included in the wake table"
+                )
+            if not include_self_kick:
+                raise ValueError(
+                    "include_self_kick=False is not supported for 3D Taylor "
+                    "wakefields: the half self-term is always included"
+                )
+            dpx, dpy, dpz = wakefield.particle_kicks_3d(P.x, P.y, z, weight, **kwargs)
+            P.px += dpx
+            P.py += dpy
+            P.pz += dpz
+        else:
+            if length is None:
+                raise ValueError("length is required for longitudinal wakefields")
+            if kwargs:
+                raise TypeError(
+                    f"Unexpected keyword arguments for a longitudinal "
+                    f"wakefield: {sorted(kwargs)}"
+                )
+            kicks = wakefield.particle_kicks(
+                z, weight, include_self_kick=include_self_kick
+            )
+            P.pz += kicks * length
 
         if not inplace:
             return P

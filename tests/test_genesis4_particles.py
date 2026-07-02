@@ -85,6 +85,18 @@ def test_equal_weights_uniform_and_charge(parfile: str):
     assert np.allclose(P.charge, EXPECTED_CHARGE, rtol=CHARGE_RTOL)
 
 
+def test_equal_weights_never_upsamples(parfile: str):
+    # equal_weights only uses existing particles, so the count can only shrink.
+    P = ParticleGroup.from_genesis4(parfile)
+    P_eq = ParticleGroup.from_genesis4(parfile, equal_weights=True, rng=2)
+    assert P_eq.n_particle <= P.n_particle
+
+
+def test_n_particle_and_equal_weights_are_mutually_exclusive(parfile: str):
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        genesis4_par_to_data(parfile, n_particle=100, equal_weights=True)
+
+
 def test_z0_offsets_absolute_position(parfile: str):
     z0 = 1.0
     P = ParticleGroup.from_genesis4(parfile, z0=z0)
@@ -122,6 +134,23 @@ def test_cutoff_filters_subphysical_slices(parfile: str):
     default = genesis4_par_to_data(parfile)
     filtered = genesis4_par_to_data(parfile, cutoff=1.6e-19)
     assert len(filtered["weight"]) <= len(default["weight"])
+
+
+def test_n_particle_exact_count_with_cutoff(parfile: str):
+    # Slices dropped by the cutoff must not consume any of the requested
+    # count (previously their apportioned share was silently lost).
+    full = genesis4_par_to_data(parfile)
+    cutoff = float(np.median(full["weight"]))  # drops roughly half the slices
+    filtered = genesis4_par_to_data(parfile, cutoff=cutoff)
+    assert len(filtered["weight"]) < len(full["weight"])
+
+    target = len(filtered["weight"]) // 2
+    sub = genesis4_par_to_data(parfile, cutoff=cutoff, n_particle=target, rng=0)
+    assert len(sub["weight"]) == target
+    # The filtered beam's charge is conserved exactly.
+    np.testing.assert_allclose(
+        np.sum(sub["weight"]), np.sum(filtered["weight"]), rtol=1e-12
+    )
 
 
 # ----------------------------------------------------------------------------

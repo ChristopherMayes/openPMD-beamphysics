@@ -1136,8 +1136,10 @@ class ParticleGroup:
 
         equal_weights : bool, default=False
             If True, particles are resampled within each slice so that all output
-            particles have equal charge weights. Useful for simulations that
-            require uniform macroparticles.
+            particles have equal charge weights. Only existing particles are used
+            (the beam is never upsampled), so the output count is generally
+            smaller. Useful for simulations that require uniform macroparticles.
+            Mutually exclusive with `n_particle`.
 
         cutoff : float, default=0.0
             Minimum per-particle weight in Coulombs. By default (0.0) nothing is
@@ -1150,11 +1152,14 @@ class ParticleGroup:
 
         n_particle : int, optional
             Subsample the beam to exactly this many particles as it is read,
-            thinning each slice in proportion to its particle count so the
-            charge profile and total charge are preserved. The full beam is
-            never held in memory — useful for very large one4one files. Values
-            >= the number of particles in the file are a no-op. Use
-            `genesis4_parfile_n_particle` to find the file's total count.
+            retaining the per-slice weights (rescaled once so the total charge
+            is conserved exactly) and thinning each slice in proportion to its
+            particle count so the charge profile is preserved. Only the
+            selected particles are read from the file — huge (e.g. one4one)
+            files are downsampled immediately, without ever loading the full
+            beam. Values >= the number of particles in the file are a no-op.
+            Use `genesis4_parfile_n_particle` to find the file's total count.
+            Mutually exclusive with `equal_weights`.
 
         rng : numpy.random.Generator or seed, optional
             Random number generator or seed used for smearing and resampling.

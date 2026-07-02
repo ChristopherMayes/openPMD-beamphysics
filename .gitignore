@@ -10,6 +10,9 @@ docs/api/computed_statistics.md
 # Generated computed statistics (runtime-generated)
 beamphysics/standards/computed_statistics.yaml
 
+# Generated Genesis4 example data (see scripts/generate_genesis4_example_data.bash)
+docs/examples/data/genesis4/*.h5
+
 # C extensions
 *.so
 

@@ -55,17 +55,25 @@ from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy.constants
 
-from ..units import c_light
+from ..units import Z0, c_light
 
 __all__ = ["TaylorWakeComponent", "TaylorWakefield"]
 
-# Free-space impedance [Ohm]
-Z0 = scipy.constants.value("characteristic impedance of vacuum")
-
 # Meaning of the Taylor indices
 INDEX_LABELS = {0: "1", 1: "x_s", 2: "y_s", 3: "x_w", 4: "y_w"}
+
+# Index pairs consumed by the second-order kick calculation. The pairs
+# (2, 2) and (4, 4) are not part of the 13-term expansion (their content
+# belongs in (1, 1) and (3, 3), which carry x^2 - y^2).
+SUPPORTED_KEYS = frozenset(
+    [
+        (0, 0), (0, 1), (0, 2), (0, 3), (0, 4),
+        (1, 1), (1, 2), (1, 3), (1, 4),
+        (2, 3), (2, 4),
+        (3, 3), (3, 4),
+    ]
+)  # fmt: skip
 
 
 # -----------------------------------------------------------------------------
@@ -157,6 +165,12 @@ def _project_current(
     current : np.ndarray
         Array of shape (n, 2): column 0 is tau [m], column 1 is current [A].
     """
+    if n_points < 3:
+        raise ValueError(f"n_points must be at least 3, got {n_points}")
+    if filter_order < 0:
+        raise ValueError(f"filter_order must be non-negative, got {filter_order}")
+    if tau.size == 0:
+        raise ValueError("Cannot compute a current profile for an empty distribution")
     s0 = np.min(tau)
     s1 = np.max(tau)
     if s1 <= s0:
@@ -239,7 +253,9 @@ class TaylorWakeComponent:
         for attr in ("s0", "w0", "s1", "w1"):
             val = getattr(self, attr)
             if val is not None:
-                setattr(self, attr, np.asarray(val, dtype=float))
+                # Copy so that components never share (and can never
+                # corrupt) each other's buffers
+                setattr(self, attr, np.array(val, dtype=float))
         if (self.s0 is None) != (self.w0 is None):
             raise ValueError("s0 and w0 must be given together")
         if (self.s1 is None) != (self.w1 is None):
@@ -341,6 +357,12 @@ class TaylorWakefield:
             components = list(components.values())
         self.components: dict[tuple[int, int], TaylorWakeComponent] = {}
         for comp in components:
+            if comp.key not in SUPPORTED_KEYS:
+                raise ValueError(
+                    f"Wake component {comp.key} is not part of the "
+                    f"second-order expansion and would be silently ignored. "
+                    f"Supported index pairs: {sorted(SUPPORTED_KEYS)}"
+                )
             if comp.key in self.components:
                 raise ValueError(f"Duplicate wake component for indices {comp.key}")
             self.components[comp.key] = comp
@@ -452,6 +474,7 @@ class TaylorWakefield:
         weight: np.ndarray,
         n_points: int = 500,
         filter_order: int = 20,
+        factor: float = 1.0,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Compute 3D wakefield momentum kicks for a particle distribution.
@@ -476,6 +499,10 @@ class TaylorWakefield:
             Number of longitudinal grid points. Default 500.
         filter_order : int, optional
             Triangular smoothing filter order. Default 20.
+        factor : float, optional
+            Scaling factor applied to all kicks, e.g. the number of
+            identical structures the table represents (equivalent to
+            ocelot's ``Wake.factor``). Default 1.
 
         Returns
         -------
@@ -587,7 +614,7 @@ class TaylorWakefield:
             Px = Px + p * X
             Py = Py - p * Y
 
-        return Px, Py, Pz
+        return factor * Px, factor * Py, factor * Pz
 
     # -- wake potentials for a current profile --------------------------------
 
@@ -619,6 +646,16 @@ class TaylorWakefield:
             or [V/m] (transverse witness components).
         """
         profile = np.asarray(current_profile, dtype=float)
+        if profile.ndim != 2 or profile.shape[1] != 2 or profile.shape[0] < 2:
+            raise ValueError(
+                f"current_profile must have shape (n, 2) with n >= 2, "
+                f"got {profile.shape}"
+            )
+        dz = np.diff(profile[:, 0])
+        if np.any(dz <= 0):
+            raise ValueError("current_profile z values must be strictly increasing")
+        if not np.allclose(dz, dz[0], rtol=1e-6):
+            raise ValueError("current_profile must be on a uniform z grid")
         # Convert to internal tail-positive coordinate, ascending
         tau = -profile[::-1, 0]
         current = np.column_stack([tau, profile[::-1, 1]])

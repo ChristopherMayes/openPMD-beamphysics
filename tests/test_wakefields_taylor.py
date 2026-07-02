@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from beamphysics.testing import pg_from_random_normal
+from beamphysics.units import c_light
 from beamphysics.wakefields import TaylorWakeComponent, TaylorWakefield
 
 
@@ -273,7 +274,7 @@ def test_apply_wakefield_3d():
     P2 = P.apply_wakefield(wake)
 
     # z coordinate used internally
-    z = np.asarray(P.z) if P.in_t_coordinates else -np.asarray(P.t) * 299792458.0
+    z = np.asarray(P.z) if P.in_t_coordinates else -np.asarray(P.t) * c_light
     dpx, dpy, dpz = wake.particle_kicks_3d(P.x, P.y, z, P.weight)
     np.testing.assert_allclose(P2.px - P.px, dpx, rtol=1e-10, atol=1e-6)
     np.testing.assert_allclose(P2.py - P.py, dpy, rtol=1e-10, atol=1e-6)
@@ -318,3 +319,90 @@ def test_apply_wakefield_1d_requires_length():
 def test_plot(parallel_plate_wake):
     ax = parallel_plate_wake.plot()
     assert ax is not None
+
+
+# -----------------------------------------------------------------------------
+# Validation and safety (added after code review)
+# -----------------------------------------------------------------------------
+
+
+def test_unsupported_component_key_raises():
+    """(2,2) and (4,4) are not part of the 13-term expansion and must be rejected."""
+    s = np.linspace(0, 1e-4, 10)
+    w = np.ones(10)
+    for a, b in [(2, 2), (4, 4)]:
+        comp = TaylorWakeComponent(a=a, b=b, s0=s, w0=w)
+        with pytest.raises(ValueError, match="not part of the"):
+            TaylorWakefield([comp])
+
+
+def test_components_do_not_alias(parallel_plate_wake):
+    """Components must own their arrays: mutating one never affects another."""
+    assert parallel_plate_wake[(0, 2)].w0 is not parallel_plate_wake[(0, 4)].w0
+    assert parallel_plate_wake[(0, 0)].s0 is not parallel_plate_wake[(1, 1)].s0
+
+    before = parallel_plate_wake[(0, 2)].w0.copy()
+    parallel_plate_wake[(0, 4)].w0 *= 2
+    np.testing.assert_array_equal(parallel_plate_wake[(0, 2)].w0, before)
+
+
+def test_n_points_validation(parallel_plate_wake, bunch):
+    x, y, z, q = bunch
+    for bad in (2, 1, 0, -5):
+        with pytest.raises(ValueError, match="n_points"):
+            parallel_plate_wake.particle_kicks_3d(x, y, z, q, n_points=bad)
+    with pytest.raises(ValueError, match="filter_order"):
+        parallel_plate_wake.particle_kicks_3d(x, y, z, q, filter_order=-1)
+
+
+def test_empty_distribution_raises(parallel_plate_wake):
+    empty = np.array([])
+    with pytest.raises(ValueError, match="empty"):
+        parallel_plate_wake.particle_kicks_3d(empty, empty, empty, empty)
+
+
+def test_factor_scales_kicks(parallel_plate_wake, bunch):
+    x, y, z, q = bunch
+    kicks1 = parallel_plate_wake.particle_kicks_3d(x, y, z, q)
+    kicks3 = parallel_plate_wake.particle_kicks_3d(x, y, z, q, factor=3.0)
+    for k1, k3 in zip(kicks1, kicks3):
+        np.testing.assert_allclose(k3, 3 * k1, rtol=1e-15)
+
+
+def test_wake_potential_grid_validation(parallel_plate_wake):
+    current = np.ones(10)
+
+    z_nonuniform = np.cumsum(np.linspace(1e-6, 2e-6, 10))
+    with pytest.raises(ValueError, match="uniform"):
+        parallel_plate_wake.wake_potential(np.column_stack([z_nonuniform, current]))
+
+    z_descending = np.linspace(1e-4, -1e-4, 10)
+    with pytest.raises(ValueError, match="increasing"):
+        parallel_plate_wake.wake_potential(np.column_stack([z_descending, current]))
+
+    with pytest.raises(ValueError, match="shape"):
+        parallel_plate_wake.wake_potential(np.array([[0.0, 1.0]]))
+
+
+def test_apply_wakefield_rejects_kwargs_for_1d():
+    from beamphysics.wakefields import Pseudomode, PseudomodeWakefield
+
+    P = pg_from_random_normal(100)
+    wake = PseudomodeWakefield([Pseudomode(A=1e15, d=1e4, k=1e5, phi=np.pi / 2)])
+    with pytest.raises(TypeError, match="Unexpected keyword"):
+        P.apply_wakefield(wake, length=1.0, n_points=200)
+
+
+def test_apply_wakefield_rejects_self_kick_flag_for_3d():
+    P = pg_from_random_normal(100)
+    wake = TaylorWakefield.parallel_plate(
+        plate_distance=250e-6, half_gap=500e-6, sigma=P["sigma_z"]
+    )
+    with pytest.raises(ValueError, match="include_self_kick"):
+        P.apply_wakefield(wake, include_self_kick=False)
+
+
+def test_wakefield_plot_rejects_3d_wakefield(parallel_plate_wake):
+    P = pg_from_random_normal(100)
+    with pytest.raises(TypeError, match="longitudinal wakefield"):
+        P.wakefield_plot(parallel_plate_wake)

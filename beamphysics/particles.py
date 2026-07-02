@@ -35,7 +35,7 @@ from .statistics import (
 )
 from .units import c_light, parse_bunching_str, pg_units, pmd_unit
 from .utils import get_rotation_matrix
-from .wakefields import WakefieldBase
+from .wakefields import TaylorWakefield, WakefieldBase
 from .writers import pmd_init, write_pmd_bunch
 
 # -----------------------------------------
@@ -1563,7 +1563,7 @@ class ParticleGroup:
 
     def apply_wakefield(
         self,
-        wakefield,
+        wakefield: WakefieldBase | TaylorWakefield,
         length: float | None = None,
         inplace: bool = False,
         include_self_kick: bool = True,
@@ -1594,11 +1594,13 @@ class ParticleGroup:
             If True, modifies in place. If False, returns a modified copy.
             Default is False.
         include_self_kick : bool, optional
-            Whether to include the self-kick term (1D wakefields only).
-            Default is True.
+            Whether to include the self-kick term. Default is True.
+            For 3D Taylor wakefields the half self-term is always
+            included, and False raises a ValueError.
         **kwargs
             Extra arguments passed to `particle_kicks_3d` for 3D
-            wakefields (e.g. `n_points`, `filter_order`).
+            wakefields (e.g. `n_points`, `filter_order`, `factor`).
+            Not accepted for 1D wakefields.
 
         Returns
         -------
@@ -1636,6 +1638,11 @@ class ParticleGroup:
                     "length must be None for 3D Taylor wakefields: "
                     "the structure length is included in the wake table"
                 )
+            if not include_self_kick:
+                raise ValueError(
+                    "include_self_kick=False is not supported for 3D Taylor "
+                    "wakefields: the half self-term is always included"
+                )
             dpx, dpy, dpz = wakefield.particle_kicks_3d(P.x, P.y, z, weight, **kwargs)
             P.px += dpx
             P.py += dpy
@@ -1643,6 +1650,11 @@ class ParticleGroup:
         else:
             if length is None:
                 raise ValueError("length is required for longitudinal wakefields")
+            if kwargs:
+                raise TypeError(
+                    f"Unexpected keyword arguments for a longitudinal "
+                    f"wakefield: {sorted(kwargs)}"
+                )
             kicks = wakefield.particle_kicks(
                 z, weight, include_self_kick=include_self_kick
             )

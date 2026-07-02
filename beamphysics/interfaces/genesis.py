@@ -504,7 +504,35 @@ def genesis4_parfile_slice_groups(h5):
     )
 
 
-def genesis4_parfile_n_particle(h5):
+def genesis4_parfile_slice_counts(h5) -> dict:
+    """
+    Particle count in each slice of a Genesis4 .par file.
+
+    Reads only the slice dataset shapes (HDF5 metadata, no bulk particle
+    data), so it is cheap even for very large files.
+
+    Parameters
+    ----------
+    h5 : str, Path, or h5py.File
+        Path to a Genesis4 `.par` file, or an open h5py file handle.
+
+    Returns
+    -------
+    dict
+        Mapping of slice group name to particle count, ordered by slice index.
+    """
+    # Allow for opening a file
+    if isinstance(h5, (str, Path)):
+        h5 = File(h5, "r")
+
+    return {
+        g: h5[g]["x"].shape[0]
+        for g in genesis4_parfile_slice_groups(h5)
+        if "x" in h5[g]
+    }
+
+
+def genesis4_parfile_n_particle(h5) -> int:
     """
     Total number of particles in a Genesis4 .par file.
 
@@ -523,15 +551,7 @@ def genesis4_parfile_n_particle(h5):
     int
         Total particle count summed over all slices.
     """
-    # Allow for opening a file
-    if isinstance(h5, (str, Path)):
-        h5 = File(h5, "r")
-
-    return sum(
-        h5[g]["x"].shape[0]
-        for g in genesis4_parfile_slice_groups(h5)
-        if isinstance(h5[g], Group) and "x" in h5[g]
-    )
+    return sum(genesis4_parfile_slice_counts(h5).values())
 
 
 def load_parfile_slice_data(group):
@@ -713,9 +733,9 @@ def genesis4_par_to_data(
     if n_particle is not None and n_particle <= 0:
         raise ValueError(f"`n_particle` must be positive, got {n_particle}.")
 
-    # Optionally subsample on read to `n_particle` particles. The number to keep
-    # from each slice is decided up front from a cheap pre-pass over dataset
-    # shapes (HDF5 metadata only, no bulk particle data). Systematic
+    # Optionally subsample on read to `n_particle` particles. The number to
+    # keep from each slice is decided up front from the cheap per-slice counts
+    # (HDF5 metadata only, no bulk particle data). Systematic
     # (cumulative-rounding) apportionment keeps each slice's share in proportion
     # to its size while hitting the requested total exactly. The full-beam
     # charge is summed in the read loop and the kept weights are rescaled once
@@ -723,12 +743,9 @@ def genesis4_par_to_data(
     # the full beam is never materialized.
     keep_counts = None
     if n_particle is not None:
-        names = [
-            s
-            for s in snames
-            if s in h5 and isinstance(h5[s], Group) and "current" in h5[s]
-        ]
-        counts = np.array([h5[s]["x"].shape[0] for s in names], dtype=np.int64)
+        slice_counts = genesis4_parfile_slice_counts(h5)
+        names = [s for s in snames if s in slice_counts]
+        counts = np.array([slice_counts[s] for s in names], dtype=np.int64)
         total_count = int(counts.sum())
         target = n_particle
         if total_count and target < total_count:

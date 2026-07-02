@@ -2,7 +2,7 @@ import os
 import re
 from pathlib import Path
 from collections import namedtuple
-from typing import Union, Optional
+from typing import Optional
 
 import numpy as np
 from h5py import File, Group
@@ -549,7 +549,7 @@ def load_parfile_slice_data(group):
 
 
 def genesis4_par_to_data(
-    h5: Union[str, Path, File],
+    h5: str | Path | File,
     species: str = "electron",
     smear: bool = False,
     wrap: bool = False,
@@ -558,7 +558,7 @@ def genesis4_par_to_data(
     equal_weights: bool = False,
     cutoff: float = 0.0,
     n_particle: Optional[int] = None,
-    rng: Optional[Union[int, np.random.Generator]] = None,
+    rng: Optional[int | np.random.Generator] = None,
 ) -> dict:
     """
     Convert Genesis 4 `.par` slice data from an HDF5 file into a dictionary

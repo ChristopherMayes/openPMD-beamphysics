@@ -1097,7 +1097,7 @@ class ParticleGroup:
     @classmethod
     def from_genesis4(
         cls,
-        h5: Union[str, pathlib.Path, File],
+        h5: str | pathlib.Path | File,
         smear: bool = False,
         wrap: bool = False,
         z0: float = 0.0,
@@ -1105,7 +1105,7 @@ class ParticleGroup:
         equal_weights: bool = False,
         cutoff: float = 0.0,
         n_particle: Optional[int] = None,
-        rng: Optional[Union[int, np.random.Generator]] = None,
+        rng: Optional[int | np.random.Generator] = None,
     ) -> "ParticleGroup":
         """
         Create a ParticleGroup from a Genesis4 `.par` HDF5 file.

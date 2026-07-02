@@ -4,12 +4,21 @@ Benchmark: beamphysics TaylorWakefield vs ocelot Wake (wake3D).
 Same particle distribution through the same wake tables; compare the
 per-particle kicks (Px, Py, Pz in eV).
 
-Requires ocelot (https://github.com/ocelot-collab/ocelot) to be installed,
-with its repository checked out for the unit-test wake table. Run:
+Requires ocelot, available from PyPI:
 
-    python scripts/benchmark_taylor_wakefield_vs_ocelot.py [path/to/ocelot/repo]
+    pip install ocelot-collab
 
-Expected agreement: machine precision (~1e-14) for file-based wake tables;
+Run:
+
+    python scripts/benchmark_taylor_wakefield_vs_ocelot.py
+
+The file-based case writes a synthetic wake table (including lumped R, L,
+1/C terms and a derivative-coupled W1 term) with TaylorWakefield.to_file
+and reads it back through ocelot's own WakeTable parser, so the file
+format and every term of the convolution are compared across the two
+codes without needing an ocelot source checkout.
+
+Expected agreement: machine precision (~1e-13) for file-based wake tables;
 ~1.5e-10 for the analytic table generators, which comes from ocelot
 hardcoding a slightly different value of the free-space impedance than
 scipy's CODATA value.
@@ -21,7 +30,7 @@ so L=0 -> full single kick.
 beamphysics conventions: z (head at larger z) => tau = -z.
 """
 
-import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -29,16 +38,35 @@ import numpy as np
 import ocelot.cpbd.wake3D as ow
 from ocelot.cpbd.beam import ParticleArray
 
-from beamphysics.wakefields import TaylorWakefield
-
-OCELOT_REPO = (
-    Path(sys.argv[1])
-    if len(sys.argv) > 1
-    else Path(__file__).resolve().parents[2] / "ocelot"
-)
-OCELOT_WAKE_TABLE = str(OCELOT_REPO / "unit_tests/ebeam_test/wake/wake_table.dat")
+from beamphysics.wakefields import TaylorWakeComponent, TaylorWakefield
 
 RNG = np.random.default_rng(42)
+
+
+def make_synthetic_table(filename):
+    """
+    Write a wake table exercising every term of the convolution:
+    tabulated W0, derivative-coupled W1, and lumped R, L, 1/C terms,
+    for monopole, dipole, and quadrupole-like components.
+    """
+    s = np.linspace(0, 1e-3, 200)
+    w_mono = 5e12 * np.exp(-s / 200e-6) * np.cos(2 * np.pi * s / 300e-6)
+    w_dip = 3e15 * (1 - np.exp(-np.sqrt(s / 50e-6)))
+    w_quad = -2e15 * np.exp(-s / 400e-6)
+    w1_dip = 1e7 * np.exp(-s / 150e-6)
+
+    wake = TaylorWakefield(
+        [
+            TaylorWakeComponent(a=0, b=0, s0=s, w0=w_mono, R=25.0, L=2e-8, Cinv=5e4),
+            TaylorWakeComponent(a=0, b=4, s0=s, w0=w_dip, s1=s, w1=w1_dip),
+            TaylorWakeComponent(a=0, b=3, s0=s, w0=0.5 * w_dip),
+            TaylorWakeComponent(a=1, b=3, s0=s, w0=-w_quad),
+            TaylorWakeComponent(a=2, b=4, s0=s, w0=w_quad),
+            TaylorWakeComponent(a=3, b=3, s0=s, w0=0.7 * w_quad),
+        ]
+    )
+    wake.to_file(filename)
+    return wake
 
 
 def make_bunch(
@@ -121,24 +149,58 @@ def run_case(
 def main():
     worst = 0.0
 
-    # --- Case 1: file-based wake table (ocelot unit-test table) ---
-    ot = ow.WakeTable(OCELOT_WAKE_TABLE)
-    bt = TaylorWakefield.from_file(OCELOT_WAKE_TABLE)
-    worst = max(
-        worst,
-        run_case("File table (h00,h13,h24), on-axis beam", ot, bt, sigma_tau=100e-6),
-    )
-    worst = max(
-        worst,
-        run_case(
-            "File table, offset beam (x=+30um, y=-50um)",
-            ot,
-            bt,
-            offset_x=30e-6,
-            offset_y=-50e-6,
-            sigma_tau=100e-6,
-        ),
-    )
+    # --- Case 1: file-based wake table, read by both parsers ---
+    with tempfile.TemporaryDirectory() as tmpdir:
+        table_file = str(Path(tmpdir) / "wake_table.dat")
+        make_synthetic_table(table_file)
+        ot = ow.WakeTable(table_file)
+        bt = TaylorWakefield.from_file(table_file)
+
+        worst = max(
+            worst,
+            run_case(
+                "File table (W0, W1, R, L, 1/C terms), on-axis beam",
+                ot,
+                bt,
+                sigma_tau=100e-6,
+            ),
+        )
+        worst = max(
+            worst,
+            run_case(
+                "File table, offset beam (x=+30um, y=-50um)",
+                ot,
+                bt,
+                offset_x=30e-6,
+                offset_y=-50e-6,
+                sigma_tau=100e-6,
+            ),
+        )
+
+        # --- Wake potentials vs ocelot get_long_wake/get_dipole_wake ---
+        print("\n=== Wake potential vs ocelot get_long_wake/get_dipole_wake ===")
+        s = np.linspace(-300e-6, 300e-6, 1000)  # ocelot tau grid
+        current = 100 * np.exp(-0.5 * (s / 50e-6) ** 2)
+        profile_ocelot = np.column_stack([s, current])
+
+        w = ow.Wake()
+        w.wake_table = ot
+        w.prepare(None)
+        x_o, W_o = w.get_long_wake(profile_ocelot)
+
+        # beamphysics: z = -tau, ascending
+        profile_bp = np.column_stack([-s[::-1], current[::-1]])
+        z_b, W_b = bt.wake_potential(profile_bp, key=(0, 0))
+        err = np.max(np.abs(W_b[::-1] - W_o)) / np.max(np.abs(W_o))
+        zerr = np.max(np.abs(-z_b[::-1] - x_o))
+        print(f"  long wake: max rel err = {err:.3g}, grid err = {zerr:.3g}")
+        worst = max(worst, err)
+
+        x_o, Wd_o = w.get_dipole_wake(profile_ocelot)
+        z_b, Wd_b = bt.wake_potential(profile_bp, key=(0, 4))
+        err = np.max(np.abs(Wd_b[::-1] - Wd_o)) / np.max(np.abs(Wd_o))
+        print(f"  dipole wake: max rel err = {err:.3g}")
+        worst = max(worst, err)
 
     # --- Case 2: analytic parallel-plate (first order, off-center) ---
     for orient_o, orient_b in [("horz", "horizontal"), ("vert", "vertical")]:
@@ -235,51 +297,6 @@ def main():
                 f"DechirperOffAxis ({orient_b})", ot, bt, offset_x=10e-6, offset_y=20e-6
             ),
         )
-
-    # --- Case 6: longitudinal wake potential vs get_long_wake ---
-    print("\n=== Wake potential vs ocelot get_long_wake/get_dipole_wake ===")
-    ot = ow.WakeTable(OCELOT_WAKE_TABLE)
-    bt = TaylorWakefield.from_file(OCELOT_WAKE_TABLE)
-    s = np.linspace(-300e-6, 300e-6, 1000)  # ocelot tau grid
-    current = 100 * np.exp(-0.5 * (s / 50e-6) ** 2)
-    profile_ocelot = np.column_stack([s, current])
-
-    w = ow.Wake()
-    w.wake_table = ot
-    w.prepare(None)
-    x_o, W_o = w.get_long_wake(profile_ocelot)
-
-    # beamphysics: z = -tau, ascending
-    profile_bp = np.column_stack([-s[::-1], current[::-1]])
-    z_b, W_b = bt.wake_potential(profile_bp, key=(0, 0))
-    err = np.max(np.abs(W_b[::-1] - W_o)) / np.max(np.abs(W_o))
-    zerr = np.max(np.abs(-z_b[::-1] - x_o))
-    print(f"  long wake: max rel err = {err:.3g}, grid err = {zerr:.3g}")
-    worst = max(worst, err)
-
-    # Dipole: needs a table with an (0,4) component; use parallel plate.
-    # (Note: ocelot's get_dipole_wake on the file table above would silently
-    # convolve the wrong component since H[0,4]=0 also means "missing".)
-    ot = ow.WakeTableParallelPlate(
-        b=250e-6, a=500e-6, t=250e-6, p=500e-6, length=1.0, sigma=50e-6, orient="horz"
-    )
-    bt = TaylorWakefield.parallel_plate(
-        plate_distance=250e-6,
-        half_gap=500e-6,
-        corrugation_gap=250e-6,
-        corrugation_period=500e-6,
-        length=1.0,
-        sigma=50e-6,
-        orientation="horizontal",
-    )
-    w = ow.Wake()
-    w.wake_table = ot
-    w.prepare(None)
-    x_o, Wd_o = w.get_dipole_wake(profile_ocelot)
-    z_b, Wd_b = bt.wake_potential(profile_bp, key=(0, 4))
-    err = np.max(np.abs(Wd_b[::-1] - Wd_o)) / np.max(np.abs(Wd_o))
-    print(f"  dipole wake: max rel err = {err:.3g}")
-    worst = max(worst, err)
 
     print(f"\nWorst relative error across all cases: {worst:.3g}")
     assert worst < 1e-8, "Benchmark FAILED"

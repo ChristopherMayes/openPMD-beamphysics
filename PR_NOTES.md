@@ -31,19 +31,21 @@ Unlike the 1D wakefields in this package, the wake amplitudes are in V/C for the
 
 ## Benchmark against ocelot
 
-The script `scripts/benchmark_taylor_wakefield_vs_ocelot.py` pushes identical 20,000-particle Gaussian bunches through ocelot's `Wake.apply` and through this implementation, and compares the per-particle kicks Px, Py, and Pz. It requires an ocelot checkout and installation, and it accepts the ocelot repository path as an optional command-line argument. The benchmark covers nine cases and the results are as follows.
+The script `scripts/benchmark_taylor_wakefield_vs_ocelot.py` pushes identical 20,000-particle Gaussian bunches through ocelot's `Wake.apply` and through this implementation, and compares the per-particle kicks Px, Py, and Pz. The only requirement is the ocelot package from PyPI (`pip install ocelot-collab`); no ocelot source checkout is needed. The benchmark was run against ocelot-collab 26.6.1.
+
+For the file-based cases, the script writes a synthetic wake table with `TaylorWakefield.to_file` and reads it back through ocelot's own `WakeTable` parser. The synthetic table contains monopole, dipole, and quadrupole-like components and deliberately exercises every term of the convolution: the tabulated wake W0, the derivative-coupled term W1, and the lumped R, L, and 1/C circuit terms. The benchmark covers nine cases and the results are as follows.
 
 | Case | Max relative error |
 | --- | --- |
-| File-based wake table (ocelot unit-test table), on-axis beam | 4.7e-15 |
-| File-based wake table, offset beam (x = +30 µm, y = -50 µm) | 2.5e-14 |
+| File-based wake table (W0, W1, R, L, 1/C terms), on-axis beam | 4.4e-14 |
+| File-based wake table, offset beam (x = +30 µm, y = -50 µm) | 9.6e-13 |
+| Longitudinal and dipole wake potentials versus `get_long_wake` and `get_dipole_wake` | exact / 2.6e-14 |
 | Analytic parallel plate, horizontal orientation, offset beam | 1.5e-10 |
 | Analytic parallel plate, vertical orientation, offset beam | 1.5e-10 |
 | Analytic parallel plate, beam centered (Y = 0 branch) | 1.5e-10 |
 | Analytic parallel plate, zeroth order (`decay=False`) | 1.5e-10 |
 | Dechirper off-axis mode sum, horizontal orientation | 1.5e-10 |
 | Dechirper off-axis mode sum, vertical orientation | 1.5e-10 |
-| Longitudinal and dipole wake potentials versus `get_long_wake` and `get_dipole_wake` | exact / 1.5e-10 |
 
 The 1.5e-10 residual in the analytic-generator cases comes from a single constant: ocelot hardcodes the free-space impedance as 376.7303134695850 Ohm, while this implementation uses `scipy.constants.value("characteristic impedance of vacuum")`. The file-based cases, which share no such constant, agree to machine precision.
 

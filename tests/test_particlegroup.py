@@ -187,6 +187,56 @@ def test_fractional_split():
     head, core, tail = P.fractional_split((0.1, 0.9), "t")
 
 
+def test_stratified_resample():
+    alive = P.where(P.status == 1)
+    n = alive.n_particle // 10  # ratio >= 5 so it stays stratified (no fallback)
+    Q = P.stratified_resample(n)
+    assert Q.n_particle == n
+    assert np.all(Q.status == 1)
+    assert np.isclose(Q.charge, alive.charge)  # charge preserved
+    assert len(set(Q.weight)) == 1  # spread over equal weights
+    assert set(np.asarray(Q.t)).issubset(set(np.asarray(alive.t)))  # picks from source
+
+    # resample(method="stratified") dispatches to the same routine.
+    assert P.resample(n, method="stratified").n_particle == n
+
+
+def test_stratified_resample_errors():
+    with pytest.raises(ValueError):
+        P.stratified_resample(P.n_alive + 1)  # too many
+    with pytest.raises(ValueError):
+        P.stratified_resample(0)  # too few
+    with pytest.raises(ValueError):
+        P.resample(10, method="bogus")  # unknown method
+
+    def modified(**changes):
+        data = {k: np.copy(P[k]) for k in P._settable_array_keys}
+        data["species"] = P["species"]
+        data.update(changes)
+        return ParticleGroup(data=data)
+
+    w = np.copy(P.weight)
+    w[0] *= 2
+    with pytest.raises(ValueError, match="constant particle weights"):
+        modified(weight=w).stratified_resample(10)
+    with pytest.raises(ValueError, match="Cannot stratify by 't'"):
+        modified(t=np.zeros(P.n_particle)).stratified_resample(10, key="t")
+
+
+def test_stratified_resample_bad_ratio_falls_back_to_random():
+    # A poor alive:n ratio falls back to random by default, which (unlike
+    # stratified) accepts variable weights; forcing stratified re-rejects them.
+    data = {k: np.copy(P[k]) for k in P._settable_array_keys}
+    data["species"] = P["species"]
+    data["weight"][0] *= 2  # variable weights
+    Pvar = ParticleGroup(data=data)
+    n = Pvar.n_alive // 2  # ratio ~2 < 5 -> fallback
+
+    assert Pvar.stratified_resample(n).n_particle == n  # random fallback: ok
+    with pytest.raises(ValueError, match="constant particle weights"):
+        Pvar.stratified_resample(n, allow_bad_sampling_ratio=True)  # forced stratified
+
+
 def test_plot_vs_z(array_key: str):
     P.plot("z", array_key)
     plt.show()

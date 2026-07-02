@@ -32,6 +32,7 @@ from .statistics import (
     particle_twiss_dispersion,
     resample_particles,
     slice_statistics,
+    stratified_resample_particles,
 )
 from .units import c_light, parse_bunching_str, pg_units, pmd_unit
 from .utils import get_rotation_matrix
@@ -1774,9 +1775,18 @@ class ParticleGroup:
         """
         return deepcopy(self)
 
-    def resample(self, n=0, equal_weights=False):
+    def resample(
+        self,
+        n=0,
+        equal_weights=False,
+        method="random",
+        key="t",
+        allow_bad_sampling_ratio=False,
+    ):
         """
-        Resample particles randomly.
+        Resample particles.
+
+        With ``method="random"`` (default):
 
         If n equals self.n_particle or n=0,
         particle indices will be scrambled.
@@ -1789,20 +1799,81 @@ class ParticleGroup:
         Note that this latter method can result in duplicate particles,
         and can be very slow for a large number of particles.
 
+        With ``method="stratified"``:
+
+        Only alive particles are used. They are sorted by ``key``, split into
+        ``n`` equal-count strata, and one particle is drawn per stratum. This
+        produces a smoother, lower-noise ("quiet") down-sample. See
+        [`stratified_resample`][beamphysics.ParticleGroup.stratified_resample].
+        Presently, this method only supports equal weight particles. If
+        ``n_alive < 5 * n`` it falls back to random resampling unless
+        ``allow_bad_sampling_ratio=True``.
+
         Parameters
         ----------
         n : int, default=0
             Number to resample.
-            If n=0, this will use all particles.
+            If n=0, this will use all particles (``method="random"`` only).
 
         equal_weights : bool, default=False
             If True, will ensure that all particles have equal weights.
+            Only used by ``method="random"``.
+
+        method : str, default="random"
+            Sampling method: ``"random"`` or ``"stratified"``.
+
+        key : str, default="t"
+            Coordinate to sort and stratify by. Only used by ``method="stratified"``.
+
+        allow_bad_sampling_ratio : bool, default=False
+            Force stratified sampling even when ``n_alive < min_ratio * n``, instead of
+            falling back to random. Only used by ``method="stratified"``.
 
         Returns
         -------
         ParticleGroup
         """
-        data = resample_particles(self, n, equal_weights=equal_weights)
+        if method == "random":
+            data = resample_particles(self, n, equal_weights=equal_weights)
+        elif method == "stratified":
+            data = stratified_resample_particles(
+                self, n, key=key, allow_bad_sampling_ratio=allow_bad_sampling_ratio
+            )
+        else:
+            raise ValueError(
+                f"Invalid method: {method!r}. Must be 'random' or 'stratified'."
+            )
+        return ParticleGroup(data=data)
+
+    def stratified_resample(self, n, key="t", allow_bad_sampling_ratio=False):
+        """
+        'Stratified' (quiet) down-sample of alive particles.
+
+        Sorts alive particles (``status == 1``) by ``key``, splits them into
+        ``n`` equal-count strata, and draws one particle per stratum. The total
+        charge is preserved and spread equally over the ``n`` returned
+        macroparticles. This is a lower-noise alternative to random resampling.
+
+        Parameters
+        ----------
+        n : int
+            Number of macroparticles to return (``1 <= n <= n_alive``).
+
+        key : str, default="t"
+            Coordinate used to sort and stratify the particles.
+
+        allow_bad_sampling_ratio : bool, default=False
+            When ``n_alive < min_ratio * n`` stratified sampling distorts the
+            distribution, so by default it falls back to random resampling of
+            the alive particles. Set True to force stratified sampling anyway.
+
+        Returns
+        -------
+        ParticleGroup
+        """
+        data = stratified_resample_particles(
+            self, n, key=key, allow_bad_sampling_ratio=allow_bad_sampling_ratio
+        )
         return ParticleGroup(data=data)
 
     # Internal sorting

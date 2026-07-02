@@ -540,6 +540,98 @@ def resample_particles(particle_group, n=0, equal_weights=False):
     return data
 
 
+def stratified_resample_particles(
+    particle_group, n, key="t", allow_bad_sampling_ratio=False
+):
+    """
+    'Stratified' (quiet) down-sampling of a ParticleGroup.
+
+    Only alive particles (``status == 1``) are used. These are sorted by
+    ``key``, split into ``n`` equal-count strata, and one particle is drawn at
+    random from each stratum. The total charge of the alive particles is
+    distributed equally among the ``n`` returned macroparticles, all of which
+    have ``status == 1``.
+
+    Compared to random resampling, this produces a smoother, lower-noise
+    ("quiet") representation of the phase space along ``key``. Note that,
+    unlike :func:`resample_particles`, dead particles (``status != 1``) are
+    dropped rather than sampled and carried through.
+
+    Parameters
+    ----------
+    n: int
+        Number of macroparticles to return. Must satisfy ``1 <= n <= n_alive``.
+
+    key: str, default = "t"
+        Coordinate used to sort and stratify the particles (e.g. "t", "z", "pz").
+
+    allow_bad_sampling_ratio: bool, default = False
+        When ``n_alive < min_ratio * n`` stratified sampling distorts the distribution
+        (see Notes). By default the routine then falls back to random resampling
+        of the alive particles. Set True to force stratified sampling anyway.
+
+    Returns
+    -------
+    data: dict of ParticleGroup data
+
+    Notes
+    -----
+    The strata hold equal counts of particles, but each returned macroparticle
+    is assigned the same charge ``charge/n``. When ``n_alive`` is not an exact
+    multiple of ``n`` the strata differ in width by one particle, so the
+    reconstructed charge density along ``key`` carries an ``O(n/n_alive)`` error.
+    This is negligible when ``n_alive >> n`` (the intended regime) but grows
+    large as ``n`` approaches ``n_alive``. When ``n_alive < min_ratio * n`` the routine
+    therefore falls back to random resampling unless ``allow_bad_sampling_ratio``
+    is set.
+
+    """
+    alive = particle_group.where(particle_group.status == 1)
+    m = alive.n_particle
+
+    if n < 1:
+        raise ValueError(f"n must be >= 1, got {n}")
+    if n > m:
+        raise ValueError(f"Cannot stratified_resample {m} alive particles up to {n}")
+
+    # If the new population is not much smaller than the initial, stratified sampling distorts; fall back to random unless overridden
+    min_ratio = 5
+    if m < min_ratio * n and not allow_bad_sampling_ratio:
+        return resample_particles(alive, n, equal_weights=True)
+
+    # Variable-weight resampling is not supported: stratifying by count assigns
+    # each macroparticle an equal share of charge, which only represents the
+    # distribution faithfully when the input weights are already equal.
+    if len(np.unique(alive.weight)) > 1:
+        raise ValueError(
+            "stratified_resample requires constant particle weights; "
+            "got variable weights."
+        )
+
+    values = alive[key]
+    # A constant stratification coordinate makes the strata meaningless.
+    if np.ptp(values) == 0:
+        raise ValueError(
+            f"Cannot stratify by {key!r}: all alive particles have the same value "
+            f"({values.flat[0]})."
+        )
+
+    rng = np.random.default_rng()
+    order = np.argsort(values)
+    edges = np.linspace(0, m, n + 1).astype(int)
+    offsets = (rng.random(n) * (edges[1:] - edges[:-1])).astype(int)
+    pick = order[edges[:-1] + offsets]
+
+    data = {}
+    for k in alive._settable_array_keys:
+        data[k] = alive[k][pick]
+    data["species"] = alive["species"]
+    data["status"] = np.ones(n, dtype=int)
+    data["weight"] = np.full(n, alive.charge / n)
+
+    return data
+
+
 def bunching(z: np.ndarray, wavelength: float, weight: np.ndarray = None) -> complex:
     r"""
     Calculate the normalized bunching parameter, which is the

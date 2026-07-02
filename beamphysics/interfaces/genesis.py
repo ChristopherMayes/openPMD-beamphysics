@@ -1,10 +1,14 @@
 import os
+import re
+from pathlib import Path
+from collections import namedtuple
+from typing import Optional
 
 import numpy as np
 from h5py import File, Group
 
 from ..statistics import twiss_calc
-from ..units import Z0, c_light, mec2, pmd_unit, write_unit_h5
+from ..units import Z0, c_light, e_charge, mec2, pmd_unit, write_unit_h5
 
 # Genesis 1.3
 # -------------
@@ -438,48 +442,259 @@ def write_genesis4_distribution(particle_group, h5file, verbose=False):
         print(f"Datasets x, xp, y, yp, t, p written to: {h5file}")
 
 
-def genesis4_par_to_data(h5, species="electron", smear=True):
+PARFILE_SLICE_FIELDS = ("x", "px", "y", "py", "gamma", "theta", "current")
+ParfileSliceData = namedtuple("ParfileSliceData", PARFILE_SLICE_FIELDS)
+
+
+# Known scalars
+_parfile_scalar_datasets = [
+    "beamletsize",
+    "one4one",
+    "refposition",
+    "slicecount",
+    "slicelength",
+    "slicespacing",
+]
+
+# Slice groups are named 'slice000001', 'slice000002', ...
+_parfile_slice_name_re = re.compile(r"slice\d+")
+
+
+def genesis4_parfile_scalars(h5):
     """
-    Converts Genesis 4 data from an h5 handle or file to data for
-    openPMD-beamphysics.
+    Extract useful scalars and slice names from a Genesis4 .par file
+    """
+    # Allow for opening a file
+    if isinstance(h5, (str, Path)):
+        h5 = File(h5, "r")
 
-    Genesis4 datasets in the HDF5 file are named:
-    'x'
-        x position in meters
-    'px'
-        = gamma * beta_x
-    'y'
-        y position in meters
-    'py'
-        = gamma * beta_y'
-    'theta'
-        angle within a slice in radians
-    'gamma'
-        relativistic gamma
-    'current'
-        Current in a single slice (scalar) in Amps
+    params = {}
+    for k in _parfile_scalar_datasets:
+        if k not in h5:
+            raise ValueError(f"Missing expected scalar dataset '{k}'")
+        if h5[k].shape != (1,):
+            raise ValueError(
+                f"Expected scalar dataset '{k}' with shape (1,), got shape {h5[k].shape}"
+            )
+        params[k] = h5[k][0]
 
+    return params
+
+
+def genesis4_parfile_slice_groups(h5):
+    """
+    Slice group names ('slice000001', ...) in a Genesis4 .par file,
+    sorted by slice index.
+
+    Groups are matched by name pattern and structure rather than by
+    excluding known metadata entries, so new metadata added by future
+    Genesis4 versions is ignored automatically.
+    """
+    # Allow for opening a file
+    if isinstance(h5, (str, Path)):
+        h5 = File(h5, "r")
+
+    return sorted(
+        (
+            g
+            for g in h5
+            if _parfile_slice_name_re.fullmatch(g) and isinstance(h5[g], Group)
+        ),
+        key=lambda s: int(s.removeprefix("slice")),
+    )
+
+
+def genesis4_parfile_slice_counts(h5) -> dict:
+    """
+    Particle count in each slice of a Genesis4 .par file.
+
+    Reads only the slice dataset shapes (HDF5 metadata, no bulk particle
+    data), so it is cheap even for very large files.
 
     Parameters
     ----------
-    h5 : open h5py handle or str
+    h5 : str, Path, or h5py.File
+        Path to a Genesis4 `.par` file, or an open h5py file handle.
+
+    Returns
+    -------
+    dict
+        Mapping of slice group name to particle count, ordered by slice index.
+    """
+    # Allow for opening a file
+    if isinstance(h5, (str, Path)):
+        h5 = File(h5, "r")
+
+    return {
+        g: h5[g]["x"].shape[0]
+        for g in genesis4_parfile_slice_groups(h5)
+        if "x" in h5[g]
+    }
+
+
+def genesis4_parfile_n_particle(h5) -> int:
+    """
+    Total number of particles in a Genesis4 .par file.
+
+    Reads only the slice dataset shapes (HDF5 metadata, no bulk particle data),
+    so it is cheap even for very large files. Useful for choosing an
+    `n_particle` subsample size for `genesis4_par_to_data` /
+    `ParticleGroup.from_genesis4`.
+
+    Parameters
+    ----------
+    h5 : str, Path, or h5py.File
+        Path to a Genesis4 `.par` file, or an open h5py file handle.
+
+    Returns
+    -------
+    int
+        Total particle count summed over all slices.
+    """
+    return sum(genesis4_parfile_slice_counts(h5).values())
+
+
+def load_parfile_slice_data(group, sel=None):
+    """
+    Returns ParfileSliceData with Genesis4's named fields in a slice group.
+
+    Parameters
+    ----------
+    group : h5py.Group
+        Slice group to read.
+    sel : array of int, optional
+        Sorted (increasing) particle row indices to read. If None, all
+        particles in the slice are read.
+    """
+    if sel is None:
+        values = [group[field][:] for field in PARFILE_SLICE_FIELDS[:-1]]
+    else:
+        values = [group[field][sel] for field in PARFILE_SLICE_FIELDS[:-1]]
+    current = group["current"][:]  # This is really a scalar
+    if len(current) != 1:
+        raise ValueError(
+            f"Expected a single 'current' value in {group.name}, found {len(current)}"
+        )
+    values.append(current[0])
+    return ParfileSliceData(*values)
+
+
+def genesis4_par_to_data(
+    h5: str | Path | File,
+    species: str = "electron",
+    smear: bool = False,
+    wrap: bool = False,
+    z0: float = 0,
+    slices: Optional[list[int]] = None,
+    equal_weights: bool = False,
+    cutoff: float = 0.0,
+    n_particle: Optional[int] = None,
+    rng: Optional[int | np.random.Generator] = None,
+) -> dict:
+    """
+    Convert Genesis 4 `.par` slice data from an HDF5 file into a dictionary
+    compatible with `openPMD-beamphysics` ParticleGroup input.
+
+    Each slice in the Genesis 4 output contains sampled macroparticles with
+    position, momentum, and phase data. This function reconstructs full 6D
+    coordinates and weights, with options for smearing, resampling, and filtering.
+
+    Parameters
+    ----------
+    h5 : str, Path, or h5py.File
+        Path to a Genesis 4 `.par` HDF5 file, or an open h5py file handle.
 
     species : str, default="electron"
+        Particle species. Currently, only "electron" is supported.
 
-    smear : bool, default=True
+    smear : bool, default=False
         Genesis4 often samples the beam by skipping slices
         in a step called 'sample'.
         This will smear out the theta coordinate over these slices,
         preserving the modulus.
 
+    slices : list of int, optional
+        Specific slice indices to include. If None, all available slices are used.
+
+    wrap: bool, default = False
+        If true, the z position within a slice will be modulo the slice length.
+
+    z0 : float, default=0.0
+        Initial z-position for slice index 1, in meters.
+
+    equal_weights : bool, default=False
+        If True, particles are resampled within each slice so that all output
+        particles have equal charge weights. Only existing particles are used
+        (the beam is never upsampled), so the output count is generally
+        smaller. Useful for simulations that require uniform macroparticles.
+        Mutually exclusive with `n_particle`.
+
+    cutoff : float, default=0.0
+        Minimum per-particle weight in Coulombs. Quiet-loaded slices whose
+        reconstructed weight falls below this value are skipped. By default
+        (0.0) nothing is dropped for being sub-physical, leaving the choice to
+        the user; pass a positive value (e.g. the elementary charge ~1.6e-19)
+        to discard slices whose macroparticles would carry less than a single
+        electron's charge. Zero-current and non-finite (nan) slices are always
+        removed regardless of this value. The cutoff is ignored for one4one
+        beams, where each macroparticle is a single real electron with weight
+        exactly equal to the elementary charge.
+
+    n_particle : int, optional
+        Subsample the beam to exactly this many particles as it is read,
+        retaining the per-slice weights (rescaled once so the total charge is
+        conserved exactly). Each slice is thinned in proportion to its
+        particle count, preserving the longitudinal/charge profile, and only
+        the selected particles are read from the file — huge (e.g. one4one)
+        files are downsampled immediately, without ever loading the full
+        beam. Values >= the number of particles in the file are a no-op (all
+        particles are returned). Use `genesis4_parfile_n_particle` to find
+        the file's total count. Mutually exclusive with `equal_weights`.
+
+    rng : numpy.random.Generator or seed, optional
+        Random number generator or seed used for smearing and resampling.
+        If None, a new default RNG is created.
+
+
     Returns
     -------
     data : dict
-        For ParticleGroup
+        Dictionary containing particle phase space and metadata in openPMD-compatible format:
+        {
+            "x", "y", "z"         : position [m],
+            "px", "py", "pz"      : momentum [eV/c],
+            "t"                   : time [s],
+            "status"              : particle status flag (all 1),
+            "species"             : particle species string,
+            "weight"              : particle weight [Coulombs],
+        }
+
+    Notes
+    -----
+    - The function expects Genesis slice groups named "slice000001", etc., each containing:
+        - 'x': x position in meters
+        - 'px': gamma * beta_x
+        - 'y': y position in meters
+        - 'py': gamma * beta_y
+        - 'theta': longitudinal phase angle in radians
+        - 'gamma': relativistic gamma
+        - 'current': scalar slice current in Amperes
+
+    - Scalar metadata (e.g., `slicespacing`, `slicelength`) must be stored as 1-element datasets.
+
+    - z positions are reconstructed from theta (ponderomotive phase), with optional smearing
+      to account for undersampled slices, and offset by slice position and `z0`.
+
+    - Transverse momenta px and py are scaled by mec² to convert to eV/c.
+
+    - Both quiet-loading and one4one beams are supported. In one4one mode each
+      macroparticle represents a single electron, so the number of particles per
+      slice varies with the current and some slices may be empty; empty slices are
+      skipped and `equal_weights` handles the unequal per-slice counts.
+
     """
     # Allow for opening a file
-    if isinstance(h5, str):
-        assert os.path.exists(h5), f"File does not exist: {h5}"
+    if isinstance(h5, (str, Path)):
         h5 = File(h5, "r")
 
     if species != "electron":
@@ -505,65 +720,217 @@ def genesis4_par_to_data(h5, species="electron", smear=True):
     # Useful local variables
     ds_slice = params["slicelength"]  # single slice length
     s_spacing = params["slicespacing"]  # spacing between slices
-    sample = int(s_spacing / ds_slice)  # This should be an integer
+    sample = round(s_spacing / ds_slice)  # This should be an integer
+    one4one = bool(params["one4one"])
 
-    x = []
-    px = []
-    y = []
-    py = []
-    z = []
-    gamma = []
-    weight = []
+    # In one4one mode each macroparticle is a single real electron with weight
+    # exactly qe (see the weight assignment below), so the qe-scale cutoff would
+    # be meaningless and is disabled; the non-finite / non-positive guard still
+    # applies.
+    effective_cutoff = 0.0 if one4one else cutoff
 
-    i0 = 0
-    for sname in sorted(g for g in h5 if g not in scalars):
+    #
+    xs = []
+    pxs = []
+    ys = []
+    pys = []
+    zs = []
+    gammas = []
+    weights = []
+
+    if slices is None:
+        snames = genesis4_parfile_slice_groups(h5)
+
+    else:
+        snames = [f"slice{ix:06}" for ix in slices]
+
+    rng = np.random.default_rng(rng)
+
+    if n_particle is not None and n_particle <= 0:
+        raise ValueError(f"`n_particle` must be positive, got {n_particle}.")
+
+    if n_particle is not None and equal_weights:
+        raise ValueError(
+            "`n_particle` and `equal_weights` are mutually exclusive. Use "
+            "`n_particle` to thin a large file while retaining the per-slice "
+            "weights, or `equal_weights` to resample the existing particles "
+            "to a single common weight."
+        )
+
+    # Metadata pre-pass: from the per-slice counts (dataset shapes) and the
+    # 1-element 'current' datasets — no bulk particle data — find the slices
+    # that survive filtering, with their index, particle count, and
+    # per-particle weight.
+    counts_all = genesis4_parfile_slice_counts(h5)
+
+    slice_names = []
+    slice_ix = []
+    slice_n = []
+    slice_q = []
+    for sname in snames:
+        n1 = int(counts_all.get(sname, 0))
+
+        # Skip missing and empty slices. In one4one mode the number of
+        # particles per slice varies with the current, and low-current slices
+        # can have no particles.
+        if n1 == 0:
+            continue
+
         g = h5[sname]
-        if not isinstance(g, Group) or "current" not in g:
-            # Groups like 'Meta' do not contain slice data.
+        if "current" not in g:
             continue
 
-        current = g["current"][:]  # I * s_spacing/c = Q
+        current = g["current"][:]  # This is really a scalar
         if len(current) != 1:
-            raise ValueError(f"Expected a single current value, found {len(current)}")
-        # Skip zero current slices. These usually have nans in the particle data.
-        if current == 0:
-            i0 += sample
-            continue
-
-        x.append(g["x"][:])
-        px.append(g["px"][:] * mec2)
-        y.append(g["y"][:])
-        py.append(g["py"][:] * mec2)
-        gamma.append(g["gamma"][:])
-
-        # Smear theta over sample slices
-        theta = g["theta"][:]
-        irel = theta / (2 * np.pi) % 1  # Relative bin position (0,1)
-        n1 = len(theta)
-        if smear:
-            z1 = (
-                irel + np.random.randint(0, high=sample, size=n1) + i0
-            ) * ds_slice  # Random smear
-        else:
-            z1 = (irel + i0) * ds_slice
-        z.append(z1)
+            raise ValueError(
+                f"Expected a single 'current' value in {g.name}, found {len(current)}"
+            )
 
         # Convert current to weight (C)
-        # I * s_spacing/c = Q
-        q1 = np.full(n1, current) * s_spacing / c_light / n1
-        weight.append(q1)
+        if one4one:
+            # Each macroparticle is a single real electron, so its weight is
+            # exactly the elementary charge. Genesis4 stores the smooth
+            # requested current per slice, but populates it with round(ne)
+            # integer particles; reconstructing q1 = ne*qe/round(ne) would
+            # scatter the weights around qe. Genesis4's own &sort namelist
+            # resolves this by resetting each slice current to npart*qe, which
+            # is equivalent to assigning qe to every macroparticle here.
+            q1 = e_charge
+        else:
+            # I * s_spacing/c = Q distributed over the n1 macroparticles.
+            q1 = current[0] * s_spacing / c_light / n1
 
-        i0 += sample  # skip samples
+        # Skip subphysical or non-physical slices. The cutoff removes
+        # quiet-loaded slices whose reconstructed weight is below the given
+        # charge; zero-current slices (usually nans) and any non-finite
+        # weight are always dropped. For one4one beams effective_cutoff is 0
+        # and q1 == qe, so no slices are dropped here (empty slices were
+        # already skipped above).
+        if not np.isfinite(q1) or q1 <= 0 or q1 < effective_cutoff:
+            continue
 
-    # Collect
-    x = np.hstack(x)
-    px = np.hstack(px)
-    y = np.hstack(y)
-    py = np.hstack(py)
-    gamma = np.hstack(gamma)
-    z = np.hstack(z)
-    weight = np.hstack(weight)
+        slice_names.append(sname)
+        slice_ix.append(int(sname.removeprefix("slice")))
+        slice_n.append(n1)
+        slice_q.append(q1)
 
+    if not slice_names:
+        raise ValueError(
+            "No slices remain after filtering. All slices were empty, "
+            f"zero-current, or below the cutoff ({cutoff} C)."
+        )
+
+    slice_n = np.array(slice_n, dtype=np.int64)
+    slice_q = np.array(slice_q)
+    total_count = int(slice_n.sum())
+    full_charge = float(np.sum(slice_n * slice_q))  # before any subsampling
+
+    # Optionally subsample on read to `n_particle` particles, apportioned over
+    # the surviving slices in proportion to their counts, so slices dropped by
+    # the filters above cannot consume any of the requested count. Systematic
+    # (cumulative-rounding) apportionment preserves the longitudinal profile
+    # while hitting the requested total exactly. Only the selected rows are
+    # read from the file, so the full beam is never read or materialized; the
+    # kept weights are rescaled once at the end to conserve the full-beam
+    # charge exactly (and keep one4one weights uniform).
+    keep_counts = None
+    if n_particle is not None and n_particle < total_count:
+        # Round the running cumulative target; consecutive differences give
+        # each slice's keep count and sum exactly to n_particle.
+        edges = np.round(np.cumsum(slice_n) / total_count * n_particle).astype(np.int64)
+        keep_counts = np.diff(edges, prepend=0)
+
+    for i, sname in enumerate(slice_names):
+        n1 = int(slice_n[i])
+        q1 = slice_q[i]
+        ix = slice_ix[i]
+
+        # Subsample this slice on read using its pre-computed keep count: only
+        # the selected rows are read from the file. Dropped charge (including
+        # whole slices that keep zero) is restored by a single global rescale
+        # after the loop, so the total is conserved exactly and one4one
+        # weights stay uniform.
+        if keep_counts is not None:
+            n_keep = int(keep_counts[i])
+            if n_keep == 0:
+                continue
+            # h5py fancy indexing requires increasing indices; shuffle=False
+            # is faster, and the order within a slice does not matter.
+            sel = np.sort(rng.choice(n1, n_keep, replace=False, shuffle=False))
+            pdata = load_parfile_slice_data(h5[sname], sel=sel)
+            n1 = n_keep
+        else:
+            pdata = load_parfile_slice_data(h5[sname])
+
+        # Calculate z
+        irel = pdata.theta / (2 * np.pi)
+        if wrap:
+            irel = irel % 1  # Relative bin position (0,1)
+
+        # Random smear over the `sample` slices each written slice represents
+        if smear:
+            z1 = (irel + rng.integers(0, sample, size=n1)) * ds_slice
+        else:
+            z1 = irel * ds_slice
+
+        z1 = z1 + (ix - 1) * s_spacing + z0  # set absolute z
+
+        # Collect arrays
+        xs.append(pdata.x)
+        pxs.append(pdata.px * mec2)
+        ys.append(pdata.y)
+        pys.append(pdata.py * mec2)
+        gammas.append(pdata.gamma)
+        zs.append(z1)
+        weights.append(np.full(n1, q1))
+
+    if equal_weights and len({float(w[0]) for w in weights}) > 1:
+        # Resample each slice so that every output particle carries the same
+        # weight. Slices may have different particle counts (e.g. in one4one
+        # mode), so the sampling is done per slice. If every slice already has
+        # the same per-particle weight (e.g. an unsubsampled one4one beam), the
+        # output is already equal-weight and this block is skipped.
+        n_slices = len(weights)
+
+        counts = np.array([len(w) for w in weights])
+        slice_charges = np.array([np.sum(w) for w in weights])
+
+        # Highest feasible sampling rate (particles per Coulomb) that does not
+        # require more particles than any slice actually has.
+        rate = np.min(counts / slice_charges)
+        n_samples = np.floor(rate * slice_charges).astype(int)
+
+        total_charge = np.sum(slice_charges)
+        n_samples_total = np.sum(n_samples)
+        weight1 = total_charge / n_samples_total  # new equal weight
+
+        # Loop over populated slices (note that some are skipped above)
+        for i in range(n_slices):
+            n_sample = n_samples[i]
+            samples = rng.choice(counts[i], n_sample, replace=False)
+            xs[i] = xs[i][samples]
+            pxs[i] = pxs[i][samples]
+            ys[i] = ys[i][samples]
+            pys[i] = pys[i][samples]
+            zs[i] = zs[i][samples]
+            gammas[i] = gammas[i][samples]
+            weights[i] = np.full(n_sample, weight1)
+
+    # Stack
+    x = np.hstack(xs)
+    px = np.hstack(pxs)
+    y = np.hstack(ys)
+    py = np.hstack(pys)
+    gamma = np.hstack(gammas)
+    z = np.hstack(zs)
+    weight = np.hstack(weights)
+
+    # If the beam was subsampled, rescale the kept weights so the total charge
+    # exactly matches the full beam (this also keeps one4one weights uniform).
+    if keep_counts is not None:
+        weight = weight * (full_charge / weight.sum())
+
+    # Form final particlegroup data
     n = len(weight)
     p = np.sqrt(gamma**2 - 1) * mec2
     pz = np.sqrt(p**2 - px**2 - py**2)
@@ -576,7 +943,7 @@ def genesis4_par_to_data(h5, species="electron", smear=True):
         "px": px,
         "py": py,
         "pz": pz,
-        "t": np.full(n, 0),
+        "t": np.full(n, 0.0),
         "status": np.full(n, status),
         "species": species,
         "weight": weight,

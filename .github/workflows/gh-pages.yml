@@ -28,6 +28,10 @@ jobs:
       - name: Install package
         shell: bash -l {0}
         run: pip install -e .
+      - name: Generate Genesis4 example data
+        shell: bash -l {0}
+        run: |
+          scripts/generate_genesis4_example_data.bash
       - name: Execute notebooks
         shell: bash -l {0}
         run: |

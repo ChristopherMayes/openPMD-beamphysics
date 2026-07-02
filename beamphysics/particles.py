@@ -1,7 +1,7 @@
 import os
 import pathlib
 from copy import deepcopy
-from typing import Sequence, Union
+from typing import Union, Optional, Sequence
 
 import numpy as np
 from h5py import File
@@ -12,6 +12,7 @@ from .interfaces.astra import write_astra
 from .interfaces.elegant import write_elegant
 from .interfaces.genesis import (
     genesis2_beam_data,
+    genesis4_par_to_data,
     write_genesis2_beam_file,
     write_genesis4_beam,
     write_genesis4_distribution,
@@ -1091,6 +1092,95 @@ class ParticleGroup:
         ParticleGroup
         """
         data = bmad.bmad_to_particlegroup_data(bmad_dict)
+        return cls(data=data)
+
+    @classmethod
+    def from_genesis4(
+        cls,
+        h5: str | pathlib.Path | File,
+        smear: bool = False,
+        wrap: bool = False,
+        z0: float = 0.0,
+        slices: Optional[list[int]] = None,
+        equal_weights: bool = False,
+        cutoff: float = 0.0,
+        n_particle: Optional[int] = None,
+        rng: Optional[int | np.random.Generator] = None,
+    ) -> "ParticleGroup":
+        """
+        Create a ParticleGroup from a Genesis4 `.par` HDF5 file.
+
+        This method loads slice-based macroparticle data from a Genesis 4 `.par`
+        file, reconstructs the 6D phase space distribution, and returns it as a
+        ParticleGroup. Supports optional smearing and resampling.
+
+        Parameters
+        ----------
+        h5 : str, pathlib.Path, or h5py.File
+            Path to a Genesis 4 `.par` HDF5 file, or an open h5py file handle.
+
+        smear : bool, default=False
+            Genesis4 often samples the beam by skipping slices
+            in a step called 'sample'.
+            This will smear out the theta coordinate over these slices,
+            preserving the modulus.
+
+        slices : list of int, optional
+            Specific slice indices to include. If None, all available slices are used.
+
+        wrap: bool, default = False
+            If true, the z position within a slice will be modulo the slice length.
+
+        z0 : float, default=0.0
+            Initial z-position for slice index 1, in meters.
+
+        equal_weights : bool, default=False
+            If True, particles are resampled within each slice so that all output
+            particles have equal charge weights. Only existing particles are used
+            (the beam is never upsampled), so the output count is generally
+            smaller. Useful for simulations that require uniform macroparticles.
+            Mutually exclusive with `n_particle`.
+
+        cutoff : float, default=0.0
+            Minimum per-particle weight in Coulombs. By default (0.0) nothing is
+            dropped for being sub-physical; pass a positive value (e.g. the
+            elementary charge ~1.6e-19) to discard slices whose macroparticles
+            would carry less than a single electron. Zero-current and non-finite
+            slices are always removed. Ignored for one4one beams, where each
+            macroparticle is a single electron of weight exactly the elementary
+            charge.
+
+        n_particle : int, optional
+            Subsample the beam to exactly this many particles as it is read,
+            retaining the per-slice weights (rescaled once so the total charge
+            is conserved exactly) and thinning each slice in proportion to its
+            particle count so the charge profile is preserved. Only the
+            selected particles are read from the file — huge (e.g. one4one)
+            files are downsampled immediately, without ever loading the full
+            beam. Values >= the number of particles in the file are a no-op.
+            Use `genesis4_parfile_n_particle` to find the file's total count.
+            Mutually exclusive with `equal_weights`.
+
+        rng : numpy.random.Generator or seed, optional
+            Random number generator or seed used for smearing and resampling.
+            If None, a new default RNG is created.
+
+        Returns
+        -------
+        ParticleGroup
+            A ParticleGroup instance constructed from the `.par` file.
+        """
+        data = genesis4_par_to_data(
+            h5=h5,
+            smear=smear,
+            wrap=wrap,
+            z0=z0,
+            slices=slices,
+            equal_weights=equal_weights,
+            cutoff=cutoff,
+            n_particle=n_particle,
+            rng=rng,
+        )
         return cls(data=data)
 
     # -------

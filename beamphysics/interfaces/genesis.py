@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 from collections import namedtuple
 from typing import Union, Optional
@@ -455,9 +456,8 @@ _parfile_scalar_datasets = [
     "slicespacing",
 ]
 
-_parfile_skip_groups = [
-    "Meta",
-]
+# Slice groups are named 'slice000001', 'slice000002', ...
+_parfile_slice_name_re = re.compile(r"slice\d+")
 
 
 def genesis4_parfile_scalars(h5):
@@ -483,14 +483,24 @@ def genesis4_parfile_scalars(h5):
 
 def genesis4_parfile_slice_groups(h5):
     """
-    Extract useful scalars and slice names from a Genesis4 .par file
+    Slice group names ('slice000001', ...) in a Genesis4 .par file,
+    sorted by slice index.
+
+    Groups are matched by name pattern and structure rather than by
+    excluding known metadata entries, so new metadata added by future
+    Genesis4 versions is ignored automatically.
     """
     # Allow for opening a file
     if isinstance(h5, (str, Path)):
         h5 = File(h5, "r")
 
     return sorted(
-        g for g in h5 if g not in _parfile_scalar_datasets + _parfile_skip_groups
+        (
+            g
+            for g in h5
+            if _parfile_slice_name_re.fullmatch(g) and isinstance(h5[g], Group)
+        ),
+        key=lambda s: int(s.removeprefix("slice")),
     )
 
 

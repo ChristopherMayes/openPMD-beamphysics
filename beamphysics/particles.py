@@ -239,7 +239,15 @@ class ParticleGroup:
         self._settable_scalar_keys = ["species"]
         self._settable_keys = self._settable_array_keys + self._settable_scalar_keys
         # Internal data. Only allow settable keys
-        self._data = {k: data[k] for k in self._settable_keys}
+
+        def fix_dtype(key: str, arr: np.ndarray) -> np.ndarray:
+            if key in self._settable_scalar_keys:
+                return arr  # passthrough
+            if key in {"id", "status"}:
+                return _round_to_int_array(arr)
+            return np.asarray(arr, dtype=float)
+
+        self._data = {key: fix_dtype(key, data[key]) for key in self._settable_keys}
 
     # -------------------------------------------------
     # Access to intrinsic coordinates
@@ -329,7 +337,7 @@ class ParticleGroup:
 
     @status.setter
     def status(self, val):
-        self._data["status"] = full_array(len(self), val)
+        self._data["status"] = full_array(len(self), val, dtype=int)
 
     @property
     def weight(self):
@@ -356,7 +364,7 @@ class ParticleGroup:
     def id(self, val):
         if "id" not in self._settable_array_keys:
             self._settable_array_keys.append("id")
-        self._data["id"] = full_array(len(self), val)
+        self._data["id"] = full_array(len(self), val, dtype=int)
 
     @property
     def species(self):
@@ -2234,20 +2242,40 @@ def default_id(n):
     return np.arange(1, n + 1)
 
 
-def full_array(n, val):
+def _round_to_int_array(val):
     """
-    Casts a value into a full array of length n
+    Coerce `val` into a `np.ndarray` with `dtype` int by way of rounding (if necessary).
     """
+    if not isinstance(val, np.ndarray):
+        val = np.asarray(val)
+
+    if np.issubdtype(val.dtype, int):
+        return val
+
+    return np.asarray(np.round(val), dtype=int)
+
+
+def full_array(n, val, dtype=None):
+    """
+    Casts a value into a full array of length n.
+
+    Special handling for `int` dtype rounds floating point values first, if
+    provided.
+    """
+
+    if dtype is not None and np.issubdtype(dtype, np.integer):
+        val = np.round(val)
+
     if np.isscalar(val):
-        return np.full(n, val)
+        return np.full(n, val, dtype=dtype)
     n_here = len(val)
 
     if n_here == 1:
-        return np.full(n, val[0])
+        return np.full(n, val[0], dtype=dtype)
     elif n_here != n:
         raise ValueError(f"Length mismatch: len(val)={n_here}, but requested n={n}")
     # Cast to array
-    return np.array(val)
+    return np.array(val, dtype=dtype)
 
 
 def full_data(data, exclude=None):

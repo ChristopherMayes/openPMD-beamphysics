@@ -203,3 +203,52 @@ def test_plot_single_particle_vs_z(array_key: str):
     Ps = single_particle(pz=10e6)
     Ps.plot("z", array_key)
     plt.show()
+
+
+def test_id_ensure_int():
+    data = single_particle().data
+    data.pop("status", None)
+    data.pop("id", None)
+
+    P = ParticleGroup(data={**data, "status": [0.1], "id": [0.0]})
+    np.testing.assert_array_equal(P.status, [0])
+    np.testing.assert_array_equal(P.id, [0])
+    assert np.issubdtype(P.status.dtype, int)
+    assert np.issubdtype(P.id.dtype, int)
+
+    for key in P._settable_array_keys:
+        if key not in {"id", "status"}:
+            assert np.issubdtype(getattr(P, key).dtype, float), key
+
+
+@pytest.mark.parametrize(
+    ("val", "expected"),
+    [
+        pytest.param(
+            [0.0, 1.0],
+            np.asarray([0, 1]),
+            id="list-float",
+        ),
+        pytest.param(
+            [0.0, 0.999],
+            np.asarray([0, 1]),
+            id="list-float-rounded",
+        ),
+        pytest.param(
+            np.array([0.0, 1.0]),
+            np.asarray([0, 1]),
+            id="ndarray-float",
+        ),
+        pytest.param(
+            np.array([0.0, 0.999]),
+            np.asarray([0, 1]),
+            id="ndarray-float-rounded",
+        ),
+    ],
+)
+def test_coerce_int_array_round(val, expected: np.ndarray):
+    from beamphysics.particles import _round_to_int_array
+
+    result = _round_to_int_array(val)
+    np.testing.assert_array_equal(actual=result, desired=expected)
+    assert np.issubdtype(result.dtype, int)

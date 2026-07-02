@@ -244,7 +244,7 @@ class ParticleGroup:
             if key in self._settable_scalar_keys:
                 return arr  # passthrough
             if key in {"id", "status"}:
-                return np.asarray(arr, dtype=int)
+                return _round_to_int_array(arr)
             return np.asarray(arr, dtype=float)
 
         self._data = {key: fix_dtype(key, data[key]) for key in self._settable_keys}
@@ -2240,6 +2240,19 @@ def default_id(n):
         Array ``[1, 2, ..., n]``.
     """
     return np.arange(1, n + 1)
+
+
+def _round_to_int_array(val):
+    """
+    Coerce `val` into a `np.ndarray` with `dtype` int by way of rounding (if necessary).
+    """
+    if not isinstance(val, np.ndarray):
+        val = np.asarray(val)
+
+    if np.issubdtype(val.dtype, int):
+        return val
+
+    return np.asarray(np.round(val), dtype=int)
 
 
 def full_array(n, val, dtype=None):

@@ -219,3 +219,36 @@ def test_id_ensure_int():
     for key in P._settable_array_keys:
         if key not in {"id", "status"}:
             assert np.issubdtype(getattr(P, key).dtype, float), key
+
+
+@pytest.mark.parametrize(
+    ("val", "expected"),
+    [
+        pytest.param(
+            [0.0, 1.0],
+            np.asarray([0, 1]),
+            id="list-float",
+        ),
+        pytest.param(
+            [0.0, 0.999],
+            np.asarray([0, 1]),
+            id="list-float-rounded",
+        ),
+        pytest.param(
+            np.array([0.0, 1.0]),
+            np.asarray([0, 1]),
+            id="ndarray-float",
+        ),
+        pytest.param(
+            np.array([0.0, 0.999]),
+            np.asarray([0, 1]),
+            id="ndarray-float-rounded",
+        ),
+    ],
+)
+def test_coerce_int_array_round(val, expected: np.ndarray):
+    from beamphysics.particles import _round_to_int_array
+
+    result = _round_to_int_array(val)
+    np.testing.assert_array_equal(actual=result, desired=expected)
+    assert np.issubdtype(result.dtype, int)

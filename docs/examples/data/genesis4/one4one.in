@@ -10,8 +10,8 @@
 &end
 
 &time
-  slen = 7.175993210500245e-05
-  sample = 10
+  slen = 9.5e-05
+  sample = 100
 &end
 
 # Low charge so one4one is tractable; Gaussian tails give empty/small slices

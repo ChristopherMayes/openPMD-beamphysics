@@ -11,7 +11,19 @@
 
 &time
   slen = 7.175993210500245e-05
-  sample = 10
+  sample = 100
+&end
+
+# A negligible-power field is declared so Genesis4 sets the radiation
+# wavenumber xks = 2*pi/lambda0 in the longitudinal ODE. Without a field,
+# xks defaults to 1 and the energy-dependent slippage (velocity bunching /
+# R56) is switched off. In a pure drift (aw=0) the field is dynamically
+# inert -- it exchanges no energy with the beam -- so this only activates
+# the correct kinematic longitudinal physics.
+&field
+  power = 1e-6
+  dgrid = 1e-3
+  ngrid = 51
 &end
 
 # 100 pC
@@ -26,6 +38,10 @@
   gamma = 1000.0
   delgam = 1.0
   current = @beamcurrent
+&end
+
+&write
+beam=beginning
 &end
 
 &track

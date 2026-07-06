@@ -10,8 +10,12 @@ docs/api/computed_statistics.md
 # Generated computed statistics (runtime-generated)
 beamphysics/standards/computed_statistics.yaml
 
-# Generated Genesis4 example data (see scripts/generate_genesis4_example_data.bash)
+# Genesis4 example data. The two particle files consumed by the tests and the
+# read_examples notebook are committed; the other run outputs (beginning.par.h5
+# and the *.out.h5 files) are regenerable via docs/examples/data/genesis4/run.sh.
 docs/examples/data/genesis4/*.h5
+!docs/examples/data/genesis4/end.par.h5
+!docs/examples/data/genesis4/one4one.par.h5
 
 # C extensions
 *.so

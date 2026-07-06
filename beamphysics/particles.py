@@ -1106,7 +1106,7 @@ class ParticleGroup:
         cutoff: float = 0.0,
         n_particle: Optional[int] = None,
         rng: Optional[int | np.random.Generator] = None,
-    ) -> "ParticleGroup":
+    ) -> ParticleGroup:
         """
         Create a ParticleGroup from a Genesis4 `.par` HDF5 file.
 

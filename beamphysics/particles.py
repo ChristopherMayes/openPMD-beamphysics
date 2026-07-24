@@ -1883,8 +1883,8 @@ class ParticleGroup:
 
         rng : None, int, or numpy.random.Generator, default=None
             Seed or Generator for reproducible sampling, passed to
-            ``np.random.default_rng``. Not used by the random fallback, which
-            follows numpy's global random state.
+            ``np.random.default_rng``. Governs all draws, including the
+            random fallback.
 
         Returns
         -------

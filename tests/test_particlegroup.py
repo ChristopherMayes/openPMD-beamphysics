@@ -207,19 +207,23 @@ def test_stratified_resample():
     assert np.array_equal(a.t, b.t)
 
 
-def test_stratified_resample_is_stratified():
-    # The defining property: one pick per equal-count stratum of the source,
-    # sorted by key. A pure-random sample would fail this.
-    alive = P.where(P.status == 1)
-    n = alive.n_particle // (2 * statistics.STRATIFIED_MIN_RATIO)
-    Q = P.stratified_resample(n, key="t", rng=0)
-
+def is_stratified(Q, alive, n):
+    # The defining property: the i-th smallest pick falls within the value
+    # range of stratum i of the alive source, sorted by t.
     values = np.sort(alive.t)
     edges = np.linspace(0, alive.n_particle, n + 1).astype(int)
     picks = np.sort(Q.t)
-    # The i-th smallest pick falls within stratum i's value range.
-    assert np.all(picks >= values[edges[:-1]])
-    assert np.all(picks <= values[edges[1:] - 1])
+    return bool(
+        np.all(picks >= values[edges[:-1]]) and np.all(picks <= values[edges[1:] - 1])
+    )
+
+
+def test_stratified_resample_is_stratified():
+    # One pick per equal-count stratum of the source, sorted by key.
+    # A pure-random sample would fail this.
+    alive = P.where(P.status == 1)
+    n = alive.n_particle // (2 * statistics.STRATIFIED_MIN_RATIO)
+    assert is_stratified(P.stratified_resample(n, key="t", rng=0), alive, n)
 
 
 def test_stratified_resample_errors():
@@ -244,22 +248,20 @@ def test_stratified_resample_errors():
         modified(t=np.zeros(P.n_particle)).stratified_resample(10, key="t")
 
 
-def test_stratified_resample_bad_ratio_falls_back_to_random(monkeypatch):
+def test_stratified_resample_bad_ratio_falls_back_to_random():
+    alive = P.where(P.status == 1)
     n = P.n_alive // 2  # ratio ~2 < STRATIFIED_MIN_RATIO -> fallback
-    calls = []
-    real_resample = statistics.resample_particles
 
-    def spy(*args, **kwargs):
-        calls.append(1)
-        return real_resample(*args, **kwargs)
+    # The fallback draw is random (not stratified) but still honors rng.
+    Q = P.stratified_resample(n, rng=0)
+    assert Q.n_particle == n
+    assert not is_stratified(Q, alive, n)
+    assert np.array_equal(Q.t, P.stratified_resample(n, rng=0).t)
 
-    monkeypatch.setattr(statistics, "resample_particles", spy)
-    assert P.stratified_resample(n).n_particle == n
-    assert calls  # fell back to random
-
-    calls.clear()
-    assert P.stratified_resample(n, allow_bad_sampling_ratio=True).n_particle == n
-    assert not calls  # forced stratified
+    # Forcing stratified sampling at the same ratio satisfies the property.
+    assert is_stratified(
+        P.stratified_resample(n, allow_bad_sampling_ratio=True, rng=0), alive, n
+    )
 
     # Variable weights are rejected before the fallback, so a bad ratio raises too.
     data = {k: np.copy(P[k]) for k in P._settable_array_keys}

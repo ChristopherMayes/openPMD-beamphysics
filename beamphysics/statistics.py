@@ -579,10 +579,9 @@ def stratified_resample_particles(
         sampling anyway.
 
     rng: None, int, or numpy.random.Generator, default = None
-        Seed or Generator for the in-stratum draws, passed to
-        ``np.random.default_rng``. Pass a seed for reproducible sampling;
-        None draws fresh entropy. Not used by the random fallback, which
-        follows numpy's global random state.
+        Seed or Generator for all random draws, both the in-stratum picks and
+        the ratio fallback, passed to ``np.random.default_rng``. Pass a seed
+        for reproducible sampling; None draws fresh entropy.
 
     Returns
     -------
@@ -618,22 +617,24 @@ def stratified_resample_particles(
             "got variable weights."
         )
 
+    rng = np.random.default_rng(rng)
+
     # If the new population is not much smaller than the initial, stratified sampling distorts; fall back to random unless overridden
     if m < STRATIFIED_MIN_RATIO * n and not allow_bad_sampling_ratio:
-        return resample_particles(alive, n, equal_weights=True)
+        # Uniform subset; the weights are already equal, so no per-weight sampling is needed
+        pick = rng.choice(m, n, replace=False)
+    else:
+        values = alive[key]
+        # A constant stratification coordinate makes the strata meaningless.
+        if np.ptp(values) == 0:
+            raise ValueError(
+                f"Cannot stratify by {key!r}: all alive particles have the same value "
+                f"({values.flat[0]})."
+            )
 
-    values = alive[key]
-    # A constant stratification coordinate makes the strata meaningless.
-    if np.ptp(values) == 0:
-        raise ValueError(
-            f"Cannot stratify by {key!r}: all alive particles have the same value "
-            f"({values.flat[0]})."
-        )
-
-    rng = np.random.default_rng(rng)
-    order = np.argsort(values)
-    edges = np.linspace(0, m, n + 1).astype(int)
-    pick = order[rng.integers(edges[:-1], edges[1:])]
+        order = np.argsort(values)
+        edges = np.linspace(0, m, n + 1).astype(int)
+        pick = order[rng.integers(edges[:-1], edges[1:])]
 
     data = {}
     for k in alive._settable_array_keys:

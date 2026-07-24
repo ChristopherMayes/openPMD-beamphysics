@@ -246,6 +246,9 @@ def test_stratified_resample_errors():
         modified(weight=w).stratified_resample(10)
     with pytest.raises(ValueError, match="Cannot stratify by 't'"):
         modified(t=np.zeros(P.n_particle)).stratified_resample(10, key="t")
+    # The key check holds even at a bad ratio, where the fallback would run.
+    with pytest.raises(ValueError, match="Cannot stratify by 't'"):
+        modified(t=np.zeros(P.n_particle)).stratified_resample(P.n_alive // 2, key="t")
 
 
 def test_stratified_resample_bad_ratio_falls_back_to_random():

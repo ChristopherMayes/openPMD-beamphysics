@@ -607,14 +607,22 @@ def stratified_resample_particles(
     if n > m:
         raise ValueError(f"Cannot stratified_resample {m} alive particles up to {n}")
 
+    # Argument checks precede the ratio fallback so they hold for all n.
     # Variable-weight resampling is not supported: stratifying by count assigns
     # each macroparticle an equal share of charge, which only represents the
     # distribution faithfully when the input weights are already equal.
-    # Checked before the ratio fallback so the requirement holds for all n.
     if len(np.unique(alive.weight)) > 1:
         raise ValueError(
             "stratified_resample requires constant particle weights; "
             "got variable weights."
+        )
+
+    values = alive[key]
+    # A constant stratification coordinate makes the strata meaningless.
+    if np.ptp(values) == 0:
+        raise ValueError(
+            f"Cannot stratify by {key!r}: all alive particles have the same value "
+            f"({values.flat[0]})."
         )
 
     rng = np.random.default_rng(rng)
@@ -624,14 +632,6 @@ def stratified_resample_particles(
         # Uniform subset; the weights are already equal, so no per-weight sampling is needed
         pick = rng.choice(m, n, replace=False)
     else:
-        values = alive[key]
-        # A constant stratification coordinate makes the strata meaningless.
-        if np.ptp(values) == 0:
-            raise ValueError(
-                f"Cannot stratify by {key!r}: all alive particles have the same value "
-                f"({values.flat[0]})."
-            )
-
         order = np.argsort(values)
         edges = np.linspace(0, m, n + 1).astype(int)
         pick = order[rng.integers(edges[:-1], edges[1:])]

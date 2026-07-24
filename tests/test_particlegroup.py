@@ -200,6 +200,11 @@ def test_stratified_resample():
     # resample(method="stratified") dispatches to the same routine.
     assert P.resample(n, method="stratified").n_particle == n
 
+    # A seed (or a Generator with that seed) makes the draw reproducible.
+    a = P.stratified_resample(n, rng=0)
+    b = P.stratified_resample(n, rng=np.random.default_rng(0))
+    assert np.array_equal(a.t, b.t)
+
 
 def test_stratified_resample_errors():
     with pytest.raises(ValueError):

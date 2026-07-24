@@ -1782,6 +1782,7 @@ class ParticleGroup:
         method="random",
         key="t",
         allow_bad_sampling_ratio=False,
+        rng=None,
     ):
         """
         Resample particles.
@@ -1829,6 +1830,11 @@ class ParticleGroup:
             Force stratified sampling even when ``n_alive < min_ratio * n``, instead of
             falling back to random. Only used by ``method="stratified"``.
 
+        rng : None, int, or numpy.random.Generator, default=None
+            Seed or Generator for reproducible sampling, passed to
+            ``np.random.default_rng``. Only used by ``method="stratified"``;
+            the random method follows numpy's global random state.
+
         Returns
         -------
         ParticleGroup
@@ -1837,7 +1843,11 @@ class ParticleGroup:
             data = resample_particles(self, n, equal_weights=equal_weights)
         elif method == "stratified":
             data = stratified_resample_particles(
-                self, n, key=key, allow_bad_sampling_ratio=allow_bad_sampling_ratio
+                self,
+                n,
+                key=key,
+                allow_bad_sampling_ratio=allow_bad_sampling_ratio,
+                rng=rng,
             )
         else:
             raise ValueError(
@@ -1845,7 +1855,7 @@ class ParticleGroup:
             )
         return ParticleGroup(data=data)
 
-    def stratified_resample(self, n, key="t", allow_bad_sampling_ratio=False):
+    def stratified_resample(self, n, key="t", allow_bad_sampling_ratio=False, rng=None):
         """
         'Stratified' (quiet) down-sample of alive particles.
 
@@ -1868,12 +1878,21 @@ class ParticleGroup:
             distribution, so by default it falls back to random resampling of
             the alive particles. Set True to force stratified sampling anyway.
 
+        rng : None, int, or numpy.random.Generator, default=None
+            Seed or Generator for reproducible sampling, passed to
+            ``np.random.default_rng``. Not used by the random fallback, which
+            follows numpy's global random state.
+
         Returns
         -------
         ParticleGroup
         """
         data = stratified_resample_particles(
-            self, n, key=key, allow_bad_sampling_ratio=allow_bad_sampling_ratio
+            self,
+            n,
+            key=key,
+            allow_bad_sampling_ratio=allow_bad_sampling_ratio,
+            rng=rng,
         )
         return ParticleGroup(data=data)
 

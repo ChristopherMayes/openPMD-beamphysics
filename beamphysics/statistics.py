@@ -541,7 +541,7 @@ def resample_particles(particle_group, n=0, equal_weights=False):
 
 
 def stratified_resample_particles(
-    particle_group, n, key="t", allow_bad_sampling_ratio=False
+    particle_group, n, key="t", allow_bad_sampling_ratio=False, rng=None
 ):
     """
     'Stratified' (quiet) down-sampling of a ParticleGroup.
@@ -571,6 +571,12 @@ def stratified_resample_particles(
         When ``n_alive < min_ratio * n`` stratified sampling distorts the distribution
         (see Notes). By default the routine then falls back to random resampling
         of the alive particles. Set True to force stratified sampling anyway.
+
+    rng: None, int, or numpy.random.Generator, default = None
+        Seed or Generator for the in-stratum draws, passed to
+        ``np.random.default_rng``. Pass a seed for reproducible sampling;
+        None draws fresh entropy. Not used by the random fallback, which
+        follows numpy's global random state.
 
     Returns
     -------
@@ -619,7 +625,7 @@ def stratified_resample_particles(
             f"({values.flat[0]})."
         )
 
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(rng)
     order = np.argsort(values)
     edges = np.linspace(0, m, n + 1).astype(int)
     offsets = (rng.random(n) * (edges[1:] - edges[:-1])).astype(int)

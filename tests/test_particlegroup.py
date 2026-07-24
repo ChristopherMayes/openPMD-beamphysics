@@ -196,7 +196,7 @@ def test_stratified_resample():
     assert np.all(Q.status == 1)
     assert np.isclose(Q.charge, alive.charge)  # charge preserved
     assert len(set(Q.weight)) == 1  # spread over equal weights
-    assert set(np.asarray(Q.t)).issubset(set(np.asarray(alive.t)))  # picks from source
+    assert np.isin(Q.t, alive.t).all()  # picks from source
 
     # resample(method="stratified") dispatches to the same routine.
     assert P.resample(n, method="stratified").n_particle == n
@@ -205,6 +205,21 @@ def test_stratified_resample():
     a = P.stratified_resample(n, rng=0)
     b = P.stratified_resample(n, rng=np.random.default_rng(0))
     assert np.array_equal(a.t, b.t)
+
+
+def test_stratified_resample_is_stratified():
+    # The defining property: one pick per equal-count stratum of the source,
+    # sorted by key. A pure-random sample would fail this.
+    alive = P.where(P.status == 1)
+    n = alive.n_particle // (2 * statistics.STRATIFIED_MIN_RATIO)
+    Q = P.stratified_resample(n, key="t", rng=0)
+
+    values = np.sort(alive.t)
+    edges = np.linspace(0, alive.n_particle, n + 1).astype(int)
+    picks = np.sort(Q.t)
+    # The i-th smallest pick falls within stratum i's value range.
+    assert np.all(picks >= values[edges[:-1]])
+    assert np.all(picks <= values[edges[1:] - 1])
 
 
 def test_stratified_resample_errors():

@@ -189,7 +189,8 @@ def test_fractional_split():
 
 def test_stratified_resample():
     alive = P.where(P.status == 1)
-    n = alive.n_particle // 10  # ratio >= 5 so it stays stratified (no fallback)
+    # Good ratio, so it stays stratified (no fallback)
+    n = alive.n_particle // (2 * statistics.STRATIFIED_MIN_RATIO)
     Q = P.stratified_resample(n)
     assert Q.n_particle == n
     assert np.all(Q.status == 1)
@@ -229,7 +230,7 @@ def test_stratified_resample_errors():
 
 
 def test_stratified_resample_bad_ratio_falls_back_to_random(monkeypatch):
-    n = P.n_alive // 2  # ratio ~2 < 5 -> fallback
+    n = P.n_alive // 2  # ratio ~2 < STRATIFIED_MIN_RATIO -> fallback
     calls = []
     real_resample = statistics.resample_particles
 

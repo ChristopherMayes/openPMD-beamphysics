@@ -1853,6 +1853,7 @@ class ParticleGroup:
         ``n`` equal-count strata, and draws one particle per stratum. The total
         charge is preserved and spread equally over the ``n`` returned
         macroparticles. This is a lower-noise alternative to random resampling.
+        The alive particles must have constant (equal) weights.
 
         Parameters
         ----------

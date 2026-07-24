@@ -555,7 +555,9 @@ def stratified_resample_particles(
     Compared to random resampling, this produces a smoother, lower-noise
     ("quiet") representation of the phase space along ``key``. Note that,
     unlike :func:`resample_particles`, dead particles (``status != 1``) are
-    dropped rather than sampled and carried through.
+    dropped rather than sampled and carried through. The alive particles must
+    have constant (equal) weights; variable weights raise a ``ValueError``
+    regardless of ``n``.
 
     Parameters
     ----------
@@ -594,19 +596,20 @@ def stratified_resample_particles(
     if n > m:
         raise ValueError(f"Cannot stratified_resample {m} alive particles up to {n}")
 
-    # If the new population is not much smaller than the initial, stratified sampling distorts; fall back to random unless overridden
-    min_ratio = 5
-    if m < min_ratio * n and not allow_bad_sampling_ratio:
-        return resample_particles(alive, n, equal_weights=True)
-
     # Variable-weight resampling is not supported: stratifying by count assigns
     # each macroparticle an equal share of charge, which only represents the
     # distribution faithfully when the input weights are already equal.
+    # Checked before the ratio fallback so the requirement holds for all n.
     if len(np.unique(alive.weight)) > 1:
         raise ValueError(
             "stratified_resample requires constant particle weights; "
             "got variable weights."
         )
+
+    # If the new population is not much smaller than the initial, stratified sampling distorts; fall back to random unless overridden
+    min_ratio = 5
+    if m < min_ratio * n and not allow_bad_sampling_ratio:
+        return resample_particles(alive, n, equal_weights=True)
 
     values = alive[key]
     # A constant stratification coordinate makes the strata meaningless.

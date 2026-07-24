@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from beamphysics import ParticleGroup
+from beamphysics import ParticleGroup, statistics
 from beamphysics.particles import single_particle
 
 P = ParticleGroup("docs/examples/data/bmad_particles.h5")
@@ -223,18 +223,29 @@ def test_stratified_resample_errors():
         modified(t=np.zeros(P.n_particle)).stratified_resample(10, key="t")
 
 
-def test_stratified_resample_bad_ratio_falls_back_to_random():
-    # A poor alive:n ratio falls back to random by default, which (unlike
-    # stratified) accepts variable weights; forcing stratified re-rejects them.
+def test_stratified_resample_bad_ratio_falls_back_to_random(monkeypatch):
+    n = P.n_alive // 2  # ratio ~2 < 5 -> fallback
+    calls = []
+    real_resample = statistics.resample_particles
+
+    def spy(*args, **kwargs):
+        calls.append(1)
+        return real_resample(*args, **kwargs)
+
+    monkeypatch.setattr(statistics, "resample_particles", spy)
+    assert P.stratified_resample(n).n_particle == n
+    assert calls  # fell back to random
+
+    calls.clear()
+    assert P.stratified_resample(n, allow_bad_sampling_ratio=True).n_particle == n
+    assert not calls  # forced stratified
+
+    # Variable weights are rejected before the fallback, so a bad ratio raises too.
     data = {k: np.copy(P[k]) for k in P._settable_array_keys}
     data["species"] = P["species"]
-    data["weight"][0] *= 2  # variable weights
-    Pvar = ParticleGroup(data=data)
-    n = Pvar.n_alive // 2  # ratio ~2 < 5 -> fallback
-
-    assert Pvar.stratified_resample(n).n_particle == n  # random fallback: ok
+    data["weight"][0] *= 2
     with pytest.raises(ValueError, match="constant particle weights"):
-        Pvar.stratified_resample(n, allow_bad_sampling_ratio=True)  # forced stratified
+        ParticleGroup(data=data).stratified_resample(n)
 
 
 def test_plot_vs_z(array_key: str):

@@ -1807,8 +1807,9 @@ class ParticleGroup:
         produces a smoother, lower-noise ("quiet") down-sample. See
         [`stratified_resample`][beamphysics.ParticleGroup.stratified_resample].
         Presently, this method only supports equal weight particles. If
-        ``n_alive < 5 * n`` it falls back to random resampling unless
-        ``allow_bad_sampling_ratio=True``.
+        ``n_alive < STRATIFIED_MIN_RATIO * n`` (see
+        ``beamphysics.statistics.STRATIFIED_MIN_RATIO``) it falls back to
+        random resampling unless ``allow_bad_sampling_ratio=True``.
 
         Parameters
         ----------
@@ -1827,8 +1828,8 @@ class ParticleGroup:
             Coordinate to sort and stratify by. Only used by ``method="stratified"``.
 
         allow_bad_sampling_ratio : bool, default=False
-            Force stratified sampling even when ``n_alive < min_ratio * n``, instead of
-            falling back to random. Only used by ``method="stratified"``.
+            Force stratified sampling even when ``n_alive < STRATIFIED_MIN_RATIO * n``,
+            instead of falling back to random. Only used by ``method="stratified"``.
 
         rng : None, int, or numpy.random.Generator, default=None
             Seed or Generator for reproducible sampling, passed to
@@ -1874,9 +1875,11 @@ class ParticleGroup:
             Coordinate used to sort and stratify the particles.
 
         allow_bad_sampling_ratio : bool, default=False
-            When ``n_alive < min_ratio * n`` stratified sampling distorts the
-            distribution, so by default it falls back to random resampling of
-            the alive particles. Set True to force stratified sampling anyway.
+            When ``n_alive < STRATIFIED_MIN_RATIO * n`` (see
+            ``beamphysics.statistics.STRATIFIED_MIN_RATIO``) stratified sampling
+            distorts the distribution, so by default it falls back to random
+            resampling of the alive particles. Set True to force stratified
+            sampling anyway.
 
         rng : None, int, or numpy.random.Generator, default=None
             Seed or Generator for reproducible sampling, passed to

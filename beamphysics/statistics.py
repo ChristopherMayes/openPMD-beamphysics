@@ -540,6 +540,11 @@ def resample_particles(particle_group, n=0, equal_weights=False):
     return data
 
 
+# Minimum alive:n ratio for faithful stratified sampling; below this,
+# stratified_resample_particles falls back to random resampling (see its Notes).
+STRATIFIED_MIN_RATIO = 5
+
+
 def stratified_resample_particles(
     particle_group, n, key="t", allow_bad_sampling_ratio=False, rng=None
 ):
@@ -568,9 +573,10 @@ def stratified_resample_particles(
         Coordinate used to sort and stratify the particles (e.g. "t", "z", "pz").
 
     allow_bad_sampling_ratio: bool, default = False
-        When ``n_alive < min_ratio * n`` stratified sampling distorts the distribution
-        (see Notes). By default the routine then falls back to random resampling
-        of the alive particles. Set True to force stratified sampling anyway.
+        When ``n_alive < STRATIFIED_MIN_RATIO * n`` stratified sampling distorts
+        the distribution (see Notes). By default the routine then falls back to
+        random resampling of the alive particles. Set True to force stratified
+        sampling anyway.
 
     rng: None, int, or numpy.random.Generator, default = None
         Seed or Generator for the in-stratum draws, passed to
@@ -589,9 +595,9 @@ def stratified_resample_particles(
     multiple of ``n`` the strata differ in width by one particle, so the
     reconstructed charge density along ``key`` carries an ``O(n/n_alive)`` error.
     This is negligible when ``n_alive >> n`` (the intended regime) but grows
-    large as ``n`` approaches ``n_alive``. When ``n_alive < min_ratio * n`` the routine
-    therefore falls back to random resampling unless ``allow_bad_sampling_ratio``
-    is set.
+    large as ``n`` approaches ``n_alive``. When ``n_alive < STRATIFIED_MIN_RATIO * n``
+    the routine therefore falls back to random resampling unless
+    ``allow_bad_sampling_ratio`` is set.
 
     """
     alive = particle_group.where(particle_group.status == 1)
@@ -613,8 +619,7 @@ def stratified_resample_particles(
         )
 
     # If the new population is not much smaller than the initial, stratified sampling distorts; fall back to random unless overridden
-    min_ratio = 5
-    if m < min_ratio * n and not allow_bad_sampling_ratio:
+    if m < STRATIFIED_MIN_RATIO * n and not allow_bad_sampling_ratio:
         return resample_particles(alive, n, equal_weights=True)
 
     values = alive[key]

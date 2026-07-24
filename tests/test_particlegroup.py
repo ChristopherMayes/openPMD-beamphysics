@@ -194,7 +194,7 @@ def test_stratified_resample():
     Q = P.stratified_resample(n)
     assert Q.n_particle == n
     assert np.all(Q.status == 1)
-    assert np.isclose(Q.charge, alive.charge)  # charge preserved
+    assert np.isclose(Q.charge, alive.charge, rtol=1e-12, atol=0)
     assert len(set(Q.weight)) == 1  # spread over equal weights
     assert np.isin(Q.t, alive.t).all()  # picks from source
 

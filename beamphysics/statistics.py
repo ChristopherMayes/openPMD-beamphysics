@@ -628,8 +628,7 @@ def stratified_resample_particles(
     rng = np.random.default_rng(rng)
     order = np.argsort(values)
     edges = np.linspace(0, m, n + 1).astype(int)
-    offsets = (rng.random(n) * (edges[1:] - edges[:-1])).astype(int)
-    pick = order[edges[:-1] + offsets]
+    pick = order[rng.integers(edges[:-1], edges[1:])]
 
     data = {}
     for k in alive._settable_array_keys:

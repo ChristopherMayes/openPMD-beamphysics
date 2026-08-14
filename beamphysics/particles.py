@@ -1415,7 +1415,7 @@ class ParticleGroup:
         return write_opal(self, filePath, verbose=verbose, dist_type=dist_type)
 
     # openPMD
-    def write(self, h5, name=None) -> None:
+    def write(self, h5, name=None, t_offset=0.0) -> None:
         """
         Write particle data to an HDF5 file or group in openPMD format.
 
@@ -1433,6 +1433,9 @@ class ParticleGroup:
         name : str, optional
             Name for the subgroup/bunch written inside the "particles" group (or provided group).
             If None, `write_pmd_bunch` will write directly to the "particles" group.
+        t_offset : float or numpy.ndarray, optional
+            Time offset, scalar or per-particle, written as the openPMD "timeOffset"
+            record. Omitted when zero. Default is 0.0.
 
         Returns
         -------
@@ -1465,7 +1468,7 @@ class ParticleGroup:
         else:
             g = h5
 
-        write_pmd_bunch(g, self, name=name)
+        write_pmd_bunch(g, self, name=name, t_offset=t_offset)
 
     # Plotting
     # --------

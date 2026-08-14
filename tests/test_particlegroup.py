@@ -8,6 +8,7 @@ import pytest
 
 from beamphysics import ParticleGroup
 from beamphysics.particles import single_particle
+from beamphysics.readers import expected_record_unit_dimension, particle_array
 
 P = ParticleGroup("docs/examples/data/bmad_particles.h5")
 
@@ -180,6 +181,51 @@ def test_write_reload_h5(tmp_path: pathlib.Path):
 
     P2 = ParticleGroup(h5file)
     assert P == P2
+
+
+def test_write_t_offset(tmp_path: pathlib.Path):
+    t_offset = 5e-9
+    h5file = tmp_path / "test_offset.h5"
+    P.write(h5file, t_offset=t_offset)
+
+    with h5py.File(h5file, "r") as fp:
+        g = fp[f"particles/{P.species}"]
+
+        # Constant component: a group with value and shape
+        offset = g["timeOffset"]
+        assert isinstance(offset, h5py.Group)
+        assert offset.attrs["value"] == t_offset
+        assert tuple(offset.attrs["shape"]) == (len(P),)
+        assert offset.attrs["unitSI"] == 1.0
+        assert tuple(offset.attrs["unitDimension"]) == tuple(
+            expected_record_unit_dimension["timeOffset"]
+        )
+
+        # The time record itself is not shifted
+        assert np.allclose(particle_array(g, "t", include_offset=False), P.t)
+
+    # Readers add the offset to t
+    P2 = ParticleGroup(h5file)
+    assert np.allclose(P2.t, P.t + t_offset)
+    assert np.allclose(P2.x, P.x)
+    assert np.allclose(P2.pz, P.pz)
+
+
+def test_write_t_offset_array(tmp_path: pathlib.Path):
+    t_offset = np.linspace(0, 1e-9, len(P))
+    h5file = tmp_path / "test_offset_array.h5"
+    P.write(h5file, t_offset=t_offset)
+
+    with h5py.File(h5file, "r") as fp:
+        assert isinstance(fp[f"particles/{P.species}/timeOffset"], h5py.Dataset)
+
+    assert np.allclose(ParticleGroup(h5file).t, P.t + t_offset)
+
+
+def test_write_t_offset_bad_shape(tmp_path: pathlib.Path):
+    h5file = tmp_path / "test_offset_bad.h5"
+    with pytest.raises(ValueError):
+        P.write(h5file, t_offset=np.zeros(len(P) + 1) + 1e-9)
 
 
 def test_fractional_split():

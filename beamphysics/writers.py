@@ -40,20 +40,25 @@ def pmd_field_init(h5, externalFieldPath="/ExternalFieldPath/%T/"):
 
 def write_pmd_bunch(h5, data, name=None, t_offset=0.0):
     """
-    Data is a dict with:
-        np.array: 'x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight'
-        str: 'species'
-        int: n_particle
+    Write bunch data in openPMD-beamphysics format.
 
-    Optional data:
-        np.array: 'id'
+    Parameters
+    ----------
+    h5 : h5py.File or h5py.Group
+        Handle to write into.
+    data : dict or ParticleGroup
+        Requires keys 'x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight'
+        (arrays), 'species' (str), 'n_particle' (int), 'charge' (float).
+        Optional key: 'id' (array).
+    name : str, optional
+        Subgroup to create for the bunch. If None, writes directly into `h5`.
+    t_offset : float or numpy.ndarray, optional
+        Time offset, scalar or per-particle, written as the 'timeOffset' record.
+        Omitted when zero. Readers add this to the 'time' record. Default is 0.0.
 
-    t_offset is a scalar or per-particle array written as the 'timeOffset'
-    record. It is omitted when zero. Readers add this to the 'time' record.
-
-    See inverse routine:
-        .particles.load_bunch_data
-
+    See Also
+    --------
+    beamphysics.particles.load_bunch_data : inverse routine
     """
     if name:
         g = h5.create_group(name)

@@ -2268,7 +2268,7 @@ def _scalar_maybe_from_array(value):
     return value[0]
 
 
-def load_bunch_data(h5):
+def load_bunch_data(h5, include_offset=True):
     """
     Load particles into structured numpy array.
     """
@@ -2296,7 +2296,7 @@ def load_bunch_data(h5):
     data["total_charge"] = attrs["totalCharge"] * attrs["chargeUnitSI"]
 
     for key in ["x", "px", "y", "py", "z", "pz", "t"]:
-        data[key] = particle_array(h5, key)
+        data[key] = particle_array(h5, key, include_offset=include_offset)
 
     if "particleStatus" in h5:
         data["status"] = particle_array(h5, "particleStatus")

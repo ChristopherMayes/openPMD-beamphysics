@@ -494,7 +494,7 @@ class ParticleGroup:
 
     def higher_order_energy_calc(self, order=2):
         """
-        Fits a polynmial with order `order` to the Energy vs. time, , and returns the energy with this subtracted.
+        Fits a polynomial with order `order` to the Energy vs. time, and returns the energy with this subtracted.
         """
         # order=2
         if self.std("z") < 1e-12:
@@ -505,8 +505,7 @@ class ParticleGroup:
             t = self.z / c_light
         energy = self.energy
 
-        best_fit_coeffs = np.polynomial.polynomial.polyfit(t, energy, order)
-        best_fit = np.polynomial.polynomial.polyval(t, best_fit_coeffs)
+        best_fit = np.polynomial.Polynomial.fit(t, energy, order)(t)
         return energy - best_fit
 
     # Polar coordinates. Note that these are centered at x=0, y=0, and not an averge center.

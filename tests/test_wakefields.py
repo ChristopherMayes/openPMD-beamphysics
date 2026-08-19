@@ -16,6 +16,7 @@ import pytest
 
 from beamphysics.interfaces.impact import (
     IMPACT_Z_MAX_WAKEFIELD_ROWS,
+    create_impact_z_wakefield_rfdata,
     parse_impact_z_wakefield,
     write_impact_z_wakefield,
 )
@@ -214,6 +215,74 @@ def test_impact_z_writer_rejects_too_many_rows(impedance_model, tmp_path):
             zmax=100 * impedance_model.s0,
             n=IMPACT_Z_MAX_WAKEFIELD_ROWS + 1,
         )
+
+
+def test_create_rfdata_matches_the_written_file(impedance_model, tmp_path):
+    """The writer is a thin wrapper: the file must hold the array it is given."""
+    zmax = 100 * impedance_model.s0
+    filename = tmp_path / "rfdata41.in"
+
+    rfdata = create_impact_z_wakefield_rfdata(impedance_model, zmax, n=512)
+    write_impact_z_wakefield(filename, impedance_model, zmax=zmax, n=512)
+
+    assert rfdata.shape == (512, 4)
+    np.testing.assert_allclose(np.loadtxt(filename), rfdata, rtol=1e-15, atol=0)
+
+
+def test_create_rfdata_rejects_too_many_rows(impedance_model):
+    """The row limit belongs to the array builder, not to the file writer."""
+    with pytest.raises(ValueError, match="5000"):
+        create_impact_z_wakefield_rfdata(
+            impedance_model,
+            zmax=100 * impedance_model.s0,
+            n=IMPACT_Z_MAX_WAKEFIELD_ROWS + 1,
+        )
+
+
+def test_parse_impact_z_wakefield_accepts_an_array(impedance_model, tmp_path):
+    """A table held in memory must parse identically to the same table on disk."""
+    zmax = 100 * impedance_model.s0
+    filename = tmp_path / "rfdata41.in"
+
+    rfdata = create_impact_z_wakefield_rfdata(impedance_model, zmax, n=256)
+    write_impact_z_wakefield(filename, impedance_model, zmax=zmax, n=256)
+
+    from_array = parse_impact_z_wakefield(rfdata)
+    from_file = parse_impact_z_wakefield(filename)
+
+    for key in ("s", "Wz", "Wx", "Wy"):
+        np.testing.assert_allclose(from_array[key], from_file[key], rtol=1e-15, atol=0)
+
+
+def test_from_impact_z_accepts_an_array(impedance_model, tmp_path):
+    """An ImpactZInput file_data entry can be turned back into a wakefield model."""
+    zmax = 100 * impedance_model.s0
+    filename = tmp_path / "rfdata41.in"
+
+    rfdata = create_impact_z_wakefield_rfdata(impedance_model, zmax, n=256)
+    write_impact_z_wakefield(filename, impedance_model, zmax=zmax, n=256)
+
+    from_array = TabularWakefield.from_impact_z(rfdata)
+    from_file = TabularWakefield.from_impact_z(filename)
+
+    z = -np.linspace(0.0, zmax, 401)
+    np.testing.assert_allclose(from_array.wake(z), from_file.wake(z), rtol=1e-15)
+
+
+def test_from_wakefield_rejects_range_beyond_a_source_table(impedance_model):
+    """Resampling past the end of a table would return the fill value, not the wake."""
+    zmax = 100 * impedance_model.s0
+    table = TabularWakefield.from_wakefield(impedance_model, zmax=zmax, n=256)
+
+    with pytest.raises(ValueError, match="zero"):
+        TabularWakefield.from_wakefield(table, zmax=2 * zmax, n=256)
+
+    with pytest.raises(ValueError, match="zero"):
+        create_impact_z_wakefield_rfdata(table, zmax=2 * zmax, n=256)
+
+    # The full range of the source table remains available.
+    resampled = TabularWakefield.from_wakefield(table, zmax=zmax, n=128)
+    assert resampled.z_data[0] == pytest.approx(-zmax)
 
 
 def test_parse_impact_z_wakefield_rejects_nonuniform_grid(tmp_path):

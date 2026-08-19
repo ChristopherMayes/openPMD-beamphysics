@@ -122,8 +122,11 @@ class TabularWakefield(WakefieldBase):
         Raises
         ------
         ValueError
-            If zmax is not positive, or if n is smaller than the four points required
-            by the interpolator.
+            If zmax is not positive, if n is smaller than the four points required by
+            the interpolator, or if the source is itself a :class:`TabularWakefield`
+            that does not cover the requested range. Resampling beyond the range of a
+            table would return the fill value rather than the wake, so the result
+            would be silently zero padded.
 
         Examples
         --------
@@ -138,6 +141,16 @@ class TabularWakefield(WakefieldBase):
             raise ValueError(f"zmax must be a positive trailing distance, got {zmax}")
         if n < 4:
             raise ValueError(f"Need at least 4 points for interpolation, got n={n}")
+
+        if isinstance(wakefield, TabularWakefield):
+            zmax_source = -float(np.min(wakefield.z_data))
+            if zmax > zmax_source:
+                raise ValueError(
+                    f"Requested zmax={zmax:.6e} m exceeds the {zmax_source:.6e} m "
+                    "covered by the source table. Resampling beyond the tabulated "
+                    "range would return the fill value, giving a silently zero "
+                    "padded result."
+                )
 
         # Ascending in z, from -zmax up to the source particle at z = 0.
         z = -np.linspace(zmax, 0.0, n)
@@ -158,19 +171,22 @@ class TabularWakefield(WakefieldBase):
         return cls(z, np.asarray(W, dtype=float), kind=kind)
 
     @classmethod
-    def from_impact_z(cls, filename, kind: str = "cubic") -> TabularWakefield:
+    def from_impact_z(cls, source, kind: str = "cubic") -> TabularWakefield:
         """
         Read the longitudinal wake from an IMPACT-Z wake table.
 
         IMPACT-Z tabulates the wake against the distance s = -z >= 0 behind the source
         particle, whereas this package uses z <= 0. The two share the sign convention
         for the wake itself, so only the abscissa is reversed. The transverse columns
-        of the file are ignored, because :class:`WakefieldBase` is longitudinal only.
+        of the table are ignored, because :class:`WakefieldBase` is longitudinal only.
 
         Parameters
         ----------
-        filename : str or pathlib.Path
-            Path to an IMPACT-Z wake table, conventionally named rfdata{N}.in.
+        source : str, pathlib.Path or array_like
+            Path to an IMPACT-Z wake table, conventionally named rfdata{N}.in, or the
+            table itself as an array of shape (n, 4). The array form recovers a model
+            from a table carried in memory, such as an entry of the file_data mapping
+            of a lume-impact ImpactZInput.
         kind : str, optional
             Interpolation method passed to the constructor. Default is 'cubic'.
 
@@ -189,10 +205,11 @@ class TabularWakefield(WakefieldBase):
         ::
 
             table = TabularWakefield.from_impact_z("rfdata41.in")
+            table = TabularWakefield.from_impact_z(I.input.file_data["41"])
         """
         from ..interfaces.impact import parse_impact_z_wakefield
 
-        data = parse_impact_z_wakefield(filename)
+        data = parse_impact_z_wakefield(source)
 
         # s ascends from zero, so z = -s descends. Reverse to ascend in z.
         z = -data["s"][::-1]

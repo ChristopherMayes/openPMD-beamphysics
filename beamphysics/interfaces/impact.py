@@ -244,6 +244,177 @@ def write_impact(
     return output
 
 
+# =============================================================================
+# IMPACT-Z read-in short-range wakefield tables
+# =============================================================================
+
+# IMPACT-Z dimensions its wakefield arrays as Ndataini in src/DataStruct/Data.f90.
+# A longer table overruns them without any diagnostic.
+IMPACT_Z_MAX_WAKEFIELD_ROWS = 5000
+
+
+def parse_impact_z_wakefield(filename):
+    """
+    Parse an IMPACT-Z read-in short-range wakefield table.
+
+    IMPACT-Z applies a tabulated short-range wake through the zero-length -41
+    element, which reads the file rfdata{file_id}.in. The file is a uniform
+    four-column ASCII table of the distance s = -z >= 0 behind the source particle,
+    the longitudinal wake, and the horizontal and vertical dipole wakes. The sign
+    convention is the one used throughout this package, in which a positive
+    longitudinal wake is energy-losing.
+
+    The abscissa is shifted so that it starts at zero, reproducing the behavior of
+    read1wk_Data in src/DataStruct/Data.f90.
+
+    Parameters
+    ----------
+    filename : str or pathlib.Path
+        Path to the wake table, conventionally named rfdata{N}.in.
+
+    Returns
+    -------
+    dict
+        Dictionary with keys:
+
+        - 's': distance behind the source particle [m], ascending from zero
+        - 'Wz': longitudinal wake [V/C/m]
+        - 'Wx': horizontal dipole wake [V/C/m^2]
+        - 'Wy': vertical dipole wake [V/C/m^2]
+
+    Raises
+    ------
+    ValueError
+        If the file does not have four columns, has fewer than two rows, or is not
+        sampled on a uniformly spaced, strictly increasing grid. IMPACT-Z takes the
+        step size from the first two rows in wakefieldread_FieldQuant and then indexes
+        the table arithmetically, so a non-uniform grid would be silently
+        misinterpreted.
+
+    See Also
+    --------
+    write_impact_z_wakefield : Corresponding writer.
+    beamphysics.wakefields.TabularWakefield.from_impact_z : Reader returning a model.
+    """
+    dat = np.loadtxt(filename, ndmin=2)
+
+    if dat.shape[1] != 4:
+        raise ValueError(
+            f"Expected 4 columns (s, Wz, Wx, Wy) in {filename}, got {dat.shape[1]}"
+        )
+    if dat.shape[0] < 2:
+        raise ValueError(
+            f"Expected at least 2 rows in {filename}, got {dat.shape[0]}. "
+            "IMPACT-Z takes the step size from the first two rows."
+        )
+
+    s = dat[:, 0]
+    ds = np.diff(s)
+
+    if np.any(ds <= 0):
+        raise ValueError(
+            f"The abscissa in {filename} must be strictly increasing. "
+            "IMPACT-Z indexes the table arithmetically."
+        )
+    if not np.allclose(ds, ds[0], rtol=1e-6, atol=0):
+        raise ValueError(
+            f"The abscissa in {filename} is not uniformly spaced: the step ranges "
+            f"from {ds.min():.6e} to {ds.max():.6e} m. IMPACT-Z takes the step from "
+            "the first two rows and would silently misinterpret this table."
+        )
+
+    return {
+        "s": s - s[0],
+        "Wz": dat[:, 1],
+        "Wx": dat[:, 2],
+        "Wy": dat[:, 3],
+    }
+
+
+def write_impact_z_wakefield(
+    filename, wakefield, zmax, n=5000, wake_x=None, wake_y=None
+):
+    """
+    Write a wakefield model as an IMPACT-Z read-in short-range wakefield table.
+
+    The model is resampled onto a uniform grid of n trailing distances spanning zero
+    to zmax, and the abscissa is mirrored from the package convention of z <= 0 to the
+    IMPACT-Z convention of s = -z >= 0. The wake itself is unchanged, since both use
+    the convention in which a positive longitudinal wake is energy-losing.
+
+    Parameters
+    ----------
+    filename : str or pathlib.Path
+        Output path. IMPACT-Z expects the name rfdata{file_id}.in, where file_id is
+        the identifier given on the -41 element.
+    wakefield : beamphysics.wakefields.WakefieldBase
+        Longitudinal wakefield model to sample.
+    zmax : float
+        Largest trailing distance behind the source particle to tabulate [m], given
+        as a positive number.
+    n : int, optional
+        Number of rows. Default is 5000, the largest value IMPACT-Z accepts.
+    wake_x : callable, optional
+        Horizontal dipole wake as a function of z <= 0 [m], returning [V/C/m^2].
+        The third column is zero when this is not supplied.
+    wake_y : callable, optional
+        Vertical dipole wake as a function of z <= 0 [m], returning [V/C/m^2].
+        The fourth column is zero when this is not supplied.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    ValueError
+        If n exceeds the IMPACT-Z limit of 5000 rows, or if zmax or n are otherwise
+        unsuitable for tabulation.
+
+    Notes
+    -----
+    The transverse columns take plain callables rather than wakefield models, because
+    :class:`beamphysics.wakefields.WakefieldBase` is longitudinal only.
+
+    See Also
+    --------
+    parse_impact_z_wakefield : Corresponding reader.
+
+    Examples
+    --------
+    ::
+
+        wake = ResistiveWallWakefield.from_material(
+            "copper-slac-pub-10707", radius=2.5e-3
+        )
+        write_impact_z_wakefield("rfdata41.in", wake, zmax=100 * wake.s0, n=1000)
+    """
+    from ..wakefields.tabular import TabularWakefield
+
+    if n > IMPACT_Z_MAX_WAKEFIELD_ROWS:
+        raise ValueError(
+            f"n={n} exceeds the IMPACT-Z limit of {IMPACT_Z_MAX_WAKEFIELD_ROWS} rows "
+            "(Ndataini in src/DataStruct/Data.f90). A longer table overruns the "
+            "IMPACT-Z arrays without any diagnostic."
+        )
+
+    # Sampling through TabularWakefield keeps the table identical to the one an
+    # in-memory resample would produce.
+    table = TabularWakefield.from_wakefield(wakefield, zmax=zmax, n=n)
+
+    # The table ascends in z from -zmax to 0; IMPACT-Z ascends in s from 0 to zmax.
+    z = table.z_data[::-1]
+    Wz = table.W_data[::-1]
+    s = -z
+
+    Wx = np.zeros_like(s) if wake_x is None else np.broadcast_to(wake_x(z), s.shape)
+    Wy = np.zeros_like(s) if wake_y is None else np.broadcast_to(wake_y(z), s.shape)
+
+    # Seventeen significant digits round-trip a double exactly, so that re-reading
+    # the file reproduces the sampled grid rather than a slightly narrower one.
+    np.savetxt(filename, np.column_stack([s, Wz, Wx, Wy]), fmt="%25.17e")
+
+
 def riffle(a, b):
     return np.vstack((a, b)).reshape((-1,), order="F")
 

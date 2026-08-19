@@ -39,6 +39,7 @@ from scipy.integrate import quad, quad_vec
 
 from ...units import Z0, c_light
 from ..base import WakefieldBase
+from ..tabular import TabularWakefield
 
 
 class Geometry(str, Enum):
@@ -719,3 +720,42 @@ class ResistiveWallWakefieldBase(WakefieldBase):
     def __call__(self, z: float | np.ndarray) -> float | np.ndarray:
         """Evaluate the wakefield at position z (convenience method)."""
         return self.wake(z)
+
+    def to_tabular(self, zmax: float | None = None, n: int = 1000) -> TabularWakefield:
+        """
+        Resample this resistive wall model onto a uniform table.
+
+        The table is the interchange format used to hand a resistive wall wake to an
+        external code, and it is far cheaper to evaluate than either parent model.
+
+        Parameters
+        ----------
+        zmax : float, optional
+            Largest trailing distance behind the source particle to tabulate [m],
+            given as a positive number. Defaults to 100 * s0, matching the default
+            range of :meth:`ResistiveWallWakefield.plot`. Over the tabulated materials
+            and for pipe radii from 1 mm to 10 mm, the residual wake beyond that
+            distance is below 0.5 percent of W0 for the impedance model and below 0.05
+            percent of W0 for the pseudomode model.
+        n : int, optional
+            Number of samples. Default is 1000.
+
+        Returns
+        -------
+        TabularWakefield
+            Table covering -zmax <= z <= 0, in the convention that z <= 0 lies behind
+            the source particle and a positive wake is energy-losing.
+
+        Examples
+        --------
+        ::
+
+            wake = ResistiveWallPseudomode.from_material(
+                "copper-slac-pub-10707", radius=2.5e-3
+            )
+            table = wake.to_tabular()
+        """
+        if zmax is None:
+            zmax = 100 * self.s0
+
+        return TabularWakefield.from_wakefield(self, zmax=zmax, n=n)

@@ -18,6 +18,27 @@
 
 ::: beamphysics.wakefields.Pseudomode
 
+## Tabulation and Interchange
+
+A `TabularWakefield` is the interchange format between the models above and external
+codes. Any model can be resampled onto a uniform table, and the resistive wall classes
+provide a convenience that picks a default range from the characteristic length `s0`.
+
+::: beamphysics.wakefields.TabularWakefield.from_wakefield
+
+::: beamphysics.wakefields.TabularWakefield.from_impact_z
+
+::: beamphysics.wakefields.ResistiveWallWakefieldBase.to_tabular
+
+### IMPACT-Z
+
+IMPACT-Z applies a tabulated short-range wake through its zero-length `-41` element,
+which reads a uniform four-column table named `rfdata{file_id}.in`.
+
+::: beamphysics.interfaces.impact.parse_impact_z_wakefield
+
+::: beamphysics.interfaces.impact.write_impact_z_wakefield
+
 ## Low-level Functions
 
 ::: beamphysics.wakefields.longitudinal_impedance_round

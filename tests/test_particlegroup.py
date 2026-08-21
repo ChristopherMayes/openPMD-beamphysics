@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from beamphysics import ParticleGroup
+from beamphysics import ParticleGroup, statistics
 from beamphysics.particles import single_particle
 
 P = ParticleGroup("docs/examples/data/bmad_particles.h5")
@@ -185,6 +185,93 @@ def test_write_reload_h5(tmp_path: pathlib.Path):
 def test_fractional_split():
     head, tail = P.fractional_split(0.5, "t")
     head, core, tail = P.fractional_split((0.1, 0.9), "t")
+
+
+def test_stratified_resample():
+    alive = P.where(P.status == 1)
+    # Good ratio, so it stays stratified (no fallback)
+    n = alive.n_particle // (2 * statistics.STRATIFIED_MIN_RATIO)
+    Q = P.stratified_resample(n)
+    assert Q.n_particle == n
+    assert np.all(Q.status == 1)
+    assert np.isclose(Q.charge, alive.charge, rtol=1e-12, atol=0)
+    assert len(set(Q.weight)) == 1  # spread over equal weights
+    assert np.isin(Q.t, alive.t).all()  # picks from source
+
+    # resample(method="stratified") dispatches to the same routine.
+    assert P.resample(n, method="stratified").n_particle == n
+
+    # A seed (or a Generator with that seed) makes the draw reproducible.
+    a = P.stratified_resample(n, rng=0)
+    b = P.stratified_resample(n, rng=np.random.default_rng(0))
+    assert np.array_equal(a.t, b.t)
+
+
+def is_stratified(Q, alive, n):
+    # The defining property: the i-th smallest pick falls within the value
+    # range of stratum i of the alive source, sorted by t.
+    values = np.sort(alive.t)
+    edges = np.linspace(0, alive.n_particle, n + 1).astype(int)
+    picks = np.sort(Q.t)
+    return bool(
+        np.all(picks >= values[edges[:-1]]) and np.all(picks <= values[edges[1:] - 1])
+    )
+
+
+def test_stratified_resample_is_stratified():
+    # One pick per equal-count stratum of the source, sorted by key.
+    # A pure-random sample would fail this.
+    alive = P.where(P.status == 1)
+    n = alive.n_particle // (2 * statistics.STRATIFIED_MIN_RATIO)
+    assert is_stratified(P.stratified_resample(n, key="t", rng=0), alive, n)
+
+
+def test_stratified_resample_errors():
+    with pytest.raises(ValueError):
+        P.stratified_resample(P.n_alive + 1)  # too many
+    with pytest.raises(ValueError):
+        P.stratified_resample(0)  # too few
+    with pytest.raises(ValueError):
+        P.resample(10, method="bogus")  # unknown method
+
+    def modified(**changes):
+        data = {k: np.copy(P[k]) for k in P._settable_array_keys}
+        data["species"] = P["species"]
+        data.update(changes)
+        return ParticleGroup(data=data)
+
+    w = np.copy(P.weight)
+    w[0] *= 2
+    with pytest.raises(ValueError, match="constant particle weights"):
+        modified(weight=w).stratified_resample(10)
+    with pytest.raises(ValueError, match="Cannot stratify by 't'"):
+        modified(t=np.zeros(P.n_particle)).stratified_resample(10, key="t")
+    # The key check holds even at a bad ratio, where the fallback would run.
+    with pytest.raises(ValueError, match="Cannot stratify by 't'"):
+        modified(t=np.zeros(P.n_particle)).stratified_resample(P.n_alive // 2, key="t")
+
+
+def test_stratified_resample_bad_ratio_falls_back_to_random():
+    alive = P.where(P.status == 1)
+    n = P.n_alive // 2  # ratio ~2 < STRATIFIED_MIN_RATIO -> fallback
+
+    # The fallback draw is random (not stratified) but still honors rng.
+    Q = P.stratified_resample(n, rng=0)
+    assert Q.n_particle == n
+    assert not is_stratified(Q, alive, n)
+    assert np.array_equal(Q.t, P.stratified_resample(n, rng=0).t)
+
+    # Forcing stratified sampling at the same ratio satisfies the property.
+    assert is_stratified(
+        P.stratified_resample(n, allow_bad_sampling_ratio=True, rng=0), alive, n
+    )
+
+    # Variable weights are rejected before the fallback, so a bad ratio raises too.
+    data = {k: np.copy(P[k]) for k in P._settable_array_keys}
+    data["species"] = P["species"]
+    data["weight"][0] *= 2
+    with pytest.raises(ValueError, match="constant particle weights"):
+        ParticleGroup(data=data).stratified_resample(n)
 
 
 def test_plot_vs_z(array_key: str):

@@ -317,7 +317,7 @@ def _scalar_maybe_from_array(value):
 
 def _only_iteration_group(h5: File | Group) -> Group:
     """
-    Select the particle group of the only openPMD iteration.
+    Get the HDF5 group of the only openPMD iteration. Raise if none or multiple in series.
 
     Parameters
     ----------
@@ -353,7 +353,7 @@ def _only_iteration_group(h5: File | Group) -> Group:
 
 def _only_species_group(h5: Group) -> Group:
     """
-    Descend into the single species subgroup of a particle group.
+    Return the HDF5 group of the only species in the OpenPMD iteration. Raise if none or more than one.
 
     Parameters
     ----------
@@ -388,7 +388,8 @@ def _only_iteration_only_species_group(
     h5: str | pathlib.Path | File | Group,
 ) -> Iterator[Group]:
     """
-    Yield the records of the only iteration and only species in `h5`.
+    Yield the HDF5 group of the only species in the only iteration of the OpenPMD series / file. Fall back to attempting to
+    treat `h5` as an iteration (legacy behavior).
 
     Parameters
     ----------

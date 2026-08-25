@@ -2,9 +2,14 @@ import logging
 import warnings
 
 import numpy as np
-from h5py import Group
+from h5py import File, Group
 
-from .exceptions import MultipleSpeciesError, NoSpeciesError
+from .exceptions import (
+    MultipleIterationsError,
+    MultipleSpeciesError,
+    NoIterationsError,
+    NoSpeciesError,
+)
 from .tools import decode_attr, decode_attrs
 from .units import SI_symbol, c_light, dimension, dimension_name, e_charge
 
@@ -304,6 +309,49 @@ def _scalar_maybe_from_array(value):
             f"Expected a scalar or length-1 array, got length {len(value)}"
         )
     return value[0]
+
+
+def _only_iteration_group(h5: File | Group) -> Group:
+    """
+    Select the particle group of the only openPMD iteration.
+
+    Parameters
+    ----------
+    h5 : h5py.File or h5py.Group
+        Handle carrying the openPMD "basePath" and "particlesPath" attributes.
+
+    Returns
+    -------
+    h5py.Group
+        Particle group of the single iteration, resolved relative to `h5`.
+
+    Raises
+    ------
+    NoIterationsError
+        If `h5` does not carry the openPMD attributes, or holds no iteration.
+    MultipleIterationsError
+        If `h5` holds more than one iteration.
+    """
+    missing = {"basePath", "particlesPath"} - set(h5.attrs)
+    if missing:
+        raise NoIterationsError(
+            f"Missing openPMD attributes in {h5.name}: {sorted(missing)}"
+        )
+
+    paths = particle_paths(h5)
+    if not paths:
+        raise NoIterationsError(f"No openPMD iterations in {h5.name}")
+    if len(paths) > 1:
+        raise MultipleIterationsError(
+            f"Multiple openPMD iterations in {h5.name}: {paths}"
+        )
+
+    logger.debug("Loading iteration %s from %s", paths[0], h5.name)
+
+    # particle_paths returns absolute paths. Strip the leading separator so that
+    # they resolve relative to h5, which may itself be a group within a file.
+    path = paths[0].strip("/")
+    return h5[path] if path else h5["."]
 
 
 def _only_species_group(h5: Group) -> Group:

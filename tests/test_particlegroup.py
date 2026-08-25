@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from beamphysics import ParticleGroup
+from beamphysics import ParticleGroup, pmd_init
+from beamphysics.exceptions import MultipleIterationsError
 from beamphysics.particles import load_bunch_data, single_particle
 from beamphysics.readers import expected_record_unit_dimension, particle_array
 
@@ -246,8 +247,38 @@ def test_init_legacy_root_base_path():
 
 def test_init_multiple_iterations():
     """astra_particles.h5 holds two iterations: /screen/0 and /screen/1."""
-    with pytest.raises(Exception):
+    with pytest.raises(MultipleIterationsError):
         ParticleGroup("docs/examples/data/astra_particles.h5")
+
+
+@pytest.mark.parametrize("h5", [{"x": [0.0]}, 3, object()])
+def test_init_unsupported_type(h5):
+    with pytest.raises(TypeError):
+        ParticleGroup(h5)
+
+
+def test_init_nested_openpmd_root(simple_pg: ParticleGroup, tmp_path: pathlib.Path):
+    """
+    A group initialized as an openPMD root inside a larger file resolves its
+    particles path relative to itself, not to the file root.
+    """
+    h5file = tmp_path / "nested.h5"
+    with h5py.File(h5file, "w") as fp:
+        run = fp.create_group("run1")
+        pmd_init(run, basePath="/", particlesPath="particles")
+        simple_pg.write(run.create_group("particles"))
+
+        # Same path from the file root, holding different particles
+        decoy = fp.create_group("decoy")
+        pmd_init(decoy, basePath="/", particlesPath="particles")
+        other = simple_pg.copy()
+        other.x += 1.0
+        other.write(decoy.create_group("particles"))
+        fp["particles"] = h5py.SoftLink("/decoy/particles")
+
+    with h5py.File(h5file, "r") as fp:
+        assert ParticleGroup(fp["run1"]) == simple_pg
+        assert ParticleGroup(fp["decoy"]) == other
 
 
 BUNCH_DATA_KEYS = {

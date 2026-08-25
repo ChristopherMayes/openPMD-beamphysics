@@ -25,7 +25,12 @@ from .interfaces.lucretia import write_lucretia
 from .interfaces.opal import write_opal
 from .interfaces.simion import write_simion
 from .plot import density_plot, marginal_plot, slice_plot, wakefield_plot
-from .readers import _only_species_group, load_species_data, particle_paths
+from .exceptions import NoIterationsError
+from .readers import (
+    _only_iteration_group,
+    _only_species_group,
+    load_species_data,
+)
 from .species import charge_of, mass_of
 from .statistics import (
     matched_particles,
@@ -190,29 +195,13 @@ class ParticleGroup:
     """
 
     def __init__(self, h5=None, data=None):
-        if h5 and data:
+        if h5 is not None and data is not None:
             # TODO:
             # Allow merging or changing some array with extra data
             raise NotImplementedError("Cannot init on both h5 and data")
 
-        if h5:
-            # Allow filename
-            if isinstance(h5, (str, pathlib.Path)):
-                fname = os.path.expandvars(h5)
-                assert os.path.exists(fname), f"File does not exist: {fname}"
-
-                with File(fname, "r") as hh5:
-                    pp = particle_paths(hh5)
-                    assert len(pp) == 1, f"Number of particle paths in {h5}: {len(pp)}"
-                    data = load_bunch_data(hh5[pp[0]])
-
-            elif isinstance(h5, File):
-                pp = particle_paths(h5)
-                assert len(pp) == 1, f"Number of particle paths in {h5}: {len(pp)}"
-                data = load_bunch_data(h5[pp[0]])
-            else:
-                # Try dict
-                data = load_bunch_data(h5)
+        if h5 is not None:
+            data = _load_only_iteration_only_species_data(h5)
         else:
             # Fill out data. Exclude species.
             data = full_data(data)
@@ -2277,6 +2266,58 @@ def load_bunch_data(h5: Group, include_offset: bool = True) -> dict:
         See `beamphysics.readers.load_species_data`.
     """
     return load_species_data(_only_species_group(h5), include_offset=include_offset)
+
+
+def _load_only_iteration_only_species_data(
+    h5: str | pathlib.Path | File | Group,
+    include_offset: bool = True,
+) -> dict:
+    """
+    Load the only species of the only iteration of an openPMD file or group.
+
+    Parameters
+    ----------
+    h5 : str, pathlib.Path, h5py.File, or h5py.Group
+        Filename of an openPMD file, or an open handle. A handle carrying the
+        openPMD attributes is resolved to its single iteration; one that does
+        not is taken to be the particle group itself.
+    include_offset : bool, optional
+        Add the openPMD offset records to their corresponding arrays.
+        Default is True.
+
+    Returns
+    -------
+    dict
+        See `beamphysics.readers.load_species_data`.
+
+    Raises
+    ------
+    FileNotFoundError
+        If `h5` names a file that does not exist.
+    TypeError
+        If `h5` is not a filename or an HDF5 handle.
+    """
+    if isinstance(h5, (str, pathlib.Path)):
+        filename = os.path.expandvars(h5)
+        if not os.path.exists(filename):
+            raise FileNotFoundError(f"File does not exist: {filename}")
+
+        with File(filename, "r") as h5file:
+            return _load_only_iteration_only_species_data(
+                h5file, include_offset=include_offset
+            )
+
+    # h5py.File is itself a Group
+    if not isinstance(h5, Group):
+        raise TypeError(f"Unsupported type for h5: {type(h5).__name__}")
+
+    try:
+        group = _only_iteration_group(h5)
+    except NoIterationsError:
+        # Not an openPMD root, so h5 is already the particle group
+        group = h5
+
+    return load_bunch_data(group, include_offset=include_offset)
 
 
 def default_id(n):

@@ -7,10 +7,13 @@ import numpy as np
 import pytest
 
 from beamphysics import ParticleGroup
-from beamphysics.particles import single_particle
+from beamphysics.particles import load_bunch_data, single_particle
 from beamphysics.readers import expected_record_unit_dimension, particle_array
 
-P = ParticleGroup("docs/examples/data/bmad_particles.h5")
+# File with no species subgroup
+LEGACY_H5FILE = "docs/examples/data/bmad_particles.h5"
+
+P = ParticleGroup(LEGACY_H5FILE)
 
 
 ARRAY_KEYS = """
@@ -181,6 +184,108 @@ def test_write_reload_h5(tmp_path: pathlib.Path):
 
     P2 = ParticleGroup(h5file)
     assert P == P2
+
+
+@pytest.fixture
+def simple_pg() -> ParticleGroup:
+    """Tiny PG for tests."""
+    return ParticleGroup(
+        data={
+            "x": np.array([0.0, 1e-3]),
+            "px": np.array([0.0, 10.0]),
+            "y": np.array([0.0, 2e-3]),
+            "py": np.array([0.0, 20.0]),
+            "z": np.array([0.0, 0.0]),
+            "pz": np.array([1e6, 1.1e6]),
+            "t": np.array([0.0, 1e-12]),
+            "status": np.array([1, 1]),
+            "weight": np.array([0.5e-9, 0.5e-9]),
+            "species": "electron",
+        }
+    )
+
+
+@pytest.fixture
+def species_h5file(simple_pg: ParticleGroup, tmp_path: pathlib.Path) -> pathlib.Path:
+    """File written by ParticleGroup.write, which nests a species subgroup."""
+    h5file = tmp_path / "simple.h5"
+    simple_pg.write(h5file)
+    return h5file
+
+
+def test_init_species_path(simple_pg: ParticleGroup, species_h5file: pathlib.Path):
+    assert ParticleGroup(str(species_h5file)) == simple_pg
+    assert ParticleGroup(species_h5file) == simple_pg
+
+
+@pytest.mark.parametrize("subpath", [None, "particles", "particles/electron"])
+def test_init_species_group(
+    simple_pg: ParticleGroup, species_h5file: pathlib.Path, subpath
+):
+    with h5py.File(species_h5file, "r") as fp:
+        assert ParticleGroup(fp if subpath is None else fp[subpath]) == simple_pg
+
+
+def test_init_legacy_path():
+    ParticleGroup(LEGACY_H5FILE)
+    ParticleGroup(pathlib.Path(LEGACY_H5FILE))
+
+
+@pytest.mark.parametrize("subpath", [None, "data/00001", "data/00001/particles"])
+def test_init_legacy_group(subpath):
+    with h5py.File(LEGACY_H5FILE, "r") as fp:
+        assert ParticleGroup(fp if subpath is None else fp[subpath]) == P
+
+
+def test_init_legacy_root_base_path():
+    """distgen_particles.h5 uses basePath '/' with the records at the root."""
+    P2 = ParticleGroup("docs/examples/data/distgen_particles.h5")
+    assert len(P2) > 0
+    assert P2.species == "electron"
+
+
+def test_init_multiple_iterations():
+    """astra_particles.h5 holds two iterations: /screen/0 and /screen/1."""
+    with pytest.raises(Exception):
+        ParticleGroup("docs/examples/data/astra_particles.h5")
+
+
+BUNCH_DATA_KEYS = {
+    "species",
+    "total_charge",
+    "x",
+    "px",
+    "y",
+    "py",
+    "z",
+    "pz",
+    "t",
+    "status",
+    "weight",
+}
+
+
+@pytest.mark.parametrize("subpath", ["particles", "particles/electron"])
+def test_load_bunch_data_species(
+    simple_pg: ParticleGroup, species_h5file: pathlib.Path, subpath: str
+):
+    with h5py.File(species_h5file, "r") as fp:
+        data = load_bunch_data(fp[subpath])
+
+    assert BUNCH_DATA_KEYS <= set(data)
+    assert data["species"] == "electron"
+    assert np.allclose(data["x"], simple_pg.x)
+    assert np.allclose(data["pz"], simple_pg.pz)
+
+
+def test_load_bunch_data_legacy():
+    with h5py.File(LEGACY_H5FILE, "r") as fp:
+        data = load_bunch_data(fp["data/00001/particles"])
+
+    assert BUNCH_DATA_KEYS <= set(data)
+    assert data["species"] == "electron"
+    assert np.allclose(data["x"], P.x)
+    assert np.allclose(data["pz"], P.pz)
 
 
 def test_write_t_offset(tmp_path: pathlib.Path):

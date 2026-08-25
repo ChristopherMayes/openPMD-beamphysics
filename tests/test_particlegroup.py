@@ -9,7 +9,12 @@ import pytest
 from beamphysics import ParticleGroup, pmd_init
 from beamphysics.exceptions import MultipleIterationsError
 from beamphysics.particles import load_bunch_data, single_particle
-from beamphysics.readers import expected_record_unit_dimension, particle_array
+from beamphysics.readers import (
+    expected_record_unit_dimension,
+    load_only_time_offset,
+    load_time_offset,
+    particle_array,
+)
 
 # File with no species subgroup
 LEGACY_H5FILE = "docs/examples/data/bmad_particles.h5"
@@ -394,6 +399,57 @@ def test_from_hdf5_include_time_offset_array(tmp_path: pathlib.Path):
     assert np.allclose(
         ParticleGroup.from_hdf5(h5file, include_time_offset=False).t, P.t
     )
+
+
+def test_load_only_time_offset_scalar(tmp_path: pathlib.Path):
+    """A constant component is returned as a float."""
+    t_offset = 5e-9
+    h5file = tmp_path / "test_offset.h5"
+    P.write(h5file, t_offset=t_offset)
+
+    offset = load_only_time_offset(h5file)
+    assert isinstance(offset, float)
+    assert offset == t_offset
+    assert load_only_time_offset(str(h5file)) == t_offset
+
+    with h5py.File(h5file, "r") as fp:
+        assert load_only_time_offset(fp) == t_offset
+        assert load_only_time_offset(fp["particles"]) == t_offset
+        assert load_only_time_offset(fp[f"particles/{P.species}"]) == t_offset
+        assert load_time_offset(fp[f"particles/{P.species}"]) == t_offset
+
+
+def test_load_only_time_offset_array(tmp_path: pathlib.Path):
+    """A per-particle dataset is returned as an array."""
+    t_offset = np.linspace(0, 1e-9, len(P))
+    h5file = tmp_path / "test_offset_array.h5"
+    P.write(h5file, t_offset=t_offset)
+
+    offset = load_only_time_offset(h5file)
+    assert isinstance(offset, np.ndarray)
+    assert np.allclose(offset, t_offset)
+
+
+@pytest.mark.parametrize("t_offset", [0.0, 5e-9])
+def test_load_only_time_offset_recovers_t(tmp_path: pathlib.Path, t_offset: float):
+    """Bare time plus the offset is the shifted time."""
+    h5file = tmp_path / "test_recover.h5"
+    P.write(h5file, t_offset=t_offset)
+
+    bare = ParticleGroup.from_hdf5(h5file, include_time_offset=False)
+    shifted = ParticleGroup.from_hdf5(h5file)
+    assert np.allclose(bare.t + load_only_time_offset(h5file), shifted.t)
+
+
+def test_load_only_time_offset_missing_file(tmp_path: pathlib.Path):
+    with pytest.raises(FileNotFoundError):
+        load_only_time_offset(tmp_path / "does_not_exist.h5")
+
+
+@pytest.mark.parametrize("h5", [{"x": [0.0]}, 3])
+def test_load_only_time_offset_unsupported_type(h5):
+    with pytest.raises(TypeError):
+        load_only_time_offset(h5)
 
 
 def test_fractional_split():

@@ -453,6 +453,32 @@ def load_species_data(h5: Group, include_time_offset: bool = True) -> dict:
     return data
 
 
+def load_time_offset(h5: Group) -> float | np.ndarray:
+    """
+    Load the time offset of a single species.
+
+    Parameters
+    ----------
+    h5 : h5py.Group
+        Group holding the particle records.
+
+    Returns
+    -------
+    float or numpy.ndarray
+        Offset in seconds: a float for a constant component, an array of length
+        n_particle for a per-particle component, and 0.0 when the group has no
+        "timeOffset" record.
+    """
+    if "timeOffset" not in h5:
+        return 0.0
+
+    offset = h5["timeOffset"]
+    if is_constant_component(offset):
+        return float(constant_component_value(offset))
+
+    return component_data(offset)
+
+
 def load_bunch_data(h5: Group, include_time_offset: bool = True) -> dict:
     """
     Load particles from the only species in this iteration of an OpenPMD BeamPhysics file into a dict of numpy arrays.
@@ -516,6 +542,67 @@ def _load_only_iteration_only_species_data(
                 h5file, include_time_offset=include_time_offset
             )
 
+    return load_species_data(
+        _only_iteration_only_species_group(h5),
+        include_time_offset=include_time_offset,
+    )
+
+
+def load_only_time_offset(h5: str | pathlib.Path | File | Group) -> float | np.ndarray:
+    """
+    Load the time offset of the only species of the only iteration.
+
+    Parameters
+    ----------
+    h5 : str, pathlib.Path, h5py.File, or h5py.Group
+        Filename of an openPMD file, or an open handle. A handle carrying the
+        openPMD attributes is resolved to its single iteration; one that does
+        not is taken to be the particle group itself.
+
+    Returns
+    -------
+    float or numpy.ndarray
+        See `load_time_offset`.
+
+    Raises
+    ------
+    FileNotFoundError
+        If `h5` names a file that does not exist.
+    TypeError
+        If `h5` is not a filename or an HDF5 handle.
+    """
+    if isinstance(h5, (str, pathlib.Path)):
+        filename = os.path.expandvars(h5)
+        if not os.path.exists(filename):
+            raise FileNotFoundError(f"File does not exist: {filename}")
+
+        with File(filename, "r") as h5file:
+            return load_only_time_offset(h5file)
+
+    return load_time_offset(_only_iteration_only_species_group(h5))
+
+
+def _only_iteration_only_species_group(h5: File | Group) -> Group:
+    """
+    Resolve an open handle to the records of its only iteration and species.
+
+    Parameters
+    ----------
+    h5 : h5py.File or h5py.Group
+        Open handle. One carrying the openPMD attributes is resolved to its
+        single iteration; one that does not is taken to be the particle group
+        itself.
+
+    Returns
+    -------
+    h5py.Group
+        Group holding the particle records.
+
+    Raises
+    ------
+    TypeError
+        If `h5` is not an HDF5 handle.
+    """
     # h5py.File is itself a Group
     if not isinstance(h5, Group):
         raise TypeError(f"Unsupported type for h5: {type(h5).__name__}")
@@ -526,7 +613,7 @@ def _load_only_iteration_only_species_data(
         # Not an openPMD root, so h5 is already the particle group
         group = h5
 
-    return load_bunch_data(group, include_time_offset=include_time_offset)
+    return _only_species_group(group)
 
 
 def all_components(h5):

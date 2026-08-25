@@ -45,7 +45,7 @@ from .wakefields import WakefieldBase
 from .writers import pmd_init, write_pmd_bunch
 
 __all__ = [
-    load_bunch_data  # Re-exported for backwards compatibility
+    "load_bunch_data",  # Re-exported for backwards compatibility
 ]
 
 # -----------------------------------------

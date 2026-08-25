@@ -2,6 +2,8 @@ import logging
 import os
 import pathlib
 import warnings
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import numpy as np
 from h5py import File, Group
@@ -395,6 +397,58 @@ def _only_species_group(h5: Group) -> Group:
     return h5[species[0]]
 
 
+@contextmanager
+def _only_iteration_only_species_group(
+    h5: str | pathlib.Path | File | Group,
+) -> Iterator[Group]:
+    """
+    Yield the records of the only iteration and only species in `h5`.
+
+    Parameters
+    ----------
+    h5 : str, pathlib.Path, h5py.File, or h5py.Group
+        Filename of an openPMD file, or an open handle. A handle carrying the
+        openPMD attributes is resolved to its single iteration; one that does
+        not is taken to be the particle group itself.
+
+    Yields
+    ------
+    h5py.Group
+        Group holding the particle records. A file opened from a filename is
+        closed on exit.
+
+    Raises
+    ------
+    FileNotFoundError
+        If `h5` names a file that does not exist.
+    TypeError
+        If `h5` is not a filename or an HDF5 handle.
+    """
+    if isinstance(h5, (str, pathlib.Path)):
+        filename = os.path.expandvars(h5)
+        if not os.path.exists(filename):
+            raise FileNotFoundError(f"File does not exist: {filename}")
+
+        with (
+            File(filename, "r") as h5file,
+            _only_iteration_only_species_group(h5file) as group,
+        ):
+            yield group
+
+    else:
+        # h5py.File is itself a Group
+        if not isinstance(h5, Group):
+            raise TypeError(f"Unsupported type for h5: {type(h5).__name__}")
+
+        try:
+            group = _only_iteration_group(h5)
+        except NoIterationsError:
+            # Not an openPMD root, so h5 is already the particle group
+            group = h5
+
+        yield _only_species_group(group)
+
+
 def load_species_data(h5: Group, include_time_offset: bool = True) -> dict:
     """
     Load a single species into a dict of numpy arrays.
@@ -532,20 +586,8 @@ def _load_only_iteration_only_species_data(
     TypeError
         If `h5` is not a filename or an HDF5 handle.
     """
-    if isinstance(h5, (str, pathlib.Path)):
-        filename = os.path.expandvars(h5)
-        if not os.path.exists(filename):
-            raise FileNotFoundError(f"File does not exist: {filename}")
-
-        with File(filename, "r") as h5file:
-            return _load_only_iteration_only_species_data(
-                h5file, include_time_offset=include_time_offset
-            )
-
-    return load_species_data(
-        _only_iteration_only_species_group(h5),
-        include_time_offset=include_time_offset,
-    )
+    with _only_iteration_only_species_group(h5) as group:
+        return load_species_data(group, include_time_offset=include_time_offset)
 
 
 def load_only_time_offset(h5: str | pathlib.Path | File | Group) -> float | np.ndarray:
@@ -571,49 +613,8 @@ def load_only_time_offset(h5: str | pathlib.Path | File | Group) -> float | np.n
     TypeError
         If `h5` is not a filename or an HDF5 handle.
     """
-    if isinstance(h5, (str, pathlib.Path)):
-        filename = os.path.expandvars(h5)
-        if not os.path.exists(filename):
-            raise FileNotFoundError(f"File does not exist: {filename}")
-
-        with File(filename, "r") as h5file:
-            return load_only_time_offset(h5file)
-
-    return load_time_offset(_only_iteration_only_species_group(h5))
-
-
-def _only_iteration_only_species_group(h5: File | Group) -> Group:
-    """
-    Resolve an open handle to the records of its only iteration and species.
-
-    Parameters
-    ----------
-    h5 : h5py.File or h5py.Group
-        Open handle. One carrying the openPMD attributes is resolved to its
-        single iteration; one that does not is taken to be the particle group
-        itself.
-
-    Returns
-    -------
-    h5py.Group
-        Group holding the particle records.
-
-    Raises
-    ------
-    TypeError
-        If `h5` is not an HDF5 handle.
-    """
-    # h5py.File is itself a Group
-    if not isinstance(h5, Group):
-        raise TypeError(f"Unsupported type for h5: {type(h5).__name__}")
-
-    try:
-        group = _only_iteration_group(h5)
-    except NoIterationsError:
-        # Not an openPMD root, so h5 is already the particle group
-        group = h5
-
-    return _only_species_group(group)
+    with _only_iteration_only_species_group(h5) as group:
+        return load_time_offset(group)
 
 
 def all_components(h5):

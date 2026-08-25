@@ -56,7 +56,13 @@ def drift_wavefront_basic(w, z, backend=np, device="cpu"):
                 continue
             new_fields.append(kernel * field)
         Ex_drifted, Ey_drifted = new_fields
-        return replace(w, Ex=Ex_drifted, Ey=Ey_drifted)
+        return replace(
+            w,
+            Ex=Ex_drifted,
+            Ey=Ey_drifted,
+            attrs=w.attrs.copy(),
+            s_position=w.s_position + z,
+        )
 
     # r-space calculation
 
@@ -78,9 +84,11 @@ def drift_wavefront_basic(w, z, backend=np, device="cpu"):
 
         # Allocate an output array of the same shape/dtype
         # Handle dtype (TODO: more general)
-        if device == "mps" or field.dtype == backend.complex64:
-            dtype = backend.complex64
-        elif field.dtype == backend.float32:
+        if (
+            device == "mps"
+            or field.dtype == backend.complex64
+            or field.dtype == backend.float32
+        ):
             dtype = backend.complex64
         elif field.dtype == backend.float64:
             dtype = backend.complex128
@@ -98,7 +106,16 @@ def drift_wavefront_basic(w, z, backend=np, device="cpu"):
 
     Ex_drifted, Ey_drifted = new_fields
 
-    return replace(w, Ex=Ex_drifted, Ey=Ey_drifted)
+    # The mesh is co-moving, so `s_position` is the only place a record of the
+    # propagation can go. `attrs` is copied because it is mutable and shared
+    # otherwise: `replace` rebinds the same object onto the new wavefront.
+    return replace(
+        w,
+        Ex=Ex_drifted,
+        Ey=Ey_drifted,
+        attrs=w.attrs.copy(),
+        s_position=w.s_position + z,
+    )
 
 
 def drift_wavefront_advanced(w, z, backend=np, device="cpu", curvature=1.0):
@@ -109,11 +126,13 @@ def drift_wavefront_advanced(w, z, backend=np, device="cpu", curvature=1.0):
     if z == 0:
         return w.copy()
 
+    s_final = w.s_position + z
+
     x_mesh, y_mesh, _ = backend.meshgrid(w.xvec, w.yvec, w.zvec, indexing="ij")
 
     curv = np.exp(-1j * backend.pi * (x_mesh**2 + y_mesh**2) / w.wavelength * curvature)
 
-    w = replace(w)
+    w = replace(w, attrs=w.attrs.copy())
     w.Ex = w.Ex * curv if w.Ex is not None else None
     w.Ey = w.Ey * curv if w.Ey is not None else None
 
@@ -136,5 +155,17 @@ def drift_wavefront_advanced(w, z, backend=np, device="cpu", curvature=1.0):
     w.Ey = w.Ey / Fr if w.Ey is not None else None
     w.dx = w.dx / M
     w.dy = w.dy / M
+
+    # Both quadratic phases above are referenced to x = y = 0, so this is a
+    # magnification about the optical axis: the map is x -> x/M. The grid midpoint
+    # has to scale with the spacing, or an off-axis feature would keep its
+    # coordinate while the grid around it expanded.
+    w.xmid = w.xmid / M
+    w.ymid = w.ymid / M
+
+    # The beamline advances by the requested distance. `drift_wavefront_basic` above
+    # was handed `z_eff`, which is a scaled-frame device rather than a distance
+    # anything travels, so its increment has to be overwritten rather than kept.
+    w.s_position = s_final
 
     return w

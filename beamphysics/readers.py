@@ -550,32 +550,6 @@ def load_bunch_data(h5: Group, include_time_offset: bool = True) -> dict:
     )
 
 
-def _load_only_iteration_only_species_data(
-    h5: str | pathlib.Path | File | Group,
-    include_time_offset: bool = True,
-) -> dict:
-    """
-    Load the only species of the only iteration of an openPMD file or group.
-
-    Parameters
-    ----------
-    h5 : str, pathlib.Path, h5py.File, or h5py.Group
-        Filename of an openPMD file, or an open handle. A handle carrying the
-        openPMD attributes is resolved to its single iteration; one that does
-        not is taken to be the particle group itself.
-    include_time_offset : bool, optional
-        Add the "timeOffset" record to `t`. The position and momentum offsets
-        are always included. Default is True.
-
-    Returns
-    -------
-    dict
-        See `beamphysics.readers.load_species_data`.
-    """
-    with _only_iteration_only_species_group(h5) as group:
-        return load_species_data(group, include_time_offset=include_time_offset)
-
-
 def load_only_time_offset(h5: str | pathlib.Path | File | Group) -> float | np.ndarray:
     """
     Load the time offset of the only species of the only iteration.

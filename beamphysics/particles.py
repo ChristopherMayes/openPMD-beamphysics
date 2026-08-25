@@ -26,8 +26,9 @@ from .interfaces.opal import write_opal
 from .interfaces.simion import write_simion
 from .plot import density_plot, marginal_plot, slice_plot, wakefield_plot
 from .readers import (
-    _load_only_iteration_only_species_data,
+    _only_iteration_only_species_group,
     load_bunch_data,
+    load_species_data,
 )
 from .species import charge_of, mass_of
 from .statistics import (
@@ -203,7 +204,8 @@ class ParticleGroup:
             raise NotImplementedError("Cannot init on both h5 and data")
 
         if h5 is not None:
-            data = _load_only_iteration_only_species_data(h5)
+            with _only_iteration_only_species_group(h5) as group:
+                data = load_species_data(group)
         else:
             # Fill out data. Exclude species.
             data = full_data(data)
@@ -1119,9 +1121,8 @@ class ParticleGroup:
         -------
         ParticleGroup
         """
-        data = _load_only_iteration_only_species_data(
-            h5, include_time_offset=include_time_offset
-        )
+        with _only_iteration_only_species_group(h5) as group:
+            data = load_species_data(group, include_time_offset=include_time_offset)
         return cls(data=data)
 
     @classmethod

@@ -328,13 +328,6 @@ def _only_iteration_group(h5: File | Group) -> Group:
     -------
     h5py.Group
         Particle group of the single iteration, resolved relative to `h5`.
-
-    Raises
-    ------
-    NoIterationsError
-        If `h5` does not carry the openPMD attributes, or holds no iteration.
-    MultipleIterationsError
-        If `h5` holds more than one iteration.
     """
     missing = {"basePath", "particlesPath"} - set(h5.attrs)
     if missing:
@@ -372,13 +365,6 @@ def _only_species_group(h5: Group) -> Group:
     -------
     h5py.Group
         Group holding the particle records.
-
-    Raises
-    ------
-    NoSpeciesError
-        If the group is empty.
-    MultipleSpeciesError
-        If the group holds more than one species.
     """
     # Legacy-style particles with no species
     if "position" in h5:

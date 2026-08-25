@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import os
 import pathlib
 from copy import deepcopy
@@ -10,7 +9,6 @@ import numpy as np
 from h5py import File, Group
 
 from . import statistics
-from .exceptions import MultipleSpeciesError, NoSpeciesError
 from .interfaces import bmad
 from .interfaces.astra import write_astra
 from .interfaces.elegant import write_elegant
@@ -27,7 +25,7 @@ from .interfaces.lucretia import write_lucretia
 from .interfaces.opal import write_opal
 from .interfaces.simion import write_simion
 from .plot import density_plot, marginal_plot, slice_plot, wakefield_plot
-from .readers import particle_array, particle_paths
+from .readers import _only_species_group, load_species_data, particle_paths
 from .species import charge_of, mass_of
 from .statistics import (
     matched_particles,
@@ -42,9 +40,6 @@ from .units import c_light, parse_bunching_str, pg_units, pmd_unit
 from .utils import get_rotation_matrix
 from .wakefields import WakefieldBase
 from .writers import pmd_init, write_pmd_bunch
-
-logger = logging.getLogger(__name__)
-
 
 # -----------------------------------------
 # Classes
@@ -2262,63 +2257,10 @@ def centroid(particle_group: ParticleGroup) -> ParticleGroup:
     return ParticleGroup(data=data)
 
 
-def _scalar_maybe_from_array(value):
-    if np.isscalar(value):
-        return value
-
-    if len(value) != 1:
-        raise ValueError(
-            f"Expected a scalar or length-1 array, got length {len(value)}"
-        )
-    return value[0]
-
-
-def _only_species_group(h5: Group) -> Group:
-    """
-    Descend into the single species subgroup of a particle group.
-
-    Parameters
-    ----------
-    h5 : h5py.Group
-        Particle group. Legacy-style groups hold the records directly instead of
-        nesting them in a species subgroup.
-
-    Returns
-    -------
-    h5py.Group
-        Group holding the particle records.
-
-    Raises
-    ------
-    NoSpeciesError
-        If the group is empty.
-    MultipleSpeciesError
-        If the group holds more than one species.
-    """
-    # Legacy-style particles with no species
-    if "position" in h5:
-        logger.debug(
-            "_only_species_group found particle data instead of species, loading records from %s",
-            h5.name,
-        )
-        return h5
-
-    species = list(h5)
-    if not species:
-        raise NoSpeciesError(f"No species in particle group: {h5.name}")
-    if len(species) > 1:
-        raise MultipleSpeciesError(
-            f"Multiple species in particle group {h5.name}: {species}"
-        )
-
-    logger.debug("Loading species group %s from %s", species[0], h5.name)
-    return h5[species[0]]
-
-
 def load_bunch_data(h5: Group, include_offset: bool = True) -> dict:
     """
-    Load particles from the only species in this iteration of an OpenPMD BeamPhysics file into a dict of numpy arrays. Raises
-    if more than one or no species.
+    Load particles from the only species in this iteration of an OpenPMD BeamPhysics file into a dict of numpy arrays.
+    Raises if more than one or no species.
 
     Parameters
     ----------
@@ -2332,66 +2274,9 @@ def load_bunch_data(h5: Group, include_offset: bool = True) -> dict:
     Returns
     -------
     dict
-        See `load_species_data`.
+        See `beamphysics.readers.load_species_data`.
     """
     return load_species_data(_only_species_group(h5), include_offset=include_offset)
-
-
-def load_species_data(h5: Group, include_offset: bool = True) -> dict:
-    """
-    Load a single species into a dict of numpy arrays.
-
-    Parameters
-    ----------
-    h5 : h5py.Group
-        Group holding the particle records.
-    include_offset : bool, optional
-        Add the openPMD offset records to their corresponding arrays.
-        Default is True.
-
-    Returns
-    -------
-    dict
-        Keys 'x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight' (arrays),
-        'species' (str), 'total_charge' (float), and optionally 'id' (array).
-    """
-    attrs = dict(h5.attrs)
-    data = {}
-
-    species_type = attrs["speciesType"]
-    data["species"] = (
-        species_type.decode("utf-8")
-        if isinstance(species_type, bytes)
-        else species_type
-    )
-
-    n_particle = int(_scalar_maybe_from_array(attrs["numParticles"]))
-
-    data["total_charge"] = attrs["totalCharge"] * attrs["chargeUnitSI"]
-
-    for key in ["x", "px", "y", "py", "z", "pz", "t"]:
-        data[key] = particle_array(h5, key, include_offset=include_offset)
-
-    if "particleStatus" in h5:
-        data["status"] = particle_array(h5, "particleStatus")
-    else:
-        data["status"] = np.full(n_particle, 1)
-
-    # Make sure weight is populated
-    if "weight" in h5:
-        weight = particle_array(h5, "weight")
-        if len(weight) == 1:
-            weight = np.full(n_particle, weight[0])
-    else:
-        weight = np.full(n_particle, data["total_charge"] / n_particle)
-    data["weight"] = weight
-
-    # id should be a unique integer, no units
-    # optional
-    if "id" in h5:
-        data["id"] = h5["id"][:]
-
-    return data
 
 
 def default_id(n):

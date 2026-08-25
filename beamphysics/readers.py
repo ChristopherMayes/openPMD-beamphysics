@@ -416,13 +416,6 @@ def _only_iteration_only_species_group(
     h5py.Group
         Group holding the particle records. A file opened from a filename is
         closed on exit.
-
-    Raises
-    ------
-    FileNotFoundError
-        If `h5` names a file that does not exist.
-    TypeError
-        If `h5` is not a filename or an HDF5 handle.
     """
     if isinstance(h5, (str, pathlib.Path)):
         filename = os.path.expandvars(h5)
@@ -578,13 +571,6 @@ def _load_only_iteration_only_species_data(
     -------
     dict
         See `beamphysics.readers.load_species_data`.
-
-    Raises
-    ------
-    FileNotFoundError
-        If `h5` names a file that does not exist.
-    TypeError
-        If `h5` is not a filename or an HDF5 handle.
     """
     with _only_iteration_only_species_group(h5) as group:
         return load_species_data(group, include_time_offset=include_time_offset)
@@ -605,13 +591,6 @@ def load_only_time_offset(h5: str | pathlib.Path | File | Group) -> float | np.n
     -------
     float or numpy.ndarray
         See `load_time_offset`.
-
-    Raises
-    ------
-    FileNotFoundError
-        If `h5` names a file that does not exist.
-    TypeError
-        If `h5` is not a filename or an HDF5 handle.
     """
     with _only_iteration_only_species_group(h5) as group:
         return load_time_offset(group)

@@ -1,7 +1,6 @@
 # Readers
 
 Lower-level routines for loading openPMD-beamphysics particle data.
-`ParticleGroup.from_hdf5` is built on these.
 
 ## Particles
 

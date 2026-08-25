@@ -1094,6 +1094,35 @@ class ParticleGroup:
         return cls(data=data)
 
     @classmethod
+    def from_hdf5(
+        cls,
+        h5: str | pathlib.Path | File | Group,
+        include_time_offset: bool = True,
+    ) -> ParticleGroup:
+        """
+        Load the only species of the only iteration of an openPMD file or group.
+
+        Parameters
+        ----------
+        h5 : str, pathlib.Path, h5py.File, or h5py.Group
+            Filename of an openPMD file, or an open handle. A handle carrying
+            the openPMD attributes is resolved to its single iteration; one
+            that does not is taken to be the particle group itself.
+        include_time_offset : bool, optional
+            Add the "timeOffset" record to `t`. When False, `t` holds the bare
+            "time" record. The position and momentum offsets are always
+            included. Default is True.
+
+        Returns
+        -------
+        ParticleGroup
+        """
+        data = _load_only_iteration_only_species_data(
+            h5, include_time_offset=include_time_offset
+        )
+        return cls(data=data)
+
+    @classmethod
     def from_genesis4(
         cls,
         h5: str | pathlib.Path | File,
@@ -2246,7 +2275,7 @@ def centroid(particle_group: ParticleGroup) -> ParticleGroup:
     return ParticleGroup(data=data)
 
 
-def load_bunch_data(h5: Group, include_offset: bool = True) -> dict:
+def load_bunch_data(h5: Group, include_time_offset: bool = True) -> dict:
     """
     Load particles from the only species in this iteration of an OpenPMD BeamPhysics file into a dict of numpy arrays.
     Raises if more than one or no species.
@@ -2256,21 +2285,23 @@ def load_bunch_data(h5: Group, include_offset: bool = True) -> dict:
     h5 : h5py.Group
         Particle group, one iteration holding either a single species subgroup or the records
         themselves (legacy).
-    include_offset : bool, optional
-        Add the openPMD offset records to their corresponding arrays.
-        Default is True.
+    include_time_offset : bool, optional
+        Add the "timeOffset" record to `t`. The position and momentum offsets
+        are always included. Default is True.
 
     Returns
     -------
     dict
         See `beamphysics.readers.load_species_data`.
     """
-    return load_species_data(_only_species_group(h5), include_offset=include_offset)
+    return load_species_data(
+        _only_species_group(h5), include_time_offset=include_time_offset
+    )
 
 
 def _load_only_iteration_only_species_data(
     h5: str | pathlib.Path | File | Group,
-    include_offset: bool = True,
+    include_time_offset: bool = True,
 ) -> dict:
     """
     Load the only species of the only iteration of an openPMD file or group.
@@ -2281,9 +2312,9 @@ def _load_only_iteration_only_species_data(
         Filename of an openPMD file, or an open handle. A handle carrying the
         openPMD attributes is resolved to its single iteration; one that does
         not is taken to be the particle group itself.
-    include_offset : bool, optional
-        Add the openPMD offset records to their corresponding arrays.
-        Default is True.
+    include_time_offset : bool, optional
+        Add the "timeOffset" record to `t`. The position and momentum offsets
+        are always included. Default is True.
 
     Returns
     -------
@@ -2304,7 +2335,7 @@ def _load_only_iteration_only_species_data(
 
         with File(filename, "r") as h5file:
             return _load_only_iteration_only_species_data(
-                h5file, include_offset=include_offset
+                h5file, include_time_offset=include_time_offset
             )
 
     # h5py.File is itself a Group
@@ -2317,7 +2348,7 @@ def _load_only_iteration_only_species_data(
         # Not an openPMD root, so h5 is already the particle group
         group = h5
 
-    return load_bunch_data(group, include_offset=include_offset)
+    return load_bunch_data(group, include_time_offset=include_time_offset)
 
 
 def default_id(n):

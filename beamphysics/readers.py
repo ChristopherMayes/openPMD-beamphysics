@@ -393,7 +393,7 @@ def _only_species_group(h5: Group) -> Group:
     return h5[species[0]]
 
 
-def load_species_data(h5: Group, include_offset: bool = True) -> dict:
+def load_species_data(h5: Group, include_time_offset: bool = True) -> dict:
     """
     Load a single species into a dict of numpy arrays.
 
@@ -401,9 +401,9 @@ def load_species_data(h5: Group, include_offset: bool = True) -> dict:
     ----------
     h5 : h5py.Group
         Group holding the particle records.
-    include_offset : bool, optional
-        Add the openPMD offset records to their corresponding arrays.
-        Default is True.
+    include_time_offset : bool, optional
+        Add the "timeOffset" record to `t`. The position and momentum offsets
+        are always included. Default is True.
 
     Returns
     -------
@@ -425,8 +425,9 @@ def load_species_data(h5: Group, include_offset: bool = True) -> dict:
 
     data["total_charge"] = attrs["totalCharge"] * attrs["chargeUnitSI"]
 
-    for key in ["x", "px", "y", "py", "z", "pz", "t"]:
-        data[key] = particle_array(h5, key, include_offset=include_offset)
+    for key in ["x", "px", "y", "py", "z", "pz"]:
+        data[key] = particle_array(h5, key)
+    data["t"] = particle_array(h5, "t", include_offset=include_time_offset)
 
     if "particleStatus" in h5:
         data["status"] = particle_array(h5, "particleStatus")

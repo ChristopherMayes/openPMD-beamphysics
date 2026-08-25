@@ -364,6 +364,38 @@ def test_write_t_offset_bad_shape(tmp_path: pathlib.Path):
         P.write(h5file, t_offset=np.zeros(len(P) + 1) + 1e-9)
 
 
+def test_from_hdf5_matches_init(simple_pg: ParticleGroup, species_h5file: pathlib.Path):
+    assert ParticleGroup.from_hdf5(species_h5file) == simple_pg
+
+    with h5py.File(species_h5file, "r") as fp:
+        assert ParticleGroup.from_hdf5(fp) == simple_pg
+        assert ParticleGroup.from_hdf5(fp["particles"]) == simple_pg
+
+
+def test_from_hdf5_include_time_offset(tmp_path: pathlib.Path):
+    t_offset = 5e-9
+    h5file = tmp_path / "test_offset.h5"
+    P.write(h5file, t_offset=t_offset)
+
+    assert np.allclose(ParticleGroup.from_hdf5(h5file).t, P.t + t_offset)
+
+    P2 = ParticleGroup.from_hdf5(h5file, include_time_offset=False)
+    assert np.allclose(P2.t, P.t)
+    assert np.allclose(P2.x, P.x)
+    assert np.allclose(P2.pz, P.pz)
+
+
+def test_from_hdf5_include_time_offset_array(tmp_path: pathlib.Path):
+    t_offset = np.linspace(0, 1e-9, len(P))
+    h5file = tmp_path / "test_offset_array.h5"
+    P.write(h5file, t_offset=t_offset)
+
+    assert np.allclose(ParticleGroup.from_hdf5(h5file).t, P.t + t_offset)
+    assert np.allclose(
+        ParticleGroup.from_hdf5(h5file, include_time_offset=False).t, P.t
+    )
+
+
 def test_fractional_split():
     head, tail = P.fractional_split(0.5, "t")
     head, core, tail = P.fractional_split((0.1, 0.9), "t")

@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import logging
 import os
 import pathlib
 from copy import deepcopy
 from typing import Union, Optional, Sequence
 
 import numpy as np
-from h5py import File
+from h5py import File, Group
 
 from . import statistics
+from .exceptions import MultipleSpeciesError, NoSpeciesError
 from .interfaces import bmad
 from .interfaces.astra import write_astra
 from .interfaces.elegant import write_elegant
@@ -40,6 +42,9 @@ from .units import c_light, parse_bunching_str, pg_units, pmd_unit
 from .utils import get_rotation_matrix
 from .wakefields import WakefieldBase
 from .writers import pmd_init, write_pmd_bunch
+
+logger = logging.getLogger(__name__)
+
 
 # -----------------------------------------
 # Classes
@@ -2268,19 +2273,88 @@ def _scalar_maybe_from_array(value):
     return value[0]
 
 
-def load_bunch_data(h5, include_offset=True):
+def _only_species_group(h5: Group) -> Group:
     """
-    Load particles into structured numpy array.
+    Descend into the single species subgroup of a particle group.
+
+    Parameters
+    ----------
+    h5 : h5py.Group
+        Particle group. Legacy-style groups hold the records directly instead of
+        nesting them in a species subgroup.
+
+    Returns
+    -------
+    h5py.Group
+        Group holding the particle records.
+
+    Raises
+    ------
+    NoSpeciesError
+        If the group is empty.
+    MultipleSpeciesError
+        If the group holds more than one species.
     """
     # Legacy-style particles with no species
-    if "position" not in h5:
-        species = list(h5)
-        if len(species) != 1:
-            raise NotImplementedError(f"multiple species in particle paths: {species}")
-        h5 = h5[species[0]]
+    if "position" in h5:
+        logger.debug(
+            "_only_species_group found particle data instead of species, loading records from %s",
+            h5.name,
+        )
+        return h5
 
-    # n = len(h5["position/x"])
+    species = list(h5)
+    if not species:
+        raise NoSpeciesError(f"No species in particle group: {h5.name}")
+    if len(species) > 1:
+        raise MultipleSpeciesError(
+            f"Multiple species in particle group {h5.name}: {species}"
+        )
 
+    logger.debug("Loading species group %s from %s", species[0], h5.name)
+    return h5[species[0]]
+
+
+def load_bunch_data(h5: Group, include_offset: bool = True) -> dict:
+    """
+    Load particles from the only species in this iteration of an OpenPMD BeamPhysics file into a dict of numpy arrays. Raises
+    if more than one or no species.
+
+    Parameters
+    ----------
+    h5 : h5py.Group
+        Particle group, one iteration holding either a single species subgroup or the records
+        themselves (legacy).
+    include_offset : bool, optional
+        Add the openPMD offset records to their corresponding arrays.
+        Default is True.
+
+    Returns
+    -------
+    dict
+        See `load_species_data`.
+    """
+    return load_species_data(_only_species_group(h5), include_offset=include_offset)
+
+
+def load_species_data(h5: Group, include_offset: bool = True) -> dict:
+    """
+    Load a single species into a dict of numpy arrays.
+
+    Parameters
+    ----------
+    h5 : h5py.Group
+        Group holding the particle records.
+    include_offset : bool, optional
+        Add the openPMD offset records to their corresponding arrays.
+        Default is True.
+
+    Returns
+    -------
+    dict
+        Keys 'x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight' (arrays),
+        'species' (str), 'total_charge' (float), and optionally 'id' (array).
+    """
     attrs = dict(h5.attrs)
     data = {}
 

@@ -472,12 +472,8 @@ def _only_iteration_only_species_group(
         closed on exit.
     """
     if isinstance(h5, (str, pathlib.Path)):
-        filename = os.path.expandvars(h5)
-        if not os.path.exists(filename):
-            raise FileNotFoundError(f"File does not exist: {filename}")
-
         with (
-            File(filename, "r") as h5file,
+            File(os.path.expandvars(h5), "r") as h5file,
             _only_iteration_only_species_group(h5file, warn=warn) as group,
         ):
             yield group

@@ -318,6 +318,44 @@ def component_data(h5, slice=slice(None), unit_factor=1, axis_labels=None):
     return dat
 
 
+def component_scalar_or_array_data(
+    h5: Group, name: str, default: float | None = None
+) -> float | np.ndarray:
+    """
+    Read a record component as a float if it is constant, otherwise as an array.
+
+    Parameters
+    ----------
+    h5 : h5py.Group
+        Group holding the record components.
+    name : str
+        Name of the component.
+    default : float, optional
+        Value to return when `h5` has no component `name`.
+
+    Returns
+    -------
+    float or numpy.ndarray
+        Component data in SI units. A constant component is returned as a
+        scalar rather than broadcast to the shape it stands in for.
+
+    Raises
+    ------
+    KeyError
+        If `h5` has no component `name` and no `default` is given.
+    """
+    if name not in h5:
+        if default is None:
+            raise KeyError(f"No component {name} in {h5.name}")
+        return default
+
+    component = h5[name]
+    if is_constant_component(component):
+        return float(constant_component_value(component))
+
+    return component_data(component)
+
+
 def offset_component_name(component_name):
     """
     Many components can also have an offset, as in:
@@ -568,14 +606,7 @@ def load_time_offset(h5: Group) -> float | np.ndarray:
         n_particle for a per-particle component, and 0.0 when the group has no
         "timeOffset" record.
     """
-    if "timeOffset" not in h5:
-        return 0.0
-
-    offset = h5["timeOffset"]
-    if is_constant_component(offset):
-        return float(constant_component_value(offset))
-
-    return component_data(offset)
+    return component_scalar_or_array_data(h5, "timeOffset", default=0.0)
 
 
 def load_bunch_data(h5: Group, include_time_offset: bool = True) -> dict:

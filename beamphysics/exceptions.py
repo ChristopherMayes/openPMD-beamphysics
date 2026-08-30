@@ -16,3 +16,7 @@ class NoSpeciesError(BeamPhysicsError):
 
 class MultipleSpeciesError(BeamPhysicsError):
     """More than one particle species was found."""
+
+
+class NotOpenPMDError(BeamPhysicsError):
+    """The group is not the root of an openPMD series."""

@@ -7,9 +7,10 @@ import numpy as np
 import pytest
 
 from beamphysics import ParticleGroup, pmd_init
-from beamphysics.exceptions import MultipleIterationsError
+from beamphysics.exceptions import MultipleIterationsError, NotOpenPMDError
 from beamphysics.particles import load_bunch_data, single_particle
 from beamphysics.readers import (
+    check_openpmd_root,
     expected_record_unit_dimension,
     load_only_time_offset,
     load_time_offset,
@@ -224,12 +225,9 @@ def test_init_species_path(simple_pg: ParticleGroup, species_h5file: pathlib.Pat
     assert ParticleGroup(species_h5file) == simple_pg
 
 
-@pytest.mark.parametrize("subpath", [None, "particles", "particles/electron"])
-def test_init_species_group(
-    simple_pg: ParticleGroup, species_h5file: pathlib.Path, subpath
-):
+def test_init_species_group(simple_pg: ParticleGroup, species_h5file: pathlib.Path):
     with h5py.File(species_h5file, "r") as fp:
-        assert ParticleGroup(fp if subpath is None else fp[subpath]) == simple_pg
+        assert ParticleGroup(fp) == simple_pg
 
 
 def test_init_legacy_path():
@@ -237,10 +235,9 @@ def test_init_legacy_path():
     ParticleGroup(pathlib.Path(LEGACY_H5FILE))
 
 
-@pytest.mark.parametrize("subpath", [None, "data/00001", "data/00001/particles"])
-def test_init_legacy_group(subpath):
+def test_init_legacy_group():
     with h5py.File(LEGACY_H5FILE, "r") as fp:
-        assert ParticleGroup(fp if subpath is None else fp[subpath]) == P
+        assert ParticleGroup(fp) == P
 
 
 def test_init_legacy_root_base_path():
@@ -284,6 +281,48 @@ def test_init_nested_openpmd_root(simple_pg: ParticleGroup, tmp_path: pathlib.Pa
     with h5py.File(h5file, "r") as fp:
         assert ParticleGroup(fp["run1"]) == simple_pg
         assert ParticleGroup(fp["decoy"]) == other
+
+
+@pytest.mark.parametrize("subpath", ["particles", "particles/electron"])
+def test_init_below_root_raises(species_h5file: pathlib.Path, subpath: str):
+    """The handle must be the openPMD root, not a group below it."""
+    with h5py.File(species_h5file, "r") as fp:
+        with pytest.raises(NotOpenPMDError):
+            ParticleGroup(fp[subpath])
+        with pytest.raises(NotOpenPMDError):
+            ParticleGroup.from_hdf5(fp[subpath])
+        with pytest.raises(NotOpenPMDError):
+            load_only_time_offset(fp[subpath])
+
+
+@pytest.mark.parametrize("subpath", ["data/00001", "data/00001/particles"])
+def test_init_legacy_below_root_raises(subpath: str):
+    with h5py.File(LEGACY_H5FILE, "r") as fp:
+        with pytest.raises(NotOpenPMDError):
+            ParticleGroup(fp[subpath])
+
+
+def test_init_not_openpmd_file():
+    """elegant_raw.h5 is plain HDF5, with no openPMD root attributes."""
+    with pytest.raises(NotOpenPMDError):
+        ParticleGroup("docs/examples/data/elegant_raw.h5")
+
+
+def test_init_bare_group_not_openpmd(simple_pg: ParticleGroup, tmp_path: pathlib.Path):
+    """Writing into a Group, unlike a File, does not write the root attributes."""
+    h5file = tmp_path / "bare.h5"
+    with h5py.File(h5file, "w") as fp:
+        simple_pg.write(fp.create_group("bunch"))
+
+    with pytest.raises(NotOpenPMDError):
+        ParticleGroup(h5file)
+
+
+def test_check_openpmd_root_attrs(species_h5file: pathlib.Path):
+    with h5py.File(species_h5file, "r") as fp:
+        attrs = check_openpmd_root(fp)
+
+    assert attrs["openPMD"] == "2.0.0"
 
 
 BUNCH_DATA_KEYS = {
@@ -374,7 +413,6 @@ def test_from_hdf5_matches_init(simple_pg: ParticleGroup, species_h5file: pathli
 
     with h5py.File(species_h5file, "r") as fp:
         assert ParticleGroup.from_hdf5(fp) == simple_pg
-        assert ParticleGroup.from_hdf5(fp["particles"]) == simple_pg
 
 
 def test_from_hdf5_include_time_offset(tmp_path: pathlib.Path):
@@ -414,8 +452,6 @@ def test_load_only_time_offset_scalar(tmp_path: pathlib.Path):
 
     with h5py.File(h5file, "r") as fp:
         assert load_only_time_offset(fp) == t_offset
-        assert load_only_time_offset(fp["particles"]) == t_offset
-        assert load_only_time_offset(fp[f"particles/{P.species}"]) == t_offset
         assert load_time_offset(fp[f"particles/{P.species}"]) == t_offset
 
 

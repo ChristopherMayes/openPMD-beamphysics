@@ -13,6 +13,7 @@ from .exceptions import (
     MultipleSpeciesError,
     NoIterationsError,
     NoSpeciesError,
+    NotOpenPMDError,
 )
 from .tools import decode_attr, decode_attrs
 from .units import SI_symbol, c_light, dimension, dimension_name, e_charge
@@ -21,6 +22,54 @@ logger = logging.getLogger(__name__)
 
 # -----------------------------------------
 # General Utilities
+
+# Root attributes recommended from the openPMD base standard
+root_attrs = (
+    "author",
+    "software",
+    "softwareVersion",
+    "date",
+    "openPMDextension",
+    "softwareDependencies",
+    "machine",
+    "comment",
+    "dataType",
+)
+
+
+def check_openpmd_root(h5: File | Group) -> dict:
+    """
+    Check that `h5` is the root of an openPMD series and log its metadata.
+
+    Parameters
+    ----------
+    h5 : h5py.File or h5py.Group
+        Handle carrying the openPMD root attributes: a file root, or a group
+        holding a series inside a larger file.
+
+    Returns
+    -------
+    dict
+        Decoded root attributes.
+
+    Raises
+    ------
+    NotOpenPMDError
+        If `h5` has no "openPMD" attribute.
+    """
+    attrs = decode_attrs(h5.attrs)
+    if "openPMD" not in attrs:
+        raise NotOpenPMDError(f"No 'openPMD' attribute in {h5.file.filename}:{h5.name}")
+
+    metadata = {key: attrs[key] for key in root_attrs if key in attrs}
+    logger.debug(
+        "Reading openPMD %s from %s:%s with metadata %s",
+        attrs["openPMD"],
+        h5.file.filename,
+        h5.name,
+        metadata,
+    )
+    return attrs
 
 
 # -----------------------------------------
@@ -420,10 +469,12 @@ def _only_iteration_only_species_group(
         if not isinstance(h5, Group):
             raise TypeError(f"Unsupported type for h5: {type(h5).__name__}")
 
+        check_openpmd_root(h5)
+
         try:
             group = _only_iteration_group(h5)
         except NoIterationsError:
-            # Not an openPMD root, so h5 is already the particle group
+            # The root has no iterations, so h5 holds the particle records
             group = h5
 
         yield _only_species_group(group)

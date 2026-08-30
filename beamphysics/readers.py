@@ -555,9 +555,7 @@ def load_species_data(h5: Group, include_time_offset: bool = True) -> dict:
 
     species_type = attrs["speciesType"]
     data["species"] = (
-        species_type.decode()
-        if isinstance(species_type, bytes)
-        else species_type
+        species_type.decode() if isinstance(species_type, bytes) else species_type
     )
 
     n_particle = int(_scalar_maybe_from_array(attrs["numParticles"]))

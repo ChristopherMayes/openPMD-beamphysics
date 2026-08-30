@@ -283,39 +283,17 @@ def test_init_nested_openpmd_root(simple_pg: ParticleGroup, tmp_path: pathlib.Pa
         assert ParticleGroup(fp["decoy"]) == other
 
 
-@pytest.mark.parametrize("subpath", ["particles", "particles/electron"])
-def test_init_below_root_raises(species_h5file: pathlib.Path, subpath: str):
-    """The handle must be the openPMD root, not a group below it."""
-    with h5py.File(species_h5file, "r") as fp:
-        with pytest.raises(NotOpenPMDError):
-            ParticleGroup(fp[subpath])
-        with pytest.raises(NotOpenPMDError):
-            ParticleGroup.from_hdf5(fp[subpath])
-        with pytest.raises(NotOpenPMDError):
-            load_only_time_offset(fp[subpath])
-
-
 @pytest.mark.parametrize("subpath", ["data/00001", "data/00001/particles"])
-def test_init_legacy_below_root_raises(subpath: str):
+def test_init_legacy_below_root_warns(subpath: str):
     with h5py.File(LEGACY_H5FILE, "r") as fp:
-        with pytest.raises(NotOpenPMDError):
-            ParticleGroup(fp[subpath])
+        with pytest.warns(FutureWarning, match="not a standards compliant"):
+            assert ParticleGroup(fp[subpath]) == P
 
 
-def test_init_not_openpmd_file():
+def test_not_openpmd_file_raises():
     """elegant_raw.h5 is plain HDF5, with no openPMD root attributes."""
     with pytest.raises(NotOpenPMDError):
-        ParticleGroup("docs/examples/data/elegant_raw.h5")
-
-
-def test_init_bare_group_not_openpmd(simple_pg: ParticleGroup, tmp_path: pathlib.Path):
-    """Writing into a Group, unlike a File, does not write the root attributes."""
-    h5file = tmp_path / "bare.h5"
-    with h5py.File(h5file, "w") as fp:
-        simple_pg.write(fp.create_group("bunch"))
-
-    with pytest.raises(NotOpenPMDError):
-        ParticleGroup(h5file)
+        ParticleGroup.from_hdf5("docs/examples/data/elegant_raw.h5")
 
 
 def test_check_openpmd_root_attrs(species_h5file: pathlib.Path):

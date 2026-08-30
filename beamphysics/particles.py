@@ -204,7 +204,7 @@ class ParticleGroup:
             raise NotImplementedError("Cannot init on both h5 and data")
 
         if h5 is not None:
-            with _only_iteration_only_species_group(h5) as group:
+            with _only_iteration_only_species_group(h5, warn=True) as group:
                 data = load_species_data(group)
         else:
             # Fill out data. Exclude species.

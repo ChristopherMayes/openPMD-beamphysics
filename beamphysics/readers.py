@@ -37,7 +37,7 @@ root_attrs = (
 )
 
 
-def check_openpmd_root(h5: File | Group) -> dict:
+def check_openpmd_root(h5: File | Group, warn: bool = False) -> dict:
     """
     Check that `h5` is the root of an openPMD series and log its metadata.
 
@@ -46,6 +46,9 @@ def check_openpmd_root(h5: File | Group) -> dict:
     h5 : h5py.File or h5py.Group
         Handle carrying the openPMD root attributes: a file root, or a group
         holding a series inside a larger file.
+    warn : bool, optional
+        Warn instead of raising when the "openPMD" attribute is missing, so
+        that the caller can read the handle anyway. Default is False.
 
     Returns
     -------
@@ -55,11 +58,22 @@ def check_openpmd_root(h5: File | Group) -> dict:
     Raises
     ------
     NotOpenPMDError
-        If `h5` has no "openPMD" attribute.
+        If `h5` has no "openPMD" attribute and `warn` is False.
     """
     attrs = decode_attrs(h5.attrs)
     if "openPMD" not in attrs:
-        raise NotOpenPMDError(f"No 'openPMD' attribute in {h5.file.filename}:{h5.name}")
+        message = f"No 'openPMD' attribute in {h5.file.filename}:{h5.name}"
+        if not warn:
+            raise NotOpenPMDError(message)
+
+        warnings.warn(
+            f"{message}. This is not a standards compliant openPMD file, but "
+            "reading will be attempted anyway. This warning will become an "
+            "exception in a later version of beamphysics.",
+            category=FutureWarning,
+            stacklevel=2,
+        )
+        return attrs
 
     metadata = {key: attrs[key] for key in root_attrs if key in attrs}
     logger.debug(
@@ -435,6 +449,7 @@ def _only_species_group(h5: Group) -> Group:
 @contextmanager
 def _only_iteration_only_species_group(
     h5: str | pathlib.Path | File | Group,
+    warn: bool = False,
 ) -> Iterator[Group]:
     """
     Yield the HDF5 group of the only species in the only iteration of the OpenPMD series / file. Fall back to attempting to
@@ -446,6 +461,9 @@ def _only_iteration_only_species_group(
         Filename of an openPMD file, or an open handle. A handle carrying the
         openPMD attributes is resolved to its single iteration; one that does
         not is taken to be the particle group itself.
+    warn : bool, optional
+        Warn instead of raising when the handle is not an openPMD root, and
+        read it anyway. Default is False.
 
     Yields
     ------
@@ -460,7 +478,7 @@ def _only_iteration_only_species_group(
 
         with (
             File(filename, "r") as h5file,
-            _only_iteration_only_species_group(h5file) as group,
+            _only_iteration_only_species_group(h5file, warn=warn) as group,
         ):
             yield group
 
@@ -469,7 +487,7 @@ def _only_iteration_only_species_group(
         if not isinstance(h5, Group):
             raise TypeError(f"Unsupported type for h5: {type(h5).__name__}")
 
-        check_openpmd_root(h5)
+        check_openpmd_root(h5, warn=warn)
 
         try:
             group = _only_iteration_group(h5)

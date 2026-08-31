@@ -84,8 +84,8 @@ class TabularWakefield(WakefieldBase):
     def from_wakefield(
         cls,
         wakefield: WakefieldBase,
-        zmax: float,
-        n: int = 1000,
+        zmax: float | None = None,
+        n: int | None = None,
         kind: str = "cubic",
     ) -> TabularWakefield:
         """
@@ -106,11 +106,13 @@ class TabularWakefield(WakefieldBase):
         ----------
         wakefield : WakefieldBase
             Source wakefield model to resample.
-        zmax : float
+        zmax : float, optional
             Largest trailing distance behind the source particle to tabulate [m],
-            given as a positive number.
+            given as a positive number. Defaults to the natural range of the source
+            model, reported by its default_zmax.
         n : int, optional
-            Number of samples. Default is 1000.
+            Number of samples. Defaults to the number the source model needs over that
+            range, reported by its default_n_samples.
         kind : str, optional
             Interpolation method passed to the constructor. Default is 'cubic'.
 
@@ -127,23 +129,33 @@ class TabularWakefield(WakefieldBase):
             that does not cover the requested range. Resampling beyond the range of a
             table would return the fill value rather than the wake, so the result
             would be silently zero padded.
+        NotImplementedError
+            If zmax or n is omitted and the source model defines no natural range or
+            no shortest length scale.
 
         Examples
         --------
         ::
 
-            wake = ResistiveWallWakefield.from_material(
+            wake = ResistiveWallPseudomode.from_material(
                 "copper-slac-pub-10707", radius=2.5e-3
             )
-            table = TabularWakefield.from_wakefield(wake, zmax=100 * wake.s0)
+            table = TabularWakefield.from_wakefield(wake)
         """
+        if zmax is None:
+            zmax = wakefield.default_zmax
+
         if zmax <= 0:
             raise ValueError(f"zmax must be a positive trailing distance, got {zmax}")
+
+        if n is None:
+            n = wakefield.default_n_samples(zmax)
+
         if n < 4:
             raise ValueError(f"Need at least 4 points for interpolation, got n={n}")
 
         if isinstance(wakefield, TabularWakefield):
-            zmax_source = -float(np.min(wakefield.z_data))
+            zmax_source = wakefield.default_zmax
             if zmax > zmax_source:
                 raise ValueError(
                     f"Requested zmax={zmax:.6e} m exceeds the {zmax_source:.6e} m "
@@ -216,6 +228,43 @@ class TabularWakefield(WakefieldBase):
         W = data["Wz"][::-1]
 
         return cls(z, W, kind=kind)
+
+    @property
+    def default_zmax(self) -> float:
+        """
+        Trailing distance beyond which the wake may be truncated [m].
+
+        The range the table itself covers. Beyond it the interpolator returns the
+        fill value rather than the wake.
+
+        Returns
+        -------
+        float
+            Largest trailing distance behind the source particle worth tabulating.
+        """
+        return -float(np.min(self._z))
+
+    def default_n_samples(self, zmax: float) -> int:
+        """
+        Number of uniform samples needed to represent the wake out to zmax.
+
+        The spacing of the table itself, since resampling it more finely than the
+        data it holds recovers nothing beyond the interpolant.
+
+        Parameters
+        ----------
+        zmax : float
+            Largest trailing distance behind the source particle to tabulate [m],
+            given as a positive number.
+
+        Returns
+        -------
+        int
+            Number of samples.
+        """
+        dz = (self._z[-1] - self._z[0]) / (len(self._z) - 1)
+
+        return int(np.ceil(zmax / dz)) + 1
 
     def wake(self, z: np.ndarray | float) -> np.ndarray | float:
         """

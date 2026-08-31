@@ -147,7 +147,29 @@ class Pseudomode:
         type: str = "longitudinal",
         transverse_dependence: str = "none",
     ) -> str:
-        """Format as Bmad-compatible string."""
+        """
+        Format this mode as a Bmad short-range wake specification.
+
+        Parameters
+        ----------
+        type : str, optional
+            Wake type. Default is "longitudinal".
+        transverse_dependence : str, optional
+            Transverse dependence. Default is "none".
+
+        Returns
+        -------
+        str
+            One Bmad mode entry of the form ``type = {A, d, k, phi, dependence}``.
+
+        Notes
+        -----
+        Bmad expresses the phase in units of 2 pi, whereas :attr:`phi` is in radians,
+        so the fourth field is written as ``phi / (2 * pi)``. Reading such an entry
+        back therefore requires multiplying that field by 2 pi. Every other field is
+        written unchanged, since the amplitude, decay rate and wavenumber follow the
+        same conventions in both representations.
+        """
         return (
             f"{type} = {{{self.A}, {self.d}, {self.k}, "
             f"{self.phi / (2 * np.pi)}, {transverse_dependence}}}"
@@ -211,6 +233,72 @@ class PseudomodeWakefield(WakefieldBase):
     def n_modes(self) -> int:
         """Number of pseudomodes."""
         return len(self._modes)
+
+    @property
+    def decay_length(self) -> float:
+        """
+        Envelope decay length of the most slowly damped mode [m].
+
+        Each mode falls off as exp(-|z| * d), so the sum has decayed to exp(-1) of
+        its envelope after the largest of the 1/d.
+
+        Returns
+        -------
+        float
+            Decay length [m].
+
+        Raises
+        ------
+        ValueError
+            If any mode has a non-positive decay rate, in which case the wake does
+            not decay and cannot be truncated.
+        """
+        d = np.array([mode.d for mode in self.modes], dtype=float)
+
+        if np.any(d <= 0):
+            raise ValueError(
+                "Every pseudomode must have a positive decay rate d for the wake to "
+                f"decay, got d={d}"
+            )
+
+        return float(1 / d.min())
+
+    @property
+    def default_zmax(self) -> float:
+        """
+        Trailing distance beyond which the wake may be truncated [m].
+
+        Ten decay lengths, at which the envelope has fallen to exp(-10), or about
+        5e-05 of its initial value. The residual is far below the accuracy of the
+        pseudomode fit itself.
+
+        Returns
+        -------
+        float
+            Largest trailing distance behind the source particle worth tabulating.
+        """
+        return 10 * self.decay_length
+
+    @property
+    def min_wavelength(self) -> float:
+        """
+        Shortest length scale the wake resolves [m].
+
+        The shorter of the period of the fastest mode and the decay length, so that a
+        purely damped mode, which has no period, still sets a sampling requirement.
+
+        Returns
+        -------
+        float
+            Shortest length scale [m].
+        """
+        k = np.abs([mode.k for mode in self.modes]).max()
+        decay_length = self.decay_length
+
+        if k == 0:
+            return decay_length
+
+        return min(2 * np.pi / k, decay_length)
 
     def wake(self, z: np.ndarray | float) -> np.ndarray | float:
         """
@@ -367,6 +455,11 @@ class PseudomodeWakefield(WakefieldBase):
         -------
         str
             Bmad-formatted string (one line per mode).
+
+        Notes
+        -----
+        See :meth:`Pseudomode.to_bmad` for the phase convention, which is the one
+        field that differs between the two representations.
         """
         lines = [mode.to_bmad(type, transverse_dependence) for mode in self._modes]
         return "\n".join(lines)

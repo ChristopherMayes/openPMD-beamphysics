@@ -721,7 +721,9 @@ class ResistiveWallWakefieldBase(WakefieldBase):
         """Evaluate the wakefield at position z (convenience method)."""
         return self.wake(z)
 
-    def to_tabular(self, zmax: float | None = None, n: int = 1000) -> TabularWakefield:
+    def to_tabular(
+        self, zmax: float | None = None, n: int | None = None
+    ) -> TabularWakefield:
         """
         Resample this resistive wall model onto a uniform table.
 
@@ -732,13 +734,14 @@ class ResistiveWallWakefieldBase(WakefieldBase):
         ----------
         zmax : float, optional
             Largest trailing distance behind the source particle to tabulate [m],
-            given as a positive number. Defaults to 100 * s0, matching the default
-            range of :meth:`ResistiveWallWakefield.plot`. Over the tabulated materials
-            and for pipe radii from 1 mm to 10 mm, the residual wake beyond that
-            distance is below 0.5 percent of W0 for the impedance model and below 0.05
-            percent of W0 for the pseudomode model.
+            given as a positive number. Defaults to the natural range of the model,
+            reported by its default_zmax. The pseudomode model uses ten envelope
+            decay lengths, and the impedance model, which has no closed-form envelope,
+            uses 100 * s0. Over the tabulated materials and for pipe radii from 1 mm
+            to 10 mm, the residual wake beyond either range is below 1e-04 of W0.
         n : int, optional
-            Number of samples. Default is 1000.
+            Number of samples. Defaults to the number the model needs over that range,
+            reported by its default_n_samples.
 
         Returns
         -------
@@ -755,7 +758,4 @@ class ResistiveWallWakefieldBase(WakefieldBase):
             )
             table = wake.to_tabular()
         """
-        if zmax is None:
-            zmax = 100 * self.s0
-
         return TabularWakefield.from_wakefield(self, zmax=zmax, n=n)

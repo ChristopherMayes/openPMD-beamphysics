@@ -1,5 +1,6 @@
 import os
 import re
+import warnings
 
 import numpy as np
 from numpy import pi
@@ -342,8 +343,8 @@ def parse_impact_z_wakefield(source):
 
 def create_impact_z_wakefield_rfdata(
     wakefield,
-    zmax,
-    n=IMPACT_Z_MAX_WAKEFIELD_ROWS,
+    zmax=None,
+    n=None,
     wake_x=None,
     wake_y=None,
 ):
@@ -363,11 +364,13 @@ def create_impact_z_wakefield_rfdata(
     ----------
     wakefield : beamphysics.wakefields.WakefieldBase
         Longitudinal wakefield model to sample.
-    zmax : float
+    zmax : float, optional
         Largest trailing distance behind the source particle to tabulate [m], given
-        as a positive number.
+        as a positive number. Defaults to the natural range of the model, reported by
+        its default_zmax.
     n : int, optional
-        Number of rows. Default is 5000, the largest value IMPACT-Z accepts.
+        Number of rows. Defaults to the number the model needs over that range,
+        reported by its default_n_samples, clamped to the 5000 rows IMPACT-Z accepts.
     wake_x : callable, optional
         Horizontal dipole wake as a function of z <= 0 [m], returning [V/C/m^2].
         The third column is zero when this is not supplied.
@@ -386,6 +389,15 @@ def create_impact_z_wakefield_rfdata(
     ValueError
         If n exceeds the IMPACT-Z limit of 5000 rows, or if zmax or n are otherwise
         unsuitable for tabulation.
+    NotImplementedError
+        If zmax or n is omitted and the model defines no natural range or no shortest
+        length scale.
+
+    Warns
+    -----
+    UserWarning
+        If the model needs more than 5000 rows over the requested range, in which case
+        the table is written at the limit and the wake is under-resolved.
 
     Notes
     -----
@@ -401,14 +413,29 @@ def create_impact_z_wakefield_rfdata(
     --------
     ::
 
-        wake = ResistiveWallWakefield.from_material(
+        wake = ResistiveWallPseudomode.from_material(
             "copper-slac-pub-10707", radius=2.5e-3
         )
-        rfdata = create_impact_z_wakefield_rfdata(wake, zmax=100 * wake.s0, n=1000)
+        rfdata = create_impact_z_wakefield_rfdata(wake)
     """
     from ..wakefields.tabular import TabularWakefield
 
-    if n > IMPACT_Z_MAX_WAKEFIELD_ROWS:
+    if zmax is None:
+        zmax = wakefield.default_zmax
+
+    if n is None:
+        n = wakefield.default_n_samples(zmax)
+        if n > IMPACT_Z_MAX_WAKEFIELD_ROWS:
+            warnings.warn(
+                f"Resolving this wake over {zmax:.6e} m needs {n} rows, above the "
+                f"IMPACT-Z limit of {IMPACT_Z_MAX_WAKEFIELD_ROWS}. The table is "
+                "written at the limit and the wake is under-resolved. Reduce zmax to "
+                "recover the resolution.",
+                UserWarning,
+                stacklevel=2,
+            )
+            n = IMPACT_Z_MAX_WAKEFIELD_ROWS
+    elif n > IMPACT_Z_MAX_WAKEFIELD_ROWS:
         raise ValueError(
             f"n={n} exceeds the IMPACT-Z limit of {IMPACT_Z_MAX_WAKEFIELD_ROWS} rows "
             "(Ndataini in src/DataStruct/Data.f90). A longer table overruns the "
@@ -431,7 +458,7 @@ def create_impact_z_wakefield_rfdata(
 
 
 def write_impact_z_wakefield(
-    filename, wakefield, zmax, n=5000, wake_x=None, wake_y=None
+    filename, wakefield, zmax=None, n=None, wake_x=None, wake_y=None
 ):
     """
     Write a wakefield model as an IMPACT-Z read-in short-range wakefield table.
@@ -447,11 +474,13 @@ def write_impact_z_wakefield(
         the identifier given on the -41 element.
     wakefield : beamphysics.wakefields.WakefieldBase
         Longitudinal wakefield model to sample.
-    zmax : float
+    zmax : float, optional
         Largest trailing distance behind the source particle to tabulate [m], given
-        as a positive number.
+        as a positive number. Defaults to the natural range of the model, reported by
+        its default_zmax.
     n : int, optional
-        Number of rows. Default is 5000, the largest value IMPACT-Z accepts.
+        Number of rows. Defaults to the number the model needs over that range,
+        reported by its default_n_samples, clamped to the 5000 rows IMPACT-Z accepts.
     wake_x : callable, optional
         Horizontal dipole wake as a function of z <= 0 [m], returning [V/C/m^2].
         The third column is zero when this is not supplied.
@@ -468,6 +497,9 @@ def write_impact_z_wakefield(
     ValueError
         If n exceeds the IMPACT-Z limit of 5000 rows, or if zmax or n are otherwise
         unsuitable for tabulation.
+    NotImplementedError
+        If zmax or n is omitted and the model defines no natural range or no shortest
+        length scale.
 
     See Also
     --------
@@ -478,10 +510,10 @@ def write_impact_z_wakefield(
     --------
     ::
 
-        wake = ResistiveWallWakefield.from_material(
+        wake = ResistiveWallPseudomode.from_material(
             "copper-slac-pub-10707", radius=2.5e-3
         )
-        write_impact_z_wakefield("rfdata41.in", wake, zmax=100 * wake.s0, n=1000)
+        write_impact_z_wakefield("rfdata41.in", wake)
     """
     np.savetxt(
         filename,

@@ -21,10 +21,14 @@ from beamphysics.interfaces.impact import (
     write_impact_z_wakefield,
 )
 from beamphysics.wakefields import (
+    Pseudomode,
+    PseudomodeWakefield,
     ResistiveWallPseudomode,
     ResistiveWallWakefield,
     TabularWakefield,
+    WakefieldBase,
 )
+from beamphysics.wakefields.base import SAMPLES_PER_WAVELENGTH
 
 test_data = pathlib.Path(__file__).resolve().parent / "data"
 
@@ -117,7 +121,7 @@ def test_to_tabular_agrees_with_parent_model(cls, geometry):
     table = wakefield.to_tabular()
 
     zmax = -table.z_data[0]
-    assert zmax == pytest.approx(100 * wakefield.s0)
+    assert zmax == pytest.approx(wakefield.default_zmax)
 
     z = -np.linspace(0.01 * zmax, 0.99 * zmax, 401)
     error = np.abs(table.wake(z) - wakefield.wake(z))
@@ -144,6 +148,177 @@ def test_to_tabular_honors_explicit_range(pseudomode_model):
 
     assert len(table.z_data) == 64
     assert table.z_data[0] == pytest.approx(-1e-4)
+
+
+# -----------------------------------------------------------------------------
+# default_zmax
+# -----------------------------------------------------------------------------
+
+
+def test_pseudomode_decay_length_is_the_slowest_mode():
+    """The envelope of the sum decays no faster than its most weakly damped mode."""
+    model = PseudomodeWakefield(
+        [
+            Pseudomode(A=1e15, d=1e4, k=1e5, phi=np.pi / 2),
+            Pseudomode(A=5e14, d=2e4, k=2e5, phi=np.pi / 4),
+        ]
+    )
+
+    assert model.decay_length == pytest.approx(1e-4)
+    assert model.default_zmax == pytest.approx(1e-3)
+
+
+def test_pseudomode_decay_length_rejects_an_undamped_mode():
+    """An undamped mode has no finite range, so no default can be offered."""
+    model = PseudomodeWakefield([Pseudomode(A=1e15, d=0.0, k=1e5, phi=0.0)])
+
+    with pytest.raises(ValueError, match="positive decay rate"):
+        model.decay_length
+
+
+def test_pseudomode_default_zmax_leaves_a_negligible_tail(pseudomode_model):
+    """Ten decay lengths leave exp(-10) of the envelope, about 5e-05 of W0."""
+    zmax = pseudomode_model.default_zmax
+
+    assert zmax == pytest.approx(10 / pseudomode_model.modes[0].d)
+    assert abs(pseudomode_model.wake(-zmax)) < 1e-4 * pseudomode_model.W0
+
+
+def test_impedance_model_default_zmax_is_a_multiple_of_s0(impedance_model):
+    """The impedance model has no closed-form envelope, so the range follows s0."""
+    assert impedance_model.default_zmax == pytest.approx(100 * impedance_model.s0)
+
+
+def test_tabular_default_zmax_is_its_own_range(pseudomode_model):
+    """A table can only be resampled over the range it covers."""
+    table = pseudomode_model.to_tabular(zmax=1e-4, n=64)
+
+    assert table.default_zmax == pytest.approx(1e-4)
+
+
+def test_default_zmax_is_not_offered_without_a_natural_range():
+    """A model with no decay length must ask for zmax explicitly."""
+
+    class _Featureless(WakefieldBase):
+        def wake(self, z):
+            return np.zeros_like(np.atleast_1d(z), dtype=float)
+
+        def impedance(self, k):
+            return np.zeros_like(np.atleast_1d(k), dtype=complex)
+
+    with pytest.raises(NotImplementedError, match="Pass zmax explicitly"):
+        TabularWakefield.from_wakefield(_Featureless())
+
+
+# -----------------------------------------------------------------------------
+# default_n_samples
+# -----------------------------------------------------------------------------
+
+
+def test_pseudomode_min_wavelength_is_the_fastest_mode():
+    """The shortest period among the modes sets the sampling requirement."""
+    model = PseudomodeWakefield(
+        [
+            Pseudomode(A=1e15, d=1e4, k=1e5, phi=np.pi / 2),
+            Pseudomode(A=5e14, d=2e4, k=4e5, phi=np.pi / 4),
+        ]
+    )
+
+    assert model.min_wavelength == pytest.approx(2 * np.pi / 4e5)
+
+
+def test_pseudomode_min_wavelength_falls_back_to_the_decay_length():
+    """A purely damped mode has no period, so its decay sets the scale."""
+    model = PseudomodeWakefield([Pseudomode(A=1e15, d=1e4, k=0.0, phi=np.pi / 2)])
+
+    assert model.min_wavelength == pytest.approx(1e-4)
+
+
+def test_impedance_model_min_wavelength_follows_the_round_pipe_form(impedance_model):
+    """The DC wake of a round pipe oscillates as cos(sqrt(3) z / s0)."""
+    expected = 2 * np.pi * impedance_model.s0 / np.sqrt(3)
+
+    assert impedance_model.min_wavelength == pytest.approx(expected)
+
+
+def test_default_n_samples_scales_with_the_range(pseudomode_model):
+    """Sampling density is fixed, so the count is proportional to the range."""
+    zmax = pseudomode_model.default_zmax
+    n = pseudomode_model.default_n_samples(zmax)
+
+    assert n == pytest.approx(
+        pseudomode_model.default_n_samples(2 * zmax) / 2, rel=0.01
+    )
+    assert n - 1 == pytest.approx(
+        SAMPLES_PER_WAVELENGTH * zmax / pseudomode_model.min_wavelength, rel=0.01
+    )
+
+
+@pytest.mark.parametrize(
+    "model_class", [ResistiveWallPseudomode, ResistiveWallWakefield]
+)
+def test_default_n_samples_resolves_the_wake_for_a_linear_consumer(model_class):
+    """IMPACT-Z interpolates the table linearly, so test the error of that estimate."""
+    model = model_class.from_material(MATERIAL, radius=RADIUS)
+    zmax = model.default_zmax
+    n = model.default_n_samples(zmax)
+
+    coarse = TabularWakefield.from_wakefield(model, zmax=zmax, n=n)
+    fine = TabularWakefield.from_wakefield(model, zmax=zmax, n=2 * n - 1)
+
+    # Midpoints of the coarse grid, where linear interpolation is least accurate.
+    z = fine.z_data[1::2]
+    linear = np.interp(z, coarse.z_data, coarse.W_data)
+
+    assert np.abs(linear - fine.W_data[1::2]).max() < 1e-3 * model.W0
+
+
+def test_tabular_default_n_samples_preserves_its_own_spacing(pseudomode_model):
+    """Resampling a table more finely than its data recovers only the interpolant."""
+    table = pseudomode_model.to_tabular(zmax=1e-4, n=64)
+
+    assert table.default_n_samples(1e-4) == 64
+    assert table.default_n_samples(5e-5) == 33
+
+
+def test_default_n_samples_is_not_offered_without_a_length_scale():
+    """A model with no oscillation or decay scale must ask for n explicitly."""
+
+    class _Featureless(WakefieldBase):
+        def wake(self, z):
+            return np.zeros_like(np.atleast_1d(z), dtype=float)
+
+        def impedance(self, k):
+            return np.zeros_like(np.atleast_1d(k), dtype=complex)
+
+    with pytest.raises(NotImplementedError, match="Pass n explicitly"):
+        TabularWakefield.from_wakefield(_Featureless(), zmax=1e-4)
+
+
+def test_impact_z_export_needs_no_range(pseudomode_model):
+    """The pseudomode to table to IMPACT-Z chain runs without any chosen parameter."""
+    rfdata = create_impact_z_wakefield_rfdata(pseudomode_model)
+    zmax = pseudomode_model.default_zmax
+
+    assert rfdata.shape == (pseudomode_model.default_n_samples(zmax), 4)
+    assert len(rfdata) <= IMPACT_Z_MAX_WAKEFIELD_ROWS
+    assert rfdata[-1, 0] == pytest.approx(zmax)
+
+    table = TabularWakefield.from_impact_z(rfdata)
+    z = -np.linspace(0, zmax, 401)
+    error = np.abs(table.wake(z) - pseudomode_model.wake(z))
+
+    assert error.max() < 1e-4 * pseudomode_model.W0
+
+
+def test_impact_z_export_clamps_an_oversized_automatic_table(pseudomode_model):
+    """A range too long to resolve is written at the limit, with a warning."""
+    zmax = 100 * pseudomode_model.default_zmax
+
+    with pytest.warns(UserWarning, match="under-resolved"):
+        rfdata = create_impact_z_wakefield_rfdata(pseudomode_model, zmax=zmax)
+
+    assert rfdata.shape == (IMPACT_Z_MAX_WAKEFIELD_ROWS, 4)
 
 
 # -----------------------------------------------------------------------------

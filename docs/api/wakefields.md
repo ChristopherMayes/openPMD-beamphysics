@@ -24,6 +24,22 @@ A `TabularWakefield` is the interchange format between the models above and exte
 codes. Any model can be resampled onto a uniform table, and the resistive wall classes
 provide a convenience that picks a default range from the characteristic length `s0`.
 
+The range need not be chosen by hand. Every model that knows its own decay reports a
+`default_zmax`, which is used whenever `zmax` is omitted: ten envelope decay lengths for
+a pseudomode model, `100 * s0` for the impedance model, and its own extent for a table.
+
+Neither does the number of rows. Every model that knows its own structure reports a
+`min_wavelength`, the shortest length scale it resolves, and `default_n_samples` turns
+that into a row count at a fixed density of 128 samples per length scale. A consumer
+that interpolates the table linearly, as IMPACT-Z does, then reproduces the resistive
+wall wakes to better than `1e-03` of `W0`.
+
+::: beamphysics.wakefields.PseudomodeWakefield.decay_length
+
+::: beamphysics.wakefields.WakefieldBase.min_wavelength
+
+::: beamphysics.wakefields.WakefieldBase.default_n_samples
+
 ::: beamphysics.wakefields.TabularWakefield.from_wakefield
 
 ::: beamphysics.wakefields.TabularWakefield.from_impact_z

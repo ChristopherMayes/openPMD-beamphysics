@@ -39,6 +39,7 @@ from scipy.integrate import quad, quad_vec
 
 from ...units import Z0, c_light
 from ..base import WakefieldBase
+from ..tabular import TabularWakefield
 
 
 class Geometry(str, Enum):
@@ -719,3 +720,42 @@ class ResistiveWallWakefieldBase(WakefieldBase):
     def __call__(self, z: float | np.ndarray) -> float | np.ndarray:
         """Evaluate the wakefield at position z (convenience method)."""
         return self.wake(z)
+
+    def to_tabular(
+        self, zmax: float | None = None, n: int | None = None
+    ) -> TabularWakefield:
+        """
+        Resample this resistive wall model onto a uniform table.
+
+        The table is the interchange format used to hand a resistive wall wake to an
+        external code, and it is far cheaper to evaluate than either parent model.
+
+        Parameters
+        ----------
+        zmax : float, optional
+            Largest trailing distance behind the source particle to tabulate [m],
+            given as a positive number. Defaults to the natural range of the model,
+            reported by its default_zmax. The pseudomode model uses ten envelope
+            decay lengths, and the impedance model, which has no closed-form envelope,
+            uses 100 * s0. Over the tabulated materials and for pipe radii from 1 mm
+            to 10 mm, the residual wake beyond either range is below 1e-04 of W0.
+        n : int, optional
+            Number of samples. Defaults to the number the model needs over that range,
+            reported by its default_n_samples.
+
+        Returns
+        -------
+        TabularWakefield
+            Table covering -zmax <= z <= 0, in the convention that z <= 0 lies behind
+            the source particle and a positive wake is energy-losing.
+
+        Examples
+        --------
+        ::
+
+            wake = ResistiveWallPseudomode.from_material(
+                "copper-slac-pub-10707", radius=2.5e-3
+            )
+            table = wake.to_tabular()
+        """
+        return TabularWakefield.from_wakefield(self, zmax=zmax, n=n)

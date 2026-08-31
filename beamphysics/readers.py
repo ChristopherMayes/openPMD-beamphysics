@@ -37,7 +37,7 @@ root_attrs = (
 )
 
 
-def check_openpmd_root(h5: File | Group, warn: bool = False) -> dict:
+def get_root_metadata(h5: File | Group, warn: bool = False) -> dict:
     """
     Check that `h5` is the root of an openPMD series and log its metadata.
 
@@ -521,7 +521,7 @@ def _only_iteration_only_species_group(
         if not isinstance(h5, Group):
             raise TypeError(f"Unsupported type for h5: {type(h5).__name__}")
 
-        check_openpmd_root(h5, warn=warn)
+        get_root_metadata(h5, warn=warn)
 
         try:
             group = _only_iteration_group(h5)

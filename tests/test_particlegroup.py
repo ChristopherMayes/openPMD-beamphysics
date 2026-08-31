@@ -10,7 +10,7 @@ from beamphysics import ParticleGroup, pmd_init
 from beamphysics.exceptions import MultipleIterationsError, NotOpenPMDError
 from beamphysics.particles import load_bunch_data, single_particle
 from beamphysics.readers import (
-    check_openpmd_root,
+    get_root_metadata,
     expected_record_unit_dimension,
     load_only_time_offset,
     load_time_offset,
@@ -296,9 +296,9 @@ def test_not_openpmd_file_raises():
         ParticleGroup.from_hdf5("docs/examples/data/elegant_raw.h5")
 
 
-def test_check_openpmd_root_attrs(species_h5file: pathlib.Path):
+def test_get_root_metadata_attrs(species_h5file: pathlib.Path):
     with h5py.File(species_h5file, "r") as fp:
-        attrs = check_openpmd_root(fp)
+        attrs = get_root_metadata(fp)
 
     assert attrs["openPMD"] == "2.0.0"
 

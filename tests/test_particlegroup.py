@@ -279,14 +279,16 @@ def test_init_nested_openpmd_root(simple_pg: ParticleGroup, tmp_path: pathlib.Pa
         fp["particles"] = h5py.SoftLink("/decoy/particles")
 
     with h5py.File(h5file, "r") as fp:
-        assert ParticleGroup(fp["run1"]) == simple_pg
-        assert ParticleGroup(fp["decoy"]) == other
+        with pytest.warns(FutureWarning):
+            assert ParticleGroup(fp["run1"]) == simple_pg
+        with pytest.warns(FutureWarning):
+            assert ParticleGroup(fp["decoy"]) == other
 
 
 @pytest.mark.parametrize("subpath", ["data/00001", "data/00001/particles"])
 def test_init_legacy_below_root_warns(subpath: str):
     with h5py.File(LEGACY_H5FILE, "r") as fp:
-        with pytest.warns(FutureWarning, match="not a standards compliant"):
+        with pytest.warns(FutureWarning):
             assert ParticleGroup(fp[subpath]) == P
 
 

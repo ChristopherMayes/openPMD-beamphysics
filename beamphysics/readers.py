@@ -446,6 +446,16 @@ def _only_iteration_group(h5: File | Group) -> Group:
 
     logger.debug("Loading iteration %s from %s", paths[0], h5.name)
 
+    if h5.name != "/":
+        warnings.warn(
+            f"The openPMD root is the group {h5.name} instead of the root of "
+            f"{h5.file.filename}. This is not a standards compliant openPMD "
+            "file, but reading will be attempted anyway. Support for this may "
+            "be removed in a future version of beamphysics.",
+            category=FutureWarning,
+            stacklevel=2,
+        )
+
     # particle_paths returns absolute paths. Strip the leading separator so that
     # they resolve relative to h5, which may itself be a group within a file.
     path = paths[0].strip("/")

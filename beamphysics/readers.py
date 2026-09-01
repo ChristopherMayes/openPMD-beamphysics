@@ -537,6 +537,15 @@ def _only_iteration_only_species_group(
             group = _only_iteration_group(h5)
         except NoIterationsError:
             # The root has no iterations, so h5 holds the particle records
+            warnings.warn(
+                f"No openPMD iterations below {h5.file.filename}:{h5.name}, so "
+                "it is taken to be the particle group itself. This is not a "
+                "standards compliant openPMD file, but reading will be "
+                "attempted anyway. Support for this may be removed in a future "
+                "version of beamphysics.",
+                category=FutureWarning,
+                stacklevel=3,
+            )
             group = h5
 
         yield _only_species_group(group)

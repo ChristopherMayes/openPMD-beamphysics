@@ -6,7 +6,7 @@ from copy import deepcopy
 from typing import Union, Optional, Sequence
 
 import numpy as np
-from h5py import File
+from h5py import File, Group
 
 from . import statistics
 from .interfaces import bmad
@@ -25,7 +25,11 @@ from .interfaces.lucretia import write_lucretia
 from .interfaces.opal import write_opal
 from .interfaces.simion import write_simion
 from .plot import density_plot, marginal_plot, slice_plot, wakefield_plot
-from .readers import particle_array, particle_paths
+from .readers import (
+    _only_iteration_only_species_group,
+    load_bunch_data,
+    load_species_data,
+)
 from .species import charge_of, mass_of
 from .statistics import (
     matched_particles,
@@ -40,6 +44,10 @@ from .units import c_light, parse_bunching_str, pg_units, pmd_unit
 from .utils import get_rotation_matrix
 from .wakefields import WakefieldBase
 from .writers import pmd_init, write_pmd_bunch
+
+__all__ = [
+    "load_bunch_data",  # Re-exported for backwards compatibility
+]
 
 # -----------------------------------------
 # Classes
@@ -190,29 +198,14 @@ class ParticleGroup:
     """
 
     def __init__(self, h5=None, data=None):
-        if h5 and data:
+        if h5 is not None and data is not None:
             # TODO:
             # Allow merging or changing some array with extra data
             raise NotImplementedError("Cannot init on both h5 and data")
 
-        if h5:
-            # Allow filename
-            if isinstance(h5, (str, pathlib.Path)):
-                fname = os.path.expandvars(h5)
-                assert os.path.exists(fname), f"File does not exist: {fname}"
-
-                with File(fname, "r") as hh5:
-                    pp = particle_paths(hh5)
-                    assert len(pp) == 1, f"Number of particle paths in {h5}: {len(pp)}"
-                    data = load_bunch_data(hh5[pp[0]])
-
-            elif isinstance(h5, File):
-                pp = particle_paths(h5)
-                assert len(pp) == 1, f"Number of particle paths in {h5}: {len(pp)}"
-                data = load_bunch_data(h5[pp[0]])
-            else:
-                # Try dict
-                data = load_bunch_data(h5)
+        if h5 is not None:
+            with _only_iteration_only_species_group(h5, warn=True) as group:
+                data = load_species_data(group)
         else:
             # Fill out data. Exclude species.
             data = full_data(data)
@@ -1104,6 +1097,34 @@ class ParticleGroup:
         return cls(data=data)
 
     @classmethod
+    def from_hdf5(
+        cls,
+        h5: str | pathlib.Path | File | Group,
+        include_time_offset: bool = True,
+    ) -> ParticleGroup:
+        """
+        Load the only species of the only iteration of an openPMD file or group.
+
+        Parameters
+        ----------
+        h5 : str, pathlib.Path, h5py.File, or h5py.Group
+            Filename of an openPMD file, or an open handle. A handle carrying
+            the openPMD attributes is resolved to its single iteration; one
+            that does not is taken to be the particle group itself.
+        include_time_offset : bool, optional
+            Add the "timeOffset" record to `t`. When False, `t` holds the bare
+            "time" record. The position and momentum offsets are always
+            included. Default is True.
+
+        Returns
+        -------
+        ParticleGroup
+        """
+        with _only_iteration_only_species_group(h5) as group:
+            data = load_species_data(group, include_time_offset=include_time_offset)
+        return cls(data=data)
+
+    @classmethod
     def from_genesis4(
         cls,
         h5: str | pathlib.Path | File,
@@ -1414,7 +1435,7 @@ class ParticleGroup:
         return write_opal(self, filePath, verbose=verbose, dist_type=dist_type)
 
     # openPMD
-    def write(self, h5, name=None) -> None:
+    def write(self, h5, name=None, t_offset=0.0) -> None:
         """
         Write particle data to an HDF5 file or group in openPMD format.
 
@@ -1432,6 +1453,9 @@ class ParticleGroup:
         name : str, optional
             Name for the subgroup/bunch written inside the "particles" group (or provided group).
             If None, `write_pmd_bunch` will write directly to the "particles" group.
+        t_offset : float or numpy.ndarray, optional
+            Time offset, scalar or per-particle, written as the openPMD "timeOffset"
+            record. Omitted when zero. Default is 0.0.
 
         Returns
         -------
@@ -1464,7 +1488,7 @@ class ParticleGroup:
         else:
             g = h5
 
-        write_pmd_bunch(g, self, name=name)
+        write_pmd_bunch(g, self, name=name, t_offset=t_offset)
 
     # Plotting
     # --------
@@ -2251,69 +2275,6 @@ def centroid(particle_group: ParticleGroup) -> ParticleGroup:
     data["weight"] = pg.charge
     data["status"] = 1
     return ParticleGroup(data=data)
-
-
-def _scalar_maybe_from_array(value):
-    if np.isscalar(value):
-        return value
-
-    if len(value) != 1:
-        raise ValueError(
-            f"Expected a scalar or length-1 array, got length {len(value)}"
-        )
-    return value[0]
-
-
-def load_bunch_data(h5):
-    """
-    Load particles into structured numpy array.
-    """
-    # Legacy-style particles with no species
-    if "position" not in h5:
-        species = list(h5)
-        if len(species) != 1:
-            raise NotImplementedError(f"multiple species in particle paths: {species}")
-        h5 = h5[species[0]]
-
-    # n = len(h5["position/x"])
-
-    attrs = dict(h5.attrs)
-    data = {}
-
-    species_type = attrs["speciesType"]
-    data["species"] = (
-        species_type.decode("utf-8")
-        if isinstance(species_type, bytes)
-        else species_type
-    )
-
-    n_particle = int(_scalar_maybe_from_array(attrs["numParticles"]))
-
-    data["total_charge"] = attrs["totalCharge"] * attrs["chargeUnitSI"]
-
-    for key in ["x", "px", "y", "py", "z", "pz", "t"]:
-        data[key] = particle_array(h5, key)
-
-    if "particleStatus" in h5:
-        data["status"] = particle_array(h5, "particleStatus")
-    else:
-        data["status"] = np.full(n_particle, 1)
-
-    # Make sure weight is populated
-    if "weight" in h5:
-        weight = particle_array(h5, "weight")
-        if len(weight) == 1:
-            weight = np.full(n_particle, weight[0])
-    else:
-        weight = np.full(n_particle, data["total_charge"] / n_particle)
-    data["weight"] = weight
-
-    # id should be a unique integer, no units
-    # optional
-    if "id" in h5:
-        data["id"] = h5["id"][:]
-
-    return data
 
 
 def default_id(n):

@@ -1,12 +1,89 @@
+import logging
+import os
+import pathlib
 import warnings
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import numpy as np
+from h5py import File, Group
 
+from .exceptions import (
+    MultipleIterationsError,
+    MultipleSpeciesError,
+    NoIterationsError,
+    NoSpeciesError,
+    NotOpenPMDError,
+)
 from .tools import decode_attr, decode_attrs
 from .units import SI_symbol, c_light, dimension, dimension_name, e_charge
 
+logger = logging.getLogger(__name__)
+
 # -----------------------------------------
 # General Utilities
+
+# Root attributes recommended from the openPMD base standard
+root_attrs = (
+    "author",
+    "software",
+    "softwareVersion",
+    "date",
+    "openPMDextension",
+    "softwareDependencies",
+    "machine",
+    "comment",
+    "dataType",
+)
+
+
+def get_root_metadata(h5: File | Group, warn: bool = False) -> dict:
+    """
+    Check that `h5` is the root of an openPMD series and log its metadata.
+
+    Parameters
+    ----------
+    h5 : h5py.File or h5py.Group
+        Handle carrying the openPMD root attributes: a file root, or a group
+        holding a series inside a larger file.
+    warn : bool, optional
+        Warn instead of raising when the "openPMD" attribute is missing, so
+        that the caller can read the handle anyway. Default is False.
+
+    Returns
+    -------
+    dict
+        Decoded root attributes.
+
+    Raises
+    ------
+    NotOpenPMDError
+        If `h5` has no "openPMD" attribute and `warn` is False.
+    """
+    attrs = decode_attrs(h5.attrs)
+    if "openPMD" not in attrs:
+        message = f"No 'openPMD' attribute in {h5.file.filename}:{h5.name}"
+        if not warn:
+            raise NotOpenPMDError(message)
+
+        warnings.warn(
+            f"{message}. This is not a standards compliant openPMD file, but "
+            "reading will be attempted anyway. This warning will become an "
+            "exception in a later version of beamphysics.",
+            category=FutureWarning,
+            stacklevel=2,
+        )
+        return attrs
+
+    metadata = {key: attrs[key] for key in root_attrs if key in attrs}
+    logger.debug(
+        "Reading openPMD %s from %s:%s with metadata %s",
+        attrs["openPMD"],
+        h5.file.filename,
+        h5.name,
+        metadata,
+    )
+    return attrs
 
 
 # -----------------------------------------
@@ -241,6 +318,44 @@ def component_data(h5, slice=slice(None), unit_factor=1, axis_labels=None):
     return dat
 
 
+def component_scalar_or_array_data(
+    h5: Group, name: str, default: float | None = None
+) -> float | np.ndarray:
+    """
+    Read a record component as a float if it is constant, otherwise as an array.
+
+    Parameters
+    ----------
+    h5 : h5py.Group
+        Group holding the record components.
+    name : str
+        Name of the component.
+    default : float, optional
+        Value to return when `h5` has no component `name`.
+
+    Returns
+    -------
+    float or numpy.ndarray
+        Component data in SI units. A constant component is returned as a
+        scalar rather than broadcast to the shape it stands in for.
+
+    Raises
+    ------
+    KeyError
+        If `h5` has no component `name` and no `default` is given.
+    """
+    if name not in h5:
+        if default is None:
+            raise KeyError(f"No component {name} in {h5.name}")
+        return default
+
+    component = h5[name]
+    if is_constant_component(component):
+        return float(constant_component_value(component))
+
+    return component_data(component)
+
+
 def offset_component_name(component_name):
     """
     Many components can also have an offset, as in:
@@ -288,6 +403,271 @@ def particle_array(h5, component, slice=slice(None), include_offset=True):
         dat += offset
 
     return dat
+
+
+def _scalar_maybe_from_array(value):
+    if np.isscalar(value):
+        return value
+
+    if len(value) != 1:
+        raise ValueError(
+            f"Expected a scalar or length-1 array, got length {len(value)}"
+        )
+    return value[0]
+
+
+def _only_iteration_group(h5: File | Group) -> Group:
+    """
+    Get the HDF5 group of the only openPMD iteration. Raise if none or multiple in series.
+
+    Parameters
+    ----------
+    h5 : h5py.File or h5py.Group
+        Handle carrying the openPMD "basePath" and "particlesPath" attributes.
+
+    Returns
+    -------
+    h5py.Group
+        Particle group of the single iteration, resolved relative to `h5`.
+    """
+    missing = {"basePath", "particlesPath"} - set(h5.attrs)
+    if missing:
+        raise NoIterationsError(
+            f"Missing openPMD attributes in {h5.name}: {sorted(missing)}"
+        )
+
+    paths = particle_paths(h5)
+    if not paths:
+        raise NoIterationsError(f"No openPMD iterations in {h5.name}")
+    if len(paths) > 1:
+        raise MultipleIterationsError(
+            f"Multiple openPMD iterations in {h5.name}: {paths}"
+        )
+
+    logger.debug("Loading iteration %s from %s", paths[0], h5.name)
+
+    if h5.name != "/":
+        warnings.warn(
+            f"The openPMD root is the group {h5.name} instead of the root of "
+            f"{h5.file.filename}. This is not a standards compliant openPMD "
+            "file, but reading will be attempted anyway. Support for this may "
+            "be removed in a future version of beamphysics.",
+            category=FutureWarning,
+            stacklevel=2,
+        )
+
+    # particle_paths returns absolute paths. Strip the leading separator so that
+    # they resolve relative to h5, which may itself be a group within a file.
+    path = paths[0].strip("/")
+    return h5[path] if path else h5["."]
+
+
+def _only_species_group(h5: Group) -> Group:
+    """
+    Return the HDF5 group of the only species in the OpenPMD iteration. Raise if none or more than one.
+
+    Parameters
+    ----------
+    h5 : h5py.Group
+        Particle group. Legacy-style groups hold the records directly instead of
+        nesting them in a species subgroup.
+
+    Returns
+    -------
+    h5py.Group
+        Group holding the particle records.
+    """
+    # Legacy-style particles with no species
+    if "position" in h5:
+        logger.debug("Loading species from records in %s", h5.name)
+        return h5
+
+    species = list(h5)
+    if not species:
+        raise NoSpeciesError(f"No species in particle group: {h5.name}")
+    if len(species) > 1:
+        raise MultipleSpeciesError(
+            f"Multiple species in particle group {h5.name}: {species}"
+        )
+
+    logger.debug("Loading species %s from %s", species[0], h5.name)
+    return h5[species[0]]
+
+
+@contextmanager
+def _only_iteration_only_species_group(
+    h5: str | pathlib.Path | File | Group,
+    warn: bool = False,
+) -> Iterator[Group]:
+    """
+    Yield the HDF5 group of the only species in the only iteration of the OpenPMD series / file. Fall back to attempting to
+    treat `h5` as an iteration (legacy behavior).
+
+    Parameters
+    ----------
+    h5 : str, pathlib.Path, h5py.File, or h5py.Group
+        Filename of an openPMD file, or an open handle. A handle carrying the
+        openPMD attributes is resolved to its single iteration; one that does
+        not is taken to be the particle group itself.
+    warn : bool, optional
+        Warn instead of raising when the handle is not an openPMD root, and
+        read it anyway. Default is False.
+
+    Yields
+    ------
+    h5py.Group
+        Group holding the particle records. A file opened from a filename is
+        closed on exit.
+    """
+    if isinstance(h5, (str, pathlib.Path)):
+        with (
+            File(os.path.expandvars(h5), "r") as h5file,
+            _only_iteration_only_species_group(h5file, warn=warn) as group,
+        ):
+            yield group
+
+    else:
+        # h5py.File is itself a Group
+        if not isinstance(h5, Group):
+            raise TypeError(f"Unsupported type for h5: {type(h5).__name__}")
+
+        get_root_metadata(h5, warn=warn)
+
+        try:
+            group = _only_iteration_group(h5)
+        except NoIterationsError:
+            # The root has no iterations, so h5 holds the particle records
+            warnings.warn(
+                f"No openPMD iterations below {h5.file.filename}:{h5.name}, so "
+                "it is taken to be the particle group itself. This is not a "
+                "standards compliant openPMD file, but reading will be "
+                "attempted anyway. Support for this may be removed in a future "
+                "version of beamphysics.",
+                category=FutureWarning,
+                stacklevel=3,
+            )
+            group = h5
+
+        yield _only_species_group(group)
+
+
+def load_species_data(h5: Group, include_time_offset: bool = True) -> dict:
+    """
+    Load a single species into a dict of numpy arrays.
+
+    Parameters
+    ----------
+    h5 : h5py.Group
+        Group holding the particle records.
+    include_time_offset : bool, optional
+        Add the "timeOffset" record to `t`. The position and momentum offsets
+        are always included. Default is True.
+
+    Returns
+    -------
+    dict
+        Keys 'x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight' (arrays),
+        'species' (str), 'total_charge' (float), and optionally 'id' (array).
+    """
+    attrs = dict(h5.attrs)
+    data = {}
+
+    species_type = attrs["speciesType"]
+    data["species"] = (
+        species_type.decode() if isinstance(species_type, bytes) else species_type
+    )
+
+    n_particle = int(_scalar_maybe_from_array(attrs["numParticles"]))
+
+    data["total_charge"] = attrs["totalCharge"] * attrs["chargeUnitSI"]
+
+    for key in ["x", "px", "y", "py", "z", "pz"]:
+        data[key] = particle_array(h5, key)
+    data["t"] = particle_array(h5, "t", include_offset=include_time_offset)
+
+    if "particleStatus" in h5:
+        data["status"] = particle_array(h5, "particleStatus")
+    else:
+        data["status"] = np.full(n_particle, 1)
+
+    # Make sure weight is populated
+    if "weight" in h5:
+        weight = particle_array(h5, "weight")
+        if len(weight) == 1:
+            weight = np.full(n_particle, weight[0])
+    else:
+        weight = np.full(n_particle, data["total_charge"] / n_particle)
+    data["weight"] = weight
+
+    # id should be a unique integer, no units
+    # optional
+    if "id" in h5:
+        data["id"] = h5["id"][:]
+
+    return data
+
+
+def load_time_offset(h5: Group) -> float | np.ndarray:
+    """
+    Load the time offset of a single species.
+
+    Parameters
+    ----------
+    h5 : h5py.Group
+        Group holding the particle records.
+
+    Returns
+    -------
+    float or numpy.ndarray
+        Offset in seconds: a float for a constant component, an array of length
+        n_particle for a per-particle component, and 0.0 when the group has no
+        "timeOffset" record.
+    """
+    return component_scalar_or_array_data(h5, "timeOffset", default=0.0)
+
+
+def load_bunch_data(h5: Group, include_time_offset: bool = True) -> dict:
+    """
+    Load particles from the only species in this iteration of an OpenPMD BeamPhysics file into a dict of numpy arrays.
+    Raises if more than one or no species.
+
+    Parameters
+    ----------
+    h5 : h5py.Group
+        Particle group, one iteration holding either a single species subgroup or the records
+        themselves (legacy).
+    include_time_offset : bool, optional
+        Add the "timeOffset" record to `t`. The position and momentum offsets
+        are always included. Default is True.
+
+    Returns
+    -------
+    dict
+        See `beamphysics.readers.load_species_data`.
+    """
+    return load_species_data(
+        _only_species_group(h5), include_time_offset=include_time_offset
+    )
+
+
+def load_only_time_offset(h5: str | pathlib.Path | File | Group) -> float | np.ndarray:
+    """
+    Load the time offset of the only species of the only iteration.
+
+    Parameters
+    ----------
+    h5 : str, pathlib.Path, h5py.File, or h5py.Group
+        Filename of an openPMD file, or an open handle. A handle carrying the
+        openPMD attributes is resolved to its single iteration; one that does
+        not is taken to be the particle group itself.
+
+    Returns
+    -------
+    float or numpy.ndarray
+        See `load_time_offset`.
+    """
+    with _only_iteration_only_species_group(h5) as group:
+        return load_time_offset(group)
 
 
 def all_components(h5):

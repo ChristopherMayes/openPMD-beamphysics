@@ -38,19 +38,27 @@ def pmd_field_init(h5, externalFieldPath="/ExternalFieldPath/%T/"):
         h5.attrs[k] = fstr(v)
 
 
-def write_pmd_bunch(h5, data, name=None):
+def write_pmd_bunch(h5, data, name=None, t_offset=0.0):
     """
-    Data is a dict with:
-        np.array: 'x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight'
-        str: 'species'
-        int: n_particle
+    Write bunch data in openPMD-beamphysics format.
 
-    Optional data:
-        np.array: 'id'
+    Parameters
+    ----------
+    h5 : h5py.File or h5py.Group
+        Handle to write into.
+    data : dict or ParticleGroup
+        Requires keys 'x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight'
+        (arrays), 'species' (str), 'n_particle' (int), 'charge' (float).
+        Optional key: 'id' (array).
+    name : str, optional
+        Subgroup to create for the bunch. If None, writes directly into `h5`.
+    t_offset : float or numpy.ndarray, optional
+        Time offset, scalar or per-particle, written as the 'timeOffset' record.
+        Omitted when zero. Readers add this to the 'time' record. Default is 0.0.
 
-    See inverse routine:
-        .particles.load_bunch_data
-
+    See Also
+    --------
+    beamphysics.particles.load_bunch_data : inverse routine
     """
     if name:
         g = h5.create_group(name)
@@ -81,6 +89,18 @@ def write_pmd_bunch(h5, data, name=None):
     # Optional id. This does not have any units.
     if "id" in data:
         g["id"] = data["id"]
+
+    # Optional time offset, with the same shape as the particle arrays.
+    t_offset = np.asarray(t_offset, dtype=float)
+    if np.any(t_offset):
+        n_particle = data["n_particle"]
+        if t_offset.ndim == 0:
+            t_offset = np.broadcast_to(t_offset, (n_particle,))
+        elif t_offset.shape != (n_particle,):
+            raise ValueError(
+                f"t_offset shape {t_offset.shape} does not match n_particle {n_particle}"
+            )
+        write_component_data(g, "timeOffset", t_offset, unit=pg_units("t"))
 
 
 def write_pmd_field(h5, data, name=None):

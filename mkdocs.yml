@@ -36,6 +36,7 @@ nav:
       - Readers: api/readers.md
       - Fields: api/fields.md
       - Wakefields: api/wakefields.md
+      - Wavefront: api/wavefront.md
 
   - Standards:
       - Statistics Standard: api/statistics_standard.md

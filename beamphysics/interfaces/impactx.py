@@ -842,10 +842,10 @@ def read_beam_monitor(
         did not change between where it was lost -- the file's own ``s_lost`` record --
         and the reference particle in hand. The momenta are normalized by ``beta_gamma``
         at the reference particle's own ``s``, so through an RF cavity or any other
-        accelerating element the two differ, and so does the reference time. This is
-        the same limitation ImpactX documents for the reference particle it now stores
-        alongside its lost particles: the invariants (mass, charge) describe them
-        exactly, the kinematic attributes are end-of-tracking values.
+        accelerating element the two differ, and so does the reference time. Which
+        reference particle ImpactX stores alongside lost particles is still settling
+        upstream; this reader applies no correction of its own -- it uses whatever it
+        is given -- so pass ``ref=`` explicitly when it matters which one that is.
 
     Returns
     -------

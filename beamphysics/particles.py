@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import pathlib
 from copy import deepcopy
-from typing import Union, Optional, Sequence
+from typing import TYPE_CHECKING, Union, Optional, Sequence
 
 import numpy as np
 from h5py import File, Group
@@ -44,6 +44,9 @@ from .units import c_light, parse_bunching_str, pg_units, pmd_unit
 from .utils import get_rotation_matrix
 from .wakefields import WakefieldBase
 from .writers import pmd_init, write_pmd_bunch
+
+if TYPE_CHECKING:
+    from .interfaces.impactx import ImpactXRefPart
 
 __all__ = [
     "load_bunch_data",  # Re-exported for backwards compatibility
@@ -1073,6 +1076,29 @@ class ParticleGroup:
         """
         return bmad.particlegroup_to_bmad(self, p0c=p0c, tref=tref)
 
+    def to_impactx(self, ref: ImpactXRefPart) -> dict:
+        """
+        Convert to ImpactX fixed-s beam arrays.
+
+        See `beamphysics.interfaces.impactx` for the coordinate conventions;
+        note in particular that `x` and `y` are taken to be relative to the
+        reference particle already.
+
+        Parameters
+        ----------
+        ref : beamphysics.interfaces.impactx.ImpactXRefPart
+            The reference particle the ImpactX coordinates are relative to.
+
+        Returns
+        -------
+        dict
+            Arrays keyed as `ImpactXParticleContainer.to_df()` names them.
+        """
+        # imported here: interfaces.impactx imports ParticleGroup at module level
+        from .interfaces.impactx import particlegroup_to_impactx
+
+        return particlegroup_to_impactx(self, ref)
+
     @classmethod
     def from_bmad(cls, bmad_dict):
         """
@@ -1123,6 +1149,65 @@ class ParticleGroup:
         with _only_iteration_only_species_group(h5) as group:
             data = load_species_data(group, include_time_offset=include_time_offset)
         return cls(data=data)
+
+    @classmethod
+    def from_impactx(
+        cls,
+        path: str | pathlib.Path,
+        iteration: int | None = None,
+        species_name: str = "beam",
+        species: str | None = None,
+        strict: bool = True,
+        ref: ImpactXRefPart | None = None,
+    ) -> ParticleGroup:
+        """
+        Load an ImpactX `BeamMonitor` openPMD file.
+
+        ImpactX is an s-based code, so the result is in z-coordinates: every `z`
+        is zero, the bunch length is a spread in `t`, and the transverse
+        coordinates are relative to the reference particle. See
+        `beamphysics.interfaces.impactx` for the frame conventions and for the
+        reference particle, which this does not return.
+
+        Parameters
+        ----------
+        path : str or pathlib.Path
+            Path to the file ImpactX wrote, e.g. `diags/openPMD/monitor.h5`.
+        iteration : int, optional
+            Which iteration to read. The last one when omitted.
+        species_name : str, optional
+            openPMD species to read. ImpactX always writes `"beam"`.
+        species : str, optional
+            openPMD-beamphysics species name; inferred from the reference
+            particle when omitted.
+        strict : bool, optional
+            Refuse to read a bunch carrying per-particle data ParticleGroup
+            cannot hold (non-zero spin, or a runtime component such as the
+            `s_lost` of ImpactX's `particles_lost` output). Default is True.
+        ref : beamphysics.interfaces.impactx.ImpactXRefPart, optional
+            Reference particle to interpret the coordinates against. Taken from
+            the file when omitted. ImpactX's `particles_lost` output carries a
+            zeroed reference particle, so reading it needs one; see
+            `beamphysics.interfaces.impactx.read_beam_monitor`, which this
+            delegates to, for the caveats.
+
+        Returns
+        -------
+        ParticleGroup
+        """
+        # imported here: interfaces.impactx imports ParticleGroup at module level
+        from .interfaces.impactx import read_beam_monitor_data
+
+        return cls(
+            data=read_beam_monitor_data(
+                path,
+                iteration=iteration,
+                species_name=species_name,
+                species=species,
+                strict=strict,
+                ref=ref,
+            )
+        )
 
     @classmethod
     def from_genesis4(

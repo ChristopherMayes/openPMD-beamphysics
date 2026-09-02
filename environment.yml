@@ -16,6 +16,7 @@ dependencies:
   - pytest-cov
   - pyyaml
   - pint  # test-only: independent oracle for beamphysics.units
+  - openpmd-api >=0.17  # test-only: reads ImpactX BeamMonitor output
   - jupyterlab>=3
   - nbconvert
   # Documentation

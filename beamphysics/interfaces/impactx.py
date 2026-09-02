@@ -1,10 +1,15 @@
 """ImpactX beam data <-> ParticleGroup.
 
-[ImpactX](https://impactx.readthedocs.io) is an s-based beam dynamics code, the
-successor of IMPACT-Z. Its particles are held at a common ``s`` with a spread in
-arrival time, which is z-coordinates on this side -- all ``z`` equal, ``t`` varying --
-so the conversion is a direct algebraic map, like the Bmad interface and unlike the
-time-based ones.
+[ImpactX](https://impactx.readthedocs.io) enables high-performance modeling of beam
+dynamics in particle accelerators with collective effects. This is the next
+generation of the IMPACT-Z code. ImpactX runs on modern GPUs or CPUs alike, provides
+user-friendly interfaces suitable for AI/ML workflows, has many benchmarks to ensure
+its correctness, and an extensive documentation.
+
+ImpactX models particle beams with respect to a common ``s`` (in this repo called ``z``)
+variable for the reference trajectory, with a spread in arrival time: all ``z`` equal,
+``t`` varying, so the conversion is a direct algebraic map, like the Bmad interface and
+unlike time-integrating codes (e.g., WarpX, ASTRA, etc.).
 
 Coordinates and frames
 ----------------------
@@ -18,6 +23,8 @@ ImpactX describes each particle at fixed ``s`` by ``(x, y, t, px, py, pt)``:
   reference momentum: ``px = Delta(beta_x gamma) / (beta_0 gamma_0)`` and
   ``pt = -Delta(gamma) / (beta_0 gamma_0)``.
 
+See: https://impactx.readthedocs.io/en/latest/theory/coordinates_units.html
+
 `ParticleGroup` is a lab-frame container, so the mapping has to choose a frame:
 
 - The transverse coordinates stay in the **local frame**: ``x`` and ``y`` are the
@@ -29,8 +36,10 @@ ImpactX describes each particle at fixed ``s`` by ``(x, y, t, px, py, pt)``:
   is what openPMD's ``position/t + positionOffset/t`` means in ImpactX output, and it
   keeps quantities like `ParticleGroup.average_current` meaningful.
 
-ImpactX source: <https://github.com/BLAST-ImpactX/impactx>. This interface was
-originally developed in [lume-impactx](https://github.com/ax3l/lume-impactx).
+See also:
+
+- ImpactX source: https://github.com/BLAST-ImpactX/impactx
+- ImpactX manual: https://impactx.readthedocs.io
 """
 
 from __future__ import annotations

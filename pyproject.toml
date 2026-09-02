@@ -25,7 +25,14 @@ readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "pytest-benchmark", "pyyaml", "pint"]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "pytest-benchmark",
+  "pyyaml",
+  "pint",           # test-only: independent oracle for beamphysics.units
+  "openpmd-api>=0.17",  # test-only: reads ImpactX BeamMonitor output
+]
 doc = [
   "mkdocs",
   "mkdocs-jupyter",

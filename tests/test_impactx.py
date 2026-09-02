@@ -538,19 +538,30 @@ requires_lost_data = pytest.mark.skipif(
 
 
 @requires_lost_data
-def test_particles_lost_has_no_reference_particle():
-    """ImpactX writes a default-constructed RefPart into particles_lost output."""
+def test_particles_lost_reference_particle_either_way():
+    """ImpactX wrote a default-constructed RefPart into particles_lost output before
+    BLAST-ImpactX/impactx#1647; newer versions store a usable one.
+
+    The committed fixture predates that fix, so it takes the first branch. Assert
+    whichever the file actually holds rather than the version it was made with, so
+    regenerating the data against a newer ImpactX does not look like a regression.
+    """
     import openpmd_api as io
 
     series = io.Series(str(PARTICLES_LOST), io.Access.read_only)
     ref = refpart_from_openpmd(series.iterations[0].particles["beam"])
     series.close()
 
-    assert ref.mass_MeV == 0.0
-    assert ref.gamma == 0.0
-
-    with pytest.raises(ValueError, match="zeroed reference particle"):
-        read_beam_monitor(PARTICLES_LOST)
+    if ref.mass_MeV == 0.0:
+        assert ref.gamma == 0.0
+        with pytest.raises(ValueError, match="zeroed reference particle"):
+            read_beam_monitor(PARTICLES_LOST)
+    else:
+        # a usable reference particle in the file means no ref= is needed
+        with pytest.warns(UserWarning, match="s_lost"):
+            lost = read_beam_monitor(PARTICLES_LOST, strict=False)
+        assert lost.n_alive == 0
+        assert pmd_species_of(ref) == "electron"
 
 
 @requires_lost_data

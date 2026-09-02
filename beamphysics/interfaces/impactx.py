@@ -766,10 +766,11 @@ def read_beam_monitor_data(
             raise ValueError(
                 f"{str(path)!r} iteration {iteration} carries a zeroed reference "
                 f"particle (mass_ref={ref.mass_MeV} MeV, gamma_ref={ref.gamma}), so "
-                "its normalized coordinates cannot be converted. ImpactX writes this "
-                "for its particles_lost output. Pass ref= with the ImpactXRefPart of "
-                "the BeamMonitor iteration the particles were lost at, which "
-                "refpart_from_openpmd() reads from the monitor file."
+                "its normalized coordinates cannot be converted. ImpactX wrote this "
+                "into its particles_lost output before BLAST-ImpactX/impactx#1647; "
+                "newer files carry a usable one. Pass ref= with the ImpactXRefPart of "
+                "a BeamMonitor iteration, which refpart_from_openpmd() reads from the "
+                "monitor file."
             )
 
     if strict:
@@ -831,17 +832,20 @@ def read_beam_monitor(
         to False to drop that data and read the bunch anyway.
     ref : ImpactXRefPart, optional
         Reference particle to interpret the coordinates against. Taken from the file
-        when omitted, which is what you want for a BeamMonitor. ImpactX's
-        ``particles_lost`` output carries a *zeroed* reference particle, so reading it
-        requires passing one, e.g.
+        when omitted, which is what you want for a BeamMonitor. ImpactX wrote a
+        *zeroed* reference particle into its ``particles_lost`` output before
+        BLAST-ImpactX/impactx#1647, so reading such a file requires passing one, e.g.
         ``refpart_from_openpmd(series.iterations[n].particles["beam"])`` from the
         monitor file.
 
-        Be aware that this is an approximation for lost particles: they were lost at
-        whatever ``s`` the file's own ``s_lost`` record says, not at the monitor's, so
-        they are un-normalized with the wrong reference momentum and given the wrong
-        reference time unless the two happen to coincide. It is exact only for
-        particles lost at the monitor.
+        Either way, a lost particle is only converted exactly if the reference energy
+        did not change between where it was lost -- the file's own ``s_lost`` record --
+        and the reference particle in hand. The momenta are normalized by ``beta_gamma``
+        at the reference particle's own ``s``, so through an RF cavity or any other
+        accelerating element the two differ, and so does the reference time. This is
+        the same limitation ImpactX documents for the reference particle it now stores
+        alongside its lost particles: the invariants (mass, charge) describe them
+        exactly, the kinematic attributes are end-of-tracking values.
 
     Returns
     -------

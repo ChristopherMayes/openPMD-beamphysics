@@ -29,7 +29,8 @@ ImpactX describes each particle at fixed ``s`` by ``(x, y, t, px, py, pt)``:
   is what openPMD's ``position/t + positionOffset/t`` means in ImpactX output, and it
   keeps quantities like `ParticleGroup.average_current` meaningful.
 
-Originally developed in lume-impactx.
+ImpactX source: <https://github.com/BLAST-ImpactX/impactx>. This interface was
+originally developed in [lume-impactx](https://github.com/ax3l/lume-impactx).
 """
 
 from __future__ import annotations

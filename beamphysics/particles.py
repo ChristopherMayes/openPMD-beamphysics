@@ -39,6 +39,7 @@ from .statistics import (
     particle_twiss_dispersion,
     resample_particles,
     slice_statistics,
+    split_statistic_key,
 )
 from .units import c_light, parse_bunching_str, pg_units, pmd_unit
 from .utils import get_rotation_matrix
@@ -913,24 +914,24 @@ class ParticleGroup:
         if key == "z/c":
             return self["z"] / (c_light)
 
+        split = split_statistic_key(key)
+        if split is not None:
+            op, names = split
+            if op == "cov":
+                return self.cov(*names)[0, 1]
+            operator = {
+                "mean": self.avg,
+                "sigma": self.std,
+                "min": self.min,
+                "max": self.max,
+                "ptp": self.ptp,
+                "delta": self.delta,
+            }[op]
+            return operator(names[0])
         if key.startswith("cov_"):
-            subkeys = key.removeprefix("cov_").split("__")
-            assert (
-                len(subkeys) == 2
-            ), f"Too many properties in covariance request: {key}"
-            return self.cov(*subkeys)[0, 1]
-        if key.startswith("delta_"):
-            return self.delta(key[6:])
-        if key.startswith("sigma_"):
-            return self.std(key[6:])
-        if key.startswith("mean_"):
-            return self.avg(key[5:])
-        if key.startswith("min_"):
-            return self.min(key[4:])
-        if key.startswith("max_"):
-            return self.max(key[4:])
-        if key.startswith("ptp_"):
-            return self.ptp(key[4:])
+            raise ValueError(
+                f"Covariance keys need exactly two properties, as in 'cov_x__px': {key}"
+            )
         if key.startswith("twiss_"):
             twiss_key = key[6:]
             plane = twiss_key[-1]

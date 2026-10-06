@@ -1,7 +1,13 @@
-from typing import Tuple
+from __future__ import annotations
+
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any, Tuple
 
 import numpy as np
 from scipy import stats as scipy_stats
+
+if TYPE_CHECKING:
+    from .particles import ParticleGroup
 
 
 def norm_emit_calc(particle_group, planes=["x"]):
@@ -612,3 +618,162 @@ def mean_variance_calc(x: np.ndarray, weight: np.ndarray) -> Tuple[float, float]
 
 def standard_deviation_calc(x: np.ndarray, weight: np.ndarray) -> float:
     return np.sqrt(mean_variance_calc(x, weight)[1])
+
+
+# Must match the operators of the statistics standard. Synchronization
+# is checked test suite.
+_OPERATOR_PREFIXES = (
+    "mean_",
+    "sigma_",
+    "min_",
+    "max_",
+    "ptp_",
+    "delta_",
+)
+
+
+def split_statistic_key(key: str) -> tuple[str, tuple[str, ...]] | None:
+    """
+    Split a statistic key into its operation and array names.
+
+    This is the prefix handling of `ParticleGroup.__getitem__`.
+
+    Parameters
+    ----------
+    key : str
+        A statistic key, e.g. `cov_x__px` or `sigma_x`.
+
+    Returns
+    -------
+    tuple of (str, tuple of str), or None
+        The operation and array names, e.g. `("cov", ("x", "px"))` for
+        `cov_x__px` and `("sigma", ("x",))` for `sigma_x`.
+        Legacy aliases such as `higher_order_energy_spread` give their `sigma`
+        equivalent.
+        None for keys that are not an operation on arrays, including malformed
+        covariance keys such as `cov_x`.
+    """
+    # Legacy keys that are the weighted standard deviation of an array
+    if key == "higher_order_energy_spread":
+        return "sigma", ("higher_order_energy",)
+    if key.startswith("cov_"):
+        names = tuple(key.removeprefix("cov_").split("__"))
+        if len(names) != 2 or not all(names):
+            return None
+        return "cov", names
+    for prefix in _OPERATOR_PREFIXES:
+        if key.startswith(prefix) and len(key) > len(prefix):
+            return prefix.removesuffix("_"), (key.removeprefix(prefix),)
+    return None
+
+
+def particle_statistics(
+    particle_group: ParticleGroup,
+    keys: Iterable[str] | None = None,
+    skip_errors: bool = False,
+) -> dict[str, Any]:
+    """
+    Compute many statistics of a particle group at once.
+
+    Equivalent to `{key: particle_group[key] for key in keys}`, but each array
+    named by a `mean_`, `sigma_`, `min_`, `max_`, `ptp_`, `delta_` or `cov_`
+    key is computed only once, and the weighted means, standard deviations
+    and covariances of all of them come from a single stacked array.
+
+    This approach is much faster than looking keys up one at a time when there
+    are many keys, or when the arrays are expensive to compute (e.g.
+    `higher_order_energy`, `x_bar`, `Jx`).
+
+    Keys that cannot be computed this way fall back to `particle_group[key]`.
+
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+    keys : iterable of str, optional
+        Statistic keys, as accepted by `ParticleGroup[key]`.  Defaults
+        to every scalar statistic of the standard. See
+        `beamphysics.standards.statistics.scalar_statistic_keys`.
+    skip_errors : bool, default=False
+        Leave out keys that raise, rather than raising.
+
+    Returns
+    -------
+    dict of str to Any
+        Values by key, in `keys` order.
+    """
+    if keys is None:
+        from .standards.statistics import scalar_statistic_keys
+
+        keys = scalar_statistic_keys()
+
+    parsed = {key: split_statistic_key(key) for key in keys}
+    names = dict.fromkeys(
+        name for split in parsed.values() if split for name in split[1]
+    )
+
+    n_particle = len(particle_group)
+    arrays: dict[str, np.ndarray] = {}
+    for name in names:
+        try:
+            values = particle_group[name]
+        except Exception:
+            pass
+        else:
+            if np.shape(values) == (n_particle,):
+                arrays[name] = np.asarray(values)
+
+    name_to_index = {name: row for row, name in enumerate(arrays)}
+    weights = np.asarray(particle_group.weight, dtype=float)
+    weight_sum = np.sum(weights)
+    mean = sigma = cov = None
+    if arrays and n_particle and weight_sum:
+        data = np.array(list(arrays.values()), dtype=float)
+        mean = np.average(data, axis=1, weights=weights)
+        # Population normalization, as in `ParticleGroup.std`
+        # (A single array gives a 0-d result)
+        population_cov = np.atleast_2d(np.cov(data, aweights=weights, ddof=0))
+        sigma = np.sqrt(np.diag(population_cov))
+        # Rescaled to the default `ddof=1` of `ParticleGroup.cov`; zero for one particle
+        norm = weight_sum - np.sum(weights**2) / weight_sum
+        with np.errstate(divide="ignore", invalid="ignore"):
+            cov = population_cov * weight_sum / norm
+
+    missing = object()
+
+    def reduce(op: str, names: tuple[str, ...]) -> Any:
+        if not n_particle:
+            return missing
+
+        if not all(name in arrays for name in names):
+            return missing
+        first_name, *_ = names
+        if op == "min":
+            return np.min(arrays[first_name])
+        if op == "max":
+            return np.max(arrays[first_name])
+        if op == "ptp":
+            return np.ptp(arrays[first_name])
+        if mean is None or sigma is None or cov is None:
+            return missing
+
+        idx = [name_to_index[name] for name in names]
+        if op == "mean":
+            return mean[idx[0]]
+        if op == "sigma":
+            return sigma[idx[0]]
+        if op == "delta":
+            return arrays[first_name] - mean[idx[0]]
+        return cov[idx[0], idx[1]]
+
+    stats: dict[str, Any] = {}
+    for key, split in parsed.items():
+        value = missing if split is None else reduce(*split)
+        if value is missing:
+            try:
+                value = particle_group[key]
+            except Exception:
+                if not skip_errors:
+                    raise
+                continue
+        stats[key] = value
+    return stats

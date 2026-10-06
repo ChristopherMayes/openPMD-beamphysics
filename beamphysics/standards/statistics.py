@@ -20,6 +20,7 @@ import numpy as np
 import yaml
 
 from ..particles import ParticleGroup
+from ..statistics import _OPERATOR_PREFIXES
 from ..units import pmd_unit
 
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "load_computed_statistics",
     "get_computed_statistic",
     "export_computed_statistics",
+    "scalar_statistic_keys",
     "ARRAY_KEYS",
     "OPERATORS",
 ]
@@ -111,6 +113,10 @@ OPERATORS = {
         "shape": ["n_particle"],
     },
 }
+
+
+if set(OPERATORS) != set(_OPERATOR_PREFIXES):
+    raise RuntimeError("Internal error: operator prefix list not updated")
 
 # Categories for computed statistics
 COMPUTED_CATEGORIES = [
@@ -746,6 +752,39 @@ def get_all_statistics_by_key() -> dict[str, dict]:
             *computed["statistics"],
         ]
     }
+
+
+# Scalar statistics that need a parameter as a suffix (e.g. `bunching_1e-6`)
+_PARAMETERIZED_STATISTICS = frozenset({"bunching"})
+
+
+@lru_cache
+def scalar_statistic_keys(
+    include_covariance: bool = True, include_twiss: bool = True
+) -> tuple[str, ...]:
+    """
+    Keys of every scalar statistic in the standard and computed statistics.
+
+    Parameters
+    ----------
+    include_covariance : bool, default=True
+        Include the `cov_` statistics (the majority of the keys).
+    include_twiss : bool, default=True
+        Include the `twiss_` statistics.
+
+    Returns
+    -------
+    tuple of str
+        Statistic keys, in the order of `get_all_statistics_by_key`.
+    """
+    return tuple(
+        key
+        for key, stat in get_all_statistics_by_key().items()
+        if stat["shape"] == []
+        and key not in _PARAMETERIZED_STATISTICS
+        and (include_covariance or not key.startswith("cov_"))
+        and (include_twiss or not key.startswith("twiss_"))
+    )
 
 
 def generate_computed_markdown() -> str:

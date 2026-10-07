@@ -32,6 +32,8 @@ from .readers import (
 )
 from .species import charge_of, mass_of
 from .statistics import (
+    StatisticKey,
+    StatisticOperator,
     matched_particles,
     norm_emit_calc,
     normalized_particle_coordinate,
@@ -39,7 +41,6 @@ from .statistics import (
     particle_twiss_dispersion,
     resample_particles,
     slice_statistics,
-    split_statistic_key,
 )
 from .units import c_light, parse_bunching_str, pg_units, pmd_unit
 from .utils import get_rotation_matrix
@@ -914,24 +915,20 @@ class ParticleGroup:
         if key == "z/c":
             return self["z"] / (c_light)
 
-        split = split_statistic_key(key)
+        split = StatisticKey.from_string(key)
         if split is not None:
             op, names = split
-            if op == "cov":
+            if op is StatisticOperator.COV:
                 return self.cov(*names)[0, 1]
             operator = {
-                "mean": self.avg,
-                "sigma": self.std,
-                "min": self.min,
-                "max": self.max,
-                "ptp": self.ptp,
-                "delta": self.delta,
+                StatisticOperator.MEAN: self.avg,
+                StatisticOperator.SIGMA: self.std,
+                StatisticOperator.MIN: self.min,
+                StatisticOperator.MAX: self.max,
+                StatisticOperator.PTP: self.ptp,
+                StatisticOperator.DELTA: self.delta,
             }[op]
             return operator(names[0])
-        if key.startswith("cov_"):
-            raise ValueError(
-                f"Covariance keys need exactly two properties, as in 'cov_x__px': {key}"
-            )
         if key.startswith("twiss_"):
             twiss_key = key[6:]
             plane = twiss_key[-1]

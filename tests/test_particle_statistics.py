@@ -10,9 +10,10 @@ from beamphysics.standards.statistics import (
     scalar_statistic_keys,
 )
 from beamphysics.statistics import (
-    _OPERATOR_PREFIXES,
+    _LEGACY_KEYS,
+    StatisticKey,
+    StatisticOperator,
     particle_statistics,
-    split_statistic_key,
 )
 
 H5FILE = "docs/examples/data/bmad_particles.h5"
@@ -48,24 +49,28 @@ def per_key_statistics(P: ParticleGroup, keys: list[str]) -> dict:
 @pytest.mark.parametrize(
     ("key", "expected"),
     [
-        ("cov_x__px", ("cov", ("x", "px"))),
-        ("cov_z/c__beta_x", ("cov", ("z/c", "beta_x"))),
-        ("sigma_x", ("sigma", ("x",))),
-        ("mean_kinetic_energy", ("mean", ("kinetic_energy",))),
-        ("delta_pz", ("delta", ("pz",))),
-        ("ptp_t", ("ptp", ("t",))),
-        ("higher_order_energy_spread", ("sigma", ("higher_order_energy",))),
+        ("cov_x__px", StatisticKey(StatisticOperator.COV, ("x", "px"))),
+        ("cov_z/c__beta_x", StatisticKey(StatisticOperator.COV, ("z/c", "beta_x"))),
+        ("sigma_x", StatisticKey(StatisticOperator.SIGMA, ("x",))),
+        (
+            "mean_kinetic_energy",
+            StatisticKey(StatisticOperator.MEAN, ("kinetic_energy",)),
+        ),
+        ("delta_pz", StatisticKey(StatisticOperator.DELTA, ("pz",))),
+        ("ptp_t", StatisticKey(StatisticOperator.PTP, ("t",))),
+        ("higher_order_energy_spread", None),
         ("norm_emit_x", None),
         ("x", None),
-        ("max_", None),
-        ("cov_x", None),
-        ("cov_x__px__py", None),
     ],
 )
-def test_split_statistic_key(
-    key: str, expected: tuple[str, tuple[str, ...]] | None
-) -> None:
-    assert split_statistic_key(key) == expected
+def test_statistic_key_from_string(key: str, expected: StatisticKey | None) -> None:
+    assert StatisticKey.from_string(key) == expected
+
+
+@pytest.mark.parametrize("key", ["max_", "cov_x", "cov_x__", "cov_x__px__py"])
+def test_statistic_key_from_string_malformed(key: str) -> None:
+    with pytest.raises(ValueError, match="exactly"):
+        StatisticKey.from_string(key)
 
 
 @pytest.mark.parametrize("n_particle", [0, 1, 2, None])
@@ -85,12 +90,12 @@ def test_particle_statistics_matches_per_key(
     assert list(stats) == list(expected)
     for key, value in expected.items():
         assert type(stats[key]) is type(value), key
-        split = split_statistic_key(key)
+        split = StatisticKey.from_string(_LEGACY_KEYS.get(key, key))
         if split is None or isinstance(value, str):
             np.testing.assert_equal(stats[key], value, err_msg=key)
             continue
         op, names = split
-        if op == "cov" and not np.isfinite(value):
+        if op is StatisticOperator.COV and not np.isfinite(value):
             # Undefined for a single particle: inf or nan, depending on rounding
             assert not np.isfinite(stats[key]), key
             continue
@@ -116,12 +121,75 @@ def test_particle_statistics_skip_errors(particle_group: ParticleGroup) -> None:
 
 
 def test_operator_prefixes_match_standard() -> None:
-    assert set(_OPERATOR_PREFIXES) == set(OPERATORS)
+    assert {op.prefix for op in StatisticOperator if op.n_arrays == 1} == set(OPERATORS)
 
 
-def test_getitem_malformed_covariance(particle_group: ParticleGroup) -> None:
-    with pytest.raises(ValueError, match="exactly two"):
-        particle_group["cov_x__px__py"]
+@pytest.mark.parametrize(
+    ("op", "names", "key"),
+    [
+        (StatisticOperator.MEAN, ("x",), "mean_x"),
+        (StatisticOperator.DELTA, ("z/c",), "delta_z/c"),
+        (StatisticOperator.COV, ("x", "px"), "cov_x__px"),
+    ],
+)
+def test_operator_key_round_trip(
+    op: StatisticOperator, names: tuple[str, ...], key: str
+) -> None:
+    assert op.key(*names) == key
+    assert op.parse(key) == names
+
+
+@pytest.mark.parametrize(
+    ("op", "names"),
+    [
+        (StatisticOperator.MEAN, ()),
+        (StatisticOperator.MEAN, ("x", "px")),
+        (StatisticOperator.MEAN, ("",)),
+        (StatisticOperator.COV, ("x",)),
+        (StatisticOperator.COV, ("x", "")),
+    ],
+)
+def test_operator_key_invalid(op: StatisticOperator, names: tuple[str, ...]) -> None:
+    with pytest.raises(ValueError):
+        op.key(*names)
+
+
+@pytest.mark.parametrize(
+    ("op", "key"),
+    [
+        (StatisticOperator.MEAN, "sigma_x"),
+        (StatisticOperator.COV, "mean_x"),
+    ],
+)
+def test_operator_parse_other_prefix(op: StatisticOperator, key: str) -> None:
+    assert op.parse(key) is None
+
+
+@pytest.mark.parametrize(
+    ("op", "key"),
+    [
+        (StatisticOperator.MEAN, "mean_"),
+        (StatisticOperator.COV, "cov_x"),
+        (StatisticOperator.COV, "cov_x__"),
+        (StatisticOperator.COV, "cov_x__px__py"),
+    ],
+)
+def test_operator_parse_malformed(op: StatisticOperator, key: str) -> None:
+    with pytest.raises(ValueError, match="exactly"):
+        op.parse(key)
+
+
+@pytest.mark.parametrize("key", ["cov_x", "cov_x__px__py", "mean_"])
+def test_getitem_malformed(particle_group: ParticleGroup, key: str) -> None:
+    with pytest.raises(ValueError, match="exactly"):
+        particle_group[key]
+
+
+def test_particle_statistics_malformed(particle_group: ParticleGroup) -> None:
+    with pytest.raises(ValueError, match="exactly"):
+        particle_statistics(particle_group, ["mean_x", "cov_x"])
+    stats = particle_statistics(particle_group, ["mean_x", "cov_x"], skip_errors=True)
+    assert list(stats) == ["mean_x"]
 
 
 @pytest.mark.parametrize("include_covariance", [True, False])
@@ -147,3 +215,14 @@ def test_particle_statistics_default_keys(particle_group: ParticleGroup) -> None
         stats = particle_statistics(particle_group)
     assert list(stats) == list(scalar_statistic_keys())
     assert all(np.ndim(value) == 0 for value in stats.values())
+
+
+def test_particle_statistics_legacy_key(particle_group: ParticleGroup) -> None:
+    stats = particle_statistics(
+        particle_group, ["higher_order_energy_spread", "sigma_higher_order_energy"]
+    )
+    assert stats["higher_order_energy_spread"] == stats["sigma_higher_order_energy"]
+    np.testing.assert_allclose(
+        stats["higher_order_energy_spread"],
+        particle_group.higher_order_energy_spread,
+    )

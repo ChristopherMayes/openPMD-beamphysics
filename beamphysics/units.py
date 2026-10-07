@@ -17,7 +17,7 @@ from typing import Optional, Sequence
 import numpy as np
 import scipy.constants
 
-from .statistics import split_statistic_key
+from .statistics import StatisticKey, StatisticOperator
 
 mec2 = scipy.constants.value("electron mass energy equivalent in MeV") * 1e6
 mpc2 = scipy.constants.value("proton mass energy equivalent in MeV") * 1e6
@@ -1518,10 +1518,10 @@ def pg_units(key: str) -> pmd_unit:
     if key in PARTICLEGROUP_UNITS:
         return PARTICLEGROUP_UNITS[key]
 
-    split = split_statistic_key(key)
+    split = StatisticKey.from_string(key)
     if split is not None:
         op, names = split
-        if op == "cov":
+        if op is StatisticOperator.COV:
             return PARTICLEGROUP_UNITS[names[0]] * PARTICLEGROUP_UNITS[names[1]]
         return pg_units(names[0])
 

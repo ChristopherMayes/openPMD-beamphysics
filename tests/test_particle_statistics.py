@@ -4,17 +4,13 @@ import numpy as np
 import pytest
 
 from beamphysics import ParticleGroup
+from beamphysics.particles import _LEGACY_KEYS
 from beamphysics.standards.statistics import (
     OPERATORS,
     get_all_statistics_by_key,
     scalar_statistic_keys,
 )
-from beamphysics.statistics import (
-    _LEGACY_KEYS,
-    StatisticKey,
-    StatisticOperator,
-    particle_statistics,
-)
+from beamphysics.statistics import StatisticKey, StatisticOperator
 
 H5FILE = "docs/examples/data/bmad_particles.h5"
 EXTRA_KEYS = [
@@ -82,7 +78,7 @@ def test_particle_statistics_matches_per_key(
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         expected = per_key_statistics(P, keys)
-        stats = particle_statistics(P, keys, skip_errors=True)
+        stats = P.statistics(*keys, skip_errors=True)
 
         def magnitude(name: str) -> float:
             return float(np.max(np.abs(P[name]), initial=0))
@@ -106,15 +102,17 @@ def test_particle_statistics_matches_per_key(
 
 def test_particle_statistics_raises(particle_group: ParticleGroup) -> None:
     with pytest.raises(ValueError, match="bunching"):
-        particle_statistics(particle_group, ["mean_x", "bunching"])
+        particle_group.statistics("mean_x", "bunching")
     with pytest.raises(AttributeError):
-        particle_statistics(particle_group, ["mean_bogus"])
+        particle_group.statistics("mean_bogus")
 
 
 def test_particle_statistics_skip_errors(particle_group: ParticleGroup) -> None:
-    stats = particle_statistics(
-        particle_group,
-        ["mean_x", "bunching", "cov_x__bogus", "sigma_x"],
+    stats = particle_group.statistics(
+        "mean_x",
+        "bunching",
+        "cov_x__bogus",
+        "sigma_x",
         skip_errors=True,
     )
     assert list(stats) == ["mean_x", "sigma_x"]
@@ -187,8 +185,8 @@ def test_getitem_malformed(particle_group: ParticleGroup, key: str) -> None:
 
 def test_particle_statistics_malformed(particle_group: ParticleGroup) -> None:
     with pytest.raises(ValueError, match="exactly"):
-        particle_statistics(particle_group, ["mean_x", "cov_x"])
-    stats = particle_statistics(particle_group, ["mean_x", "cov_x"], skip_errors=True)
+        particle_group.statistics("mean_x", "cov_x")
+    stats = particle_group.statistics("mean_x", "cov_x", skip_errors=True)
     assert list(stats) == ["mean_x"]
 
 
@@ -212,14 +210,14 @@ def test_scalar_statistic_keys(include_covariance: bool, include_twiss: bool) ->
 def test_particle_statistics_default_keys(particle_group: ParticleGroup) -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        stats = particle_statistics(particle_group)
+        stats = particle_group.statistics()
     assert list(stats) == list(scalar_statistic_keys())
     assert all(np.ndim(value) == 0 for value in stats.values())
 
 
 def test_particle_statistics_legacy_key(particle_group: ParticleGroup) -> None:
-    stats = particle_statistics(
-        particle_group, ["higher_order_energy_spread", "sigma_higher_order_energy"]
+    stats = particle_group.statistics(
+        "higher_order_energy_spread", "sigma_higher_order_energy"
     )
     assert stats["higher_order_energy_spread"] == stats["sigma_higher_order_energy"]
     np.testing.assert_allclose(

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 from enum import Enum
-from typing import TYPE_CHECKING, Any, NamedTuple, Tuple
+from typing import TYPE_CHECKING, NamedTuple, Tuple
 
 import numpy as np
 from scipy import stats as scipy_stats
 
 if TYPE_CHECKING:
-    from .particles import ParticleGroup
+    pass
 
 
 def norm_emit_calc(particle_group, planes=["x"]):
@@ -762,109 +761,3 @@ class StatisticKey(NamedTuple):
             if names is not None:
                 return cls(op, names)
         return None
-
-
-# Legacy keys of `ParticleGroup` that are statistics of an array
-_LEGACY_KEYS = {"higher_order_energy_spread": "sigma_higher_order_energy"}
-
-
-def particle_statistics(
-    particle_group: ParticleGroup,
-    keys: Iterable[str] | None = None,
-    skip_errors: bool = False,
-) -> dict[str, Any]:
-    """
-    Compute many statistics of a particle group at once.
-
-    Equivalent to `{key: particle_group[key] for key in keys}`, but each array
-    named by a `mean_`, `sigma_`, `min_`, `max_`, `ptp_`, `delta_` or `cov_`
-    key is computed only once, and the weighted means, standard deviations
-    and covariances of all of them come from a single stacked array.
-
-    This approach is much faster than looking keys up one at a time when there
-    are many keys, or when the arrays are expensive to compute (e.g.
-    `higher_order_energy`, `x_bar`, `Jx`).
-
-    Keys that cannot be computed this way fall back to `particle_group[key]`.
-
-    Parameters
-    ----------
-    particle_group : ParticleGroup
-    keys : iterable of str, optional
-        Statistic keys, as accepted by `ParticleGroup[key]`.  Defaults
-        to every scalar statistic of the standard. See
-        `beamphysics.standards.statistics.scalar_statistic_keys`.
-    skip_errors : bool, default=False
-        Leave out keys that raise, rather than raising.
-
-    Returns
-    -------
-    dict of str to Any
-        Values by key, in `keys` order.
-    """
-    if keys is None:
-        from .standards.statistics import scalar_statistic_keys
-
-        keys = scalar_statistic_keys()
-
-    def try_split(key: str) -> StatisticKey | None:
-        # Malformed keys raise from the `particle_group[key]` fallback instead,
-        # subject to `skip_errors`
-        try:
-            return StatisticKey.from_string(_LEGACY_KEYS.get(key, key))
-        except ValueError:
-            return None
-
-    parsed = {key: try_split(key) for key in keys}
-    names = dict.fromkeys(
-        name for split in parsed.values() if split for name in split.names
-    )
-
-    n_particle = len(particle_group)
-    arrays: dict[str, np.ndarray] = {}
-    for name in names:
-        try:
-            values = particle_group[name]
-        except Exception:
-            pass
-        else:
-            if np.shape(values) == (n_particle,):
-                arrays[name] = np.asarray(values)
-
-    weights = np.asarray(particle_group.weight, dtype=float)
-    bulk: dict[str, Any] = {}
-    if arrays and n_particle and np.sum(weights):
-        row = {name: i for i, name in enumerate(arrays)}
-        data = np.array(list(arrays.values()), dtype=float)
-        # The same formulas as `ParticleGroup.avg`, `.std` and `.cov`
-        mean = np.average(data, axis=1, weights=weights)
-        sigma = np.sqrt(
-            np.average((data - mean[:, None]) ** 2, axis=1, weights=weights)
-        )
-        cov = np.cov(data, aweights=weights)
-        ops = {
-            StatisticOperator.MEAN: lambda a: mean[row[a]],
-            StatisticOperator.SIGMA: lambda a: sigma[row[a]],
-            StatisticOperator.DELTA: lambda a: arrays[a] - mean[row[a]],
-            StatisticOperator.MIN: lambda a: np.min(arrays[a]),
-            StatisticOperator.MAX: lambda a: np.max(arrays[a]),
-            StatisticOperator.PTP: lambda a: np.ptp(arrays[a]),
-            StatisticOperator.COV: lambda a, b: cov[row[a], row[b]],
-        }
-        bulk = {
-            key: ops[split.op](*split.names)
-            for key, split in parsed.items()
-            if split and all(name in arrays for name in split.names)
-        }
-
-    stats: dict[str, Any] = {}
-    for key in parsed:
-        if key in bulk:
-            stats[key] = bulk[key]
-            continue
-        try:
-            stats[key] = particle_group[key]
-        except Exception:
-            if not skip_errors:
-                raise
-    return stats

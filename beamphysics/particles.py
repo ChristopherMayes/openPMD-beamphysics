@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import os
 import pathlib
+from collections.abc import Sequence
 from copy import deepcopy
-from typing import Any, Union, Optional, Sequence
+from typing import Any
 
 import numpy as np
 from h5py import File, Group
@@ -1259,11 +1260,11 @@ class ParticleGroup:
         smear: bool = False,
         wrap: bool = False,
         z0: float = 0.0,
-        slices: Optional[list[int]] = None,
+        slices: list[int] | None = None,
         equal_weights: bool = False,
         cutoff: float = 0.0,
-        n_particle: Optional[int] = None,
-        rng: Optional[int | np.random.Generator] = None,
+        n_particle: int | None = None,
+        rng: int | np.random.Generator | None = None,
     ) -> ParticleGroup:
         """
         Create a ParticleGroup from a Genesis4 `.par` HDF5 file.
@@ -1954,7 +1955,7 @@ class ParticleGroup:
         """
         return split_particles(self, n_chunks=n_chunks, key=key)
 
-    def fractional_split(self, fractions: Union[float, int, list], key: str):
+    def fractional_split(self, fractions: float | list, key: str):
         """
         Split particles based on a given array key and a list of specified fractions or a single fraction.
 
@@ -2122,7 +2123,7 @@ class ParticleGroup:
     # Transformations
     # ---------------
     def linear_point_transform(
-        self, mat3: Union[np.ndarray, Sequence[Sequence[float]]]
+        self, mat3: np.ndarray | Sequence[Sequence[float]]
     ) -> None:
         """
         Applies a linear transformation to the particle's spatial coordinates and

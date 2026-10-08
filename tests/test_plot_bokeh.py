@@ -367,6 +367,7 @@ def test_marginal_plot_responsive_grid(stats_location):
     assert grid.cols == ["minmax(0, 75fr)", "minmax(0, 25fr)"]
     assert grid.rows == ["minmax(0, 25fr)", "minmax(0, 75fr)"]
     assert grid.aspect_ratio is None
+    assert grid.styles["aspect-ratio"] == "600 / 600"
     for child, _row, _col in grid.children:
         assert child.sizing_mode == "stretch_both"
         assert child.aspect_ratio is None

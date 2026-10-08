@@ -10,7 +10,7 @@ from beamphysics.standards.statistics import (
     get_all_statistics_by_key,
     scalar_statistic_keys,
 )
-from beamphysics.statistics import StatisticKey, StatisticOperator
+from beamphysics.statistics import StatisticKey, StatisticOperator, TwissParameter
 
 H5FILE = "docs/examples/data/bmad_particles.h5"
 EXTRA_KEYS = [
@@ -224,3 +224,51 @@ def test_particle_statistics_legacy_key(particle_group: ParticleGroup) -> None:
         stats["higher_order_energy_spread"],
         particle_group.higher_order_energy_spread,
     )
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("twiss_beta_x", (TwissParameter.beta, "x")),
+        ("twiss_norm_emit_y", (TwissParameter.norm_emit, "y")),
+        ("twiss_bogus_x", None),
+        ("twiss_x", None),
+        ("twiss_beta_z", None),
+        ("sigma_x", None),
+    ],
+)
+def test_twiss_parameter_parse(
+    key: str, expected: tuple[TwissParameter, str] | None
+) -> None:
+    assert TwissParameter.parse(key) == expected
+    if expected is not None:
+        param, plane = expected
+        assert param.key(plane) == key
+
+
+def test_statistics_twiss_once_per_plane(
+    particle_group: ParticleGroup, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = []
+    twiss = ParticleGroup.twiss
+
+    def counting_twiss(self, plane="x", **kwargs):
+        calls.append(plane)
+        return twiss(self, plane, **kwargs)
+
+    monkeypatch.setattr(ParticleGroup, "twiss", counting_twiss)
+    stats = particle_group.statistics(
+        "twiss_beta_x", "twiss_alpha_x", "twiss_eta_y", "mean_x"
+    )
+    assert calls == ["x", "y"]
+    expected = {**twiss(particle_group, "x"), **twiss(particle_group, "y")}
+    assert stats["twiss_beta_x"] == expected["beta_x"]
+    assert stats["twiss_alpha_x"] == expected["alpha_x"]
+    assert stats["twiss_eta_y"] == expected["eta_y"]
+    assert list(stats) == ["twiss_beta_x", "twiss_alpha_x", "twiss_eta_y", "mean_x"]
+
+
+def test_statistics_twiss_unknown_key(particle_group: ParticleGroup) -> None:
+    with pytest.raises(KeyError):
+        particle_group.statistics("twiss_bogus_x")
+    assert particle_group.statistics("twiss_bogus_x", skip_errors=True) == {}

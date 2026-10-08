@@ -132,6 +132,20 @@ def test_slice_statistics_twiss_keys_filled():
     assert np.all(np.isfinite(sdat["twiss_beta_x"]))
 
 
+def test_slice_statistics_matches_per_slice():
+    """slice_statistics must give exactly the per-slice bracket and twiss values."""
+    from beamphysics.statistics import slice_statistics
+
+    keys = ["mean_z", "sigma_x", "twiss_x"]
+    sdat = slice_statistics(P, keys=keys, n_slice=5, slice_key="z")
+    for i, pg in enumerate(P.split(5, key="z")):
+        expected = {"mean_z": pg["mean_z"], "sigma_x": pg["sigma_x"]}
+        expected.update({f"twiss_{k}": v for k, v in pg.twiss("x").items()})
+        assert set(sdat) == set(expected)
+        for key, value in expected.items():
+            assert sdat[key][i] == value, key
+
+
 def test_eq_checks_species_and_does_not_assign_ids():
     """Comparing two groups must not assign ids as a side effect, and
     groups of different species must not compare equal."""

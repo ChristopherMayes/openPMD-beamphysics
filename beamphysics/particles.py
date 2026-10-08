@@ -34,6 +34,7 @@ from .species import charge_of, mass_of
 from .statistics import (
     StatisticKey,
     StatisticOperator,
+    TwissParameter,
     matched_particles,
     norm_emit_calc,
     normalized_particle_coordinate,
@@ -906,9 +907,9 @@ class ParticleGroup:
 
         Equivalent to `{key: self[key] for key in keys}`, but each array
         named by a `mean_`, `sigma_`, `min_`, `max_`, `ptp_`, `delta_` or
-        `cov_` key is computed only once, and the weighted means, standard
+        `cov_` key is computed only once, the weighted means, standard
         deviations and covariances of all of them come from a single stacked
-        array.
+        array, and `twiss_` keys share one `twiss` calculation per plane.
 
         This is much faster than looking keys up one at a time when there
         are many keys, or when the arrays are expensive to compute (e.g.
@@ -984,6 +985,23 @@ class ParticleGroup:
                 for key, split in parsed.items()
                 if split and all(name in arrays for name in split.names)
             }
+
+        twiss_plane_to_params: dict[str, list[TwissParameter]] = {}
+        for key in parsed:
+            res = TwissParameter.parse(key)
+            if res is not None:
+                twiss_param, plane = res
+                twiss_plane_to_params.setdefault(plane, []).append(twiss_param)
+
+        for plane, twiss_params in twiss_plane_to_params.items():
+            try:
+                result = self.twiss(plane)
+            except Exception:
+                if not skip_errors:
+                    raise
+            else:
+                for param in twiss_params:
+                    bulk[param.key(plane)] = result[f"{param.value}_{plane}"]
 
         stats: dict[str, Any] = {}
         for key in parsed:

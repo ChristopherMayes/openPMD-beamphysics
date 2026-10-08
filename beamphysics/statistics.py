@@ -447,7 +447,7 @@ def slice_statistics(particle_group, keys=["mean_z"], n_slice=40, slice_key=None
     twiss_planes = set()
     twiss = {}
 
-    normal_keys = set()
+    normal_keys = []
 
     for k in keys:
         if k.startswith("twiss"):
@@ -460,14 +460,15 @@ def slice_statistics(particle_group, keys=["mean_z"], n_slice=40, slice_key=None
                 twiss_planes.add(plane)
         else:
             sdat[k] = np.empty(n_slice)
-            normal_keys.add(k)
+            normal_keys.append(k)
 
     twiss_plane = "".join(twiss_planes)  # flatten
     assert twiss_plane in ("x", "y", "xy", "yx", "")
 
     for i, pg in enumerate(particle_group.split(n_slice, key=slice_key)):
-        for k in normal_keys:
-            sdat[k][i] = pg[k]
+        if normal_keys:
+            for k, value in pg.statistics(*normal_keys).items():
+                sdat[k][i] = value
 
         # Handle twiss
         if twiss_plane:
@@ -713,6 +714,52 @@ class StatisticOperator(str, Enum):
         names = tuple(rest.split("__")) if self.n_arrays > 1 else (rest,)
         self._check_names(names, given=key)
         return names
+
+
+class TwissParameter(str, Enum):
+    """
+    A Twiss or dispersion parameter in a statistic key, such as `beta` in `twiss_beta_x`.
+
+    These are the keys of `particle_twiss_dispersion` for a plane, in order.
+    """
+
+    alpha = "alpha"
+    beta = "beta"
+    gamma = "gamma"
+    emit = "emit"
+    norm_emit = "norm_emit"
+    eta = "eta"
+    etap = "etap"
+
+    def key(self, plane: str) -> str:
+        """The statistic key for this parameter in a plane, e.g. `twiss_beta_x`."""
+        return f"twiss_{self.value}_{plane}"
+
+    @classmethod
+    def parse(cls, key: str) -> tuple[TwissParameter, str] | None:
+        """
+        Split a Twiss statistic key into its parameter and plane.
+
+        The inverse of `key`.
+
+        Parameters
+        ----------
+        key : str
+            A statistic key, e.g. `twiss_beta_x`.
+
+        Returns
+        -------
+        tuple of (TwissParameter, str), or None
+            The parameter and plane (`x` or `y`), or None if `key` is not a
+            Twiss statistic key.
+        """
+        name, _, plane = key.removeprefix("twiss_").rpartition("_")
+        if not key.startswith("twiss_") or plane not in ("x", "y"):
+            return None
+        try:
+            return cls(name), plane
+        except ValueError:
+            return None
 
 
 class StatisticKey(NamedTuple):

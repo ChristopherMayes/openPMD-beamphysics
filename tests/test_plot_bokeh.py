@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import numpy as np
 import pytest
 
@@ -17,14 +16,13 @@ except ImportError:
     raise
 
 
-from beamphysics import ParticleGroup, set_default_backend
-from beamphysics.particles import single_particle
-from beamphysics.plot_dispatch import get_backend, get_default_backend, _default_backend
-from beamphysics.wavefront.wavefront import Wavefront
-
 from conftest import test_artifacts
 
 import beamphysics.plot_bokeh as _plot_bokeh_mod
+from beamphysics import ParticleGroup, set_default_backend
+from beamphysics.particles import single_particle
+from beamphysics.plot_dispatch import _default_backend, get_backend, get_default_backend
+from beamphysics.wavefront.wavefront import Wavefront
 
 P = ParticleGroup("docs/examples/data/bmad_particles.h5")
 
@@ -337,3 +335,90 @@ def test_wavefront_plot_photon_energy_spectrum():
     assert isinstance(result, LayoutDOM)
     # Artifact saved automatically by _bokeh_show_to_save fixture
     # _save_bokeh(result,"wavefront_plot_photon_energy_spectrum")
+
+
+# ---------------------------------------------------------------------------
+# Marginal grid sizing
+# ---------------------------------------------------------------------------
+
+
+def _grid_of(layout):
+    from bokeh.models import GridPlot
+
+    if isinstance(layout, GridPlot):
+        return layout
+    return next(child for child in layout.children if isinstance(child, GridPlot))
+
+
+@pytest.mark.parametrize("stats_location", ["top-right", "bottom"])
+def test_marginal_plot_responsive_grid(stats_location):
+    be = get_backend("bokeh")
+    layout = be.marginal_plot(
+        P,
+        "x",
+        "y",
+        sizing_mode="stretch_both",
+        marginal_fraction=0.25,
+        stats_location=stats_location,
+        show=False,
+    )
+    grid = _grid_of(layout)
+    assert grid.sizing_mode == "stretch_both"
+    assert grid.cols == ["minmax(0, 75fr)", "minmax(0, 25fr)"]
+    assert grid.rows == ["minmax(0, 25fr)", "minmax(0, 75fr)"]
+    assert grid.aspect_ratio is None
+    for child, _row, _col in grid.children:
+        assert child.sizing_mode == "stretch_both"
+        assert child.aspect_ratio is None
+
+
+def test_marginal_plot_scale_both_keeps_aspect():
+    be = get_backend("bokeh")
+    layout = be.marginal_plot(
+        P, "x", "y", sizing_mode="scale_both", width=800, height=400, show=False
+    )
+    assert _grid_of(layout).aspect_ratio == 2.0
+
+
+def test_marginal_plot_fixed_sizes():
+    be = get_backend("bokeh")
+    layout = be.marginal_plot(
+        P, "x", "y", width=600, height=300, marginal_fraction=0.25, show=False
+    )
+    grid = _grid_of(layout)
+    assert grid.sizing_mode is None
+    assert grid.rows is None and grid.cols is None
+    sizes = {
+        (row, col): (child.width, child.height) for child, row, col in grid.children
+    }
+    assert sizes == {
+        (0, 0): (450, 75),
+        (0, 1): (150, 75),
+        (1, 0): (450, 225),
+        (1, 1): (150, 225),
+    }
+    assert all(child.sizing_mode is None for child, _, _ in grid.children)
+
+
+def test_marginal_plot_stats_div_scrolls():
+    from bokeh.models import Div
+
+    be = get_backend("bokeh")
+    layout = be.marginal_plot(P, "x", "y", text="a<br>" * 50, show=False)
+    stats = next(
+        child for child, _, _ in _grid_of(layout).children if isinstance(child, Div)
+    )
+    assert stats.styles["overflow"] == "auto"
+
+
+def test_plot_2d_density_with_marginals_responsive_grid():
+    be = get_backend("bokeh")
+    layout = be.plot_2d_density_with_marginals(
+        np.random.rand(20, 20),
+        sizing_mode="stretch_both",
+        marginal_fraction=0.2,
+        show=False,
+    )
+    assert layout.cols == ["minmax(0, 80fr)", "minmax(0, 20fr)"]
+    assert layout.rows == ["minmax(0, 20fr)", "minmax(0, 80fr)"]
+    assert all(child.sizing_mode == "stretch_both" for child, _, _ in layout.children)

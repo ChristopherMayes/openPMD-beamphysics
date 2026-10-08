@@ -6,11 +6,13 @@ from typing import Literal
 
 import numpy as np
 from bokeh.core.enums import SizingModeType
-from bokeh.layouts import column, gridplot, row
+from bokeh.io import show as _bokeh_show
+from bokeh.layouts import column, gridplot
 from bokeh.models import (
     ColorBar,  # pyright: ignore[reportPrivateImportUsage]
     ColumnDataSource,  # pyright: ignore[reportPrivateImportUsage]
     Div,  # pyright: ignore[reportPrivateImportUsage]
+    GridPlot,  # pyright: ignore[reportPrivateImportUsage]
     HoverTool,  # pyright: ignore[reportPrivateImportUsage]
     LayoutDOM,  # pyright: ignore[reportPrivateImportUsage]
     LinearAxis,  # pyright: ignore[reportPrivateImportUsage]
@@ -18,7 +20,6 @@ from bokeh.models import (
     Range1d,  # pyright: ignore[reportPrivateImportUsage]
     Spacer,  # pyright: ignore[reportPrivateImportUsage]
 )
-from bokeh.io import show as _bokeh_show
 from bokeh.palettes import Palette, Viridis256
 from bokeh.plotting import figure
 
@@ -289,6 +290,78 @@ def density_plot(
     return _maybe_show(fig, show)
 
 
+def _marginal_grid(
+    joint: figure,
+    top: figure,
+    right: figure,
+    corner: LayoutDOM,
+    *,
+    width: int,
+    height: int,
+    marginal_fraction: float,
+    sizing_mode: SizingModeType | None,
+) -> GridPlot:
+    """
+    Assemble joint/marginal figures into a 2x2 ``GridPlot``.
+
+    Parameters
+    ----------
+    joint, top, right : figure
+        Main figure and the x/y marginal figures.
+    corner : LayoutDOM
+        Element for the unused top-right cell (a ``Spacer`` or a stats ``Div``).
+    width, height : int
+        Overall size in pixels when `sizing_mode` is ``None``.
+    marginal_fraction : float
+        Fraction of width/height given to the marginal figures.
+    sizing_mode : str or None
+        ``None`` yields a fixed-size grid. Otherwise the grid is responsive:
+        children fill proportional CSS grid tracks so the marginals keep
+        `marginal_fraction` of the layout at any container size. ``scale_*``
+        modes also impose the `width`/`height` aspect ratio on the whole grid.
+    """
+    main_w = int(width * (1.0 - marginal_fraction))
+    main_h = int(height * (1.0 - marginal_fraction))
+    marg_w = int(width * marginal_fraction)
+    marg_h = int(height * marginal_fraction)
+
+    for child, (w, h) in (
+        (joint, (main_w, main_h)),
+        (top, (main_w, marg_h)),
+        (right, (marg_w, main_h)),
+        (corner, (marg_w, marg_h)),
+    ):
+        child.width = w
+        child.height = h
+
+    if sizing_mode is not None:
+        for child in (joint, top, right, corner):
+            child.sizing_mode = "stretch_both"
+
+    grid = gridplot(
+        [
+            [top, corner],
+            [joint, right],
+        ],
+        merge_tools=True,
+        toolbar_location="left",
+    )
+
+    if sizing_mode is not None:
+        # Proportions live on the grid tracks, not the children. minmax(0, ...)
+        # drops the implicit min-content floor so neither a plot canvas nor an
+        # oversized stats Div can widen a track.
+        main = round((1.0 - marginal_fraction) * 100)
+        marg = 100 - main
+        grid.cols = [f"minmax(0, {main}fr)", f"minmax(0, {marg}fr)"]
+        grid.rows = [f"minmax(0, {marg}fr)", f"minmax(0, {main}fr)"]
+        grid.sizing_mode = sizing_mode
+        if sizing_mode.startswith("scale_"):
+            grid.aspect_ratio = width / height
+
+    return grid
+
+
 def marginal_plot(
     particle_group,
     key1: str = "t",
@@ -339,13 +412,16 @@ def marginal_plot(
     ellipse: bool, default = True
         If True, plot an ellipse representing the 2x2 sigma matrix.
     sizing_mode: str, default = None
-        Bokeh sizing mode for responsive layout.  When set (e.g.
-        ``"stretch_width"``), the layout uses ``row``/``column`` instead of
-        ``gridplot`` so that the marginal histograms scale correctly with the
-        main figure.
-        By default (None), a fixed-size ``GridPlot`` is returned.
-    marginal_fraction : float, default = 0.2
+        Bokeh sizing mode for responsive layout. When set, the returned
+        ``GridPlot`` uses proportional CSS grid tracks, so the marginal
+        histograms keep `marginal_fraction` of the layout at any container
+        size. ``scale_*`` modes additionally preserve the `width`/`height`
+        aspect ratio. By default (None), a fixed-size ``GridPlot`` is returned.
+    marginal_fraction : float, default = 0.33
         Fraction of the plot to use for the marginal plots.
+    stats_location : {"top-right", "bottom"}, default = "top-right"
+        Where to show the stats text: in the unused grid cell (scrolls if the
+        text does not fit) or in a strip below the plot.
     palette : bokeh.palettes.Palette, default=Viridis256
         Color map.
     text : str or None, optional
@@ -387,16 +463,8 @@ def marginal_plot(
     labelx = mathlabel(key1, units=pdata.x.full_unit, tex=False)
     labely = mathlabel(key2, units=pdata.y.full_unit, tex=False)
 
-    # Layout Sizes
-    main_w = int(width * (1.0 - marginal_fraction))
-    main_h = int(height * (1.0 - marginal_fraction))
-    marg_w = int(width * marginal_fraction)
-    marg_h = int(height * marginal_fraction)
-
     # Main Joint Figure
     fig_joint = figure(
-        width=main_w,
-        height=main_h,
         x_axis_label=labelx,
         y_axis_label=labely,
         x_range=pdata.x.lim,
@@ -472,8 +540,6 @@ def marginal_plot(
 
     # Top (X projection)
     p_top = figure(
-        width=main_w,
-        height=marg_h,
         x_range=fig_joint.x_range,
         y_axis_location="left",
         min_border=0,
@@ -495,8 +561,6 @@ def marginal_plot(
 
     # Right (Y projection)
     p_right = figure(
-        width=marg_w,
-        height=main_h,
         y_range=fig_joint.y_range,
         x_axis_location="below",
         min_border=0,
@@ -547,14 +611,18 @@ def marginal_plot(
     if custom_text or annotations:
         if stats_location == "top-right":
             content = custom_text or _annotations_to_html(annotations)
+            # Flex + margin:auto centers the text when it fits but keeps it
+            # scrollable (rather than clipped at the top) when it does not.
             stats_div = Div(
                 text=f"""
-                <div style="font-size:{popup_font_size}; line-height:1.6; {popup_css}">
-                  {content}
+                <div style="display:flex; width:100%; height:100%">
+                  <div style="margin:auto; font-size:{popup_font_size};
+                              line-height:1.6; {popup_css}">
+                    {content}
+                  </div>
                 </div>
                 """,
-                width=marg_w,
-                height=marg_h,
+                styles={"overflow": "auto"},
             )
         else:
             # "bottom" - horizontal stats bar below the plot
@@ -568,39 +636,27 @@ def marginal_plot(
                 """,
             )
 
-    # Assemble layout
     top_right: LayoutDOM = (
         stats_div
         if stats_div is not None and stats_location == "top-right"
-        else Spacer(width=marg_w, height=marg_h)
+        else Spacer()
+    )
+    plot_layout = _marginal_grid(
+        fig_joint,
+        p_top,
+        p_right,
+        top_right,
+        width=width,
+        height=height,
+        marginal_fraction=marginal_fraction,
+        sizing_mode=sizing_mode,
     )
 
-    if sizing_mode is not None:
-        fig_joint.sizing_mode = "scale_both"
-        fig_joint.aspect_ratio = main_h / main_w
-        p_top.sizing_mode = "stretch_width"
-        p_right.sizing_mode = "stretch_height"
-
-        left_col = column(p_top, fig_joint, sizing_mode=sizing_mode)
-        right_col = column(
-            top_right,
-            p_right,
-            sizing_mode="stretch_height",
-            width=marg_w,
-        )
-        plot_layout = row(left_col, right_col, sizing_mode=sizing_mode)
-    else:
-        plot_layout = gridplot(
-            [
-                [p_top, top_right],
-                [fig_joint, p_right],
-            ],
-            merge_tools=True,
-            toolbar_location="left",
-        )
-
+    layout: LayoutDOM
     if stats_div is not None and stats_location == "bottom":
-        layout = column(plot_layout, stats_div)
+        if sizing_mode is not None:
+            stats_div.sizing_mode = "stretch_width"
+        layout = column(plot_layout, stats_div, sizing_mode=sizing_mode)
     else:
         layout = plot_layout
 
@@ -1265,12 +1321,6 @@ def plot_2d_density_with_marginals(
     x_label = mathjax_fix(f"{x_name} ({x_units})" if x_units else x_name)
     y_label = mathjax_fix(f"{y_name} ({y_units})" if y_units else y_name)
 
-    # Layout sizes
-    main_w = int(width * (1.0 - marginal_fraction))
-    main_h = int(height * (1.0 - marginal_fraction))
-    marg_w = int(width * marginal_fraction)
-    marg_h = int(height * marginal_fraction)
-
     # Color mapper
     if log_scale_z:
         low = max(vmin, vmax * 1e-6)
@@ -1283,8 +1333,6 @@ def plot_2d_density_with_marginals(
     y_range = ylim or (ymin - dy / 2, ymax + dy / 2)
 
     fig_main = figure(
-        width=main_w,
-        height=main_h,
         x_axis_label=x_label,
         y_axis_label=y_label,
         x_range=x_range,
@@ -1312,8 +1360,6 @@ def plot_2d_density_with_marginals(
 
     # Top marginal (X projection)
     p_top = figure(
-        width=main_w,
-        height=marg_h,
         x_range=fig_main.x_range,
         y_axis_type="log" if log_scale_marginals else "auto",
         min_border=0,
@@ -1334,8 +1380,6 @@ def plot_2d_density_with_marginals(
 
     # Right marginal (Y projection)
     p_right = figure(
-        width=marg_w,
-        height=main_h,
         y_range=fig_main.y_range,
         x_axis_type="log" if log_scale_marginals else "auto",
         min_border=0,
@@ -1357,26 +1401,15 @@ def plot_2d_density_with_marginals(
     for p in (fig_main, p_top, p_right):
         p.toolbar.logo = None
 
-    top_right = Spacer(width=marg_w, height=marg_h)
-
-    if sizing_mode is not None:
-        fig_main.sizing_mode = "scale_both"
-        # fig_main.aspect_ratio = main_h / main_w
-        p_top.sizing_mode = "stretch_width"
-        p_right.sizing_mode = "stretch_height"
-        left_col = column(p_top, fig_main, sizing_mode=sizing_mode)
-        right_col = column(
-            top_right, p_right, sizing_mode="stretch_height", width=marg_w
-        )
-        layout = row(left_col, right_col, sizing_mode=sizing_mode)
-    else:
-        layout = gridplot(
-            [
-                [p_top, top_right],
-                [fig_main, p_right],
-            ],
-            merge_tools=True,
-            toolbar_location="left",
-        )
+    layout = _marginal_grid(
+        fig_main,
+        p_top,
+        p_right,
+        Spacer(),
+        width=width,
+        height=height,
+        marginal_fraction=marginal_fraction,
+        sizing_mode=sizing_mode,
+    )
 
     return _maybe_show(layout, show)

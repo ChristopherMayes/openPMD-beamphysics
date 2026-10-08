@@ -318,7 +318,9 @@ def _marginal_grid(
         ``None`` yields a fixed-size grid. Otherwise the grid is responsive:
         children fill proportional CSS grid tracks so the marginals keep
         `marginal_fraction` of the layout at any container size. ``scale_*``
-        modes also impose the `width`/`height` aspect ratio on the whole grid.
+        modes impose the `width`/`height` aspect ratio on the whole grid;
+        ``stretch_both`` fills a container of definite height and falls back
+        to that aspect ratio in an auto-height block container.
     """
     main_w = int(width * (1.0 - marginal_fraction))
     main_h = int(height * (1.0 - marginal_fraction))
@@ -358,6 +360,14 @@ def _marginal_grid(
         grid.sizing_mode = sizing_mode
         if sizing_mode.startswith("scale_"):
             grid.aspect_ratio = width / height
+        elif sizing_mode == "stretch_both":
+            # Fill the container when it has a definite height. In a plain
+            # block container with auto height, `height: 100%` resolves to
+            # auto and this inline aspect-ratio derives the height from the
+            # width instead of letting the fr rows collapse to the toolbar's
+            # height. It cannot override a flex parent that stretches the
+            # grid; use scale_* for an aspect that must always hold.
+            grid.styles = {"aspect-ratio": f"{width} / {height}", **grid.styles}
 
     return grid
 

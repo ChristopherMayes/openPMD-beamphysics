@@ -970,7 +970,18 @@ class ParticleGroup:
             sigma = np.sqrt(
                 np.average((data - mean[:, None]) ** 2, axis=1, weights=weights)
             )
-            cov = np.cov(data, aweights=weights)
+            cov_names = {
+                name
+                for split in parsed.values()
+                if split and split.op is StatisticOperator.COV
+                for name in split.names
+                if name in arrays
+            }
+            if cov_names:
+                cov_row = {name: i for i, name in enumerate(cov_names)}
+                cov = np.atleast_2d(
+                    np.cov(data[[row[name] for name in cov_names]], aweights=weights)
+                )
             ops = {
                 StatisticOperator.MEAN: lambda a: mean[row[a]],
                 StatisticOperator.SIGMA: lambda a: sigma[row[a]],
@@ -978,7 +989,7 @@ class ParticleGroup:
                 StatisticOperator.MIN: lambda a: np.min(arrays[a]),
                 StatisticOperator.MAX: lambda a: np.max(arrays[a]),
                 StatisticOperator.PTP: lambda a: np.ptp(arrays[a]),
-                StatisticOperator.COV: lambda a, b: cov[row[a], row[b]],
+                StatisticOperator.COV: lambda a, b: cov[cov_row[a], cov_row[b]],
             }
             bulk = {
                 key: ops[split.op](*split.names)

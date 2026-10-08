@@ -272,3 +272,28 @@ def test_statistics_twiss_unknown_key(particle_group: ParticleGroup) -> None:
     with pytest.raises(KeyError):
         particle_group.statistics("twiss_bogus_x")
     assert particle_group.statistics("twiss_bogus_x", skip_errors=True) == {}
+
+
+def test_statistics_single_particle_no_cov_warnings(
+    particle_group: ParticleGroup,
+) -> None:
+    single = particle_group[:1]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        stats = single.statistics("mean_x", "sigma_x", "mean_z")
+    assert stats == {key: single[key] for key in stats}
+
+
+@pytest.mark.parametrize(
+    "keys",
+    [
+        pytest.param(("cov_x__x",), id="single"),
+        pytest.param(("cov_x__px", "mean_y", "cov_px__z"), id="mixed"),
+    ],
+)
+def test_statistics_cov_subset(
+    particle_group: ParticleGroup, keys: tuple[str, ...]
+) -> None:
+    stats = particle_group.statistics(*keys)
+    for key in keys:
+        assert np.isclose(stats[key], particle_group[key])

@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, NamedTuple, Tuple
+from typing import NamedTuple
 
 import numpy as np
 from scipy import stats as scipy_stats
-
-if TYPE_CHECKING:
-    pass
 
 
 def norm_emit_calc(particle_group, planes=["x"]):
@@ -455,7 +452,7 @@ def slice_statistics(particle_group, keys=["mean_z"], n_slice=40, slice_key=None
                 twiss_planes.add("x")
                 twiss_planes.add("y")
             else:
-                plane = k[-1]  #
+                plane = k[-1]
                 assert plane in ("x", "y")
                 twiss_planes.add(plane)
         else:
@@ -606,7 +603,7 @@ def mean_calc(x: np.ndarray, weight: np.ndarray) -> float:
     return np.sum(x * P)
 
 
-def mean_variance_calc(x: np.ndarray, weight: np.ndarray) -> Tuple[float, float]:
+def mean_variance_calc(x: np.ndarray, weight: np.ndarray) -> tuple[float, float]:
     """
     Calculate the weighted mean and variance.
 

@@ -1,7 +1,9 @@
 """ """
 
+from __future__ import annotations
+
 from copy import copy
-from typing import Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -10,52 +12,41 @@ from matplotlib.axes import Axes
 from matplotlib.colors import LogNorm, Normalize, TwoSlopeNorm
 from matplotlib.figure import Figure
 from matplotlib.gridspec import GridSpec
+from matplotlib.offsetbox import AnchoredOffsetbox, TextArea, VPacker
 
 # For field legends
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from .labels import mathlabel
-from .statistics import slice_statistics, twiss_ellipse_points
+from .plot_base import (
+    Limit,
+    PlotPreparationError,
+    StatsAnnotation,
+    check_unused_kwargs,
+    drop_lost_particles,
+    get_annotations,
+    n_dead_annotation,
+    prepare_density_and_slice_plot,
+    prepare_density_plot,
+    prepare_marginal_plot,
+    prepare_slice_plot,
+    prepare_wakefield_plot,
+)
 from .units import (
-    c_light,
     nice_array,
-    nice_scale_prefix,
     pg_units,
     plottable_array,
     plottable_array_and_units,
     pmd_unit,
 )
 
+if TYPE_CHECKING:
+    from .particles import ParticleGroup
+
 CMAP0 = copy(plt.get_cmap("viridis"))
 CMAP0.set_under("white")
 
 CMAP1 = copy(plt.get_cmap("plasma"))
-
-
-def _charge_density_units_str(
-    x_unit, axis_units, hist_f: float, axis_f: float = 1.0
-) -> str:
-    """
-    Units string for a histogram density: charge per displayed axis unit.
-
-    The denominator is the axis unit exactly as the axis label shows it,
-    prefix included, and the histogram's own scale becomes a prefix on the
-    C: 'nC/µm', 'pC/(keV/c)'. A time axis is special-cased to amps
-    (C/s = A), which folds the histogram and axis scales into one prefix.
-
-    ``x_unit`` is the coordinate's pmd_unit, ``axis_units`` its displayed
-    label string, ``hist_f`` the factor the density values were divided by,
-    and ``axis_f`` the factor the coordinate was divided by.
-    """
-    if (pmd_unit("C") / x_unit).simplify() == pmd_unit("A"):
-        return pmd_unit("A").scaled_symbol(hist_f / axis_f)
-
-    numerator = pmd_unit("C").scaled_symbol(hist_f)
-    try:
-        return (pmd_unit(numerator) / pmd_unit(str(axis_units))).unitSymbol
-    except (ValueError, KeyError):
-        # Axis units in the explicit power-of-ten form ('1e-3 sqrt(m)').
-        return f"{numerator}/({axis_units})"
 
 
 def plt_histogram(a, weights=None, bins=40):
@@ -86,124 +77,64 @@ def slice_plot(
 
     Parameters
     ----------
-    particle_group: ParticleGroup
+    particle_group : ParticleGroup
         The object to plot
 
-    keys: iterable of str
+    keys : iterable of str
         Keys to calculate the statistics, e.g. `sigma_x`.
 
-    n_slice: int, default = 40
+    n_slice : int, default = 40
         Number of slices
 
-    slice_key: str, default = None
+    slice_key : str, default = None
          The dimension to slice in. This is typically `t` or `z`.
          `delta_t`, etc. are also allowed.
          If None, `t` or `z` will automatically be determined.
 
-    ylim: tuple, default = None
+    ylim : tuple, default = None
         Manual setting of the y-axis limits.
 
-    tex: bool, default = True
+    tex : bool, default = True
         Use TEX for labels
 
     Returns
     -------
-    fig: matplotlib.figure.Figure
+    fig : matplotlib.figure.Figure
 
     """
-
-    # Allow a single key
-    # if isinstance(keys, str):
-    #
-    #     keys = (keys, )
-
-    if slice_key is None:
-        if particle_group.in_t_coordinates:
-            slice_key = "z"
-        else:
-            slice_key = "t"
-
-    # Special case for delta_
-    if slice_key.startswith("delta_"):
-        slice_key = slice_key[6:]
-        has_delta_prefix = True
-    else:
-        has_delta_prefix = False
-
-    # Get all data
-    slice_dat = particle_group.slice_statistics(
-        *keys, n_slice=n_slice, slice_key=slice_key
-    )
-    slice_dat["density"] = slice_dat["charge"] / slice_dat["ptp_" + slice_key]
-    y2_key = "density"
-
-    # X-axis
-    x = slice_dat["mean_" + slice_key]
-    if has_delta_prefix:
-        x -= particle_group["mean_" + slice_key]
-        slice_key = "delta_" + slice_key  # restore
-
-    x, f1, ux, xmin, xmax = plottable_array_and_units(
-        x, particle_group.units(slice_key), nice=nice, lim=xlim
+    pdata = prepare_slice_plot(
+        particle_group,
+        *keys,
+        n_slice=n_slice,
+        slice_key=slice_key,
+        xlim=xlim,
+        ylim=ylim,
+        nice=nice,
+        tex=tex,
     )
 
-    # Y-axis
-
-    # Units check (value-based: 'Hz' == '1/s')
-    ulist = [particle_group.units(k) for k in keys]
-    u0 = ulist[0]
-    if not all(u == u0 for u in ulist):
-        raise ValueError(f"Incompatible units: {[u.unitSymbol for u in ulist]}")
-    uy = u0.unitSymbol
-
-    ymin = min([slice_dat[k].min() for k in keys])
-    ymax = max([slice_dat[k].max() for k in keys])
-
-    _, f2, uy, ymin, ymax = plottable_array_and_units(
-        np.array([ymin, ymax]), uy, nice=nice, lim=ylim
-    )
-
-    # Form Figure
     fig, ax = plt.subplots(**kwargs)
 
     # Main curves
-    if len(keys) == 1:
-        color = "black"
-    else:
-        color = None
-
-    for k in keys:
-        label = mathlabel(k, units=uy, tex=tex)
-        ax.plot(x, slice_dat[k] / f2, label=label, color=color)
-    if len(keys) > 1:
+    color = "black" if len(pdata.curves) == 1 else None
+    for curve in pdata.curves:
+        ax.plot(pdata.x, curve.values, label=curve.label, color=color)
+    if len(pdata.curves) > 1:
         ax.legend()
 
+    ax.set_xlabel(pdata.x_label)
+    ax.set_ylabel(pdata.y_label)
+
     # Density on r.h.s
-    y2, fy2, _, _, _ = plottable_array(slice_dat[y2_key], nice=nice, lim=None)
-
-    # Charge per (unprefixed) slice coordinate; a time axis displays as amps
-    slice_unit = particle_group.units(slice_key)
-    y2_units = _charge_density_units_str(slice_unit, slice_unit, fy2)
-
-    # Labels
-    labelx = mathlabel(slice_key, units=ux, tex=tex)
-    labely = mathlabel(*keys, units=uy, tex=tex)
-    labely2 = mathlabel(y2_key, units=y2_units, tex=tex)
-
-    ax.set_xlabel(labelx)
-    ax.set_ylabel(labely)
-
-    # rhs plot
     ax2 = ax.twinx()
-    ax2.set_ylabel(labely2)
-    ax2.fill_between(x, 0, y2, color="black", alpha=0.2)
+    ax2.set_ylabel(pdata.density_label)
+    ax2.fill_between(pdata.x, 0, pdata.density_values, color="black", alpha=0.2)
     ax2.set_ylim(0, None)
 
-    # Actual plot limits, considering scaling
-    if xlim:
-        ax.set_xlim(xmin / f1, xmax / f1)
-    if ylim:
-        ax.set_ylim(ymin / f2, ymax / f2)
+    if pdata.xlim:
+        ax.set_xlim(*pdata.xlim)
+    if pdata.ylim:
+        ax.set_ylim(*pdata.ylim)
 
     return fig
 
@@ -211,12 +142,12 @@ def slice_plot(
 def density_plot(
     particle_group,
     key: str = "x",
-    bins: Optional[Union[int, str]] = None,
+    bins: int | str | None = None,
     *,
-    xlim: Optional[Tuple[float, float]] = None,
+    xlim: Limit | None = None,
     tex: bool = True,
     nice: bool = True,
-    ax: Optional[Axes] = None,
+    ax: Axes | None = None,
     color="grey",
     alpha=1,
     **kwargs,
@@ -258,211 +189,162 @@ def density_plot(
     fig : matplotlib.figure.Figure
         The created or parent figure.
     """
-    if bins is None:
-        n = len(particle_group)
-        bins = int(n / 100)
-
-    x, f1, ux, xmin, xmax = plottable_array_and_units(
-        particle_group[key], particle_group.units(key), nice=nice, lim=xlim
+    pdata = prepare_density_plot(
+        particle_group, key=key, bins=bins, xlim=xlim, nice=nice, tex=tex
     )
-    w = particle_group["weight"]
-
-    labelx = mathlabel(key, units=ux, tex=tex)
 
     if ax is None:
         fig, ax = plt.subplots(**kwargs)
     else:
         fig = ax.get_figure()
 
-    hist, bin_edges = np.histogram(x, bins=bins, weights=w)
-    hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
-    hist_width = np.diff(bin_edges)
-    hist_y, hist_f, _, _hist_xmin, _hist_xmax = plottable_array(
-        hist / hist_width, nice=nice
+    ax.bar(
+        pdata.hist_centers,
+        pdata.hist_values,
+        pdata.hist_width,
+        color=color,
+        alpha=alpha,
     )
-
-    ax.bar(hist_x, hist_y, hist_width, color=color, alpha=alpha)
-
-    density_units = _charge_density_units_str(particle_group.units(key), ux, hist_f, f1)
-    ax.set_ylabel(f"density ({density_units})")
+    ax.set_ylabel(pdata.y_label)
 
     if hasattr(ax, "get_shared_x_axes") and ax.get_shared_x_axes().joined(
         ax, ax.figure.axes[0]
     ):
-        ax.figure.axes[0].set_xlabel(labelx)
+        ax.figure.axes[0].set_xlabel(pdata.x_label)
     else:
-        ax.set_xlabel(labelx)
+        ax.set_xlabel(pdata.x_label)
 
-    if xlim:
-        ax.set_xlim(xmin / f1, xmax / f1)
+    if pdata.xlim:
+        ax.set_xlim(*pdata.xlim)
 
     return fig
 
 
 def marginal_plot(
-    particle_group,
-    key1="t",
-    key2="p",
-    bins=None,
+    particle_group: ParticleGroup,
+    key1: str = "t",
+    key2: str = "p",
+    bins: int | None = None,
     *,
-    xlim=None,
-    ylim=None,
-    tex=True,
-    nice=True,
-    ellipse=False,
+    xlim: Limit | None = None,
+    ylim: Limit | None = None,
+    tex: bool = True,
+    nice: bool = True,
+    ellipse: bool = False,
+    stats: bool = False,
+    text: str | None = None,
+    title: str | None = None,
+    filter_lost_particles: bool = True,
+    n_dead: int | None = None,
     **kwargs,
 ):
     """
-    Density plot and projections
-
-    Example:
-
-        marginal_plot(P, 't', 'energy', bins=200)
-
+    Density plot and projections with matplotlib.
 
     Parameters
     ----------
-    particle_group: ParticleGroup
+    particle_group : ParticleGroup
         The object to plot
-
-    key1: str, default = 't'
+    key1 : str, default = 't'
         Key to bin on the x-axis
-
-    key2: str, default = 'p'
+    key2 : str, default = 'p'
         Key to bin on the y-axis
-
-    bins: int, default = None
-       Number of bins. If None, this will use a heuristic: bins = sqrt(n_particle/4)
-
-    xlim: tuple, default = None
+    bins : int, default = None
+       Number of bins. If None, this will use a heuristic:
+       `bins = sqrt(n_particle/4)`
+    xlim : tuple, default = None
         Manual setting of the x-axis limits.
-
-    ylim: tuple, default = None
+    ylim : tuple, default = None
         Manual setting of the y-axis limits.
-
-    tex: bool, default = True
+    tex : bool, default = True
         Use TEX for labels
+    nice : bool, default = True
 
-    nice: bool, default = True
-
-    ellipse: bool, default = True
+    ellipse : bool, default = True
         If True, plot an ellipse representing the
         2x2 sigma matrix
+    stats : bool, default = False
+        Show automatic beam statistics in the top-right corner for recognized
+        key pairs (e.g. ``x``/``y``, ``x``/``px``, ``delta_z/c``/``energy``).
+    text : str or None, optional
+        Custom text for the top-right corner, shown above any statistics.
+    title : str or None, optional
+        Title drawn above the plot.
+    filter_lost_particles : bool, default = True
+        Exclude lost particles (``status != 1``) from the plot and statistics.
+        If any exist, a red ``n_dead`` line is appended to the text block.
+    n_dead : int or None, optional
+        Dead-particle count to annotate; defaults to ``particle_group.n_dead``.
+        Pass it when the group has already been filtered.
+    **kwargs :
+        Passed to `plt.figure`.
 
     Returns
     -------
-    fig: matplotlib.figure.Figure
+    matplotlib.figure.Figure
 
+    Examples
+    --------
 
+    >>> P = ParticleGroup("particles.h5")
+    >>> marginal_plot(P, 't', 'energy', bins=200)
     """
-    if not bins:
-        n = len(particle_group)
-        bins = int(np.sqrt(n / 4))
-
-    # Scale to nice units and get the factor, unit prefix
-    x = particle_group[key1]
-    y = particle_group[key2]
-
-    if len(x) == 1:
-        bins = 100
-
-        if xlim is None:
-            (x0,) = x
-            if np.isclose(x0, 0.0):
-                xlim = (-1, 1)
-            else:
-                xlim = tuple(sorted((0.9 * x0, 1.1 * x0)))
-        if ylim is None:
-            (y0,) = y
-            if np.isclose(y0, 0.0):
-                ylim = (-1, 1)
-            else:
-                ylim = tuple(sorted((0.9 * y0, 1.1 * y0)))
-
-    # Form nice arrays with display units
-    x, f1, ux, xmin, xmax = plottable_array_and_units(
-        x, particle_group.units(key1), nice=nice, lim=xlim
-    )
-    y, f2, uy, ymin, ymax = plottable_array_and_units(
-        y, particle_group.units(key2), nice=nice, lim=ylim
-    )
-
-    w = particle_group["weight"]
-
-    # Handle labels.
-    labelx = mathlabel(key1, units=ux, tex=tex)
-    labely = mathlabel(key2, units=uy, tex=tex)
 
     fig = plt.figure(**kwargs)
-    if np.all(np.isnan(x)):
-        fig.text(0.5, 0.5, f"{key1} is all NaN", ha="center", va="center")
-        return fig
-    if np.all(np.isnan(y)):
-        fig.text(0.5, 0.5, f"{key2} is all NaN", ha="center", va="center")
+    try:
+        particle_group, n_dead = drop_lost_particles(
+            particle_group, filter_lost_particles, n_dead
+        )
+        pdata = prepare_marginal_plot(
+            particle_group,
+            key1=key1,
+            key2=key2,
+            bins=bins,
+            xlim=xlim,
+            ylim=ylim,
+            nice=nice,
+            ellipse=ellipse,
+        )
+    except PlotPreparationError as ex:
+        fig.text(0.5, 0.5, str(ex), ha="center", va="center")
         return fig
 
     gs = GridSpec(4, 4)
-
     ax_joint = fig.add_subplot(gs[1:4, 0:3])
     ax_marg_x = fig.add_subplot(gs[0, 0:3])
     ax_marg_y = fig.add_subplot(gs[1:4, 3])
-    # ax_info = fig.add_subplot(gs[0, 3:4])
-    # ax_info.table(cellText=['a'])
 
-    # Main plot
-    # Proper weighting
-    if len(x) == 1:
-        ax_joint.scatter(x, y)
+    if len(pdata.x.data) == 1:
+        ax_joint.scatter(pdata.x.data, pdata.y.data)
     else:
         ax_joint.hexbin(
-            x,
-            y,
-            C=w,
+            pdata.x.data,
+            pdata.y.data,
+            C=pdata.weights,
             reduce_C_function=np.sum,
-            gridsize=bins,
+            gridsize=pdata.bins,
             cmap=CMAP0,
             vmin=1e-20,
         )
 
-    if ellipse:
-        sigma_mat2 = particle_group.cov(key1, key2)
-        x_ellipse, y_ellipse = twiss_ellipse_points(sigma_mat2)
-        x_ellipse += particle_group.avg(key1)
-        y_ellipse += particle_group.avg(key2)
-        ax_joint.plot(x_ellipse / f1, y_ellipse / f2, color="red")
-
-    # Manual histogramming version
-    # H, xedges, yedges = np.histogram2d(x, y, weights=w, bins=bins)
-    # extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
-    # ax_joint.imshow(H.T, cmap=cmap, vmin=1e-16, origin='lower', extent=extent, aspect='auto')
+    if pdata.ellipse_x is not None and pdata.ellipse_y is not None:
+        ax_joint.plot(pdata.ellipse_x, pdata.ellipse_y, color="red")
 
     # Top histogram
-    # Old method:
-    # dx = x.ptp()/bins
-    # ax_marg_x.hist(x, weights=w/dx/f1, bins=bins, color='gray')
-    hist, bin_edges = np.histogram(x, bins=bins, weights=w)
-    hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
-    hist_width = np.diff(bin_edges)
-    hist_y, hist_f, _ = nice_array(hist / hist_width)
-    ax_marg_x.bar(hist_x, hist_y, hist_width, color="gray")
-    density_units = _charge_density_units_str(
-        particle_group.units(key1), ux, hist_f, f1
+    ax_marg_x.bar(
+        pdata.x.hist_centers, pdata.x.hist_values, pdata.x.hist_width, color="gray"
     )
-    ax_marg_x.set_ylabel(mathlabel(units=density_units, tex=tex))
 
-    # Side histogram
-    # Old method:
-    # dy = y.ptp()/bins
-    # ax_marg_y.hist(y, orientation="horizontal", weights=w/dy, bins=bins, color='gray')
-    hist, bin_edges = np.histogram(y, bins=bins, weights=w)
-    hist_x = bin_edges[:-1] + np.diff(bin_edges) / 2
-    hist_width = np.diff(bin_edges)
-    hist_y, hist_f, _ = nice_array(hist / hist_width)
-    ax_marg_y.barh(hist_x, hist_y, hist_width, color="gray")
-    density_units = _charge_density_units_str(
-        particle_group.units(key2), uy, hist_f, f2
+    # Right histogram
+    ax_marg_y.barh(
+        pdata.y.hist_centers, pdata.y.hist_values, pdata.y.hist_width, color="gray"
     )
-    ax_marg_y.set_xlabel(mathlabel(units=density_units, tex=tex))
+
+    labelx = mathlabel(key1, units=pdata.x.display_unit, tex=tex)
+    labely = mathlabel(key2, units=pdata.y.display_unit, tex=tex)
+
+    ax_marg_x.set_ylabel(pdata.x.density_label(tex=tex))
+    ax_marg_y.set_xlabel(pdata.y.density_label(tex=tex))
 
     # Turn off tick labels on marginals
     plt.setp(ax_marg_x.get_xticklabels(), visible=False)
@@ -473,96 +355,118 @@ def marginal_plot(
     ax_joint.set_ylabel(labely)
 
     # Actual plot limits, considering scaling
-    if xlim:
-        ax_joint.set_xlim(xmin / f1, xmax / f1)
-        ax_marg_x.set_xlim(xmin / f1, xmax / f1)
+    if pdata.x.lim is not None:
+        ax_joint.set_xlim(pdata.x.lim)
+        ax_marg_x.set_xlim(pdata.x.lim)
 
-    if ylim:
-        ax_joint.set_ylim(ymin / f2, ymax / f2)
-        ax_marg_y.set_ylim(ymin / f2, ymax / f2)
+    if pdata.y.lim is not None:
+        ax_joint.set_ylim(pdata.y.lim)
+        ax_marg_y.set_ylim(pdata.y.lim)
+
+    annotations = get_annotations(particle_group, key1, key2) if stats else []
+    if n_dead:
+        annotations.append(n_dead_annotation(n_dead))
+    _add_stats_text(fig, gs[0, 3], text, annotations)
+
+    if title:
+        ax_marg_x.set_title(title)
 
     return fig
+
+
+def _annotation_text(a: StatsAnnotation) -> str:
+    label = f"{a.label}$_{{{a.sub_label}}}$" if a.sub_label else a.label
+    return f"{label} = {a.value} {a.units}".rstrip()
+
+
+def _add_stats_text(fig, subplot_spec, text: str | None, annotations) -> None:
+    """Stack custom text and annotation lines in the unused grid corner."""
+    lines: list[tuple[str, str]] = []
+    if text:
+        lines.append((text.strip(), "black"))
+    lines.extend((_annotation_text(a), a.color or "black") for a in annotations)
+    if not lines:
+        return
+    ax_text = fig.add_subplot(subplot_spec)
+    ax_text.axis("off")
+    boxes = [
+        TextArea(line, textprops={"fontsize": 11, "color": color, "ha": "center"})
+        for line, color in lines
+    ]
+    packed = VPacker(children=boxes, align="center", pad=0, sep=4)
+    ax_text.add_artist(AnchoredOffsetbox(loc="center", child=packed, frameon=False))
 
 
 def density_and_slice_plot(
     particle_group,
     key1="t",
     key2="p",
-    stat_keys=["norm_emit_x", "norm_emit_y"],
+    stat_keys=None,
     bins=100,
     n_slice=30,
     tex=True,
+    **kwargs,
 ):
     """
-    Density plot and projections
+    2D density plot with overlaid slice statistics.
 
-    Example:
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+        The object to plot.
+    key1 : str, default = 't'
+        Key for x-axis (also used as slice key).
+    key2 : str, default = 'p'
+        Key for y-axis (density).
+    stat_keys : list of str, optional
+        Slice statistics to overlay. Default: ``['norm_emit_x', 'norm_emit_y']``.
+    bins : int, default = 100
+        Number of bins for the 2D histogram.
+    n_slice : int, default = 30
+        Number of slices.
+    tex : bool, default = True
+        Use TeX for labels.
 
-        marginal_plot(P, 't', 'energy', bins=200)
-
+    Returns
+    -------
+    matplotlib.figure.Figure
     """
-
-    # Scale to nice units and get the factor, unit prefix
-    x, f1, ux, xmin, xmax = plottable_array_and_units(
-        particle_group[key1], particle_group.units(key1)
-    )
-    y, f2, uy, ymin, ymax = plottable_array_and_units(
-        particle_group[key2], particle_group.units(key2)
-    )
-    w = particle_group["weight"]
-
-    labelx = mathlabel(key1, units=ux, tex=tex)
-    labely = mathlabel(key2, units=uy, tex=tex)
-
-    fig, ax = plt.subplots()
-
-    ax.set_xlabel(labelx)
-    ax.set_ylabel(labely)
-
-    # Proper weighting
-    # ax_joint.hexbin(x, y, C=w, reduce_C_function=np.sum, gridsize=bins, cmap=cmap, vmin=1e-15)
-
-    # Manual histogramming version
-    H, xedges, yedges = np.histogram2d(x, y, weights=w, bins=bins)
-    extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
-    ax.imshow(H.T, cmap=CMAP0, vmin=1e-16, origin="lower", extent=extent, aspect="auto")
-
-    # Slice data
-    slice_dat = slice_statistics(
+    pdata = prepare_density_and_slice_plot(
         particle_group,
+        key1=key1,
+        key2=key2,
+        stat_keys=stat_keys,
+        bins=bins,
         n_slice=n_slice,
-        slice_key=key1,
-        keys=stat_keys + ["ptp_" + key1, "mean_" + key1, "charge"],
+        tex=tex,
     )
 
-    slice_dat["density"] = slice_dat["charge"] / slice_dat["ptp_" + key1]
+    fig, ax = plt.subplots(**kwargs)
 
-    #
+    ax.set_xlabel(pdata.x_label)
+    ax.set_ylabel(pdata.y_label)
+
+    ax.imshow(
+        pdata.hist2d.T,
+        cmap=CMAP0,
+        vmin=1e-16,
+        origin="lower",
+        extent=pdata.extent,
+        aspect="auto",
+    )
+
+    # Slice statistics on secondary y-axis
     ax2 = ax.twinx()
-    # ax2.set_ylim(0, 1e-6)
-    x2 = slice_dat["mean_" + key1] / f1
-    ulist = [particle_group.units(k) for k in stat_keys]
-
-    max2 = max([np.ptp(slice_dat[k]) for k in stat_keys])
-
-    f3, _ = nice_scale_prefix(max2)
-
-    u0 = ulist[0]
-    if not all(u == u0 for u in ulist):
-        raise ValueError(f"Incompatible units: {[u.unitSymbol for u in ulist]}")
-    u2 = u0.scaled_symbol(f3)
-    labely2 = mathlabel(*stat_keys, units=u2, tex=tex)
-    for k in stat_keys:
-        label = mathlabel(k, units=u2, tex=tex)
-        ax2.plot(x2, slice_dat[k] / f3, label=label)
+    for curve in pdata.slice_curves:
+        ax2.plot(pdata.slice_x, curve.values, label=curve.label)
     ax2.legend()
-    ax2.set_ylabel(labely2)
+    ax2.set_ylabel(pdata.slice_y_label)
     ax2.set_ylim(bottom=0)
 
-    # Add density
-    y2 = slice_dat["density"]
-    y2 = y2 * max2 / y2.max() / f3 / 2
-    ax2.fill_between(x2, 0, y2, color="black", alpha=0.1)
+    # Density overlay
+    ax2.fill_between(pdata.slice_x, 0, pdata.slice_density, color="black", alpha=0.1)
+
+    return fig
 
 
 # -------------------------------------
@@ -1036,28 +940,30 @@ def plot_fieldmesh_rectangular_2d(
 
 
 def plot_1d_density(
-    x: Union[str, np.ndarray],
-    y: Union[str, np.ndarray],
+    x: str | np.ndarray,
+    y: str | np.ndarray,
     x_name: str = "",
-    y_name: Optional[str] = None,
-    x_units: Optional[str] = None,
-    y_units: Optional[str] = None,
-    figsize: Tuple[float, float] = (6, 4),
+    y_name: str | None = None,
+    x_units: str | None = None,
+    y_units: str | None = None,
+    figsize: tuple[float, float] = (6, 4),
     log_scale_y: bool = False,
     show_cdf: bool = False,
     cdf_label: str = "CDF",
-    cdf_style: Optional[Dict[str, Union[str, float]]] = None,
+    cdf_style: dict[str, str | float] | None = None,
     kind: str = "bar",
-    plot_style: Optional[Dict[str, Union[str, float]]] = None,
-    xlim: Optional[Tuple[float, float]] = None,
-    ylim: Optional[Tuple[float, float]] = (0, None),
-    ax: Optional[plt.Axes] = None,
+    plot_style: dict[str, str | float] | None = None,
+    xlim: Limit | None = None,
+    ylim: Limit | None = (0, None),
+    ax: Axes | None = None,
     nice: bool = True,
     auto_label: bool = False,
     tex: bool = True,
-    data: Optional[Dict[str, np.ndarray]] = None,
+    data: dict[str, np.ndarray] | None = None,
+    return_figure: bool = False,
     return_axes: bool = False,
-) -> Optional[Tuple[plt.Figure, Dict[str, plt.Axes]]]:
+    **kwargs,
+) -> tuple[plt.Figure, dict[str, plt.Axes]] | plt.Figure | None:
     """
     Plot a 1D density distribution with optional cumulative distribution function (CDF).
 
@@ -1140,7 +1046,7 @@ def plot_1d_density(
         >>> plot_1d_density("t", "norm_emit_x", data=data, auto_label=True)
         # Will automatically use TeX labels and proper units
     """
-    # Handle data dict indexing (matplotlib pattern)
+    check_unused_kwargs("mpl", kwargs)
     # Handle data dict indexing (matplotlib pattern)
     x_key = None
     y_key = None
@@ -1164,11 +1070,11 @@ def plot_1d_density(
     # Use the key as the label if not explicitly provided
     # Note: x_name and y_name are function parameters with defaults
     if x_key is not None:
-        if x_name == "":  # noqa: F821
+        if x_name == "":
             x_name = x_key
 
     if y_key is not None:
-        if y_name is None:  # noqa: F821
+        if y_name is None:
             y_name = y_key
 
     # Set default y_name if still None
@@ -1320,42 +1226,43 @@ def plot_1d_density(
 
         axes["cdf"] = ax_cdf
 
-    # Return axes if requested
     if return_axes:
         return fig, axes
+    if return_figure:
+        return fig
 
 
 def plot_2d_density_with_marginals(
     data: np.ndarray,
-    dx: Optional[float] = 1,
-    dy: Optional[float] = 1,
-    xmin: Optional[float] = None,
-    ymin: Optional[float] = None,
+    dx: float | None = 1,
+    dy: float | None = 1,
+    xmin: float | None = None,
+    ymin: float | None = None,
     x_name: str = "",
     y_name: str = "",
     z_name: str = "",
-    x_units: Optional[str] = None,
-    y_units: Optional[str] = None,
-    z_units: Optional[str] = None,
+    x_units: str | None = None,
+    y_units: str | None = None,
+    z_units: str | None = None,
     cmap: str = "inferno",
-    figsize: Tuple[float, float] = (5, 5),
+    figsize: tuple[float, float] = (5, 5),
     log_scale_z: bool = False,
     log_scale_marginals: bool = False,
-    marginal_titles: Tuple[Optional[str], Optional[str]] = (None, None),
-    highlight_regions: Optional[
-        List[Dict[str, Union[float, Tuple[float, float]]]]
-    ] = None,
-    marginal_style: Optional[Dict[str, Union[str, float]]] = None,
+    marginal_titles: tuple[str | None, str | None] = (None, None),
+    highlight_regions: list[dict[str, float | tuple[float, float]]] | None = None,
+    marginal_style: dict[str, str | float] | None = None,
     show_stats: bool = False,
     show_colorbar: bool = True,
-    xlim: Tuple[float, float] = None,
-    ylim: Tuple[float, float] = None,
-    vmin: Optional[float] = None,
-    vcenter: Optional[float] = None,
-    vmax: Optional[float] = None,
-    aspect: Optional[str] = "auto",
+    xlim: Limit | None = None,
+    ylim: Limit | None = None,
+    vmin: float | None = None,
+    vcenter: float | None = None,
+    vmax: float | None = None,
+    aspect: str | None = "auto",
+    return_figure: bool = False,
     return_axes: bool = False,
-) -> Optional[Tuple[plt.Figure, Dict[str, plt.Axes]]]:
+    **kwargs,
+) -> tuple[plt.Figure, dict[str, plt.Axes]] | plt.Figure | None:
     """
     Basic plot for a 2D density map with marginal histograms.
 
@@ -1438,6 +1345,8 @@ def plot_2d_density_with_marginals(
     else:
         norm = TwoSlopeNorm(vmin=vmin, vcenter=vcenter, vmax=vmax)
 
+    check_unused_kwargs("mpl", kwargs)
+
     # Create figure and GridSpec
     fig = plt.figure(figsize=figsize)
     gs = GridSpec(6, 6, figure=fig, wspace=0.05, hspace=0.05)
@@ -1501,21 +1410,22 @@ def plot_2d_density_with_marginals(
     ax_main.set_ylim(ylim)
     ax_right.set_ylim(ylim)
 
-    # Return axes if requested
     if return_axes:
         return fig, axes
+    if return_figure:
+        return fig
 
 
 def wakefield_plot(
     particle_group,
     wake,
-    key: Optional[str] = None,
+    key: str | None = None,
     nice: bool = True,
-    ax: Optional[Axes] = None,
-    xlim: Optional[Tuple[float, float]] = None,
-    ylim: Optional[Tuple[float, float]] = None,
+    ax: Axes | None = None,
+    xlim: Limit | None = None,
+    ylim: Limit | None = None,
     tex: bool = True,
-    bins: Optional[Union[int, str]] = None,
+    bins: int | str | None = None,
     **kwargs,
 ) -> Figure:
     """
@@ -1566,47 +1476,41 @@ def wakefield_plot(
     fig : matplotlib.figure.Figure
         The matplotlib figure containing the plot.
     """
-    if key is None:
-        if particle_group.in_t_coordinates:
-            key = "delta_z/c"
-        else:
-            key = "delta_t"
+    pdata = prepare_wakefield_plot(
+        particle_group,
+        wake,
+        key=key,
+        nice=nice,
+        tex=tex,
+        xlim=xlim,
+        ylim=ylim,
+        bins=bins,
+    )
 
     if ax is None:
         fig, ax = plt.subplots(**kwargs)
     else:
         fig = ax.get_figure()
 
-    # Plot density on twin axis
+    # Density on twin axis
     ax2 = ax.twinx()
-    density_plot(particle_group, key=key, ax=ax2, nice=nice, alpha=0.5, bins=bins)
-
-    # Wake kicks
-    x_raw = particle_group[key]
-
-    if particle_group.in_t_coordinates:
-        z = np.asarray(particle_group.z)
-    else:
-        z = -c_light * np.asarray(particle_group.t)
-    kicks = wake.particle_kicks(z=z, weight=particle_group.weight)
-
-    x, f1, ux, xmin, xmax = plottable_array_and_units(
-        x_raw, particle_group.units(key), nice=nice, lim=xlim
+    ax2.bar(
+        pdata.density.hist_centers,
+        pdata.density.hist_values,
+        pdata.density.hist_width,
+        color="grey",
+        alpha=0.5,
     )
-    y, f2, uy, ymin, ymax = plottable_array_and_units(
-        kicks, "eV/m", nice=nice, lim=ylim
-    )
+    ax2.set_ylabel(pdata.density.y_label)
 
-    ax.scatter(x, y, marker=".", color="black", s=0.5)
+    # Wake kicks scatter
+    ax.scatter(pdata.scatter_x, pdata.scatter_y, marker=".", color="black", s=0.5)
+    ax.set_xlabel(pdata.x_label)
+    ax.set_ylabel(pdata.y_label)
 
-    # Labels
-    ax.set_xlabel(mathlabel(key, units=ux, tex=tex))
-    ax.set_ylabel(mathlabel("W_z", units=uy, tex=tex))
-
-    # Limits
-    if xlim:
-        ax.set_xlim(xmin / f1, xmax / f1)
-    if ylim:
-        ax.set_ylim(ymin / f2, ymax / f2)
+    if pdata.xlim:
+        ax.set_xlim(*pdata.xlim)
+    if pdata.ylim:
+        ax.set_ylim(*pdata.ylim)
 
     return fig

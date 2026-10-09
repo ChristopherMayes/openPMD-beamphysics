@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import dataclasses
+import html
 import logging
 from typing import Literal
 
 import numpy as np
+from bokeh import palettes as bokeh_palettes
 from bokeh.core.enums import SizingModeType
 from bokeh.io import show as _bokeh_show
 from bokeh.layouts import column
@@ -17,16 +19,19 @@ from bokeh.models import (
     LayoutDOM,  # pyright: ignore[reportPrivateImportUsage]
     LinearAxis,  # pyright: ignore[reportPrivateImportUsage]
     LinearColorMapper,  # pyright: ignore[reportPrivateImportUsage]
+    LogColorMapper,  # pyright: ignore[reportPrivateImportUsage]
     Range1d,  # pyright: ignore[reportPrivateImportUsage]
     Spacer,  # pyright: ignore[reportPrivateImportUsage]
 )
-from bokeh.palettes import Palette, Viridis256
+from bokeh.palettes import Category10, Palette, Viridis256
 from bokeh.plotting import figure
 
 from .labels import mathlabel
 from .plot_base import (
     Limit,
+    PlotPreparationError,
     StatsAnnotation,
+    check_unused_kwargs,
     drop_lost_particles,
     get_annotations,
     n_dead_annotation,
@@ -36,8 +41,12 @@ from .plot_base import (
     prepare_slice_plot,
     prepare_wakefield_plot,
 )
+from .units import pg_units, plottable_array, plottable_array_and_units
 
 logger = logging.getLogger(__name__)
+
+# Default color cycle for multi-curve plots (matches matplotlib's tab10)
+_BOKEH_COLORS = Category10[10]
 
 
 def initialize_jupyter():
@@ -65,6 +74,26 @@ def _maybe_show(layout: LayoutDOM, show: bool = True) -> LayoutDOM:
     return layout
 
 
+def _error_div(message: str, width: int, height: int) -> Div:
+    """A placeholder shown in place of a plot that could not be prepared."""
+    return Div(
+        text=(
+            '<div style="display:flex;align-items:center;justify-content:center;'
+            f'width:100%;height:100%;color:#555">{html.escape(message)}</div>'
+        ),
+        width=width,
+        height=height,
+    )
+
+
+def _palette_from_cmap(cmap: str) -> Palette:
+    """Map a matplotlib-style colormap name ('inferno') to a 256-color palette."""
+    try:
+        return getattr(bokeh_palettes, f"{cmap.capitalize()}256")
+    except AttributeError:
+        raise ValueError(f"No 256-color bokeh palette for cmap {cmap!r}") from None
+
+
 @dataclasses.dataclass
 class FontPlotSettings:
     """Font settings for a single Bokeh figure's axes."""
@@ -83,6 +112,13 @@ class FontPlotSettings:
             axis.major_label_text_font_style = self.major_label_text_font_style
 
 
+def _marginal_font_settings() -> FontPlotSettings:
+    return FontPlotSettings(
+        axis_label_text_font_size="10px",
+        major_label_text_font_size="8px",
+    )
+
+
 @dataclasses.dataclass
 class MarginalFontSettings:
     """Font settings for Bokeh marginal plots."""
@@ -90,18 +126,8 @@ class MarginalFontSettings:
     text_font: str | None = None
     annotation_text_font_size: str | None = None
     main: FontPlotSettings = dataclasses.field(default_factory=FontPlotSettings)
-    top: FontPlotSettings = dataclasses.field(
-        default_factory=lambda: FontPlotSettings(
-            axis_label_text_font_size="10px",
-            major_label_text_font_size="8px",
-        )
-    )
-    right: FontPlotSettings = dataclasses.field(
-        default_factory=lambda: FontPlotSettings(
-            axis_label_text_font_size="10px",
-            major_label_text_font_size="8px",
-        )
-    )
+    top: FontPlotSettings = dataclasses.field(default_factory=_marginal_font_settings)
+    right: FontPlotSettings = dataclasses.field(default_factory=_marginal_font_settings)
 
 
 def mathjax_fix(label: str) -> str:
@@ -131,21 +157,22 @@ def _annotations_to_html(
     def style(a: StatsAnnotation) -> str:
         return f" style='color:{a.color}'" if a.color else ""
 
+    def label(a: StatsAnnotation) -> str:
+        return f"{a.label}<sub>{a.sub_label}</sub>" if a.sub_label else a.label
+
     if horizontal:
-        items = []
-        for a in annotations:
-            label = f"{a.label}<sub>{a.sub_label}</sub>" if a.sub_label else a.label
-            items.append(f"<span{style(a)}>{label} = {a.value} {a.units}</span>")
+        items = [
+            f"<span{style(a)}>{label(a)} = {a.value} {a.units}</span>"
+            for a in annotations
+        ]
         sep = " &nbsp;&middot;&nbsp; "
         return f"<span>{sep.join(items)}</span>"
 
-    rows = []
-    for a in annotations:
-        label = f"{a.label}<sub>{a.sub_label}</sub>" if a.sub_label else a.label
-        rows.append(
-            f"<tr{style(a)}><td style='text-align:right;padding-right:4px'>{label}</td>"
-            f"<td>{a.value} {a.units}</td></tr>"
-        )
+    rows = [
+        f"<tr{style(a)}><td style='text-align:right;padding-right:4px'>{label(a)}</td>"
+        f"<td>{a.value} {a.units}</td></tr>"
+        for a in annotations
+    ]
     return "<table style='border-collapse:collapse'>" + "".join(rows) + "</table>"
 
 
@@ -190,6 +217,7 @@ def density_plot(
     -------
     LayoutDOM
     """
+    check_unused_kwargs("bokeh", kwargs)
     pdata = prepare_density_plot(
         particle_group, key=key, bins=bins, xlim=xlim, nice=nice, tex=tex
     )
@@ -369,6 +397,7 @@ def marginal_plot(
     *,
     xlim: Limit | None = None,
     ylim: Limit | None = None,
+    tex: bool = False,
     nice: bool = True,
     ellipse: bool = False,
     filter_lost_particles: bool = True,
@@ -406,11 +435,11 @@ def marginal_plot(
         Manual setting of the x-axis limits.
     ylim: tuple, default = None
         Manual setting of the y-axis limits.
-    tex: bool, default = True
-        Use TEX for labels
+    tex: bool, default = False
+        Use TeX (rendered by MathJax) for labels.
     nice: bool, default = True
         Use "nice" prefixes.
-    ellipse: bool, default = True
+    ellipse: bool, default = False
         If True, plot an ellipse representing the 2x2 sigma matrix.
     filter_lost_particles : bool, default = True
         Exclude lost particles (``status != 1``) from the plot and statistics.
@@ -452,36 +481,42 @@ def marginal_plot(
     >>> obj = marginal_plot(P, 't', 'energy', bins=200)
     >>> bokeh.io.save(obj, "t_vs_energy.html")
     """
-    if kwargs:
-        logger.debug("Unused kwargs (may be for another backend): %s", kwargs)
+    check_unused_kwargs("bokeh", kwargs)
     if font_settings is None:
         font_settings = MarginalFontSettings()
 
-    particle_group, n_dead = drop_lost_particles(
-        particle_group, filter_lost_particles, n_dead
-    )
-    pdata = prepare_marginal_plot(
-        particle_group,
-        key1=key1,
-        key2=key2,
-        bins=bins,
-        xlim=xlim,
-        ylim=ylim,
-        nice=nice,
-        ellipse=ellipse,
-    )
+    try:
+        particle_group, n_dead = drop_lost_particles(
+            particle_group, filter_lost_particles, n_dead
+        )
+        pdata = prepare_marginal_plot(
+            particle_group,
+            key1=key1,
+            key2=key2,
+            bins=bins,
+            xlim=xlim,
+            ylim=ylim,
+            nice=nice,
+            ellipse=ellipse,
+        )
+    except PlotPreparationError as ex:
+        return _maybe_show(_error_div(str(ex), width, height), show)
 
-    labelx = mathlabel(key1, units=pdata.x.full_unit, tex=False)
-    labely = mathlabel(key2, units=pdata.y.full_unit, tex=False)
+    labelx = mathjax_fix(mathlabel(key1, units=pdata.x.display_unit, tex=tex))
+    labely = mathjax_fix(mathlabel(key2, units=pdata.y.display_unit, tex=tex))
 
     # Main Joint Figure
+    ranges = {}
+    if pdata.x.lim is not None:
+        ranges["x_range"] = pdata.x.lim
+    if pdata.y.lim is not None:
+        ranges["y_range"] = pdata.y.lim
     fig_joint = figure(
         x_axis_label=labelx,
         y_axis_label=labely,
-        x_range=pdata.x.lim,
-        y_range=pdata.y.lim,
         tools="pan,wheel_zoom,box_zoom,save,reset",
         toolbar_location="left",
+        **ranges,
     )
 
     font_settings.main.apply(fig_joint.xaxis, fig_joint.yaxis)
@@ -566,8 +601,7 @@ def marginal_plot(
         line_color="gray",
     )
 
-    p_top.yaxis.axis_label = mathjax_fix(pdata.x.axis_label)
-    # p_top.yaxis.axis_label_orientation = ...
+    p_top.yaxis.axis_label = mathjax_fix(pdata.x.density_label(tex=tex))
     p_top.xaxis.visible = False
 
     # Right (Y projection)
@@ -586,8 +620,7 @@ def marginal_plot(
         fill_color="gray",
         line_color="gray",
     )
-    p_right.xaxis.axis_label = mathjax_fix(pdata.y.axis_label)
-    # p_right.xaxis.axis_label_orientation = ...
+    p_right.xaxis.axis_label = mathjax_fix(pdata.y.density_label(tex=tex))
     p_right.yaxis.visible = False
 
     plots = [p_right, p_top, fig_joint]
@@ -664,21 +697,6 @@ def marginal_plot(
     return _maybe_show(layout, show)
 
 
-# Default Bokeh color cycle for multi-curve plots
-_BOKEH_COLORS = [
-    "#1f77b4",
-    "#ff7f0e",
-    "#2ca02c",
-    "#d62728",
-    "#9467bd",
-    "#8c564b",
-    "#e377c2",
-    "#7f7f7f",
-    "#bcbd22",
-    "#17becf",
-]
-
-
 def slice_plot(
     particle_group,
     *keys: str,
@@ -723,9 +741,7 @@ def slice_plot(
     -------
     LayoutDOM
     """
-    if kwargs:
-        logger.debug("Unused kwargs (may be for another backend): %s", kwargs)
-
+    check_unused_kwargs("bokeh", kwargs)
     pdata = prepare_slice_plot(
         particle_group,
         *keys,
@@ -843,8 +859,7 @@ def wakefield_plot(
     LayoutDOM
     """
 
-    if kwargs:
-        logger.debug("Unused kwargs (may be for another backend): %s", kwargs)
+    check_unused_kwargs("bokeh", kwargs)
     pdata = prepare_wakefield_plot(
         particle_group,
         wake,
@@ -956,6 +971,7 @@ def density_and_slice_plot(
     -------
     LayoutDOM
     """
+    check_unused_kwargs("bokeh", kwargs)
     pdata = prepare_density_and_slice_plot(
         particle_group,
         key1=key1,
@@ -1076,6 +1092,7 @@ def plot_1d_density(
     sizing_mode: SizingModeType | None = None,
     title: str | None = None,
     show: bool = True,
+    return_figure: bool = True,
     **kwargs,
 ) -> LayoutDOM:
     """
@@ -1103,15 +1120,16 @@ def plot_1d_density(
         Dict mapping string keys to arrays.
     width, height : int
         Figure dimensions.
+    return_figure : bool
+        Accepted for parity with the matplotlib backend; the layout is always
+        returned.
 
     Returns
     -------
     LayoutDOM
     """
 
-    if kwargs:
-        logger.debug("Unused kwargs (may be for another backend): %s", kwargs)
-    from .units import pg_units, plottable_array, plottable_array_and_units
+    check_unused_kwargs("bokeh", kwargs)
 
     # Resolve data dict
     x_key = None
@@ -1264,10 +1282,12 @@ def plot_2d_density_with_marginals(
     width: int = 600,
     height: int = 600,
     marginal_fraction: float = 0.25,
-    palette: Palette = Viridis256,
+    cmap: str = "viridis",
+    palette: Palette | None = None,
     sizing_mode: SizingModeType | None = None,
     title: str | None = None,
     show: bool = True,
+    return_figure: bool = True,
     **kwargs,
 ) -> LayoutDOM:
     """
@@ -1289,17 +1309,26 @@ def plot_2d_density_with_marginals(
         Units appended to labels.
     log_scale_z : bool
         Log color mapping.
-    palette : Palette
-        Bokeh color palette.
+    log_scale_marginals : bool
+        Log scale on the marginal histogram axes.
+    cmap : str, default = 'viridis'
+        Matplotlib-style colormap name, mapped to the 256-color bokeh palette
+        of the same name (e.g. ``'inferno'`` -> ``Inferno256``).
+    palette : Palette, optional
+        Explicit bokeh palette; takes precedence over `cmap`.
     width, height : int
         Figure dimensions.
+    return_figure : bool
+        Accepted for parity with the matplotlib backend; the layout is always
+        returned.
 
     Returns
     -------
     LayoutDOM
     """
-    if kwargs:
-        logger.debug("Unused kwargs (may be for another backend): %s", kwargs)
+    check_unused_kwargs("bokeh", kwargs)
+    if palette is None:
+        palette = _palette_from_cmap(cmap)
     nx, ny = data.shape
 
     if xmin is None:
@@ -1324,10 +1353,22 @@ def plot_2d_density_with_marginals(
 
     # Color mapper
     if log_scale_z:
-        low = max(vmin, vmax * 1e-6)
-        mapper = LinearColorMapper(palette=palette, low=low, high=vmax)
+        # Same dynamic range as the matplotlib LogNorm(vmin=Fmax/1e6) default
+        low = max(vmin, vmax * 1e-6) if vmax > 0 else 1e-300
+        mapper = LogColorMapper(palette=palette, low=low, high=vmax)
     else:
         mapper = LinearColorMapper(palette=palette, low=vmin, high=vmax)
+
+    # Bars touching zero vanish on a log axis; clamp them to a small floor.
+    if log_scale_marginals:
+        positive = np.concatenate(
+            [x_marginal[x_marginal > 0], y_marginal[y_marginal > 0]]
+        )
+        floor = float(positive.min()) / 10 if positive.size else 1e-300
+        x_marginal = np.maximum(x_marginal, floor)
+        y_marginal = np.maximum(y_marginal, floor)
+    else:
+        floor = 0.0
 
     # Main density figure
     x_range = xlim or (xmin - dx / 2, xmax + dx / 2)
@@ -1371,7 +1412,7 @@ def plot_2d_density_with_marginals(
         x=xvec,
         top=x_marginal,
         width=dx,
-        bottom=0,
+        bottom=floor,
         fill_color="gray",
         line_color="gray",
     )
@@ -1391,7 +1432,7 @@ def plot_2d_density_with_marginals(
         y=yvec,
         right=y_marginal,
         height=dy,
-        left=0,
+        left=floor,
         fill_color="gray",
         line_color="gray",
     )

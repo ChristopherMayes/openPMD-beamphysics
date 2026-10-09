@@ -1879,6 +1879,7 @@ class ParticleGroup:
         wake: WakefieldBase,
         key=None,
         nice=True,
+        ax=None,
         xlim=None,
         ylim=None,
         tex=True,
@@ -1919,11 +1920,11 @@ class ParticleGroup:
         bins : int or str, optional
             Number of bins to use for the density histogram.
 
+        ax : matplotlib.axes.Axes, optional
+            Matplotlib only: an existing Axes to plot into.
+
         backend : str, optional
             Plot backend: ``'mpl'`` or ``'bokeh'``.
-
-        ax : matplotlib.axes.Axes, optional
-            Matplotlib-only: An existing Axes to plot into. (part of **kwargs)
 
         **kwargs
             Additional keyword arguments passed to the backend plot function.
@@ -1933,6 +1934,8 @@ class ParticleGroup:
         figure object
         """
         be = get_backend(backend)
+        if ax is not None:
+            kwargs["ax"] = ax
         return be.wakefield_plot(
             self,
             wake,

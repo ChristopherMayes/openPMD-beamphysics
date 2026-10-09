@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
 from .labels import mathlabel
-from .statistics import twiss_ellipse_points
+from .statistics import slice_statistics, twiss_ellipse_points
 from .units import (
     c_light,
     nice_array,
@@ -52,6 +53,21 @@ class PlotPreparationError(Exception): ...
 
 
 class NanDataError(PlotPreparationError): ...
+
+
+def check_unused_kwargs(backend: str, kwargs: dict[str, Any]) -> None:
+    """
+    Warn about keyword arguments a backend plot function did not consume.
+
+    Every backend accepts ``**kwargs`` so that callers can pass options meant
+    for another backend; a warning rather than silence keeps typos visible.
+    """
+    if kwargs:
+        warnings.warn(
+            f"Keyword arguments not used by the {backend!r} plot backend: "
+            f"{sorted(kwargs)}",
+            stacklevel=3,
+        )
 
 
 def drop_lost_particles(
@@ -178,7 +194,7 @@ class MarginalAxisData:
 
     key: str
     data: np.ndarray
-    lim: tuple[float, float]
+    lim: tuple[float, float] | None  # scaled; None when no limits were requested
     unit_factor: float
     unit: pmd_unit
     display_unit: str
@@ -189,17 +205,12 @@ class MarginalAxisData:
     hist_width: np.ndarray
     hist_unit_factor: float
 
-    @property
-    def full_unit(self) -> str:
-        """Returns the scaled display unit, e.g. 'mm'"""
-        return self.display_unit
-
-    @property
-    def axis_label(self) -> str:
+    def density_label(self, tex: bool = True) -> str:
+        """Axis label for this axis' marginal histogram, e.g. 'nC/µm'."""
         density_units = _charge_density_units_str(
             self.unit, self.display_unit, self.hist_unit_factor, self.unit_factor
         )
-        return mathlabel(units=density_units)
+        return mathlabel(units=density_units, tex=tex)
 
 
 @dataclass
@@ -501,13 +512,11 @@ def prepare_density_and_slice_plot(
     if stat_keys is None:
         stat_keys = ["norm_emit_x", "norm_emit_y"]
 
-    from .statistics import slice_statistics as _slice_statistics
-
     # Scale to nice units
-    x, f1, ux, xmin, xmax = plottable_array_and_units(
+    x, f1, ux, _, _ = plottable_array_and_units(
         particle_group[key1], particle_group.units(key1)
     )
-    y, f2, uy, ymin, ymax = plottable_array_and_units(
+    y, _, uy, _, _ = plottable_array_and_units(
         particle_group[key2], particle_group.units(key2)
     )
     w = particle_group["weight"]
@@ -520,7 +529,7 @@ def prepare_density_and_slice_plot(
     extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
 
     # Slice data
-    slice_dat = _slice_statistics(
+    slice_dat = slice_statistics(
         particle_group,
         n_slice=n_slice,
         slice_key=key1,
@@ -654,7 +663,7 @@ def prepare_marginal_plot(
         x=MarginalAxisData(
             key=key1,
             data=x_data,
-            lim=(xmin_raw / f1, xmax_raw / f1),
+            lim=(xmin_raw / f1, xmax_raw / f1) if xlim is not None else None,
             unit_factor=f1,
             unit=u1,
             display_unit=ux,
@@ -666,7 +675,7 @@ def prepare_marginal_plot(
         y=MarginalAxisData(
             key=key2,
             data=y_data,
-            lim=(ymin_raw / f2, ymax_raw / f2),
+            lim=(ymin_raw / f2, ymax_raw / f2) if ylim is not None else None,
             unit_factor=f2,
             unit=u2,
             display_unit=uy,

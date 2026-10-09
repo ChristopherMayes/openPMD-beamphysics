@@ -22,6 +22,7 @@ from .plot_base import (
     Limit,
     PlotPreparationError,
     StatsAnnotation,
+    check_unused_kwargs,
     drop_lost_particles,
     get_annotations,
     n_dead_annotation,
@@ -146,7 +147,7 @@ def density_plot(
     xlim: Limit | None = None,
     tex: bool = True,
     nice: bool = True,
-    # ax: Axes | None = None,  # <-- handled in kwargs to maintain protocol
+    ax: Axes | None = None,
     color="grey",
     alpha=1,
     **kwargs,
@@ -188,7 +189,6 @@ def density_plot(
     fig : matplotlib.figure.Figure
         The created or parent figure.
     """
-    ax: Axes | None = kwargs.pop("ax", None)
     pdata = prepare_density_plot(
         particle_group, key=key, bins=bins, xlim=xlim, nice=nice, tex=tex
     )
@@ -338,11 +338,11 @@ def marginal_plot(
         pdata.y.hist_centers, pdata.y.hist_values, pdata.y.hist_width, color="gray"
     )
 
-    labelx = mathlabel(key1, units=pdata.x.full_unit, tex=tex)
-    labely = mathlabel(key2, units=pdata.y.full_unit, tex=tex)
+    labelx = mathlabel(key1, units=pdata.x.display_unit, tex=tex)
+    labely = mathlabel(key2, units=pdata.y.display_unit, tex=tex)
 
-    ax_marg_x.set_ylabel(pdata.x.axis_label)
-    ax_marg_y.set_xlabel(pdata.y.axis_label)
+    ax_marg_x.set_ylabel(pdata.x.density_label(tex=tex))
+    ax_marg_y.set_xlabel(pdata.y.density_label(tex=tex))
 
     # Turn off tick labels on marginals
     plt.setp(ax_marg_x.get_xticklabels(), visible=False)
@@ -353,11 +353,11 @@ def marginal_plot(
     ax_joint.set_ylabel(labely)
 
     # Actual plot limits, considering scaling
-    if xlim is not None:
+    if pdata.x.lim is not None:
         ax_joint.set_xlim(pdata.x.lim)
         ax_marg_x.set_xlim(pdata.x.lim)
 
-    if ylim is not None:
+    if pdata.y.lim is not None:
         ax_joint.set_ylim(pdata.y.lim)
         ax_marg_y.set_ylim(pdata.y.lim)
 
@@ -945,7 +945,7 @@ def plot_1d_density(
     y_name: str | None = None,
     x_units: str | None = None,
     y_units: str | None = None,
-    figsize: Limit = (6, 4),
+    figsize: tuple[float, float] = (6, 4),
     log_scale_y: bool = False,
     show_cdf: bool = False,
     cdf_label: str = "CDF",
@@ -954,7 +954,7 @@ def plot_1d_density(
     plot_style: dict[str, str | float] | None = None,
     xlim: Limit | None = None,
     ylim: Limit | None = (0, None),
-    # ax: Axes | None = None,  # <-- handled in kwargs to maintain protocol
+    ax: Axes | None = None,
     nice: bool = True,
     auto_label: bool = False,
     tex: bool = True,
@@ -1045,7 +1045,7 @@ def plot_1d_density(
         >>> plot_1d_density("t", "norm_emit_x", data=data, auto_label=True)
         # Will automatically use TeX labels and proper units
     """
-    ax: Axes | None = kwargs.pop("ax", None)
+    check_unused_kwargs("mpl", kwargs)
     # Handle data dict indexing (matplotlib pattern)
     x_key = None
     y_key = None
@@ -1244,11 +1244,11 @@ def plot_2d_density_with_marginals(
     y_units: str | None = None,
     z_units: str | None = None,
     cmap: str = "inferno",
-    figsize: Limit = (5, 5),
+    figsize: tuple[float, float] = (5, 5),
     log_scale_z: bool = False,
     log_scale_marginals: bool = False,
     marginal_titles: tuple[str | None, str | None] = (None, None),
-    highlight_regions: None | (list[dict[str, float | Limit]]) = None,
+    highlight_regions: list[dict[str, float | tuple[float, float]]] | None = None,
     marginal_style: dict[str, str | float] | None = None,
     show_stats: bool = False,
     show_colorbar: bool = True,
@@ -1344,6 +1344,8 @@ def plot_2d_density_with_marginals(
     else:
         norm = TwoSlopeNorm(vmin=vmin, vcenter=vcenter, vmax=vmax)
 
+    check_unused_kwargs("mpl", kwargs)
+
     # Create figure and GridSpec
     fig = plt.figure(figsize=figsize)
     gs = GridSpec(6, 6, figure=fig, wspace=0.05, hspace=0.05)
@@ -1418,7 +1420,7 @@ def wakefield_plot(
     wake,
     key: str | None = None,
     nice: bool = True,
-    # ax: Axes | None = None,  # <-- handled in kwargs to maintain protocol
+    ax: Axes | None = None,
     xlim: Limit | None = None,
     ylim: Limit | None = None,
     tex: bool = True,
@@ -1473,7 +1475,6 @@ def wakefield_plot(
     fig : matplotlib.figure.Figure
         The matplotlib figure containing the plot.
     """
-    ax: Axes | None = kwargs.pop("ax", None)
     pdata = prepare_wakefield_plot(
         particle_group,
         wake,

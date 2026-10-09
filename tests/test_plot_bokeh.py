@@ -7,7 +7,16 @@ import pytest
 
 try:
     from bokeh.io import save
+    from bokeh.models import (
+        DataRange1d,
+        Div,
+        GridBox,
+        LinearColorMapper,
+        LogColorMapper,
+        Range1d,
+    )
     from bokeh.models.layouts import LayoutDOM
+    from bokeh.palettes import Inferno256
     from bokeh.resources import Resources
 except ImportError:
     # <-- I like sorted imports without 'noqa' everywhere; repeat import then
@@ -21,14 +30,17 @@ from conftest import test_artifacts
 import beamphysics.plot_bokeh as _plot_bokeh_mod
 from beamphysics import ParticleGroup, set_default_backend
 from beamphysics.particles import single_particle
-from beamphysics.plot_dispatch import _default_backend, get_backend, get_default_backend
+from beamphysics.plot_dispatch import get_backend, get_default_backend
 from beamphysics.wavefront.wavefront import Wavefront
-
-P = ParticleGroup("docs/examples/data/bmad_particles.h5")
 
 _bokeh_artifacts = test_artifacts / "bokeh"
 _bokeh_artifacts.mkdir(exist_ok=True)
 _resources = Resources()
+
+
+@pytest.fixture(scope="module")
+def P() -> ParticleGroup:
+    return ParticleGroup("docs/examples/data/bmad_particles.h5")
 
 
 @pytest.fixture(autouse=True)
@@ -53,14 +65,13 @@ def _bokeh_show_to_save(request, monkeypatch):
 
 
 def test_dispatch_default():
-    assert get_default_backend() == _default_backend
-    be = get_backend()
-    assert be.name == _default_backend
+    assert get_backend().name == get_default_backend()
 
 
 def test_dispatch_explicit_bokeh():
     be = get_backend("bokeh")
     assert be.name == "bokeh"
+    assert be.marginal_plot is _plot_bokeh_mod.marginal_plot
 
 
 def test_dispatch_set_default():
@@ -81,23 +92,24 @@ def test_dispatch_invalid():
         get_backend("plotly")
 
 
+def test_unused_kwargs_warn(P):
+    with pytest.warns(UserWarning, match="not used by the 'bokeh'"):
+        P.plot("x", backend="bokeh", return_figure=True, figsize=(4, 4))
+
+
 # ---------------------------------------------------------------------------
 # ParticleGroup density_plot (1D)
 # ---------------------------------------------------------------------------
 
 
-def test_density_plot():
+def test_density_plot(P):
     result = P.plot("x", backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"density_plot_x")
 
 
-def test_density_plot_with_options():
+def test_density_plot_with_options(P):
     result = P.plot("t", backend="bokeh", return_figure=True, bins=50)
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"density_plot_t_bins50")
 
 
 # ---------------------------------------------------------------------------
@@ -113,18 +125,48 @@ MARGINAL_PAIRS = [
 
 
 @pytest.mark.parametrize("key1,key2", MARGINAL_PAIRS, ids=lambda p: str(p))
-def test_marginal_plot(key1, key2):
+def test_marginal_plot(P, key1, key2):
     result = P.plot(key1, key2, backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,f"marginal_plot_{key1}_{key2}")
 
 
-def test_marginal_plot_with_ellipse():
+def test_marginal_plot_with_ellipse(P):
     result = P.plot("x", "px", backend="bokeh", return_figure=True, ellipse=True)
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"marginal_plot_x_px_ellipse")
+
+
+def _joint_figure(layout):
+    grid = layout if isinstance(layout, GridBox) else layout.children[0]
+    return next(child for child, row, col in grid.children if (row, col) == (1, 0))
+
+
+@pytest.mark.parametrize("tex", [False, True])
+def test_marginal_plot_tex_labels(P, tex):
+    layout = get_backend("bokeh").marginal_plot(P, "x", "px", tex=tex, show=False)
+    joint = _joint_figure(layout)
+    assert ("$$" in joint.xaxis.axis_label) == tex
+    top = next(c for c, r, col in _grid_of(layout).children if (r, col) == (0, 0))
+    assert ("$$" in top.yaxis.axis_label) == tex
+
+
+def test_marginal_plot_limits(P):
+    be = get_backend("bokeh")
+    joint = _joint_figure(be.marginal_plot(P, "x", "px", show=False))
+    assert isinstance(joint.x_range, DataRange1d)
+    joint = _joint_figure(
+        be.marginal_plot(P, "x", "px", xlim=(-1e-3, 1e-3), show=False)
+    )
+    assert isinstance(joint.x_range, Range1d)
+    assert joint.x_range.start == pytest.approx(-1)
+    assert joint.x_range.end == pytest.approx(1)
+
+
+def test_marginal_plot_all_lost_renders_message(P):
+    P_dead = ParticleGroup(data=dict(P.data))
+    P_dead.status = np.zeros_like(P_dead.status)
+    result = get_backend("bokeh").marginal_plot(P_dead, "x", "y", show=False)
+    assert isinstance(result, Div)
+    assert "lost" in result.text
 
 
 # ---------------------------------------------------------------------------
@@ -135,14 +177,12 @@ SLICE_KEYS = ["sigma_x", "norm_emit_x"]
 
 
 @pytest.mark.parametrize("stat_key", SLICE_KEYS)
-def test_slice_plot(stat_key):
+def test_slice_plot(P, stat_key):
     result = P.slice_plot(stat_key, backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,f"slice_plot_{stat_key}")
 
 
-def test_slice_plot_multi_keys():
+def test_slice_plot_multi_keys(P):
     result = P.slice_plot("sigma_x", "sigma_y", backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
 
@@ -152,16 +192,16 @@ def test_slice_plot_multi_keys():
 # ---------------------------------------------------------------------------
 
 
-def test_density_and_slice_plot():
+def test_density_and_slice_plot(P):
     be = get_backend("bokeh")
-    result = be.density_and_slice_plot(P, key1="t", key2="p", return_figure=True)
+    result = be.density_and_slice_plot(P, key1="t", key2="p")
     assert isinstance(result, LayoutDOM)
 
 
-def test_density_and_slice_plot_custom_keys():
+def test_density_and_slice_plot_custom_keys(P):
     be = get_backend("bokeh")
     result = be.density_and_slice_plot(
-        P, key1="t", key2="energy", stat_keys=["sigma_x", "sigma_y"], return_figure=True
+        P, key1="t", key2="energy", stat_keys=["sigma_x", "sigma_y"]
     )
     assert isinstance(result, LayoutDOM)
 
@@ -170,29 +210,28 @@ def test_density_and_slice_plot_custom_keys():
 # Single-particle edge case
 # ---------------------------------------------------------------------------
 
+single_particle_warnings = pytest.mark.filterwarnings(
+    "ignore:.*invalid value encountered in.*",
+    "ignore:.*divide by zero.*",
+    "ignore:.*Degrees of freedom.*",
+    "ignore:.*The fit may be poorly conditioned.*",
+)
 
-@pytest.mark.filterwarnings("ignore:.*invalid value encountered in.*")
-@pytest.mark.filterwarnings("ignore:.*divide by zero.*")
-@pytest.mark.filterwarnings("ignore:.*Degrees of freedom.*")
-@pytest.mark.filterwarnings("ignore:.*The fit may be poorly conditioned.*")
+
+@single_particle_warnings
 def test_single_particle_density():
     Ps = single_particle(pz=10e6)
     result = Ps.plot("x", backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"single_particle_density")
 
 
-@pytest.mark.filterwarnings("ignore:.*invalid value encountered in.*")
-@pytest.mark.filterwarnings("ignore:.*divide by zero.*")
-@pytest.mark.filterwarnings("ignore:.*Degrees of freedom.*")
-@pytest.mark.filterwarnings("ignore:.*The fit may be poorly conditioned.*")
+@single_particle_warnings
 def test_single_particle_marginal():
     Ps = single_particle(pz=10e6)
     result = Ps.plot("x", "px", backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"single_particle_marginal")
+    joint = _joint_figure(result)
+    assert (joint.x_range.start, joint.x_range.end) == (-1, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -200,28 +239,15 @@ def test_single_particle_marginal():
 # ---------------------------------------------------------------------------
 
 
-def test_plot_1d_density_bar():
+@pytest.mark.parametrize("kind", ["bar", "line"])
+def test_plot_1d_density(kind):
     be = get_backend("bokeh")
     x = np.linspace(0, 10, 50)
     y = np.exp(-x)
     result = be.plot_1d_density(
-        x, y, x_name="x", y_name="f(x)", kind="bar", return_figure=True
+        x, y, x_name="x", y_name="f(x)", kind=kind, return_figure=True
     )
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"plot_1d_density_bar")
-
-
-def test_plot_1d_density_line():
-    be = get_backend("bokeh")
-    x = np.linspace(0, 10, 50)
-    y = np.exp(-x)
-    result = be.plot_1d_density(
-        x, y, x_name="x", y_name="f(x)", kind="line", return_figure=True
-    )
-    assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"plot_1d_density_line")
 
 
 def test_plot_1d_density_with_data_dict():
@@ -231,8 +257,6 @@ def test_plot_1d_density_with_data_dict():
         "time", "signal", data=data, kind="line", return_figure=True
     )
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"plot_1d_density_data_dict")
 
 
 def test_plot_1d_density_with_cdf():
@@ -241,8 +265,6 @@ def test_plot_1d_density_with_cdf():
     y = np.exp(-x)
     result = be.plot_1d_density(x, y, show_cdf=True, return_figure=True)
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"plot_1d_density_cdf")
 
 
 # ---------------------------------------------------------------------------
@@ -257,13 +279,19 @@ def test_plot_2d_density_with_marginals():
         data, dx=0.1, dy=0.1, x_name="x", y_name="y", return_figure=True
     )
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"plot_2d_density_with_marginals")
+
+
+def _color_mapper(layout):
+    main = _joint_figure(layout)
+    return next(
+        r.glyph.color_mapper for r in main.renderers if hasattr(r.glyph, "color_mapper")
+    )
 
 
 def test_plot_2d_density_with_log_scale():
     be = get_backend("bokeh")
-    data = np.random.rand(50, 50) + 0.01
+    data = np.random.rand(50, 50)
+    data[0, :] = 0  # a zero row: must not break the log marginals
     result = be.plot_2d_density_with_marginals(
         data,
         dx=0.1,
@@ -272,9 +300,25 @@ def test_plot_2d_density_with_log_scale():
         log_scale_marginals=True,
         return_figure=True,
     )
-    assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"plot_2d_density_log_scale")
+    assert isinstance(_color_mapper(result), LogColorMapper)
+    top = next(c for c, r, col in result.children if (r, col) == (0, 0))
+    source = top.renderers[0].data_source.data
+    assert np.all(np.asarray(source["top"]) > 0)
+    assert top.renderers[0].glyph.bottom > 0
+
+
+def test_plot_2d_density_cmap():
+    be = get_backend("bokeh")
+    layout = be.plot_2d_density_with_marginals(
+        np.random.rand(10, 10), cmap="inferno", show=False
+    )
+    mapper = _color_mapper(layout)
+    assert isinstance(mapper, LinearColorMapper)
+    assert tuple(mapper.palette) == tuple(Inferno256)
+    with pytest.raises(ValueError, match="No 256-color"):
+        be.plot_2d_density_with_marginals(
+            np.random.rand(10, 10), cmap="nope", show=False
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +326,8 @@ def test_plot_2d_density_with_log_scale():
 # ---------------------------------------------------------------------------
 
 
-def _make_wavefront():
+@pytest.fixture
+def W() -> Wavefront:
     return Wavefront.from_gaussian(
         shape=(51, 51, 21),
         dx=10e-6,
@@ -295,46 +340,32 @@ def _make_wavefront():
 
 
 @pytest.mark.filterwarnings("ignore:.*identical low and high.*:UserWarning")
-def test_wavefront_plot_power():
-    W = _make_wavefront()
+def test_wavefront_plot_power(W):
     result = W.plot_power(backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"wavefront_plot_power")
 
 
-def test_wavefront_plot_fluence():
-    W = _make_wavefront()
+def test_wavefront_plot_fluence(W):
     result = W.plot_fluence(backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"wavefront_plot_fluence")
 
 
-def test_wavefront_plot2():
-    W = _make_wavefront()
-    result = W.plot2(backend="bokeh", return_figure=True)
+def test_wavefront_plot2_deprecated(W):
+    with pytest.deprecated_call():
+        result = W.plot2(backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"wavefront_plot2")
 
 
-def test_wavefront_plot_spectral_intensity():
-    W = _make_wavefront()
+def test_wavefront_plot_spectral_intensity(W):
     Wk = W.to_kspace()
     result = Wk.plot_spectral_intensity(backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"wavefront_plot_spectral_intensity")
 
 
-def test_wavefront_plot_photon_energy_spectrum():
-    W = _make_wavefront()
+def test_wavefront_plot_photon_energy_spectrum(W):
     Wk = W.to_kspace()
     result = Wk.plot_photon_energy_spectrum(backend="bokeh", return_figure=True)
     assert isinstance(result, LayoutDOM)
-    # Artifact saved automatically by _bokeh_show_to_save fixture
-    # _save_bokeh(result,"wavefront_plot_photon_energy_spectrum")
 
 
 # ---------------------------------------------------------------------------
@@ -343,15 +374,13 @@ def test_wavefront_plot_photon_energy_spectrum():
 
 
 def _grid_of(layout):
-    from bokeh.models import GridBox
-
     if isinstance(layout, GridBox):
         return layout
     return next(child for child in layout.children if isinstance(child, GridBox))
 
 
 @pytest.mark.parametrize("stats_location", ["top-right", "bottom"])
-def test_marginal_plot_responsive_grid(stats_location):
+def test_marginal_plot_responsive_grid(P, stats_location):
     be = get_backend("bokeh")
     layout = be.marginal_plot(
         P,
@@ -373,7 +402,7 @@ def test_marginal_plot_responsive_grid(stats_location):
         assert child.aspect_ratio is None
 
 
-def test_marginal_plot_scale_both_keeps_aspect():
+def test_marginal_plot_scale_both_keeps_aspect(P):
     be = get_backend("bokeh")
     layout = be.marginal_plot(
         P, "x", "y", sizing_mode="scale_both", width=800, height=400, show=False
@@ -381,7 +410,7 @@ def test_marginal_plot_scale_both_keeps_aspect():
     assert _grid_of(layout).aspect_ratio == 2.0
 
 
-def test_marginal_plot_fixed_sizes():
+def test_marginal_plot_fixed_sizes(P):
     be = get_backend("bokeh")
     layout = be.marginal_plot(
         P, "x", "y", width=600, height=300, marginal_fraction=0.25, show=False
@@ -401,9 +430,7 @@ def test_marginal_plot_fixed_sizes():
     assert all(child.sizing_mode is None for child, _, _ in grid.children)
 
 
-def test_marginal_plot_stats_div_scrolls():
-    from bokeh.models import Div
-
+def test_marginal_plot_stats_div_scrolls(P):
     be = get_backend("bokeh")
     layout = be.marginal_plot(P, "x", "y", text="a<br>" * 50, show=False)
     stats = next(

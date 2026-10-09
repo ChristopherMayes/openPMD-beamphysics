@@ -54,6 +54,122 @@ class PlotPreparationError(Exception): ...
 class NanDataError(PlotPreparationError): ...
 
 
+def drop_lost_particles(
+    particle_group: ParticleGroup,
+    filter_lost_particles: bool = True,
+    n_dead: int | None = None,
+) -> tuple[ParticleGroup, int]:
+    """
+    Exclude lost particles (``status != 1``) from a group before plotting.
+
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+    filter_lost_particles : bool, default=True
+        When False the group is returned unchanged; `n_dead` is still resolved.
+    n_dead : int or None, optional
+        Dead-particle count to report. Defaults to `particle_group.n_dead`;
+        pass it when the group has already been filtered.
+
+    Returns
+    -------
+    (ParticleGroup, int)
+        The group to plot and the number of dead particles to annotate.
+
+    Raises
+    ------
+    PlotPreparationError
+        If filtering would leave no particles.
+    """
+    if n_dead is None:
+        n_dead = int(particle_group.n_dead)
+    if not filter_lost_particles or particle_group.n_dead == 0:
+        return particle_group, n_dead
+    if particle_group.n_alive == 0:
+        raise PlotPreparationError(
+            f"All {particle_group.n_particle} particles are lost; nothing to plot"
+        )
+    return cast(
+        "ParticleGroup", particle_group.where(particle_group.status == 1)
+    ), n_dead
+
+
+@dataclass
+class StatsAnnotation:
+    """A single beam statistic annotation row."""
+
+    label: str
+    sub_label: str
+    value: str
+    units: str
+    color: str | None = None
+
+
+def n_dead_annotation(n_dead: int) -> StatsAnnotation:
+    """The red ``n_dead`` line appended to plot statistics."""
+    return StatsAnnotation("n_dead", "", f"{n_dead:,}", "", color="red")
+
+
+def get_annotations(
+    particle_group: ParticleGroup, key1: str, key2: str
+) -> list[StatsAnnotation]:
+    """
+    Return beam-statistic annotations for a given key combination.
+
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+        The particle group to compute statistics from.
+    key1 : str
+        The x-axis key.
+    key2 : str
+        The y-axis key.
+
+    Returns
+    -------
+    list[StatsAnnotation]
+    """
+    # Longitudinal phase space: delta_z/c or z/c vs energy
+    if key1 in ("delta_z/c", "z/c") and key2 == "energy":
+        sigma_z = particle_group["sigma_z"]
+        sigma_p = particle_group["sigma_p"]
+        p0 = particle_group["mean_p"]
+        return [
+            StatsAnnotation("σ", "z", f"{sigma_z / c_light * 1e15:.0f}", "fs"),
+            StatsAnnotation("σ", "δ", f"{sigma_p / p0 * 1e4:.1f} × 10⁻⁴", ""),
+            StatsAnnotation(
+                "⟨E⟩", "", f"{particle_group['mean_energy'] / 1e6:.1f}", "MeV"
+            ),
+        ]
+
+    # Transverse spot: x vs y
+    if key1 == "x" and key2 == "y":
+        return [
+            StatsAnnotation("⟨x⟩", "", f"{particle_group['mean_x'] * 1e6:.1f}", "µm"),
+            StatsAnnotation("⟨y⟩", "", f"{particle_group['mean_y'] * 1e6:.1f}", "µm"),
+            StatsAnnotation("σ", "x", f"{particle_group['sigma_x'] * 1e6:.1f}", "µm"),
+            StatsAnnotation("σ", "y", f"{particle_group['sigma_y'] * 1e6:.1f}", "µm"),
+        ]
+
+    # Horizontal phase space: x vs xp or px
+    if key1 == "x" and key2 in ("xp", "px"):
+        return [
+            StatsAnnotation(
+                "ε", "n,x", f"{particle_group['norm_emit_x'] * 1e6:.2f}", "mm-mrad"
+            ),
+        ]
+
+    # Vertical phase space: y vs yp or py
+    if key1 == "y" and key2 in ("yp", "py"):
+        return [
+            StatsAnnotation(
+                "ε", "n,y", f"{particle_group['norm_emit_y'] * 1e6:.2f}", "mm-mrad"
+            ),
+        ]
+
+    return []
+
+
 @dataclass
 class MarginalAxisData:
     """

@@ -26,13 +26,16 @@ from bokeh.plotting import figure
 from .labels import mathlabel
 from .plot_base import (
     Limit,
+    StatsAnnotation,
+    drop_lost_particles,
+    get_annotations,
+    n_dead_annotation,
     prepare_density_and_slice_plot,
     prepare_density_plot,
     prepare_marginal_plot,
     prepare_slice_plot,
     prepare_wakefield_plot,
 )
-from .units import c_light
 
 logger = logging.getLogger(__name__)
 
@@ -110,75 +113,6 @@ def mathjax_fix(label: str) -> str:
     return label
 
 
-@dataclasses.dataclass
-class StatsAnnotation:
-    """A single beam statistic annotation row."""
-
-    label: str
-    sub_label: str
-    value: str
-    units: str
-
-
-def get_annotations(particle_group, key1: str, key2: str) -> list[StatsAnnotation]:
-    """
-    Return beam-statistic annotations for a given key combination.
-
-    Parameters
-    ----------
-    particle_group : ParticleGroup
-        The particle group to compute statistics from.
-    key1 : str
-        The x-axis key.
-    key2 : str
-        The y-axis key.
-
-    Returns
-    -------
-    list[StatsAnnotation]
-    """
-
-    # Longitudinal phase space: delta_z/c or z/c vs energy
-    if key1 in ("delta_z/c", "z/c") and key2 == "energy":
-        sigma_z = particle_group["sigma_z"]
-        sigma_p = particle_group["sigma_p"]
-        p0 = particle_group["mean_p"]
-        return [
-            StatsAnnotation("σ", "z", f"{sigma_z / c_light * 1e15:.0f}", "fs"),
-            StatsAnnotation("σ", "δ", f"{sigma_p / p0 * 1e4:.1f} × 10⁻⁴", ""),
-            StatsAnnotation(
-                "⟨E⟩", "", f"{particle_group['mean_energy'] / 1e6:.1f}", "MeV"
-            ),
-        ]
-
-    # Transverse spot: x vs y
-    if key1 == "x" and key2 == "y":
-        return [
-            StatsAnnotation("⟨x⟩", "", f"{particle_group['mean_x'] * 1e6:.1f}", "µm"),
-            StatsAnnotation("⟨y⟩", "", f"{particle_group['mean_y'] * 1e6:.1f}", "µm"),
-            StatsAnnotation("σ", "x", f"{particle_group['sigma_x'] * 1e6:.1f}", "µm"),
-            StatsAnnotation("σ", "y", f"{particle_group['sigma_y'] * 1e6:.1f}", "µm"),
-        ]
-
-    # Horizontal phase space: x vs xp or px
-    if key1 == "x" and key2 in ("xp", "px"):
-        return [
-            StatsAnnotation(
-                "ε", "n,x", f"{particle_group['norm_emit_x'] * 1e6:.2f}", "mm-mrad"
-            ),
-        ]
-
-    # Vertical phase space: y vs yp or py
-    if key1 == "y" and key2 in ("yp", "py"):
-        return [
-            StatsAnnotation(
-                "ε", "n,y", f"{particle_group['norm_emit_y'] * 1e6:.2f}", "mm-mrad"
-            ),
-        ]
-
-    return []
-
-
 def _annotations_to_html(
     annotations: list[StatsAnnotation],
     horizontal: bool = False,
@@ -194,11 +128,14 @@ def _annotations_to_html(
     if not annotations:
         return None
 
+    def style(a: StatsAnnotation) -> str:
+        return f" style='color:{a.color}'" if a.color else ""
+
     if horizontal:
         items = []
         for a in annotations:
             label = f"{a.label}<sub>{a.sub_label}</sub>" if a.sub_label else a.label
-            items.append(f"{label} = {a.value} {a.units}")
+            items.append(f"<span{style(a)}>{label} = {a.value} {a.units}</span>")
         sep = " &nbsp;&middot;&nbsp; "
         return f"<span>{sep.join(items)}</span>"
 
@@ -206,7 +143,7 @@ def _annotations_to_html(
     for a in annotations:
         label = f"{a.label}<sub>{a.sub_label}</sub>" if a.sub_label else a.label
         rows.append(
-            f"<tr><td style='text-align:right;padding-right:4px'>{label}</td>"
+            f"<tr{style(a)}><td style='text-align:right;padding-right:4px'>{label}</td>"
             f"<td>{a.value} {a.units}</td></tr>"
         )
     return "<table style='border-collapse:collapse'>" + "".join(rows) + "</table>"
@@ -309,6 +246,20 @@ _STATS_CSS = """
   .stats:hover .stats-popover { display: block; }
 }
 """
+
+
+def _stats_html(
+    custom_text: str | None, annotations: list[StatsAnnotation], horizontal: bool
+) -> str:
+    """Custom text (if any) followed by the annotation rows, e.g. ``n_dead``."""
+    parts: list[str] = []
+    if custom_text:
+        parts.append(custom_text)
+        annotations = [a for a in annotations if a.color is not None]
+    html = _annotations_to_html(annotations, horizontal=horizontal)
+    if html:
+        parts.append(html)
+    return (" &nbsp;&middot;&nbsp; " if horizontal else "<br>").join(parts)
 
 
 def _stats_cell_div(content: str, font_size: str, font_css: str) -> Div:
@@ -420,6 +371,8 @@ def marginal_plot(
     ylim: Limit | None = None,
     nice: bool = True,
     ellipse: bool = False,
+    filter_lost_particles: bool = True,
+    n_dead: int | None = None,
     width: int = 600,
     height: int = 600,
     colorbar: bool = False,
@@ -459,6 +412,12 @@ def marginal_plot(
         Use "nice" prefixes.
     ellipse: bool, default = True
         If True, plot an ellipse representing the 2x2 sigma matrix.
+    filter_lost_particles : bool, default = True
+        Exclude lost particles (``status != 1``) from the plot and statistics.
+        If any exist, a red ``n_dead`` line is appended to the stats text.
+    n_dead : int or None, optional
+        Dead-particle count to annotate; defaults to ``particle_group.n_dead``.
+        Pass it when the group has already been filtered.
     sizing_mode: str, default = None
         Bokeh sizing mode for responsive layout. When set, the returned
         ``GridPlot`` uses proportional CSS grid tracks, so the marginal
@@ -498,6 +457,9 @@ def marginal_plot(
     if font_settings is None:
         font_settings = MarginalFontSettings()
 
+    particle_group, n_dead = drop_lost_particles(
+        particle_group, filter_lost_particles, n_dead
+    )
     pdata = prepare_marginal_plot(
         particle_group,
         key1=key1,
@@ -646,6 +608,8 @@ def marginal_plot(
 
     annotations = get_annotations(particle_group, key1, key2) if text is None else []
     custom_text = text.replace("\n", "<br>") if text else None
+    if n_dead:
+        annotations.append(n_dead_annotation(n_dead))
 
     if title:
         fig_joint.title.text = title
@@ -659,11 +623,11 @@ def marginal_plot(
 
     if custom_text or annotations:
         if stats_location == "top-right":
-            content = custom_text or _annotations_to_html(annotations)
+            content = _stats_html(custom_text, annotations, horizontal=False)
             stats_div = _stats_cell_div(content, popup_font_size, popup_css)
         else:
             # "bottom" - horizontal stats bar below the plot
-            content = custom_text or _annotations_to_html(annotations, horizontal=True)
+            content = _stats_html(custom_text, annotations, horizontal=True)
             stats_div = Div(
                 text=f"""
                 <div style="font-size:{popup_font_size}; color:#555;

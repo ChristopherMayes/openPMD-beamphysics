@@ -409,7 +409,9 @@ def test_marginal_plot_stats_div_scrolls():
     stats = next(
         child for child, _, _ in _grid_of(layout).children if isinstance(child, Div)
     )
-    assert stats.styles["overflow"] == "auto"
+    assert 'class="stats-cell"' in stats.text
+    assert 'class="stats-popover"' in stats.text
+    assert any("@container" in css for css in stats.stylesheets)
 
 
 def test_plot_2d_density_with_marginals_responsive_grid():

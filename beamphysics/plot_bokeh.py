@@ -290,6 +290,43 @@ def density_plot(
     return _maybe_show(fig, show)
 
 
+_STATS_CSS = """
+:host { overflow: visible; }
+/* Bokeh wraps Div text in an inline-block; size containment below would
+   otherwise collapse it to zero width. */
+.bk-clearfix { display: block; width: 100%; height: 100%; }
+.stats { position: relative; width: 100%; height: 100%; container-type: size; }
+.stats-cell { display: flex; width: 100%; height: 100%; overflow: auto; }
+.stats-cell > div { margin: auto; }
+.stats-popover {
+  display: none; position: absolute; top: 0; right: 0; z-index: 100;
+  padding: 6px 10px; border: 1px solid #999; border-radius: 4px;
+  background: rgba(255, 255, 255, 0.97); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  white-space: nowrap; font-size: 13px; line-height: 1.6;
+}
+/* Offer the hover overlay only when the cell is too small to read in place. */
+@container (max-width: 160px) or (max-height: 100px) {
+  .stats:hover .stats-popover { display: block; }
+}
+"""
+
+
+def _stats_cell_div(content: str, font_size: str, font_css: str) -> Div:
+    """
+    Stats text for the grid corner: scrolls in place, hover overlay when cramped.
+    """
+    return Div(
+        text=(
+            '<div class="stats">'
+            f'<div class="stats-cell"><div style="font-size:{font_size}; '
+            f'line-height:1.6; {font_css}">{content}</div></div>'
+            f'<div class="stats-popover" style="{font_css}">{content}</div>'
+            "</div>"
+        ),
+        stylesheets=[_STATS_CSS],
+    )
+
+
 def _marginal_grid(
     joint: figure,
     top: figure,
@@ -432,7 +469,8 @@ def marginal_plot(
         Fraction of the plot to use for the marginal plots.
     stats_location : {"top-right", "bottom"}, default = "top-right"
         Where to show the stats text: in the unused grid cell (scrolls if the
-        text does not fit) or in a strip below the plot.
+        text does not fit, and shows a hover overlay when the cell is small)
+        or in a strip below the plot.
     palette : bokeh.palettes.Palette, default=Viridis256
         Color map.
     text : str or None, optional
@@ -622,19 +660,7 @@ def marginal_plot(
     if custom_text or annotations:
         if stats_location == "top-right":
             content = custom_text or _annotations_to_html(annotations)
-            # Flex + margin:auto centers the text when it fits but keeps it
-            # scrollable (rather than clipped at the top) when it does not.
-            stats_div = Div(
-                text=f"""
-                <div style="display:flex; width:100%; height:100%">
-                  <div style="margin:auto; font-size:{popup_font_size};
-                              line-height:1.6; {popup_css}">
-                    {content}
-                  </div>
-                </div>
-                """,
-                styles={"overflow": "auto"},
-            )
+            stats_div = _stats_cell_div(content, popup_font_size, popup_css)
         else:
             # "bottom" - horizontal stats bar below the plot
             content = custom_text or _annotations_to_html(annotations, horizontal=True)

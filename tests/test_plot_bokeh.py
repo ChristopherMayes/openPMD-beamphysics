@@ -343,11 +343,11 @@ def test_wavefront_plot_photon_energy_spectrum():
 
 
 def _grid_of(layout):
-    from bokeh.models import GridPlot
+    from bokeh.models import GridBox
 
-    if isinstance(layout, GridPlot):
+    if isinstance(layout, GridBox):
         return layout
-    return next(child for child in layout.children if isinstance(child, GridPlot))
+    return next(child for child in layout.children if isinstance(child, GridBox))
 
 
 @pytest.mark.parametrize("stats_location", ["top-right", "bottom"])

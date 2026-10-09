@@ -7,12 +7,12 @@ from typing import Literal
 import numpy as np
 from bokeh.core.enums import SizingModeType
 from bokeh.io import show as _bokeh_show
-from bokeh.layouts import column, gridplot
+from bokeh.layouts import column
 from bokeh.models import (
     ColorBar,  # pyright: ignore[reportPrivateImportUsage]
     ColumnDataSource,  # pyright: ignore[reportPrivateImportUsage]
     Div,  # pyright: ignore[reportPrivateImportUsage]
-    GridPlot,  # pyright: ignore[reportPrivateImportUsage]
+    GridBox,  # pyright: ignore[reportPrivateImportUsage]
     HoverTool,  # pyright: ignore[reportPrivateImportUsage]
     LayoutDOM,  # pyright: ignore[reportPrivateImportUsage]
     LinearAxis,  # pyright: ignore[reportPrivateImportUsage]
@@ -300,9 +300,15 @@ def _marginal_grid(
     height: int,
     marginal_fraction: float,
     sizing_mode: SizingModeType | None,
-) -> GridPlot:
+) -> GridBox:
     """
-    Assemble joint/marginal figures into a 2x2 ``GridPlot``.
+    Assemble joint/marginal figures into a 2x2 ``GridBox``.
+
+    A ``GridBox`` rather than ``gridplot``/``GridPlot`` on purpose: bokehjs
+    only propagates frame-alignment layout through views that own one, and
+    ``GridPlotView`` does not, so inside a Panel ``Tabs`` whose other tabs
+    hold figures the grid's figures were never laid out (blank plots). The
+    joint figure keeps its own toolbar instead of a merged one.
 
     Parameters
     ----------
@@ -340,14 +346,9 @@ def _marginal_grid(
         for child in (joint, top, right, corner):
             child.sizing_mode = "stretch_both"
 
-    grid = gridplot(
-        [
-            [top, corner],
-            [joint, right],
-        ],
-        merge_tools=True,
-        toolbar_location="left",
-    )
+    top.toolbar_location = None
+    right.toolbar_location = None
+    grid = GridBox(children=[(top, 0, 0), (corner, 0, 1), (joint, 1, 0), (right, 1, 1)])
 
     if sizing_mode is not None:
         # Proportions live on the grid tracks, not the children. minmax(0, ...)

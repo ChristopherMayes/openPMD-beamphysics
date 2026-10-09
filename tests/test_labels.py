@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from beamphysics.labels import mathlabel
+from beamphysics.labels import mathlabel, tex_to_unicode, unicodelabel
 from beamphysics.units import pmd_unit, sqrt_unit
 
 
@@ -83,3 +83,31 @@ from beamphysics.units import pmd_unit, sqrt_unit
 )
 def test_mathlabel(keys, units, tex, expected) -> None:
     assert mathlabel(*keys, units=units, tex=tex) == expected
+
+
+@pytest.mark.parametrize(
+    "tex, expected",
+    [
+        (r"$\sigma_{ x }~(\mathrm{mm})$", "σ_x (mm)"),
+        (r"\epsilon_{n, x}~(\mathrm{mm})", "ε_n,x (mm)"),
+        (r"\left<E\right>~(\mathrm{eV})", "⟨E⟩ (eV)"),
+        (r"\mathrm{ z/c } - \left<\mathrm{ z/c }\right>", "z/c - ⟨z/c⟩"),
+        (r"\left|x\right|", "|x|"),
+        (r"\text{Twiss}\ \beta_x~(\mathrm{m})", "Twiss β_x (m)"),
+        (r"\overline{p_x}", "p̄_x"),
+        (r"\sqrt{\mathrm{m}}", "√m"),
+        (r"\mathrm{m}^{2}", "m²"),
+        (r"\mathrm{keV}/\mathrm{c}", "keV/c"),
+        (r"\mathrm{nC}/(\mathrm{keV}/\mathrm{c})", "nC/(keV/c)"),
+        (r"\min(x)", "min(x)"),
+        (r"\mathrm{ mm-mrad }", "mm-mrad"),
+        (r"x^{ab}", "x^ab"),
+    ],
+)
+def test_tex_to_unicode(tex, expected):
+    assert tex_to_unicode(tex) == expected
+
+
+def test_unicodelabel():
+    assert unicodelabel("sigma_x", "norm_emit_y", units="µm") == "σ_x, ε_n,y (µm)"
+    assert unicodelabel(units="nC/µm") == "nC/µm"

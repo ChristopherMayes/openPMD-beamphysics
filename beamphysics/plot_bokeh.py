@@ -769,7 +769,7 @@ def slice_plot(
         fig.line(
             pdata.x,
             curve.values,
-            legend_label=mathjax_fix(curve.label),
+            legend_label=curve.plain_label,
             color=color,
             line_width=2,
         )
@@ -1036,7 +1036,7 @@ def density_and_slice_plot(
             pdata.slice_x,
             curve.values,
             y_range_name="stats",
-            legend_label=mathjax_fix(curve.label),
+            legend_label=curve.plain_label,
             color=color,
             line_width=2,
         )

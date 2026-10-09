@@ -187,6 +187,22 @@ def test_slice_plot_multi_keys(P):
     assert isinstance(result, LayoutDOM)
 
 
+@pytest.mark.parametrize("tex", [False, True])
+def test_slice_plot_legend_is_unicode(P, tex):
+    fig = P.slice_plot(
+        "sigma_x",
+        "norm_emit_y",
+        backend="bokeh",
+        tex=tex,
+        show=False,
+        return_figure=True,
+    )
+    labels = [item.label.value for item in fig.legend[0].items]
+    assert labels[0].startswith("σ_x (")
+    assert labels[1].startswith("ε_n,y (")
+    assert not any("$" in label or "\\" in label for label in labels)
+
+
 # ---------------------------------------------------------------------------
 # ParticleGroup density_and_slice_plot
 # ---------------------------------------------------------------------------

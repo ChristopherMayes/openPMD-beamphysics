@@ -1,3 +1,5 @@
+import re
+
 from .units import nice_array, parse_bunching_str, pmd_unit
 
 TEXLABEL = {
@@ -207,3 +209,104 @@ def mathlabel(*keys, units=None, tex=True):
     if units_frag:
         label = rf"{label}~({units_frag})"
     return rf"${label}$"
+
+
+_GREEK = {
+    "alpha": "α",
+    "beta": "β",
+    "gamma": "γ",
+    "delta": "δ",
+    "Delta": "Δ",
+    "epsilon": "ε",
+    "varepsilon": "ε",
+    "eta": "η",
+    "theta": "θ",
+    "lambda": "λ",
+    "mu": "µ",
+    "pi": "π",
+    "rho": "ρ",
+    "sigma": "σ",
+    "tau": "τ",
+    "phi": "φ",
+    "psi": "ψ",
+    "omega": "ω",
+}
+_SYMBOLS = {
+    "cdot": "·",
+    "times": "×",
+    "pm": "±",
+    "min": "min",
+    "max": "max",
+    "left<": "⟨",
+    "right>": "⟩",
+    "langle": "⟨",
+    "rangle": "⟩",
+    "left": "",
+    "right": "",
+    ",": " ",
+    ";": " ",
+    " ": " ",
+}
+_SUPERSCRIPTS = str.maketrans("0123456789+-()ni", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁽⁾ⁿⁱ")
+_WRAPPER_RE = re.compile(r"\\(?:mathrm|text|textrm|mathit|mathbf)\{([^{}]*)\}")
+_OVERLINE_RE = re.compile(r"\\(?:overline|bar)\{([^{}]*)\}")
+_SQRT_RE = re.compile(r"\\sqrt\{([^{}]*)\}")
+_COMMAND_RE = re.compile(r"\\(left<|right>|[A-Za-z]+|[,; ])")
+_SUPERSCRIPT_RE = re.compile(r"\^(?:\{([^{}]*)\}|(\S))")
+_SUBSCRIPT_RE = re.compile(r"_\{([^{}]*)\}")
+
+
+def _superscript(match: re.Match) -> str:
+    inner = (match.group(1) if match.group(1) is not None else match.group(2)).strip()
+    converted = inner.translate(_SUPERSCRIPTS)
+    if all(ord(c) > 127 for c in converted):
+        return converted
+    return f"^{inner}"
+
+
+def _overline(match: re.Match) -> str:
+    inner = match.group(1).strip()
+    return inner[:1] + "\u0304" + inner[1:]
+
+
+def tex_to_unicode(tex: str) -> str:
+    r"""
+    Render a TeX label fragment as plain Unicode text.
+
+    For contexts without math rendering, such as Bokeh legend entries.
+    Greek letters, angle brackets, overlines, square roots and digit
+    superscripts become Unicode characters; subscripts stay in ``x_y`` form
+    (``σ_x``, ``ε_n,x``) since Unicode subscripts do not cover every letter.
+
+    Examples
+    --------
+    >>> tex_to_unicode(r"$\sigma_{ x }~(\mathrm{mm})$")
+    'σ_x (mm)'
+    >>> tex_to_unicode(r"\left<E\right>~(\mathrm{m}^{2})")
+    '⟨E⟩ (m²)'
+    """
+    text = tex.strip("$")
+    # Resolve innermost-first so nested wrappers unwind in a few passes.
+    previous = None
+    while previous != text:
+        previous = text
+        text = _WRAPPER_RE.sub(lambda m: m.group(1).strip(), text)
+        text = _SQRT_RE.sub(lambda m: "√" + m.group(1).strip(), text)
+        text = _OVERLINE_RE.sub(_overline, text)
+    text = _COMMAND_RE.sub(
+        lambda m: _GREEK.get(m.group(1), _SYMBOLS.get(m.group(1), m.group(0))), text
+    )
+    text = _SUPERSCRIPT_RE.sub(_superscript, text)
+    text = _SUBSCRIPT_RE.sub(lambda m: "_" + re.sub(r"\s+", "", m.group(1)), text)
+    text = text.replace("~", " ").replace("{", "").replace("}", "")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def unicodelabel(*keys, units=None) -> str:
+    """
+    Plain-Unicode label for one or more attribute keys, with optional units.
+
+    The TeX form from `mathlabel` converted with `tex_to_unicode`, e.g.
+    ``unicodelabel("sigma_x", units="mm")`` gives ``'σ_x (mm)'``.
+    """
+    return tex_to_unicode(mathlabel(*keys, units=units, tex=True))

@@ -82,6 +82,9 @@ def test_bokeh_marginal_custom_text_keeps_n_dead(with_dead: ParticleGroup):
     layout = be.marginal_plot(with_dead, "x", "y", text="hello", show=False)
     text = _bokeh_stats_text(layout)
     assert "hello" in text and "n_dead" in text and "⟨x⟩" not in text
+    layout = be.marginal_plot(with_dead, "x", "y", text="hello", stats=True, show=False)
+    text = _bokeh_stats_text(layout)
+    assert "hello" in text and "n_dead" in text and "⟨x⟩" in text
 
 
 def test_bokeh_marginal_no_dead_no_line(alive: ParticleGroup):
@@ -97,7 +100,7 @@ def _mpl_texts(fig) -> list[Text]:
 
 def test_mpl_marginal_filters_and_annotates(with_dead: ParticleGroup):
     be = get_backend("mpl")
-    fig = be.marginal_plot(with_dead, "x", "y", title="spot")
+    fig = be.marginal_plot(with_dead, "x", "y", title="spot", stats=True)
     texts = {t.get_text(): t for t in _mpl_texts(fig)}
     dead = next(t for s, t in texts.items() if s.startswith("n_dead"))
     assert dead.get_text() == f"n_dead = {N_DEAD:,}"
@@ -107,9 +110,9 @@ def test_mpl_marginal_filters_and_annotates(with_dead: ParticleGroup):
     matplotlib.pyplot.close(fig)
 
 
-def test_mpl_marginal_suppressed_text_keeps_n_dead(with_dead: ParticleGroup):
+def test_mpl_marginal_stats_opt_in_keeps_n_dead(with_dead: ParticleGroup):
     be = get_backend("mpl")
-    fig = be.marginal_plot(with_dead, "x", "y", text="")
+    fig = be.marginal_plot(with_dead, "x", "y")
     labels = [t.get_text() for t in _mpl_texts(fig)]
     assert any(s.startswith("n_dead") for s in labels)
     assert not any(s.startswith("⟨x⟩") for s in labels)

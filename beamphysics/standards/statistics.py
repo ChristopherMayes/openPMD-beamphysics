@@ -20,6 +20,7 @@ import numpy as np
 import yaml
 
 from ..particles import ParticleGroup
+from ..statistics import StatisticOperator
 from ..units import pmd_unit
 
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "load_computed_statistics",
     "get_computed_statistic",
     "export_computed_statistics",
+    "scalar_statistic_keys",
     "ARRAY_KEYS",
     "OPERATORS",
 ]
@@ -554,12 +556,13 @@ def _generate_computed_statistics_list(base_stats: Dict[str, Dict]) -> List[Dict
 
     # Generate operator + key combinations
     for op_prefix, op_info in OPERATORS.items():
+        op = StatisticOperator(op_prefix.removesuffix("_"))
         for key in ARRAY_KEYS:
             base = base_stats.get(key)
             if not base:
                 continue
 
-            label = f"{op_prefix}{key}"
+            label = op.key(key)
             base_mathlabel = base.get("mathlabel", key)
             base_desc = base.get("description", key).lower()
 
@@ -567,11 +570,7 @@ def _generate_computed_statistics_list(base_stats: Dict[str, Dict]) -> List[Dict
             units = base.get("units", "1")
 
             dtype = base["dtype"]
-            if base["dtype"] == "int" and op_prefix.rstrip("_") in {
-                "mean",
-                "sigma",
-                "delta",
-            }:
+            if base["dtype"] == "int" and not op.preserves_dtype:
                 dtype = "float"
             stat = {
                 "label": label,
@@ -585,7 +584,7 @@ def _generate_computed_statistics_list(base_stats: Dict[str, Dict]) -> List[Dict
                 "reference": op_info["reference"],
                 "category": "computed_operators",
                 "base_statistic": key,
-                "operator": op_prefix.rstrip("_"),
+                "operator": op.value,
                 "shape": op_info["shape"],
                 "dtype": dtype,
             }
@@ -602,7 +601,7 @@ def _generate_computed_statistics_list(base_stats: Dict[str, Dict]) -> List[Dict
             if not base2:
                 continue
 
-            label = f"cov_{key1}__{key2}"
+            label = StatisticOperator.COV.key(key1, key2)
             mathlabel1 = base1.get("mathlabel", key1)
             mathlabel2 = base2.get("mathlabel", key2)
 
@@ -746,6 +745,39 @@ def get_all_statistics_by_key() -> dict[str, dict]:
             *computed["statistics"],
         ]
     }
+
+
+# Scalar statistics that need a parameter as a suffix (e.g. `bunching_1e-6`)
+_PARAMETERIZED_STATISTICS = frozenset({"bunching"})
+
+
+@lru_cache
+def scalar_statistic_keys(
+    include_covariance: bool = True, include_twiss: bool = True
+) -> tuple[str, ...]:
+    """
+    Keys of every scalar statistic in the standard and computed statistics.
+
+    Parameters
+    ----------
+    include_covariance : bool, default=True
+        Include the `cov_` statistics (the majority of the keys).
+    include_twiss : bool, default=True
+        Include the `twiss_` statistics.
+
+    Returns
+    -------
+    tuple of str
+        Statistic keys, in the order of `get_all_statistics_by_key`.
+    """
+    return tuple(
+        key
+        for key, stat in get_all_statistics_by_key().items()
+        if stat["shape"] == []
+        and key not in _PARAMETERIZED_STATISTICS
+        and (include_covariance or not key.startswith("cov_"))
+        and (include_twiss or not key.startswith("twiss_"))
+    )
 
 
 def generate_computed_markdown() -> str:

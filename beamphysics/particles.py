@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import os
 import pathlib
+from collections.abc import Sequence
 from copy import deepcopy
-from typing import Union, Optional, Sequence
+from typing import Any
 
 import numpy as np
 from h5py import File, Group
@@ -32,6 +33,9 @@ from .readers import (
 )
 from .species import charge_of, mass_of
 from .statistics import (
+    StatisticKey,
+    StatisticOperator,
+    TwissParameter,
     matched_particles,
     norm_emit_calc,
     normalized_particle_coordinate,
@@ -51,6 +55,10 @@ __all__ = [
 
 # -----------------------------------------
 # Classes
+
+
+# Legacy keys that are statistics of an array
+_LEGACY_KEYS = {"higher_order_energy_spread": "sigma_higher_order_energy"}
 
 
 class ParticleGroup:
@@ -894,6 +902,131 @@ class ParticleGroup:
 
         return get_all_statistics_by_key()[key]
 
+    def statistics(self, *keys: str, skip_errors: bool = False) -> dict[str, Any]:
+        """
+        Compute many statistics at once.
+
+        Equivalent to `{key: self[key] for key in keys}`, but each array
+        named by a `mean_`, `sigma_`, `min_`, `max_`, `ptp_`, `delta_` or
+        `cov_` key is computed only once, the weighted means, standard
+        deviations and covariances of all of them come from a single stacked
+        array, and `twiss_` keys share one `twiss` calculation per plane.
+
+        This is much faster than looking keys up one at a time when there
+        are many keys, or when the arrays are expensive to compute (e.g.
+        `higher_order_energy`, `x_bar`, `Jx`).
+
+        Keys that cannot be computed this way fall back to `self[key]`.
+
+        Parameters
+        ----------
+        *keys : str
+            Statistic keys, as accepted by `self[key]`. Defaults to every
+            scalar statistic of the standard. See
+            `beamphysics.standards.statistics.scalar_statistic_keys`.
+        skip_errors : bool, default=False
+            Leave out keys that raise, rather than raising.
+
+        Returns
+        -------
+        dict of str to Any
+            Values by key, in `keys` order.
+        """
+        if not keys:
+            from .standards.statistics import scalar_statistic_keys
+
+            keys = scalar_statistic_keys()
+
+        def try_split(key: str) -> StatisticKey | None:
+            # Malformed keys raise from the `self[key]` fallback instead,
+            # subject to `skip_errors`
+            try:
+                return StatisticKey.from_string(_LEGACY_KEYS.get(key, key))
+            except ValueError:
+                return None
+
+        parsed = {key: try_split(key) for key in keys}
+        names = dict.fromkeys(
+            name for split in parsed.values() if split for name in split.names
+        )
+
+        n_particle = len(self)
+        arrays: dict[str, np.ndarray] = {}
+        for name in names:
+            try:
+                values = self[name]
+            except Exception:
+                pass
+            else:
+                if np.shape(values) == (n_particle,):
+                    arrays[name] = np.asarray(values)
+
+        weights = np.asarray(self.weight, dtype=float)
+        bulk: dict[str, Any] = {}
+        if arrays and n_particle and np.sum(weights):
+            row = {name: i for i, name in enumerate(arrays)}
+            data = np.array(list(arrays.values()), dtype=float)
+            # The same formulas as `avg`, `std` and `cov`
+            mean = np.average(data, axis=1, weights=weights)
+            sigma = np.sqrt(
+                np.average((data - mean[:, None]) ** 2, axis=1, weights=weights)
+            )
+            cov_names = {
+                name
+                for split in parsed.values()
+                if split and split.op is StatisticOperator.COV
+                for name in split.names
+                if name in arrays
+            }
+            if cov_names:
+                cov_row = {name: i for i, name in enumerate(cov_names)}
+                cov = np.atleast_2d(
+                    np.cov(data[[row[name] for name in cov_names]], aweights=weights)
+                )
+            ops = {
+                StatisticOperator.MEAN: lambda a: mean[row[a]],
+                StatisticOperator.SIGMA: lambda a: sigma[row[a]],
+                StatisticOperator.DELTA: lambda a: arrays[a] - mean[row[a]],
+                StatisticOperator.MIN: lambda a: np.min(arrays[a]),
+                StatisticOperator.MAX: lambda a: np.max(arrays[a]),
+                StatisticOperator.PTP: lambda a: np.ptp(arrays[a]),
+                StatisticOperator.COV: lambda a, b: cov[cov_row[a], cov_row[b]],
+            }
+            bulk = {
+                key: ops[split.op](*split.names)
+                for key, split in parsed.items()
+                if split and all(name in arrays for name in split.names)
+            }
+
+        twiss_plane_to_params: dict[str, list[TwissParameter]] = {}
+        for key in parsed:
+            res = TwissParameter.parse(key)
+            if res is not None:
+                twiss_param, plane = res
+                twiss_plane_to_params.setdefault(plane, []).append(twiss_param)
+
+        for plane, twiss_params in twiss_plane_to_params.items():
+            try:
+                result = self.twiss(plane)
+            except Exception:
+                if not skip_errors:
+                    raise
+            else:
+                for param in twiss_params:
+                    bulk[param.key(plane)] = result[f"{param.value}_{plane}"]
+
+        stats: dict[str, Any] = {}
+        for key in parsed:
+            if key in bulk:
+                stats[key] = bulk[key]
+                continue
+            try:
+                stats[key] = self[key]
+            except Exception:
+                if not skip_errors:
+                    raise
+        return stats
+
     def __getitem__(self, key: str):
         """
         Returns a property or statistical quantity that can be computed:
@@ -913,24 +1046,20 @@ class ParticleGroup:
         if key == "z/c":
             return self["z"] / (c_light)
 
-        if key.startswith("cov_"):
-            subkeys = key.removeprefix("cov_").split("__")
-            assert (
-                len(subkeys) == 2
-            ), f"Too many properties in covariance request: {key}"
-            return self.cov(*subkeys)[0, 1]
-        if key.startswith("delta_"):
-            return self.delta(key[6:])
-        if key.startswith("sigma_"):
-            return self.std(key[6:])
-        if key.startswith("mean_"):
-            return self.avg(key[5:])
-        if key.startswith("min_"):
-            return self.min(key[4:])
-        if key.startswith("max_"):
-            return self.max(key[4:])
-        if key.startswith("ptp_"):
-            return self.ptp(key[4:])
+        split = StatisticKey.from_string(key)
+        if split is not None:
+            op, names = split
+            if op is StatisticOperator.COV:
+                return self.cov(*names)[0, 1]
+            operator = {
+                StatisticOperator.MEAN: self.avg,
+                StatisticOperator.SIGMA: self.std,
+                StatisticOperator.MIN: self.min,
+                StatisticOperator.MAX: self.max,
+                StatisticOperator.PTP: self.ptp,
+                StatisticOperator.DELTA: self.delta,
+            }[op]
+            return operator(names[0])
         if key.startswith("twiss_"):
             twiss_key = key[6:]
             plane = twiss_key[-1]
@@ -1131,11 +1260,11 @@ class ParticleGroup:
         smear: bool = False,
         wrap: bool = False,
         z0: float = 0.0,
-        slices: Optional[list[int]] = None,
+        slices: list[int] | None = None,
         equal_weights: bool = False,
         cutoff: float = 0.0,
-        n_particle: Optional[int] = None,
-        rng: Optional[int | np.random.Generator] = None,
+        n_particle: int | None = None,
+        rng: int | np.random.Generator | None = None,
     ) -> ParticleGroup:
         """
         Create a ParticleGroup from a Genesis4 `.par` HDF5 file.
@@ -1826,7 +1955,7 @@ class ParticleGroup:
         """
         return split_particles(self, n_chunks=n_chunks, key=key)
 
-    def fractional_split(self, fractions: Union[float, int, list], key: str):
+    def fractional_split(self, fractions: float | list, key: str):
         """
         Split particles based on a given array key and a list of specified fractions or a single fraction.
 
@@ -1994,7 +2123,7 @@ class ParticleGroup:
     # Transformations
     # ---------------
     def linear_point_transform(
-        self, mat3: Union[np.ndarray, Sequence[Sequence[float]]]
+        self, mat3: np.ndarray | Sequence[Sequence[float]]
     ) -> None:
         """
         Applies a linear transformation to the particle's spatial coordinates and

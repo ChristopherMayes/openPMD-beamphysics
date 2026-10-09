@@ -1,4 +1,7 @@
-from typing import Tuple
+from __future__ import annotations
+
+from enum import Enum
+from typing import NamedTuple
 
 import numpy as np
 from scipy import stats as scipy_stats
@@ -441,7 +444,7 @@ def slice_statistics(particle_group, keys=["mean_z"], n_slice=40, slice_key=None
     twiss_planes = set()
     twiss = {}
 
-    normal_keys = set()
+    normal_keys = []
 
     for k in keys:
         if k.startswith("twiss"):
@@ -449,19 +452,20 @@ def slice_statistics(particle_group, keys=["mean_z"], n_slice=40, slice_key=None
                 twiss_planes.add("x")
                 twiss_planes.add("y")
             else:
-                plane = k[-1]  #
+                plane = k[-1]
                 assert plane in ("x", "y")
                 twiss_planes.add(plane)
         else:
             sdat[k] = np.empty(n_slice)
-            normal_keys.add(k)
+            normal_keys.append(k)
 
     twiss_plane = "".join(twiss_planes)  # flatten
     assert twiss_plane in ("x", "y", "xy", "yx", "")
 
     for i, pg in enumerate(particle_group.split(n_slice, key=slice_key)):
-        for k in normal_keys:
-            sdat[k][i] = pg[k]
+        if normal_keys:
+            for k, value in pg.statistics(*normal_keys).items():
+                sdat[k][i] = value
 
         # Handle twiss
         if twiss_plane:
@@ -599,7 +603,7 @@ def mean_calc(x: np.ndarray, weight: np.ndarray) -> float:
     return np.sum(x * P)
 
 
-def mean_variance_calc(x: np.ndarray, weight: np.ndarray) -> Tuple[float, float]:
+def mean_variance_calc(x: np.ndarray, weight: np.ndarray) -> tuple[float, float]:
     """
     Calculate the weighted mean and variance.
 
@@ -612,3 +616,192 @@ def mean_variance_calc(x: np.ndarray, weight: np.ndarray) -> Tuple[float, float]
 
 def standard_deviation_calc(x: np.ndarray, weight: np.ndarray) -> float:
     return np.sqrt(mean_variance_calc(x, weight)[1])
+
+
+class StatisticOperator(str, Enum):
+    """
+    An operation in a statistic key, such as `mean` in `mean_x`.
+
+    All but `COV` take a single array and must match the operators of the
+    statistics standard. Synchronization is checked in the test suite.
+    """
+
+    MEAN = "mean"
+    SIGMA = "sigma"
+    MIN = "min"
+    MAX = "max"
+    PTP = "ptp"
+    DELTA = "delta"
+    COV = "cov"
+
+    @property
+    def prefix(self) -> str:
+        """The key prefix, e.g. `mean_`."""
+        return f"{self.value}_"
+
+    @property
+    def n_arrays(self) -> int:
+        """The number of arrays the operation applies to."""
+        return 2 if self is StatisticOperator.COV else 1
+
+    @property
+    def preserves_dtype(self) -> bool:
+        """Whether the result has the dtype of its array, rather than float."""
+        return self in (
+            StatisticOperator.MIN,
+            StatisticOperator.MAX,
+            StatisticOperator.PTP,
+        )
+
+    def _check_names(self, names: tuple[str, ...], given: str) -> None:
+        if len(names) != self.n_arrays or not all(names):
+            example = self.prefix + "__".join(("x", "px")[: self.n_arrays])
+            raise ValueError(
+                f"{self.value!r} statistic keys need exactly {self.n_arrays} "
+                f"nonempty array name(s), as in {example!r}: {given!r}"
+            )
+
+    def key(self, *names: str) -> str:
+        """
+        Make the statistic key for this operation on arrays.
+
+        Parameters
+        ----------
+        *names : str
+            The array names, `n_arrays` of them.
+
+        Returns
+        -------
+        str
+            The key, e.g. `mean_x` or `cov_x__px`.
+
+        Raises
+        ------
+        ValueError
+            If the wrong number of names is given, or any is empty.
+        """
+        self._check_names(names, given=repr(names))
+        return self.prefix + "__".join(names)
+
+    def parse(self, key: str) -> tuple[str, ...] | None:
+        """
+        Get the array names of a statistic key for this operation.
+
+        The inverse of `key`.
+
+        Parameters
+        ----------
+        key : str
+            A statistic key, e.g. `mean_x` or `cov_x__px`.
+
+        Returns
+        -------
+        tuple of str, or None
+            The array names, or None if `key` does not start with `prefix`.
+
+        Raises
+        ------
+        ValueError
+            If `key` starts with `prefix` but has the wrong number of array
+            names, or any is empty, as in `cov_x` or `mean_`.
+        """
+        if not key.startswith(self.prefix):
+            return None
+        rest = key.removeprefix(self.prefix)
+        names = tuple(rest.split("__")) if self.n_arrays > 1 else (rest,)
+        self._check_names(names, given=key)
+        return names
+
+
+class TwissParameter(str, Enum):
+    """
+    A Twiss or dispersion parameter in a statistic key, such as `beta` in `twiss_beta_x`.
+
+    These are the keys of `particle_twiss_dispersion` for a plane, in order.
+    """
+
+    alpha = "alpha"
+    beta = "beta"
+    gamma = "gamma"
+    emit = "emit"
+    norm_emit = "norm_emit"
+    eta = "eta"
+    etap = "etap"
+
+    def key(self, plane: str) -> str:
+        """The statistic key for this parameter in a plane, e.g. `twiss_beta_x`."""
+        return f"twiss_{self.value}_{plane}"
+
+    @classmethod
+    def parse(cls, key: str) -> tuple[TwissParameter, str] | None:
+        """
+        Split a Twiss statistic key into its parameter and plane.
+
+        The inverse of `key`.
+
+        Parameters
+        ----------
+        key : str
+            A statistic key, e.g. `twiss_beta_x`.
+
+        Returns
+        -------
+        tuple of (TwissParameter, str), or None
+            The parameter and plane (`x` or `y`), or None if `key` is not a
+            Twiss statistic key.
+        """
+        name, _, plane = key.removeprefix("twiss_").rpartition("_")
+        if not key.startswith("twiss_") or plane not in ("x", "y"):
+            return None
+        try:
+            return cls(name), plane
+        except ValueError:
+            return None
+
+
+class StatisticKey(NamedTuple):
+    """
+    A statistic key split into its operation and array names.
+
+    Attributes
+    ----------
+    op : StatisticOperator
+        The operation.
+    names : tuple of str
+        The array names the operation applies to: two for `cov`, one otherwise.
+    """
+
+    op: StatisticOperator
+    names: tuple[str, ...]
+
+    @classmethod
+    def from_string(cls, key: str) -> StatisticKey | None:
+        """
+        Split a statistic key into its operation and array names.
+
+        This is the prefix handling of `ParticleGroup.__getitem__`.
+
+        Parameters
+        ----------
+        key : str
+            A statistic key, e.g. `cov_x__px` or `sigma_x`.
+
+        Returns
+        -------
+        StatisticKey or None
+            The operation and array names, e.g.
+            `StatisticKey(StatisticOperator.COV, ("x", "px"))` for `cov_x__px`
+            and `StatisticKey(StatisticOperator.SIGMA, ("x",))` for `sigma_x`.
+            None for keys that are not an operation on arrays.
+
+        Raises
+        ------
+        ValueError
+            For malformed keys with an operator prefix, such as `cov_x` or
+            `mean_`.
+        """
+        for op in StatisticOperator:
+            names = op.parse(key)
+            if names is not None:
+                return cls(op, names)
+        return None

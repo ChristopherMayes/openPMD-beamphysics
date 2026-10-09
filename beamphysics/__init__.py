@@ -7,7 +7,7 @@ if _typing.TYPE_CHECKING:
     from .particles import ParticleGroup, single_particle
     from .readers import particle_paths
     from .status import ParticleStatus
-    from .wavefront import Wavefront, WavefrontK
+    from .wavefront import Wavefront, WavefrontAttrs, WavefrontK
     from .writers import pmd_init
 
 try:
@@ -23,6 +23,7 @@ _LAZY_IMPORTS = {
     "particle_paths": ".readers",
     "ParticleStatus": ".status",
     "Wavefront": ".wavefront",
+    "WavefrontAttrs": ".wavefront",
     "WavefrontK": ".wavefront",
     "pmd_init": ".writers",
 }
@@ -36,6 +37,7 @@ __all__ = [
     "pmd_init",
     "single_particle",
     "Wavefront",
+    "WavefrontAttrs",
     "WavefrontK",
 ]
 

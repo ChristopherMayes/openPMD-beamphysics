@@ -283,7 +283,6 @@ def _stats_html(
     parts: list[str] = []
     if custom_text:
         parts.append(custom_text)
-        annotations = [a for a in annotations if a.color is not None]
     html = _annotations_to_html(annotations, horizontal=horizontal)
     if html:
         parts.append(html)
@@ -410,6 +409,7 @@ def marginal_plot(
     marginal_fraction: float = 0.33,
     palette: Palette = Viridis256,
     low_color: str = "#ffffff00",
+    stats: bool = False,
     text: str | None = None,
     title: str | None = None,
     font_settings: MarginalFontSettings | None = None,
@@ -461,12 +461,11 @@ def marginal_plot(
         or in a strip below the plot.
     palette : bokeh.palettes.Palette, default=Viridis256
         Color map.
+    stats : bool, default = False
+        Show automatic beam statistics for recognized key pairs (e.g.
+        ``x``/``y``, ``x``/``px``, ``delta_z/c``/``energy``).
     text : str or None, optional
-        Custom HTML text to display in the top-right corner.  If ``None``
-        (the default), automatic beam-statistics text is generated for
-        recognized key combinations (e.g. ``x``/``y``, ``x``/``px``,
-        ``delta_z/c``/``energy``).  Pass an empty string ``""`` to suppress
-        automatic text.
+        Custom HTML text to display, shown above any statistics.
     title : str or None, optional
         Title to set on the main density plot.
 
@@ -639,7 +638,7 @@ def marginal_plot(
                 axis.axis_label_text_font = font_settings.text_font
                 axis.major_label_text_font = font_settings.text_font
 
-    annotations = get_annotations(particle_group, key1, key2) if text is None else []
+    annotations = get_annotations(particle_group, key1, key2) if stats else []
     custom_text = text.replace("\n", "<br>") if text else None
     if n_dead:
         annotations.append(n_dead_annotation(n_dead))

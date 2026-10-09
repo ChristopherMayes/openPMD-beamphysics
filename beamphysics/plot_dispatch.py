@@ -1,17 +1,15 @@
 from __future__ import annotations
 
+import functools
+import logging
 import os
-
+import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 
 from .plot_base import Limit
-
-import functools
-import logging
-import sys
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +51,10 @@ class MarginalPlotFn(Protocol):
         ylim: Limit | None = ...,
         nice: bool = ...,
         ellipse: bool = ...,
+        text: str | None = ...,
+        title: str | None = ...,
+        filter_lost_particles: bool = ...,
+        n_dead: int | None = ...,
         **kwargs: Any,
     ) -> Any: ...
 

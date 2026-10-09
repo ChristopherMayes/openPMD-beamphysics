@@ -12,6 +12,7 @@ from matplotlib.axes import Axes
 from matplotlib.colors import LogNorm, Normalize, TwoSlopeNorm
 from matplotlib.figure import Figure
 from matplotlib.gridspec import GridSpec
+from matplotlib.offsetbox import AnchoredOffsetbox, TextArea, VPacker
 
 # For field legends
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -20,6 +21,10 @@ from .labels import mathlabel
 from .plot_base import (
     Limit,
     PlotPreparationError,
+    StatsAnnotation,
+    drop_lost_particles,
+    get_annotations,
+    n_dead_annotation,
     prepare_density_and_slice_plot,
     prepare_density_plot,
     prepare_marginal_plot,
@@ -226,6 +231,10 @@ def marginal_plot(
     tex: bool = True,
     nice: bool = True,
     ellipse: bool = False,
+    text: str | None = None,
+    title: str | None = None,
+    filter_lost_particles: bool = True,
+    n_dead: int | None = None,
     **kwargs,
 ):
     """
@@ -253,6 +262,18 @@ def marginal_plot(
     ellipse : bool, default = True
         If True, plot an ellipse representing the
         2x2 sigma matrix
+    text : str or None, optional
+        Custom text for the top-right corner. ``None`` (default) shows
+        automatic beam statistics for recognized key pairs (e.g. ``x``/``y``,
+        ``x``/``px``, ``delta_z/c``/``energy``); ``""`` suppresses them.
+    title : str or None, optional
+        Title drawn above the plot.
+    filter_lost_particles : bool, default = True
+        Exclude lost particles (``status != 1``) from the plot and statistics.
+        If any exist, a red ``n_dead`` line is appended to the text block.
+    n_dead : int or None, optional
+        Dead-particle count to annotate; defaults to ``particle_group.n_dead``.
+        Pass it when the group has already been filtered.
     **kwargs :
         Passed to `plt.figure`.
 
@@ -269,6 +290,9 @@ def marginal_plot(
 
     fig = plt.figure(**kwargs)
     try:
+        particle_group, n_dead = drop_lost_particles(
+            particle_group, filter_lost_particles, n_dead
+        )
         pdata = prepare_marginal_plot(
             particle_group,
             key1=key1,
@@ -337,7 +361,39 @@ def marginal_plot(
         ax_joint.set_ylim(pdata.y.lim)
         ax_marg_y.set_ylim(pdata.y.lim)
 
+    annotations = get_annotations(particle_group, key1, key2) if text is None else []
+    if n_dead:
+        annotations.append(n_dead_annotation(n_dead))
+    _add_stats_text(fig, gs[0, 3], text, annotations)
+
+    if title:
+        ax_marg_x.set_title(title)
+
     return fig
+
+
+def _annotation_text(a: StatsAnnotation) -> str:
+    label = f"{a.label}$_{{{a.sub_label}}}$" if a.sub_label else a.label
+    return f"{label} = {a.value} {a.units}".rstrip()
+
+
+def _add_stats_text(fig, subplot_spec, text: str | None, annotations) -> None:
+    """Stack custom text and annotation lines in the unused grid corner."""
+    lines: list[tuple[str, str]] = []
+    if text:
+        lines.append((text.strip(), "black"))
+        annotations = [a for a in annotations if a.color is not None]
+    lines.extend((_annotation_text(a), a.color or "black") for a in annotations)
+    if not lines:
+        return
+    ax_text = fig.add_subplot(subplot_spec)
+    ax_text.axis("off")
+    boxes = [
+        TextArea(line, textprops={"fontsize": 11, "color": color, "ha": "center"})
+        for line, color in lines
+    ]
+    packed = VPacker(children=boxes, align="center", pad=0, sep=4)
+    ax_text.add_artist(AnchoredOffsetbox(loc="center", child=packed, frameon=False))
 
 
 def density_and_slice_plot(
@@ -1013,11 +1069,11 @@ def plot_1d_density(
     # Use the key as the label if not explicitly provided
     # Note: x_name and y_name are function parameters with defaults
     if x_key is not None:
-        if x_name == "":  # noqa: F821
+        if x_name == "":
             x_name = x_key
 
     if y_key is not None:
-        if y_name is None:  # noqa: F821
+        if y_name is None:
             y_name = y_key
 
     # Set default y_name if still None

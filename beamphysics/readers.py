@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 import numpy as np
-from h5py import File, Group
+from h5py import File, Group, is_hdf5
 
 from .exceptions import (
     MultipleIterationsError,
@@ -37,6 +37,33 @@ root_attrs = (
 )
 
 
+def is_openpmd(h5: str | os.PathLike | File | Group) -> bool:
+    """
+    Whether `h5` is the root of an openPMD series, by confirming it is HDF5
+    with the attribute "openPMD".
+
+    Parameters
+    ----------
+    h5 : str, os.PathLike, h5py.File, or h5py.Group
+        Path to any file on disk, or an open HDF5 handle.
+
+    Returns
+    -------
+    bool
+        Whether we think this is openPMD or not.
+    """
+    if isinstance(h5, (File, Group)):
+        return "openPMD" in h5.attrs
+    if not is_hdf5(h5):
+        return False
+    try:
+        with File(h5, "r") as fp:
+            return "openPMD" in fp.attrs
+    except OSError as ex:
+        logger.warning(f"Could not read {h5} as HDF5: {ex}")
+        return False
+
+
 def get_root_metadata(h5: File | Group, warn: bool = False) -> dict:
     """
     Check that `h5` is the root of an openPMD series and log its metadata.
@@ -61,7 +88,7 @@ def get_root_metadata(h5: File | Group, warn: bool = False) -> dict:
         If `h5` has no "openPMD" attribute and `warn` is False.
     """
     attrs = decode_attrs(h5.attrs)
-    if "openPMD" not in attrs:
+    if not is_openpmd(h5):
         message = f"No 'openPMD' attribute in {h5.file.filename}:{h5.name}"
         if not warn:
             raise NotOpenPMDError(message)

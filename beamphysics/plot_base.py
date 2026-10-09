@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
-from .labels import mathlabel
+from .labels import mathlabel, unicodelabel
 from .statistics import slice_statistics, twiss_ellipse_points
 from .units import (
     c_light,
@@ -296,6 +296,7 @@ class SliceCurve:
 
     key: str
     label: str
+    plain_label: str  # Unicode, for contexts without math rendering
     values: np.ndarray  # scaled
 
 
@@ -375,8 +376,14 @@ def prepare_slice_plot(
     # Curves
     curves = []
     for k in keys:
-        label = mathlabel(k, units=uy, tex=tex)
-        curves.append(SliceCurve(key=k, label=label, values=slice_dat[k] / f2))
+        curves.append(
+            SliceCurve(
+                key=k,
+                label=mathlabel(k, units=uy, tex=tex),
+                plain_label=unicodelabel(k, units=uy),
+                values=slice_dat[k] / f2,
+            )
+        )
 
     # Density on r.h.s
     y2, fy2, _, _, _ = plottable_array(slice_dat["density"], nice=nice, lim=None)
@@ -551,8 +558,14 @@ def prepare_density_and_slice_plot(
 
     curves = []
     for k in stat_keys:
-        label = mathlabel(k, units=u2_stat, tex=tex)
-        curves.append(SliceCurve(key=k, label=label, values=slice_dat[k] / f3))
+        curves.append(
+            SliceCurve(
+                key=k,
+                label=mathlabel(k, units=u2_stat, tex=tex),
+                plain_label=unicodelabel(k, units=u2_stat),
+                values=slice_dat[k] / f3,
+            )
+        )
 
     # Density overlay normalized to fit on the stat axis
     density_raw = slice_dat["density"]

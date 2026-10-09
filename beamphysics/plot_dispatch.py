@@ -4,7 +4,8 @@ import functools
 import logging
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+from types import ModuleType
 from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
@@ -163,6 +164,12 @@ _default_backend: str = os.environ.get("BEAMPHYSICS_PLOT", "mpl")
 _backend_cache: dict[str, PlotBackend] = {}
 
 
+def _check_backend_name(name: str) -> None:
+    if name not in _backend_loaders:
+        choices = ", ".join(repr(key) for key in _backend_loaders)
+        raise ValueError(f"Unknown backend {name!r}. Choose one of: {choices}")
+
+
 def set_default_backend(name: str) -> None:
     """
     Set the module-level default plot backend.
@@ -173,28 +180,12 @@ def set_default_backend(name: str) -> None:
         ``"mpl"`` for Matplotlib or ``"bokeh"`` for Bokeh.
     """
     global _default_backend
-    if name not in ("mpl", "bokeh"):
-        raise ValueError(f"Unknown backend {name!r}. Choose 'mpl' or 'bokeh'.")
+    _check_backend_name(name)
     _default_backend = name
 
 
 def get_default_backend() -> str:
     """Return the current module-level default backend name."""
-    return _default_backend
-
-
-def resolve_backend(backend: str | None = None, obj: Any = None) -> str:
-    """
-    Determine which backend to use.
-
-    Priority: explicit *backend* argument > ``obj.plot_backend`` > module default.
-    """
-    if backend is not None:
-        return backend
-    if obj is not None:
-        obj_backend = getattr(obj, "plot_backend", None)
-        if obj_backend is not None:
-            return obj_backend
     return _default_backend
 
 
@@ -230,38 +221,28 @@ def is_jupyter() -> bool:
     return check.mode == "jupyter"
 
 
-def _load_mpl_backend() -> PlotBackend:
-    from . import plot as mod
+def _backend_from_module(name: str, mod: ModuleType) -> PlotBackend:
+    """Collect the plot functions of a backend module by their shared names."""
+    funcs = {
+        field.name: getattr(mod, field.name)
+        for field in fields(PlotBackend)
+        if field.name != "name"
+    }
+    return PlotBackend(name=name, **funcs)
 
-    return PlotBackend(
-        name="mpl",
-        density_plot=mod.density_plot,
-        marginal_plot=mod.marginal_plot,
-        slice_plot=mod.slice_plot,
-        wakefield_plot=mod.wakefield_plot,
-        density_and_slice_plot=mod.density_and_slice_plot,
-        plot_1d_density=mod.plot_1d_density,
-        plot_2d_density_with_marginals=mod.plot_2d_density_with_marginals,
-    )
+
+def _load_mpl_backend() -> PlotBackend:
+    from . import plot
+
+    return _backend_from_module("mpl", plot)
 
 
 def _load_bokeh_backend() -> PlotBackend:
-    from . import plot_bokeh as mod
-
-    backend = PlotBackend(
-        name="bokeh",
-        density_plot=mod.density_plot,
-        marginal_plot=mod.marginal_plot,
-        slice_plot=mod.slice_plot,
-        wakefield_plot=mod.wakefield_plot,
-        density_and_slice_plot=mod.density_and_slice_plot,
-        plot_1d_density=mod.plot_1d_density,
-        plot_2d_density_with_marginals=mod.plot_2d_density_with_marginals,
-    )
+    from . import plot_bokeh
 
     if is_jupyter():
-        mod.initialize_jupyter()
-    return backend
+        plot_bokeh.initialize_jupyter()
+    return _backend_from_module("bokeh", plot_bokeh)
 
 
 _backend_loaders = {
@@ -270,7 +251,7 @@ _backend_loaders = {
 }
 
 
-def get_backend(backend: str | None = None, obj: Any = None) -> PlotBackend:
+def get_backend(backend: str | None = None) -> PlotBackend:
     """
     Resolve the backend name and return a :class:`PlotBackend`.
 
@@ -280,15 +261,10 @@ def get_backend(backend: str | None = None, obj: Any = None) -> PlotBackend:
     ----------
     backend : str or None
         Explicit backend name (``"mpl"`` or ``"bokeh"``).
-        If ``None``, falls through to *obj* and then the module default.
-    obj : object, optional
-        An object with an optional ``plot_backend`` attribute
-        (e.g. a :class:`ParticleGroup`).
+        If ``None``, the module default is used (see `set_default_backend`).
     """
-    name = resolve_backend(backend, obj)
+    name = _default_backend if backend is None else backend
+    _check_backend_name(name)
     if name not in _backend_cache:
-        loader = _backend_loaders.get(name)
-        if loader is None:
-            raise ValueError(f"Unknown backend {name!r}. Choose 'mpl' or 'bokeh'.")
-        _backend_cache[name] = loader()
+        _backend_cache[name] = _backend_loaders[name]()
     return _backend_cache[name]

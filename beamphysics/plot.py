@@ -231,6 +231,7 @@ def marginal_plot(
     tex: bool = True,
     nice: bool = True,
     ellipse: bool = False,
+    stats: bool = False,
     text: str | None = None,
     title: str | None = None,
     filter_lost_particles: bool = True,
@@ -262,10 +263,11 @@ def marginal_plot(
     ellipse : bool, default = True
         If True, plot an ellipse representing the
         2x2 sigma matrix
+    stats : bool, default = False
+        Show automatic beam statistics in the top-right corner for recognized
+        key pairs (e.g. ``x``/``y``, ``x``/``px``, ``delta_z/c``/``energy``).
     text : str or None, optional
-        Custom text for the top-right corner. ``None`` (default) shows
-        automatic beam statistics for recognized key pairs (e.g. ``x``/``y``,
-        ``x``/``px``, ``delta_z/c``/``energy``); ``""`` suppresses them.
+        Custom text for the top-right corner, shown above any statistics.
     title : str or None, optional
         Title drawn above the plot.
     filter_lost_particles : bool, default = True
@@ -361,7 +363,7 @@ def marginal_plot(
         ax_joint.set_ylim(pdata.y.lim)
         ax_marg_y.set_ylim(pdata.y.lim)
 
-    annotations = get_annotations(particle_group, key1, key2) if text is None else []
+    annotations = get_annotations(particle_group, key1, key2) if stats else []
     if n_dead:
         annotations.append(n_dead_annotation(n_dead))
     _add_stats_text(fig, gs[0, 3], text, annotations)
@@ -382,7 +384,6 @@ def _add_stats_text(fig, subplot_spec, text: str | None, annotations) -> None:
     lines: list[tuple[str, str]] = []
     if text:
         lines.append((text.strip(), "black"))
-        annotations = [a for a in annotations if a.color is not None]
     lines.extend((_annotation_text(a), a.color or "black") for a in annotations)
     if not lines:
         return

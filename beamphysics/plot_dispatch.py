@@ -52,6 +52,7 @@ class MarginalPlotFn(Protocol):
         ylim: Limit | None = ...,
         nice: bool = ...,
         ellipse: bool = ...,
+        stats: bool = ...,
         text: str | None = ...,
         title: str | None = ...,
         filter_lost_particles: bool = ...,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import warnings
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, replace
@@ -950,23 +951,11 @@ class WavefrontK(WavefrontBase):
 
         F = zfactor * self.spectral_fluence  # shape (nx, ny)
 
-        # Grid spacing in µrad
-        dthetax = (
-            (self.thetaxmax - self.thetaxmin) / (self.nx - 1) * xfactor
-            if self.nx > 1
-            else 1.0
-        )
-        dthetay = (
-            (self.thetaymax - self.thetaymin) / (self.ny - 1) * yfactor
-            if self.ny > 1
-            else 1.0
-        )
-
         be = get_backend(backend)
         fig = be.plot_2d_density_with_marginals(
             F,
-            dx=dthetax,
-            dy=dthetay,
+            dx=self.dthetax * xfactor,
+            dy=self.dthetay * yfactor,
             xmin=self.thetaxmin * xfactor,
             ymin=self.thetaymin * yfactor,
             x_name=r"$\theta_x$",
@@ -1004,6 +993,8 @@ class WavefrontK(WavefrontBase):
         x = self.photon_energy_vec  # eV
         y = self.photon_energy_spectrum * 1e6  # µJ/eV
 
+        if ax is not None:
+            kwargs["ax"] = ax
         be = get_backend(backend)
         fig = be.plot_1d_density(
             x,
@@ -1016,7 +1007,6 @@ class WavefrontK(WavefrontBase):
             plot_style={"color": "purple"},
             ylim=(0, None),
             xlim=xlim,
-            ax=ax,
             nice=False,
             return_figure=True,
             **kwargs,
@@ -1385,6 +1375,8 @@ class Wavefront(WavefrontBase):
 
         data = {"z/c": x, "power": y}
 
+        if ax is not None:
+            kwargs["ax"] = ax
         be = get_backend(backend)
         fig = be.plot_1d_density(
             "z/c",
@@ -1392,7 +1384,6 @@ class Wavefront(WavefrontBase):
             data=data,
             xlim=xlim,
             ylim=ylim,
-            ax=ax,
             auto_label=True,
             show_cdf=show_cdf,
             log_scale_y=log_scale_y,
@@ -1452,48 +1443,16 @@ class Wavefront(WavefrontBase):
         if return_figure:
             return fig
 
-    def plot2(
-        self,
-        cmap="inferno",
-        logscale=False,
-        backend=None,
-        return_figure=False,
-        **kwargs,
-    ):
+    def plot2(self, *args, **kwargs):
         """
-        Simple fluence plot
-
-        Notes
-        -----
-        This is experimental.
+        Deprecated alias for `plot_fluence`.
         """
-
-        xfactor = 100
-        yfactor = 100
-        zfactor = 1 / (100 * 100)  # 1/m^2 -> 1/cm^2
-        F = self.fluence
-
-        be = get_backend(backend)
-        fig = be.plot_2d_density_with_marginals(
-            F * zfactor,
-            dx=self.dx * xfactor,
-            dy=self.dy * yfactor,
-            xmin=self.xmin * xfactor,
-            ymin=self.ymin * yfactor,
-            x_name=r"$x$",
-            x_units="cm",
-            y_name=r"$y$",
-            y_units="cm",
-            z_name=r"$F$",
-            z_units="J/cm$^2$",
-            cmap=cmap,
-            log_scale_marginals=logscale,
-            log_scale_z=logscale,
-            return_figure=True,
-            **kwargs,
+        warnings.warn(
+            "Wavefront.plot2 is deprecated; use Wavefront.plot_fluence instead.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-        if return_figure:
-            return fig
+        return self.plot_fluence(*args, **kwargs)
 
     @property
     def dkx(self) -> float:

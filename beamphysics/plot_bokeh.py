@@ -1,0 +1,1456 @@
+from __future__ import annotations
+
+import dataclasses
+import html
+import logging
+from typing import Literal
+
+import numpy as np
+from bokeh import palettes as bokeh_palettes
+from bokeh.core.enums import SizingModeType
+from bokeh.io import show as _bokeh_show
+from bokeh.layouts import column
+from bokeh.models import (
+    ColorBar,  # pyright: ignore[reportPrivateImportUsage]
+    ColumnDataSource,  # pyright: ignore[reportPrivateImportUsage]
+    Div,  # pyright: ignore[reportPrivateImportUsage]
+    GridBox,  # pyright: ignore[reportPrivateImportUsage]
+    HoverTool,  # pyright: ignore[reportPrivateImportUsage]
+    LayoutDOM,  # pyright: ignore[reportPrivateImportUsage]
+    LinearAxis,  # pyright: ignore[reportPrivateImportUsage]
+    LinearColorMapper,  # pyright: ignore[reportPrivateImportUsage]
+    LogColorMapper,  # pyright: ignore[reportPrivateImportUsage]
+    Range1d,  # pyright: ignore[reportPrivateImportUsage]
+    Spacer,  # pyright: ignore[reportPrivateImportUsage]
+)
+from bokeh.palettes import Category10, Palette, Viridis256
+from bokeh.plotting import figure
+
+from .labels import mathlabel
+from .plot_base import (
+    Limit,
+    PlotPreparationError,
+    StatsAnnotation,
+    check_unused_kwargs,
+    drop_lost_particles,
+    get_annotations,
+    n_dead_annotation,
+    prepare_density_and_slice_plot,
+    prepare_density_plot,
+    prepare_marginal_plot,
+    prepare_slice_plot,
+    prepare_wakefield_plot,
+)
+from .units import pg_units, plottable_array, plottable_array_and_units
+
+logger = logging.getLogger(__name__)
+
+# Default color cycle for multi-curve plots (matches matplotlib's tab10)
+_BOKEH_COLORS = Category10[10]
+
+
+def initialize_jupyter():
+    # Is this public bokeh API? An attempt at forward-compatibility
+    try:
+        from bokeh.io.state import curstate
+    except ImportError:
+        pass
+    else:
+        state = curstate()
+        if getattr(state, "notebook", False):
+            # Jupyter already initialized
+            logger.debug("Bokeh output_notebook already called; not re-initializing")
+            return
+
+    from bokeh.plotting import output_notebook
+
+    output_notebook()
+
+
+def _maybe_show(layout: LayoutDOM, show: bool = True) -> LayoutDOM:
+    """Call ``bokeh.io.show`` on *layout* if *show* is truthy."""
+    if show:
+        _bokeh_show(layout)
+    return layout
+
+
+def _error_div(message: str, width: int, height: int) -> Div:
+    """A placeholder shown in place of a plot that could not be prepared."""
+    return Div(
+        text=(
+            '<div style="display:flex;align-items:center;justify-content:center;'
+            f'width:100%;height:100%;color:#555">{html.escape(message)}</div>'
+        ),
+        width=width,
+        height=height,
+    )
+
+
+def _palette_from_cmap(cmap: str) -> Palette:
+    """Map a matplotlib-style colormap name ('inferno') to a 256-color palette."""
+    try:
+        return getattr(bokeh_palettes, f"{cmap.capitalize()}256")
+    except AttributeError:
+        raise ValueError(f"No 256-color bokeh palette for cmap {cmap!r}") from None
+
+
+@dataclasses.dataclass
+class FontPlotSettings:
+    """Font settings for a single Bokeh figure's axes."""
+
+    axis_label_text_font_size: str = "14px"
+    axis_label_text_font_style: str = "italic"
+    major_label_text_font_size: str = "12px"
+    major_label_text_font_style: str = "normal"
+
+    def apply(self, *axes) -> None:
+        """Apply these font settings to one or more Bokeh axis objects."""
+        for axis in axes:
+            axis.axis_label_text_font_size = self.axis_label_text_font_size
+            axis.axis_label_text_font_style = self.axis_label_text_font_style
+            axis.major_label_text_font_size = self.major_label_text_font_size
+            axis.major_label_text_font_style = self.major_label_text_font_style
+
+
+def _marginal_font_settings() -> FontPlotSettings:
+    return FontPlotSettings(
+        axis_label_text_font_size="10px",
+        major_label_text_font_size="8px",
+    )
+
+
+@dataclasses.dataclass
+class MarginalFontSettings:
+    """Font settings for Bokeh marginal plots."""
+
+    text_font: str | None = None
+    annotation_text_font_size: str | None = None
+    main: FontPlotSettings = dataclasses.field(default_factory=FontPlotSettings)
+    top: FontPlotSettings = dataclasses.field(default_factory=_marginal_font_settings)
+    right: FontPlotSettings = dataclasses.field(default_factory=_marginal_font_settings)
+
+
+def mathjax_fix(label: str) -> str:
+    """
+    Adjust the Matplotlib-style LaTeX label for bokeh/MathJax.
+    """
+    label = label.replace("µ", r" \mu ")
+    label = label.replace("$", "$$")
+    return label
+
+
+def _annotations_to_html(
+    annotations: list[StatsAnnotation],
+    horizontal: bool = False,
+) -> str | None:
+    """Convert a list of Annotation objects to an HTML table.
+
+    Parameters
+    ----------
+    annotations : list[StatsAnnotation]
+    horizontal : bool
+        If True, render items in a single row separated by spacing.
+    """
+    if not annotations:
+        return None
+
+    def style(a: StatsAnnotation) -> str:
+        return f" style='color:{a.color}'" if a.color else ""
+
+    def label(a: StatsAnnotation) -> str:
+        return f"{a.label}<sub>{a.sub_label}</sub>" if a.sub_label else a.label
+
+    if horizontal:
+        items = [
+            f"<span{style(a)}>{label(a)} = {a.value} {a.units}</span>"
+            for a in annotations
+        ]
+        sep = " &nbsp;&middot;&nbsp; "
+        return f"<span>{sep.join(items)}</span>"
+
+    rows = [
+        f"<tr{style(a)}><td style='text-align:right;padding-right:4px'>{label(a)}</td>"
+        f"<td>{a.value} {a.units}</td></tr>"
+        for a in annotations
+    ]
+    return "<table style='border-collapse:collapse'>" + "".join(rows) + "</table>"
+
+
+def density_plot(
+    particle_group,
+    key: str = "x",
+    bins: int | str | None = None,
+    *,
+    xlim: Limit | None = None,
+    tex: bool = False,
+    nice: bool = True,
+    width: int = 600,
+    height: int = 400,
+    color: str = "gray",
+    alpha: float = 0.7,
+    sizing_mode: SizingModeType | None = None,
+    title: str | None = None,
+    show: bool = True,
+    **kwargs,
+) -> LayoutDOM:
+    """
+    1D density histogram with Bokeh.
+
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+        The object to plot.
+    key : str, default = 'x'
+        Which quantity to plot.
+    bins : int or str, optional
+        Number of bins.
+    xlim : tuple of float, optional
+        Manual x-axis limits.
+    nice : bool, default = True
+        Use nice unit scaling.
+    width, height : int
+        Figure dimensions in pixels.
+    show : bool, default = True
+        Display the plot.
+
+    Returns
+    -------
+    LayoutDOM
+    """
+    check_unused_kwargs("bokeh", kwargs)
+    pdata = prepare_density_plot(
+        particle_group, key=key, bins=bins, xlim=xlim, nice=nice, tex=tex
+    )
+
+    fig = figure(
+        width=width,
+        height=height,
+        x_axis_label=mathjax_fix(pdata.x_label),
+        y_axis_label=mathjax_fix(pdata.y_label),
+        tools="pan,wheel_zoom,box_zoom,save,reset",
+        toolbar_location="right",
+    )
+
+    fig.vbar(
+        x=pdata.hist_centers,
+        top=pdata.hist_values,
+        width=pdata.hist_width,
+        bottom=0,
+        fill_color=color,
+        line_color=color,
+        fill_alpha=alpha,
+    )
+
+    if pdata.xlim:
+        fig.x_range.start, fig.x_range.end = pdata.xlim
+
+    if title:
+        fig.title.text = title
+
+    if sizing_mode is not None:
+        fig.sizing_mode = sizing_mode
+
+    fig.toolbar.logo = None
+
+    return _maybe_show(fig, show)
+
+
+_STATS_CSS = """
+:host { overflow: visible; }
+/* Bokeh wraps Div text in an inline-block; size containment below would
+   otherwise collapse it to zero width. */
+.bk-clearfix { display: block; width: 100%; height: 100%; }
+.stats { position: relative; width: 100%; height: 100%; container-type: size; }
+.stats-cell { display: flex; width: 100%; height: 100%; overflow: auto; }
+.stats-cell > div { margin: auto; }
+.stats-popover {
+  display: none; position: absolute; top: 0; right: 0; z-index: 100;
+  padding: 6px 10px; border: 1px solid #999; border-radius: 4px;
+  background: rgba(255, 255, 255, 0.97); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  white-space: nowrap; font-size: 13px; line-height: 1.6;
+}
+/* Offer the hover overlay only when the cell is too small to read in place. */
+@container (max-width: 160px) or (max-height: 100px) {
+  .stats:hover .stats-popover { display: block; }
+}
+"""
+
+
+def _stats_html(
+    custom_text: str | None, annotations: list[StatsAnnotation], horizontal: bool
+) -> str:
+    """Custom text (if any) followed by the annotation rows, e.g. ``n_dead``."""
+    parts: list[str] = []
+    if custom_text:
+        parts.append(custom_text)
+    html = _annotations_to_html(annotations, horizontal=horizontal)
+    if html:
+        parts.append(html)
+    return (" &nbsp;&middot;&nbsp; " if horizontal else "<br>").join(parts)
+
+
+def _stats_cell_div(content: str, font_size: str, font_css: str) -> Div:
+    """
+    Stats text for the grid corner: scrolls in place, hover overlay when cramped.
+    """
+    return Div(
+        text=(
+            '<div class="stats">'
+            f'<div class="stats-cell"><div style="font-size:{font_size}; '
+            f'line-height:1.6; {font_css}">{content}</div></div>'
+            f'<div class="stats-popover" style="{font_css}">{content}</div>'
+            "</div>"
+        ),
+        stylesheets=[_STATS_CSS],
+    )
+
+
+def _marginal_grid(
+    joint: figure,
+    top: figure,
+    right: figure,
+    corner: LayoutDOM,
+    *,
+    width: int,
+    height: int,
+    marginal_fraction: float,
+    sizing_mode: SizingModeType | None,
+) -> GridBox:
+    """
+    Assemble joint/marginal figures into a 2x2 ``GridBox``.
+
+    A ``GridBox`` rather than ``gridplot``/``GridPlot`` on purpose: bokehjs
+    only propagates frame-alignment layout through views that own one, and
+    ``GridPlotView`` does not, so inside a Panel ``Tabs`` whose other tabs
+    hold figures the grid's figures were never laid out (blank plots). The
+    joint figure keeps its own toolbar instead of a merged one.
+
+    Parameters
+    ----------
+    joint, top, right : figure
+        Main figure and the x/y marginal figures.
+    corner : LayoutDOM
+        Element for the unused top-right cell (a ``Spacer`` or a stats ``Div``).
+    width, height : int
+        Overall size in pixels when `sizing_mode` is ``None``.
+    marginal_fraction : float
+        Fraction of width/height given to the marginal figures.
+    sizing_mode : str or None
+        ``None`` yields a fixed-size grid. Otherwise the grid is responsive:
+        children fill proportional CSS grid tracks so the marginals keep
+        `marginal_fraction` of the layout at any container size. ``scale_*``
+        modes impose the `width`/`height` aspect ratio on the whole grid;
+        ``stretch_both`` fills a container of definite height and falls back
+        to that aspect ratio in an auto-height block container.
+    """
+    main_w = int(width * (1.0 - marginal_fraction))
+    main_h = int(height * (1.0 - marginal_fraction))
+    marg_w = int(width * marginal_fraction)
+    marg_h = int(height * marginal_fraction)
+
+    for child, (w, h) in (
+        (joint, (main_w, main_h)),
+        (top, (main_w, marg_h)),
+        (right, (marg_w, main_h)),
+        (corner, (marg_w, marg_h)),
+    ):
+        child.width = w
+        child.height = h
+
+    if sizing_mode is not None:
+        for child in (joint, top, right, corner):
+            child.sizing_mode = "stretch_both"
+
+    top.toolbar_location = None
+    right.toolbar_location = None
+    grid = GridBox(children=[(top, 0, 0), (corner, 0, 1), (joint, 1, 0), (right, 1, 1)])
+
+    if sizing_mode is not None:
+        # Proportions live on the grid tracks, not the children. minmax(0, ...)
+        # drops the implicit min-content floor so neither a plot canvas nor an
+        # oversized stats Div can widen a track.
+        main = round((1.0 - marginal_fraction) * 100)
+        marg = 100 - main
+        grid.cols = [f"minmax(0, {main}fr)", f"minmax(0, {marg}fr)"]
+        grid.rows = [f"minmax(0, {marg}fr)", f"minmax(0, {main}fr)"]
+        grid.sizing_mode = sizing_mode
+        if sizing_mode.startswith("scale_"):
+            grid.aspect_ratio = width / height
+        elif sizing_mode == "stretch_both":
+            # Fill the container when it has a definite height. In a plain
+            # block container with auto height, `height: 100%` resolves to
+            # auto and this inline aspect-ratio derives the height from the
+            # width instead of letting the fr rows collapse to the toolbar's
+            # height. It cannot override a flex parent that stretches the
+            # grid; use scale_* for an aspect that must always hold.
+            grid.styles = {"aspect-ratio": f"{width} / {height}", **grid.styles}
+
+    return grid
+
+
+def marginal_plot(
+    particle_group,
+    key1: str = "t",
+    key2: str = "p",
+    bins: int | None = None,
+    *,
+    xlim: Limit | None = None,
+    ylim: Limit | None = None,
+    tex: bool = False,
+    nice: bool = True,
+    ellipse: bool = False,
+    filter_lost_particles: bool = True,
+    n_dead: int | None = None,
+    width: int = 600,
+    height: int = 600,
+    colorbar: bool = False,
+    sizing_mode: SizingModeType | None = None,
+    x_label_orientation: float | None = np.pi / 4,
+    marginal_fraction: float = 0.33,
+    palette: Palette = Viridis256,
+    low_color: str = "#ffffff00",
+    stats: bool = False,
+    text: str | None = None,
+    title: str | None = None,
+    font_settings: MarginalFontSettings | None = None,
+    stats_location: Literal["bottom", "top-right"] = "top-right",
+    show: bool = True,
+    **kwargs,
+) -> LayoutDOM:
+    """
+    Density plot and projections with bokeh.
+
+    Parameters
+    ----------
+    particle_group: ParticleGroup
+        The object to plot
+    key1: str, default = 't'
+        Key to bin on the x-axis
+    key2: str, default = 'p'
+        Key to bin on the y-axis
+    bins: int, default = None
+       Number of bins. If None, this will use a heuristic:
+       `bins = sqrt(n_particle/4)`
+    xlim: tuple, default = None
+        Manual setting of the x-axis limits.
+    ylim: tuple, default = None
+        Manual setting of the y-axis limits.
+    tex: bool, default = False
+        Use TeX (rendered by MathJax) for labels.
+    nice: bool, default = True
+        Use "nice" prefixes.
+    ellipse: bool, default = False
+        If True, plot an ellipse representing the 2x2 sigma matrix.
+    filter_lost_particles : bool, default = True
+        Exclude lost particles (``status != 1``) from the plot and statistics.
+        If any exist, a red ``n_dead`` line is appended to the stats text.
+    n_dead : int or None, optional
+        Dead-particle count to annotate; defaults to ``particle_group.n_dead``.
+        Pass it when the group has already been filtered.
+    sizing_mode: str, default = None
+        Bokeh sizing mode for responsive layout. When set, the returned
+        ``GridPlot`` uses proportional CSS grid tracks, so the marginal
+        histograms keep `marginal_fraction` of the layout at any container
+        size. ``scale_*`` modes additionally preserve the `width`/`height`
+        aspect ratio. By default (None), a fixed-size ``GridPlot`` is returned.
+    marginal_fraction : float, default = 0.33
+        Fraction of the plot to use for the marginal plots.
+    stats_location : {"top-right", "bottom"}, default = "top-right"
+        Where to show the stats text: in the unused grid cell (scrolls if the
+        text does not fit, and shows a hover overlay when the cell is small)
+        or in a strip below the plot.
+    palette : bokeh.palettes.Palette, default=Viridis256
+        Color map.
+    stats : bool, default = False
+        Show automatic beam statistics for recognized key pairs (e.g.
+        ``x``/``y``, ``x``/``px``, ``delta_z/c``/``energy``).
+    text : str or None, optional
+        Custom HTML text to display, shown above any statistics.
+    title : str or None, optional
+        Title to set on the main density plot.
+
+    Returns
+    -------
+    LayoutDOM
+
+    Examples
+    --------
+
+    >>> P = ParticleGroup("particles.h5")
+    >>> obj = marginal_plot(P, 't', 'energy', bins=200)
+    >>> bokeh.io.save(obj, "t_vs_energy.html")
+    """
+    check_unused_kwargs("bokeh", kwargs)
+    if font_settings is None:
+        font_settings = MarginalFontSettings()
+
+    try:
+        particle_group, n_dead = drop_lost_particles(
+            particle_group, filter_lost_particles, n_dead
+        )
+        pdata = prepare_marginal_plot(
+            particle_group,
+            key1=key1,
+            key2=key2,
+            bins=bins,
+            xlim=xlim,
+            ylim=ylim,
+            nice=nice,
+            ellipse=ellipse,
+        )
+    except PlotPreparationError as ex:
+        return _maybe_show(_error_div(str(ex), width, height), show)
+
+    labelx = mathjax_fix(mathlabel(key1, units=pdata.x.display_unit, tex=tex))
+    labely = mathjax_fix(mathlabel(key2, units=pdata.y.display_unit, tex=tex))
+
+    # Main Joint Figure
+    ranges = {}
+    if pdata.x.lim is not None:
+        ranges["x_range"] = pdata.x.lim
+    if pdata.y.lim is not None:
+        ranges["y_range"] = pdata.y.lim
+    fig_joint = figure(
+        x_axis_label=labelx,
+        y_axis_label=labely,
+        tools="pan,wheel_zoom,box_zoom,save,reset",
+        toolbar_location="left",
+        **ranges,
+    )
+
+    font_settings.main.apply(fig_joint.xaxis, fig_joint.yaxis)
+
+    if len(pdata.x.data) == 1:
+        fig_joint.scatter(pdata.x.data, pdata.y.data, size=10, color="navy")
+    else:
+        H, xedges, yedges = np.histogram2d(
+            pdata.x.data, pdata.y.data, bins=pdata.bins, weights=pdata.weights
+        )
+        H = H.T
+
+        h_min = np.min(H[H > 0]) if np.any(H > 0) else 0
+        h_max = np.max(H) if np.any(H) else 1
+
+        mapper = LinearColorMapper(
+            palette=palette,
+            low=h_min,
+            high=h_max,
+            low_color=low_color,
+        )
+
+        if colorbar:
+            color_bar = ColorBar(color_mapper=mapper, location=(0, 0))
+            fig_joint.add_layout(color_bar, "left")
+
+        source_img = ColumnDataSource(
+            {
+                "image": [H],
+                "x": [xedges[0]],
+                "y": [yedges[0]],
+                "dw": [xedges[-1] - xedges[0]],
+                "dh": [yedges[-1] - yedges[0]],
+            }
+        )
+
+        image_renderer = fig_joint.image(
+            image="image",
+            x="x",
+            y="y",
+            dw="dw",
+            dh="dh",
+            source=source_img,
+            color_mapper=mapper,
+        )
+
+        hover = HoverTool(
+            renderers=[image_renderer],
+            tooltips=[
+                (labelx, "$x"),
+                (labely, "$y"),
+                ("density", "@image"),
+            ],
+        )
+        fig_joint.add_tools(hover)
+
+    if pdata.ellipse_x is not None and pdata.ellipse_y is not None:
+        fig_joint.line(
+            pdata.ellipse_x,
+            pdata.ellipse_y,
+            color="red",
+            line_width=2,
+            alpha=0.8,
+        )
+
+    # Marginal Plots
+
+    # Top (X projection)
+    p_top = figure(
+        x_range=fig_joint.x_range,
+        y_axis_location="left",
+        min_border=0,
+        outline_line_color=None,
+        tools="",
+    )
+    p_top.vbar(
+        x=pdata.x.hist_centers,
+        top=pdata.x.hist_values,
+        width=pdata.x.hist_width,
+        bottom=0,
+        fill_color="gray",
+        line_color="gray",
+    )
+
+    p_top.yaxis.axis_label = mathjax_fix(pdata.x.density_label(tex=tex))
+    p_top.xaxis.visible = False
+
+    # Right (Y projection)
+    p_right = figure(
+        y_range=fig_joint.y_range,
+        x_axis_location="below",
+        min_border=0,
+        outline_line_color=None,
+        tools="",
+    )
+    p_right.hbar(
+        y=pdata.y.hist_centers,
+        right=pdata.y.hist_values,
+        height=pdata.y.hist_width,
+        left=0,
+        fill_color="gray",
+        line_color="gray",
+    )
+    p_right.xaxis.axis_label = mathjax_fix(pdata.y.density_label(tex=tex))
+    p_right.yaxis.visible = False
+
+    plots = [p_right, p_top, fig_joint]
+    if x_label_orientation is not None:
+        for plot in plots:
+            plot.xaxis.major_label_orientation = x_label_orientation
+    for plot in plots:
+        plot.toolbar.logo = None
+
+    font_settings.top.apply(p_top.yaxis)
+    font_settings.right.apply(p_right.xaxis)
+
+    if font_settings.text_font is not None:
+        for plot in plots:
+            for axis in (plot.xaxis, plot.yaxis):
+                axis.axis_label_text_font = font_settings.text_font
+                axis.major_label_text_font = font_settings.text_font
+
+    annotations = get_annotations(particle_group, key1, key2) if stats else []
+    custom_text = text.replace("\n", "<br>") if text else None
+    if n_dead:
+        annotations.append(n_dead_annotation(n_dead))
+
+    if title:
+        fig_joint.title.text = title
+
+    # Build the stats Div (if any) with style depending on location
+    stats_div: Div | None = None
+    popup_font_size = font_settings.annotation_text_font_size or "12px"
+    popup_css = ""
+    if font_settings.text_font is not None:
+        popup_css += f"font-family: {font_settings.text_font}; "
+
+    if custom_text or annotations:
+        if stats_location == "top-right":
+            content = _stats_html(custom_text, annotations, horizontal=False)
+            stats_div = _stats_cell_div(content, popup_font_size, popup_css)
+        else:
+            # "bottom" - horizontal stats bar below the plot
+            content = _stats_html(custom_text, annotations, horizontal=True)
+            stats_div = Div(
+                text=f"""
+                <div style="font-size:{popup_font_size}; color:#555;
+                            padding:4px 8px; {popup_css}">
+                  {content}
+                </div>
+                """,
+            )
+
+    top_right: LayoutDOM = (
+        stats_div
+        if stats_div is not None and stats_location == "top-right"
+        else Spacer()
+    )
+    plot_layout = _marginal_grid(
+        fig_joint,
+        p_top,
+        p_right,
+        top_right,
+        width=width,
+        height=height,
+        marginal_fraction=marginal_fraction,
+        sizing_mode=sizing_mode,
+    )
+
+    layout: LayoutDOM
+    if stats_div is not None and stats_location == "bottom":
+        if sizing_mode is not None:
+            stats_div.sizing_mode = "stretch_width"
+        layout = column(plot_layout, stats_div, sizing_mode=sizing_mode)
+    else:
+        layout = plot_layout
+
+    return _maybe_show(layout, show)
+
+
+def slice_plot(
+    particle_group,
+    *keys: str,
+    n_slice: int = 40,
+    slice_key: str | None = None,
+    xlim: Limit | None = None,
+    ylim: Limit | None = None,
+    nice: bool = True,
+    tex: bool = False,
+    width: int = 700,
+    height: int = 400,
+    sizing_mode: SizingModeType | None = None,
+    title: str | None = None,
+    density_alpha: float = 0.2,
+    show: bool = True,
+    **kwargs,
+) -> LayoutDOM:
+    """
+    Slice statistics plot with Bokeh.
+
+    Plots slice statistics as lines on the primary y-axis and
+    the bunch density as a filled area on a secondary y-axis.
+
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+        The object to plot.
+    keys : str
+        Statistical quantities to plot (e.g. ``'sigma_x'``, ``'norm_emit_x'``).
+    n_slice : int, default = 40
+        Number of slices.
+    slice_key : str, optional
+        Dimension to slice in (``'t'``, ``'z'``, ``'delta_t'``, etc.).
+    xlim, ylim : tuple of float, optional
+        Manual axis limits.
+    nice : bool, default = True
+        Use nice unit scaling.
+    width, height : int
+        Figure dimensions in pixels.
+
+    Returns
+    -------
+    LayoutDOM
+    """
+    check_unused_kwargs("bokeh", kwargs)
+    pdata = prepare_slice_plot(
+        particle_group,
+        *keys,
+        n_slice=n_slice,
+        slice_key=slice_key,
+        xlim=xlim,
+        ylim=ylim,
+        nice=nice,
+        tex=tex,
+    )
+
+    fig = figure(
+        width=width,
+        height=height,
+        x_axis_label=mathjax_fix(pdata.x_label),
+        y_axis_label=mathjax_fix(pdata.y_label),
+        tools="pan,wheel_zoom,box_zoom,save,reset",
+        toolbar_location="right",
+    )
+
+    # Main curves
+    for i, curve in enumerate(pdata.curves):
+        color = (
+            "black" if len(pdata.curves) == 1 else _BOKEH_COLORS[i % len(_BOKEH_COLORS)]
+        )
+        fig.line(
+            pdata.x,
+            curve.values,
+            legend_label=curve.plain_label,
+            color=color,
+            line_width=2,
+        )
+
+    if len(pdata.curves) > 1:
+        fig.legend.click_policy = "hide"
+
+    # Density on secondary y-axis
+    density_max = (
+        float(np.max(pdata.density_values)) if len(pdata.density_values) > 0 else 1.0
+    )
+    fig.extra_y_ranges["density"] = Range1d(start=0, end=density_max * 1.1)
+    fig.add_layout(
+        LinearAxis(
+            y_range_name="density",
+            axis_label=mathjax_fix(pdata.density_label),
+        ),
+        "right",
+    )
+
+    fig.varea(
+        x=pdata.x,
+        y1=0,
+        y2=pdata.density_values,
+        y_range_name="density",
+        fill_color="black",
+        fill_alpha=density_alpha,
+    )
+
+    if pdata.xlim:
+        fig.x_range.start, fig.x_range.end = pdata.xlim
+    if pdata.ylim:
+        fig.y_range.start, fig.y_range.end = pdata.ylim
+
+    if title:
+        fig.title.text = title
+
+    if sizing_mode is not None:
+        fig.sizing_mode = sizing_mode
+
+    fig.toolbar.logo = None
+
+    return _maybe_show(fig, show)
+
+
+def wakefield_plot(
+    particle_group,
+    wake,
+    key: str | None = None,
+    nice: bool = True,
+    xlim: Limit | None = None,
+    ylim: Limit | None = None,
+    tex: bool = False,
+    bins: int | str | None = None,
+    width: int = 700,
+    height: int = 400,
+    sizing_mode: SizingModeType | None = None,
+    title: str | None = None,
+    density_alpha: float = 0.3,
+    scatter_size: float = 2,
+    show: bool = True,
+    **kwargs,
+) -> LayoutDOM:
+    """
+    Wakefield kicks scatter plot with density overlay using Bokeh.
+
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+        The particle distribution.
+    wake : WakefieldBase
+        Wakefield object providing ``particle_kicks(z, weight)``.
+    key : str, optional
+        Independent variable key. Auto-detected if None.
+    nice : bool, default = True
+        Use nice unit scaling.
+    width, height : int
+        Figure dimensions in pixels.
+    density_alpha : float
+        Alpha for the density overlay bars.
+    scatter_size : float
+        Size of scatter markers.
+
+    Returns
+    -------
+    LayoutDOM
+    """
+
+    check_unused_kwargs("bokeh", kwargs)
+    pdata = prepare_wakefield_plot(
+        particle_group,
+        wake,
+        key=key,
+        nice=nice,
+        tex=tex,
+        xlim=xlim,
+        ylim=ylim,
+        bins=bins,
+    )
+
+    fig = figure(
+        width=width,
+        height=height,
+        x_axis_label=mathjax_fix(pdata.x_label),
+        y_axis_label=mathjax_fix(pdata.y_label),
+        tools="pan,wheel_zoom,box_zoom,save,reset",
+        toolbar_location="right",
+    )
+
+    # Density overlay on secondary y-axis
+    density_max = (
+        float(np.max(pdata.density.hist_values))
+        if len(pdata.density.hist_values) > 0
+        else 1.0
+    )
+    fig.extra_y_ranges["density"] = Range1d(start=0, end=density_max * 1.1)
+    fig.add_layout(
+        LinearAxis(
+            y_range_name="density",
+            axis_label=mathjax_fix(pdata.density.y_label),
+        ),
+        "right",
+    )
+
+    fig.vbar(
+        x=pdata.density.hist_centers,
+        top=pdata.density.hist_values,
+        width=pdata.density.hist_width,
+        bottom=0,
+        y_range_name="density",
+        fill_color="gray",
+        line_color="gray",
+        fill_alpha=density_alpha,
+    )
+
+    # Wake kicks scatter
+    fig.scatter(
+        pdata.scatter_x,
+        pdata.scatter_y,
+        size=scatter_size,
+        color="black",
+    )
+
+    if pdata.xlim:
+        fig.x_range.start, fig.x_range.end = pdata.xlim
+    if pdata.ylim:
+        fig.y_range.start, fig.y_range.end = pdata.ylim
+
+    if title:
+        fig.title.text = title
+
+    if sizing_mode is not None:
+        fig.sizing_mode = sizing_mode
+
+    fig.toolbar.logo = None
+
+    return _maybe_show(fig, show)
+
+
+def density_and_slice_plot(
+    particle_group,
+    key1: str = "t",
+    key2: str = "p",
+    stat_keys: list[str] | None = None,
+    bins: int = 100,
+    n_slice: int = 30,
+    tex: bool = False,
+    width: int = 700,
+    height: int = 450,
+    sizing_mode: SizingModeType | None = None,
+    title: str | None = None,
+    density_alpha: float = 0.1,
+    palette: Palette = Viridis256,
+    show: bool = True,
+    **kwargs,
+) -> LayoutDOM:
+    """
+    2D density plot with overlaid slice statistics using Bokeh.
+
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+        The object to plot.
+    key1 : str, default = 't'
+        Key for x-axis (also used as slice key).
+    key2 : str, default = 'p'
+        Key for y-axis (density).
+    stat_keys : list of str, optional
+        Slice statistics to overlay.
+    bins : int, default = 100
+        Number of bins for the 2D histogram.
+    n_slice : int, default = 30
+        Number of slices.
+    width, height : int
+        Figure dimensions in pixels.
+
+    Returns
+    -------
+    LayoutDOM
+    """
+    check_unused_kwargs("bokeh", kwargs)
+    pdata = prepare_density_and_slice_plot(
+        particle_group,
+        key1=key1,
+        key2=key2,
+        stat_keys=stat_keys,
+        bins=bins,
+        n_slice=n_slice,
+        tex=tex,
+    )
+
+    ext = pdata.extent  # [xmin, xmax, ymin, ymax]
+
+    # Color mapper for the 2D histogram
+    H = pdata.hist2d
+    h_min = float(np.min(H[H > 0])) if np.any(H > 0) else 0
+    h_max = float(np.max(H)) if np.any(H) else 1
+
+    mapper = LinearColorMapper(
+        palette=palette,
+        low=h_min,
+        high=h_max,
+        low_color="#ffffff00",
+    )
+
+    fig = figure(
+        width=width,
+        height=height,
+        x_axis_label=mathjax_fix(pdata.x_label),
+        y_axis_label=mathjax_fix(pdata.y_label),
+        x_range=(ext[0], ext[1]),
+        y_range=(ext[2], ext[3]),
+        tools="pan,wheel_zoom,box_zoom,save,reset",
+        toolbar_location="right",
+    )
+
+    fig.image(
+        image=[H.T],
+        x=ext[0],
+        y=ext[2],
+        dw=ext[1] - ext[0],
+        dh=ext[3] - ext[2],
+        color_mapper=mapper,
+    )
+
+    # Slice statistics on secondary y-axis
+    stat_max = (
+        max(float(np.max(c.values)) for c in pdata.slice_curves)
+        if pdata.slice_curves
+        else 1.0
+    )
+    fig.extra_y_ranges["stats"] = Range1d(start=0, end=stat_max * 1.1)
+    fig.add_layout(
+        LinearAxis(
+            y_range_name="stats",
+            axis_label=mathjax_fix(pdata.slice_y_label),
+        ),
+        "right",
+    )
+
+    for i, curve in enumerate(pdata.slice_curves):
+        color = _BOKEH_COLORS[i % len(_BOKEH_COLORS)]
+        fig.line(
+            pdata.slice_x,
+            curve.values,
+            y_range_name="stats",
+            legend_label=curve.plain_label,
+            color=color,
+            line_width=2,
+        )
+
+    if len(pdata.slice_curves) > 1:
+        fig.legend.click_policy = "hide"
+
+    # Density overlay
+    fig.varea(
+        x=pdata.slice_x,
+        y1=0,
+        y2=pdata.slice_density,
+        y_range_name="stats",
+        fill_color="black",
+        fill_alpha=density_alpha,
+    )
+
+    if title:
+        fig.title.text = title
+    if sizing_mode is not None:
+        fig.sizing_mode = sizing_mode
+    fig.toolbar.logo = None
+
+    return _maybe_show(fig, show)
+
+
+# ---------------------------------------------------------------------------
+# Generic plotting functions (used by Wavefront, etc.)
+# ---------------------------------------------------------------------------
+
+
+def plot_1d_density(
+    x,
+    y,
+    x_name: str = "",
+    y_name: str | None = None,
+    x_units: str | None = None,
+    y_units: str | None = None,
+    log_scale_y: bool = False,
+    show_cdf: bool = False,
+    cdf_label: str = "CDF",
+    kind: str = "bar",
+    plot_style: dict | None = None,
+    xlim: Limit | None = None,
+    ylim: Limit | None = (0, None),
+    nice: bool = True,
+    auto_label: bool = False,
+    tex: bool = False,
+    data: dict | None = None,
+    width: int = 600,
+    height: int = 400,
+    sizing_mode: SizingModeType | None = None,
+    title: str | None = None,
+    show: bool = True,
+    return_figure: bool = True,
+    **kwargs,
+) -> LayoutDOM:
+    """
+    Generic 1D density distribution plot with Bokeh.
+
+    Mirrors the API of the matplotlib ``plot_1d_density``.
+
+    Parameters
+    ----------
+    x, y : array or str
+        Data arrays or string keys into *data* dict.
+    x_name, y_name : str
+        Axis labels.
+    x_units, y_units : str, optional
+        Units appended to labels.
+    log_scale_y : bool
+        Log scale on y-axis.
+    show_cdf : bool
+        Show cumulative distribution on secondary y-axis.
+    kind : str
+        ``'bar'`` or ``'line'``.
+    nice : bool
+        Use nice unit scaling.
+    data : dict, optional
+        Dict mapping string keys to arrays.
+    width, height : int
+        Figure dimensions.
+    return_figure : bool
+        Accepted for parity with the matplotlib backend; the layout is always
+        returned.
+
+    Returns
+    -------
+    LayoutDOM
+    """
+
+    check_unused_kwargs("bokeh", kwargs)
+
+    # Resolve data dict
+    x_key = None
+    y_key = None
+
+    if isinstance(x, str):
+        if data is None:
+            raise ValueError("If `x` is a string, `data` dict must be provided")
+        x_key = x
+        x = np.asarray(data[x_key])
+    else:
+        x = np.asarray(x)
+
+    if isinstance(y, str):
+        if data is None:
+            raise ValueError("If `y` is a string, `data` dict must be provided")
+        y_key = y
+        y = np.asarray(data[y_key])
+    else:
+        y = np.asarray(y)
+
+    if x_key is not None and x_name == "":
+        x_name = x_key
+    if y_key is not None and y_name is None:
+        y_name = y_key
+    if y_name is None:
+        y_name = "Density"
+
+    # Auto-label
+    if auto_label:
+        if x_key and x_units is None:
+            try:
+                x_units = pg_units(x_key).unitSymbol
+            except (ValueError, KeyError):
+                pass
+        if y_key and y_units is None:
+            try:
+                y_units = pg_units(y_key).unitSymbol
+            except (ValueError, KeyError):
+                pass
+
+    # Nice scaling
+    x, f1, x_units, x_min, x_max = plottable_array_and_units(
+        x, x_units, nice=nice, lim=xlim
+    )
+    y, f2, y_units, y_min, y_max = plottable_array_and_units(
+        y, y_units, nice=nice, lim=ylim
+    )
+
+    # Labels
+    if auto_label and x_key:
+        x_label = mathjax_fix(mathlabel(x_key, units=x_units, tex=tex))
+    else:
+        x_label = f"{x_name} ({x_units})" if x_units else x_name
+
+    if auto_label and y_key:
+        y_label = mathjax_fix(mathlabel(y_key, units=y_units, tex=tex))
+    else:
+        y_label = f"{y_name} ({y_units})" if y_units else y_name
+
+    # Bar widths
+    if len(x) > 1:
+        widths = np.diff(x)
+        widths = np.append(widths, widths[-1])
+    else:
+        widths = np.ones_like(x)
+
+    fig = figure(
+        width=width,
+        height=height,
+        x_axis_label=x_label,
+        y_axis_label=y_label,
+        tools="pan,wheel_zoom,box_zoom,save,reset",
+        toolbar_location="right",
+        y_axis_type="log" if log_scale_y else "auto",
+    )
+
+    if plot_style is None:
+        plot_style = {}
+
+    if kind == "bar":
+        color = plot_style.get("color", "gray")
+        alpha = plot_style.get("alpha", 0.7)
+        fig.vbar(
+            x=x,
+            top=y,
+            width=widths,
+            bottom=0,
+            fill_color=color,
+            line_color=color,
+            fill_alpha=alpha,
+        )
+    elif kind == "line":
+        color = plot_style.get("color", "blue")
+        line_width = plot_style.get("linewidth", plot_style.get("line_width", 2))
+        fig.line(x, y, color=color, line_width=line_width)
+    else:
+        raise ValueError(f"kind must be 'bar' or 'line', got '{kind}'")
+
+    if xlim is not None:
+        fig.x_range.start, fig.x_range.end = x_min / f1, x_max / f1
+    if ylim is not None:
+        if ylim[0] is not None:
+            fig.y_range.start = y_min / f2
+        if ylim[1] is not None:
+            fig.y_range.end = y_max / f2
+
+    # CDF on secondary y-axis
+    if show_cdf:
+        cdf = np.cumsum(y * widths) * f1 * f2
+        cdf_scaled, _, cdf_prefix, _, _ = plottable_array(cdf, nice=nice)
+
+        cdf_max = float(np.max(cdf_scaled)) if len(cdf_scaled) > 0 else 1.0
+        fig.extra_y_ranges["cdf"] = Range1d(start=0, end=cdf_max)
+        cdf_axis_label = f"{cdf_label} ({cdf_prefix})" if cdf_prefix else cdf_label
+        fig.add_layout(
+            LinearAxis(y_range_name="cdf", axis_label=cdf_axis_label),
+            "right",
+        )
+        fig.line(x, cdf_scaled, y_range_name="cdf", color="blue", line_width=2)
+
+    if title:
+        fig.title.text = title
+    if sizing_mode is not None:
+        fig.sizing_mode = sizing_mode
+    fig.toolbar.logo = None
+
+    return _maybe_show(fig, show)
+
+
+def plot_2d_density_with_marginals(
+    data: np.ndarray,
+    dx: float = 1,
+    dy: float = 1,
+    xmin: float | None = None,
+    ymin: float | None = None,
+    x_name: str = "",
+    y_name: str = "",
+    z_name: str = "",
+    x_units: str | None = None,
+    y_units: str | None = None,
+    z_units: str | None = None,
+    log_scale_z: bool = False,
+    log_scale_marginals: bool = False,
+    show_colorbar: bool = True,
+    xlim: Limit | None = None,
+    ylim: Limit | None = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
+    width: int = 600,
+    height: int = 600,
+    marginal_fraction: float = 0.25,
+    cmap: str = "viridis",
+    palette: Palette | None = None,
+    sizing_mode: SizingModeType | None = None,
+    title: str | None = None,
+    show: bool = True,
+    return_figure: bool = True,
+    **kwargs,
+) -> LayoutDOM:
+    """
+    2D density map with marginal histograms using Bokeh.
+
+    Mirrors the API of the matplotlib ``plot_2d_density_with_marginals``.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        2D array of density values, shape ``(nx, ny)``.
+    dx, dy : float
+        Grid spacing.
+    xmin, ymin : float, optional
+        Origin of the grid. Default centers at 0.
+    x_name, y_name, z_name : str
+        Axis labels.
+    x_units, y_units, z_units : str, optional
+        Units appended to labels.
+    log_scale_z : bool
+        Log color mapping.
+    log_scale_marginals : bool
+        Log scale on the marginal histogram axes.
+    cmap : str, default = 'viridis'
+        Matplotlib-style colormap name, mapped to the 256-color bokeh palette
+        of the same name (e.g. ``'inferno'`` -> ``Inferno256``).
+    palette : Palette, optional
+        Explicit bokeh palette; takes precedence over `cmap`.
+    width, height : int
+        Figure dimensions.
+    return_figure : bool
+        Accepted for parity with the matplotlib backend; the layout is always
+        returned.
+
+    Returns
+    -------
+    LayoutDOM
+    """
+    check_unused_kwargs("bokeh", kwargs)
+    if palette is None:
+        palette = _palette_from_cmap(cmap)
+    nx, ny = data.shape
+
+    if xmin is None:
+        xmin = -((nx - 1) * dx) / 2
+    if ymin is None:
+        ymin = -((ny - 1) * dy) / 2
+
+    xmax = xmin + (nx - 1) * dx
+    ymax = ymin + (ny - 1) * dy
+
+    xvec = np.linspace(xmin, xmax, nx)
+    yvec = np.linspace(ymin, ymax, ny)
+
+    x_marginal = np.sum(data, axis=1) * dy
+    y_marginal = np.sum(data, axis=0) * dx
+
+    vmin = vmin if vmin is not None else float(np.min(data))
+    vmax = vmax if vmax is not None else float(np.max(data))
+
+    x_label = mathjax_fix(f"{x_name} ({x_units})" if x_units else x_name)
+    y_label = mathjax_fix(f"{y_name} ({y_units})" if y_units else y_name)
+
+    # Color mapper
+    if log_scale_z:
+        # Same dynamic range as the matplotlib LogNorm(vmin=Fmax/1e6) default
+        low = max(vmin, vmax * 1e-6) if vmax > 0 else 1e-300
+        mapper = LogColorMapper(palette=palette, low=low, high=vmax)
+    else:
+        mapper = LinearColorMapper(palette=palette, low=vmin, high=vmax)
+
+    # Bars touching zero vanish on a log axis; clamp them to a small floor.
+    if log_scale_marginals:
+        positive = np.concatenate(
+            [x_marginal[x_marginal > 0], y_marginal[y_marginal > 0]]
+        )
+        floor = float(positive.min()) / 10 if positive.size else 1e-300
+        x_marginal = np.maximum(x_marginal, floor)
+        y_marginal = np.maximum(y_marginal, floor)
+    else:
+        floor = 0.0
+
+    # Main density figure
+    x_range = xlim or (xmin - dx / 2, xmax + dx / 2)
+    y_range = ylim or (ymin - dy / 2, ymax + dy / 2)
+
+    fig_main = figure(
+        x_axis_label=x_label,
+        y_axis_label=y_label,
+        x_range=x_range,
+        y_range=y_range,
+        tools="pan,wheel_zoom,box_zoom,save,reset",
+        toolbar_location="left",
+    )
+
+    fig_main.image(
+        image=[data.T],
+        x=xmin - dx / 2,
+        y=ymin - dy / 2,
+        dw=xmax - xmin + dx,
+        dh=ymax - ymin + dy,
+        color_mapper=mapper,
+    )
+
+    if show_colorbar:
+        cbar_label = mathjax_fix(f"{z_name} ({z_units})" if z_units else z_name)
+        color_bar = ColorBar(color_mapper=mapper, title=cbar_label, location=(0, 0))
+        fig_main.add_layout(color_bar, "left")
+
+    if title:
+        fig_main.title.text = title
+
+    # Top marginal (X projection)
+    p_top = figure(
+        x_range=fig_main.x_range,
+        y_axis_type="log" if log_scale_marginals else "auto",
+        min_border=0,
+        outline_line_color=None,
+        tools="",
+    )
+    p_top.vbar(
+        x=xvec,
+        top=x_marginal,
+        width=dx,
+        bottom=floor,
+        fill_color="gray",
+        line_color="gray",
+    )
+    if z_units and y_units:
+        p_top.yaxis.axis_label = mathjax_fix(f"{z_units} {y_units}")
+    p_top.xaxis.visible = False
+
+    # Right marginal (Y projection)
+    p_right = figure(
+        y_range=fig_main.y_range,
+        x_axis_type="log" if log_scale_marginals else "auto",
+        min_border=0,
+        outline_line_color=None,
+        tools="",
+    )
+    p_right.hbar(
+        y=yvec,
+        right=y_marginal,
+        height=dy,
+        left=floor,
+        fill_color="gray",
+        line_color="gray",
+    )
+    if z_units and x_units:
+        p_right.xaxis.axis_label = mathjax_fix(f"{z_units} {x_units}")
+    p_right.yaxis.visible = False
+
+    for p in (fig_main, p_top, p_right):
+        p.toolbar.logo = None
+
+    layout = _marginal_grid(
+        fig_main,
+        p_top,
+        p_right,
+        Spacer(),
+        width=width,
+        height=height,
+        marginal_fraction=marginal_fraction,
+        sizing_mode=sizing_mode,
+    )
+
+    return _maybe_show(layout, show)

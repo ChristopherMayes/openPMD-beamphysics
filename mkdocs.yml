@@ -12,6 +12,7 @@ nav:
           - examples/read_examples.ipynb
           - examples/write_examples.ipynb
           - examples/plot_examples.ipynb
+          - examples/plot_backend_comparison.ipynb
           - examples/bunching.ipynb
       - Fields:
           - examples/fields/field_examples.ipynb
@@ -33,6 +34,7 @@ nav:
 
   - API:
       - Particles: api/particles.md
+      - Plotting: api/plotting.md
       - Readers: api/readers.md
       - Fields: api/fields.md
       - Wakefields: api/wakefields.md

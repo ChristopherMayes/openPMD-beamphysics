@@ -5,6 +5,7 @@ import typing as _typing
 if _typing.TYPE_CHECKING:
     from .fields import FieldMesh
     from .particles import ParticleGroup, single_particle
+    from .plot_dispatch import get_default_backend, set_default_backend
     from .readers import particle_paths
     from .status import ParticleStatus
     from .wavefront import Wavefront, WavefrontK
@@ -26,19 +27,23 @@ _LAZY_IMPORTS = {
     "Wavefront": ".wavefront",
     "WavefrontK": ".wavefront",
     "pmd_init": ".writers",
+    "set_default_backend": ".plot_dispatch",
+    "get_default_backend": ".plot_dispatch",
 }
 
 
 __all__ = [
     "FieldMesh",
-    "is_openpmd",
-    "particle_paths",
     "ParticleGroup",
     "ParticleStatus",
-    "pmd_init",
-    "single_particle",
     "Wavefront",
     "WavefrontK",
+    "get_default_backend",
+    "is_openpmd",
+    "particle_paths",
+    "pmd_init",
+    "set_default_backend",
+    "single_particle",
 ]
 
 

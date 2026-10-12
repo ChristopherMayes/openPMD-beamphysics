@@ -21,6 +21,7 @@ _LAZY_IMPORTS = {
     "ParticleGroup": ".particles",
     "single_particle": ".particles",
     "particle_paths": ".readers",
+    "is_openpmd": ".readers",
     "ParticleStatus": ".status",
     "Wavefront": ".wavefront",
     "WavefrontK": ".wavefront",
@@ -30,9 +31,10 @@ _LAZY_IMPORTS = {
 
 __all__ = [
     "FieldMesh",
+    "is_openpmd",
+    "particle_paths",
     "ParticleGroup",
     "ParticleStatus",
-    "particle_paths",
     "pmd_init",
     "single_particle",
     "Wavefront",

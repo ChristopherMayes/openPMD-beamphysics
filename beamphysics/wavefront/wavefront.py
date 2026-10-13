@@ -3,8 +3,9 @@ from __future__ import annotations
 import pathlib
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import Enum
+from html import escape
 from math import pi
 from typing import ClassVar, Union
 
@@ -22,6 +23,11 @@ from ..interfaces.genesis import (
 from ..plot import plot_1d_density, plot_2d_density_with_marginals
 from ..statistics import mean_calc, mean_variance_calc
 from ..units import Z0, c_light
+from ..wavefront.openpmd import (
+    WavefrontAttrs,
+    load_wavefront_openpmd,
+    write_wavefront_openpmd,
+)
 from ..wavefront.propagators import drift_wavefront
 
 
@@ -74,6 +80,39 @@ class WavefrontBase(ABC):
 
     wavelength: float = 1.0  # m
     axis_labels: ClassVar[tuple[str, str, str]] = ("", "", "")
+
+    # Declared as a real dataclass field on each concrete subclass.
+    attrs: WavefrontAttrs
+
+    # Midpoint of the grid in m, defaulting to a grid centered on the origin.
+    # `xmin` and `xmax` follow from these. They are real-space quantities even on
+    # `WavefrontK`, which carries them through the transform without interpreting
+    # them: a real-space shift is a linear phase in k-space, not a shift of the
+    # k grid.
+    xmid: float = 0.0
+    ymid: float = 0.0
+    zmid: float = 0.0
+
+    # Position of this plane along the beamline in m, in whatever frame the caller
+    # picked. Advanced by `drift`, since the mesh is co-moving and has nowhere else
+    # to record that the wavefront has propagated. Written as the extension's
+    # `zCoordinate` and as Genesis4's `refposition`.
+    s_position: float = 0.0
+
+    def __setattr__(self, name, value):
+        """
+        Keep `attrs` a `WavefrontAttrs` however it is set.
+
+        A mapping keyed by either openPMD or field names is accepted for
+        convenience, but the attribute itself is always the typed object. Coercing
+        only in `__post_init__` would leave a plain assignment such as
+        ``w.attrs = {...}`` holding a raw dict, so that `w.attrs.beamline`
+        raises `AttributeError` and the mapping's contents go unvalidated until
+        write time.
+        """
+        if name == "attrs" and not isinstance(value, WavefrontAttrs):
+            value = WavefrontAttrs.from_pmd(value)
+        object.__setattr__(self, name, value)
 
     def __post_init__(self):
         """
@@ -192,18 +231,18 @@ class WavefrontBase(ABC):
         """
         Minimum x coordinate in m.
 
-        xmin = -(nx-1) * dx / 2
+        xmin = xmid - (nx-1) * dx / 2
         """
-        return -((self.nx - 1) * self.dx) / 2
+        return self.xmid - ((self.nx - 1) * self.dx) / 2
 
     @property
     def xmax(self):
         """
         Maximum x coordinate in m.
 
-        xmax = (nx-1) * dx / 2
+        xmax = xmid + (nx-1) * dx / 2
         """
-        return ((self.nx - 1) * self.dx) / 2
+        return self.xmid + ((self.nx - 1) * self.dx) / 2
 
     @property
     def xvec(self):
@@ -218,18 +257,18 @@ class WavefrontBase(ABC):
         """
         Minimum y coordinate in m.
 
-        ymin = -(ny-1) * dy / 2
+        ymin = ymid - (ny-1) * dy / 2
         """
-        return -((self.ny - 1) * self.dy) / 2
+        return self.ymid - ((self.ny - 1) * self.dy) / 2
 
     @property
     def ymax(self):
         """
         Maximum y coordinate in m.
 
-        ymax = (ny-1) * dy / 2
+        ymax = ymid + (ny-1) * dy / 2
         """
-        return ((self.ny - 1) * self.dy) / 2
+        return self.ymid + ((self.ny - 1) * self.dy) / 2
 
     @property
     def yvec(self):
@@ -244,18 +283,18 @@ class WavefrontBase(ABC):
         """
         Minimum z coordinate in m.
 
-        zmin = -(nz-1) * dz / 2
+        zmin = zmid - (nz-1) * dz / 2
         """
-        return -((self.nz - 1) * self.dz) / 2
+        return self.zmid - ((self.nz - 1) * self.dz) / 2
 
     @property
     def zmax(self):
         """
         Maximum z coordinate in m.
 
-        zmax = (nz-1) * dz / 2
+        zmax = zmid + (nz-1) * dz / 2
         """
-        return ((self.nz - 1) * self.dz) / 2
+        return self.zmid + ((self.nz - 1) * self.dz) / 2
 
     @property
     def zvec(self):
@@ -440,6 +479,25 @@ class WavefrontBase(ABC):
     def drift(self, z, curvature=0):
         return drift_wavefront(self, z, curvature=curvature)
 
+    def _resized_mids(self, nx, ny, nz):
+        """
+        Grid midpoint fields after each axis is resized.
+
+        Parameters
+        ----------
+        nx, ny, nz : tuple of (int, int)
+            Elements removed from the (start, end) of each axis. Negative values
+            mean elements were added.
+
+        Returns
+        -------
+        dict
+            Fields to pass to `dataclasses.replace`. Empty here, because the axes
+            of a k-space wavefront are not real-space axes: discarding k samples
+            does not move the real-space grid.
+        """
+        return {}
+
     def pad(self, nx=(0, 0), ny=(0, 0), nz=(0, 0)):
         """
         zero-pad the field arrays.
@@ -455,7 +513,9 @@ class WavefrontBase(ABC):
         Ex = np.pad(self.Ex, (nx, ny, nz)) if self.Ex is not None else None
         Ey = np.pad(self.Ey, (nx, ny, nz)) if self.Ey is not None else None
 
-        return replace(self, Ex=Ex, Ey=Ey)
+        # Padding adds elements, which is a removal of a negative count.
+        mids = self._resized_mids((-nx[0], -nx[1]), (-ny[0], -ny[1]), (-nz[0], -nz[1]))
+        return replace(self, Ex=Ex, Ey=Ey, attrs=self.attrs.copy(), **mids)
 
     def crop(self, nx=(0, 0), ny=(0, 0), nz=(0, 0)):
         """
@@ -482,6 +542,11 @@ class WavefrontBase(ABC):
         ------
         ValueError
             If crop amounts exceed array dimensions.
+
+        Notes
+        -----
+        The surviving samples keep their physical coordinates: an asymmetric crop
+        moves the grid origin rather than re-centering the grid.
         """
         nx = (nx, nx) if np.isscalar(nx) else nx
         ny = (ny, ny) if np.isscalar(ny) else ny
@@ -520,7 +585,13 @@ class WavefrontBase(ABC):
             else None
         )
 
-        return replace(self, Ex=Ex, Ey=Ey)
+        return replace(
+            self,
+            Ex=Ex,
+            Ey=Ey,
+            attrs=self.attrs.copy(),
+            **self._resized_mids(nx, ny, nz),
+        )
 
     def auto_crop(self, threshold: float = 1e-6, apply: bool = True):
         """
@@ -548,16 +619,28 @@ class WavefrontBase(ABC):
 
         Examples
         --------
-        >>> # Get crop amounts without applying
-        >>> crop_info = w.auto_crop(threshold=1e-4, apply=False)
-        >>> print(crop_info)  # {'nx': 10, 'ny': 8, 'nz': 5}
+        >>> from beamphysics.wavefront import Wavefront
+        >>> w = Wavefront.from_gaussian(
+        ...     shape=(64, 64, 16), dx=1e-6, dy=1e-6, dz=1e-6,
+        ...     wavelength=1e-9, sigma0=3e-6, sigma_z=2e-6,
+        ... )
 
-        >>> # Apply auto-crop directly
-        >>> w_cropped = w.auto_crop(threshold=1e-4)
+        Get the crop amounts without applying them:
 
-        >>> # Manual two-step process
         >>> crop_info = w.auto_crop(threshold=1e-4, apply=False)
-        >>> w_cropped = w.crop(**crop_info)
+        >>> crop_info
+        {'nx': 19, 'ny': 19, 'nz': 0}
+
+        Apply the crop directly, removing that many elements from each end:
+
+        >>> w.auto_crop(threshold=1e-4).shape
+        (26, 26, 16)
+
+        The two steps are equivalent, so the amounts can be inspected or adjusted
+        first:
+
+        >>> w.crop(**crop_info).shape
+        (26, 26, 16)
         """
 
         def find_symmetric_crop(profile: np.ndarray, threshold: float) -> int:
@@ -585,7 +668,8 @@ class WavefrontBase(ABC):
             crop_start = first_idx
             crop_end = len(profile) - 1 - last_idx
 
-            return min(crop_start, crop_end)
+            # A plain int, so that the returned dict reprs and serializes cleanly.
+            return int(min(crop_start, crop_end))
 
         # Get 1D intensity projections along each axis
         intensity = self.intensity
@@ -609,86 +693,108 @@ class WavefrontBase(ABC):
         """Returns a deep copy"""
         return deepcopy(self)
 
+    def _summary_rows(self):
+        """
+        Label/value pairs describing this wavefront, shared by both reprs.
+
+        Rows that carry no information are omitted, so that the common case stays
+        short: a grid centered on the origin, a wavefront at the origin of the
+        beamline frame, and unset metadata each contribute nothing. Metadata is
+        listed field by field rather than as the `WavefrontAttrs` repr, which
+        spells out every unset field.
+
+        Returns
+        -------
+        list of (str, str)
+        """
+        present = [name for name in ("Ex", "Ey") if getattr(self, name) is not None]
+
+        # %g rather than a fixed exponent, so that a spacing of 1 reads as "1"
+        # instead of "1.000e+00".
+        def g(value):
+            return f"{value:g}"
+
+        # Report each class's own axes: dx/dy/dz here, dkx/dky/dkz in k-space.
+        spacing = ", ".join(
+            f"d{label}={g(getattr(self, 'd' + label))}" for label in self.axis_labels
+        )
+
+        rows = [
+            ("wavelength", f"{g(self.wavelength)} m"),
+            ("photon energy", f"{g(self.photon_energy)} eV"),
+            ("grid shape", f"{self.shape}"),
+            ("spacing", f"{spacing} {'m' if self.in_rspace else 'rad/m'}"),
+            ("fields", ", ".join(present) if present else "None"),
+        ]
+
+        if (self.xmid, self.ymid, self.zmid) != (0.0, 0.0, 0.0):
+            # Always a real-space quantity, so say so when the axes are not.
+            label = "grid midpoint" if self.in_rspace else "grid midpoint (r-space)"
+            rows.append(
+                (label, f"x={g(self.xmid)}, y={g(self.ymid)}, z={g(self.zmid)} m")
+            )
+        if self.s_position != 0.0:
+            rows.append(("s_position", f"{g(self.s_position)} m"))
+
+        for name in self.attrs.pmd_keys():
+            value = getattr(self.attrs, name)
+            if value is not None:
+                rows.append((name, str(value)))
+        # Keyed by openPMD name, since that is how they arrived and how they leave.
+        for name, value in self.attrs.other.items():
+            rows.append((name, str(value)))
+
+        return rows
+
+    def __repr__(self):
+        # The subclasses set `repr=False` so that this is used instead of the
+        # dataclass repr, which prints the entire field array. Deliberately short,
+        # since this appears inside containers and tracebacks; the full summary is
+        # in the pretty and HTML reprs.
+        return (
+            f"{self.__class__.__name__}(shape={self.shape}, "
+            f"wavelength={self.wavelength:g} m, s_position={self.s_position:g} m)"
+        )
+
     def _repr_pretty_(self, p, cycle):
         """IPython/Jupyter pretty-print representation"""
         if cycle:
             p.text(f"{self.__class__.__name__}(...)")
             return
 
-        def summarize_field(field, name):
-            if field is None:
-                return f"{name}: None"
-            return f"{name}: {field.shape}"
-
-        lines = [
-            f"{self.__class__.__name__}(",
-            f"  wavelength: {self.wavelength:.6e} m",
-            f"  shape: {self.shape}",
-            f"  spacing: dx={self.dx:.3e}, dy={self.dy:.3e}, dz={self.dz:.3e} m",
-            f"  {summarize_field(self.Ex, 'Ex')}",
-            f"  {summarize_field(self.Ey, 'Ey')}",
-            ")",
-        ]
+        lines = [f"{self.__class__.__name__}("]
+        lines += [f"  {label}: {value}" for label, value in self._summary_rows()]
+        lines.append(")")
         p.text("\n".join(lines))
 
     def _repr_html_(self):
         """Rich HTML representation for Jupyter notebooks"""
-        # Determine which fields exist
-        fields = []
-        if self.Ex is not None:
-            fields.append("Ex")
-        if self.Ey is not None:
-            fields.append("Ey")
-        field_str = ", ".join(fields) if fields else "None"
+        # Labels and values can come from a file, since `attrs.other` carries
+        # whatever the file held. This string is injected into the notebook DOM,
+        # so escape both rather than trusting them.
+        cells = []
+        for i, (label, value) in enumerate(self._summary_rows()):
+            shade = (
+                ' style="background-color: rgba(128,128,128,0.1);"'
+                if i % 2 == 0
+                else ""
+            )
+            cells.append(
+                f"<tr{shade}><td><b>{escape(label)}</b></td>"
+                f"<td>{escape(value)}</td></tr>"
+            )
 
-        # Add photon energy for easier reference
-        photon_energy_str = ""
-        if hasattr(self, "photon_energy"):
-            photon_energy_str = f"""
-                <tr>
-                    <td><b>photon energy</b></td>
-                    <td>{self.photon_energy:.6e} eV</td>
-                </tr>
-            """
-
-        fmt = ""
-
-        html = f"""
+        return f"""
         <div style="font-family: monospace; border: 1px solid rgba(128,128,128,0.3); padding: 10px; max-width: 600px;">
             <h4 style="margin-top: 0;">{self.__class__.__name__}</h4>
             <table style="width: 100%; border-collapse: collapse;">
-                <tr style="background-color: rgba(128,128,128,0.1);">
-                    <td><b>wavelength</b></td>
-                    <td>{self.wavelength:{fmt}} m</td>
-                </tr>
-                {photon_energy_str}
-                <tr>
-                    <td><b>grid shape</b></td>
-                    <td>{self.shape}</td>
-                </tr>
-                <tr style="background-color: rgba(128,128,128,0.1);">
-                    <td><b>dx</b></td>
-                    <td>{self.dx:{fmt}} m</td>
-                </tr>
-                <tr>
-                    <td><b>dy</b></td>
-                    <td>{self.dy:{fmt}} m</td>
-                </tr>
-                <tr style="background-color: rgba(128,128,128,0.1);">
-                    <td><b>dz</b></td>
-                    <td>{self.dz:{fmt}} m</td>
-                </tr>
-                <tr>
-                    <td><b>fields</b></td>
-                    <td>{field_str}</td>
-                </tr>
+                {"".join(cells)}
             </table>
         </div>
         """
-        return html
 
 
-@dataclass
+@dataclass(repr=False)
 class WavefrontK(WavefrontBase):
     """
     K-space (Fourier) representation of electromagnetic wavefront fields.
@@ -714,6 +820,17 @@ class WavefrontK(WavefrontBase):
         Grid spacing in kz direction (rad/m)
     wavelength : float, default=1.0
         Central wavelength (m)
+    attrs : WavefrontAttrs or mapping, optional
+        openPMD EXT_Wavefront attributes carried through file I/O, such as
+        `beamline`. Not interpreted by this class. A mapping keyed by either
+        openPMD or field names is coerced to `WavefrontAttrs`.
+    xmid, ymid, zmid : float, default=0.0
+        Midpoint of the *real-space* grid in m, carried through from the real-space
+        wavefront. Not interpreted here: a real-space shift is a linear phase in
+        k-space, not a shift of the k grid.
+    s_position : float, default=0.0
+        Beamline position of this plane in m, carried through from the real-space
+        wavefront.
 
     Attributes
     ----------
@@ -770,6 +887,15 @@ class WavefrontK(WavefrontBase):
     dkz: float = 1.0  # rad/m  # type: ignore[override]
 
     wavelength: float = 1.0  # m
+
+    # Provenance carried through from file I/O. Not interpreted by this class.
+    attrs: WavefrontAttrs = field(default_factory=WavefrontAttrs)
+
+    # Real-space grid midpoint, carried through the transform. See the class docstring.
+    xmid: float = 0.0  # m
+    ymid: float = 0.0  # m
+    zmid: float = 0.0  # m
+    s_position: float = 0.0  # m
 
     axis_labels: ClassVar[tuple[str, str, str]] = ("kx", "ky", "kz")
 
@@ -838,6 +964,11 @@ class WavefrontK(WavefrontBase):
             dy=self.dy,
             dz=self.dz,
             wavelength=self.wavelength,
+            attrs=self.attrs.copy(),
+            xmid=self.xmid,
+            ymid=self.ymid,
+            zmid=self.zmid,
+            s_position=self.s_position,
         )
 
     @property
@@ -1074,7 +1205,7 @@ class WavefrontK(WavefrontBase):
         return self._std("thetay")
 
 
-@dataclass
+@dataclass(repr=False)
 class Wavefront(WavefrontBase):
     """
     Real-space representation of electromagnetic wavefront fields.
@@ -1101,6 +1232,18 @@ class Wavefront(WavefrontBase):
         Grid spacing in z direction (m)
     wavelength : float, default=1.0
         Central wavelength (m)
+    attrs : WavefrontAttrs or mapping, optional
+        openPMD EXT_Wavefront attributes carried through file I/O, such as
+        `beamline`. Not interpreted by this class. A mapping keyed by either
+        openPMD or field names is coerced to `WavefrontAttrs`.
+    xmid, ymid, zmid : float, default=0.0
+        Midpoint of the grid in m. The default of 0.0 gives a grid centered on the
+        origin, so that ``xvec`` runs from ``-(nx-1)*dx/2`` to ``+(nx-1)*dx/2``.
+        Note that `z` here is the intra-pulse coordinate, not the beamline
+        position: see the note on frames below.
+    s_position : float, default=0.0
+        Position of this plane along the beamline in m, in whatever frame the
+        caller picked. Advanced by `drift`. See the note on frames below.
 
     Attributes
     ----------
@@ -1141,6 +1284,10 @@ class Wavefront(WavefrontBase):
         Create Wavefront from Genesis4 HDF5 field file
     write_genesis4(file)
         Write Wavefront to Genesis4 HDF5 format
+    from_openpmd(file, iteration=None)
+        Create Wavefront from an openPMD EXT_Wavefront file
+    write_openpmd(file, iteration=1, ...)
+        Write Wavefront to an openPMD EXT_Wavefront file
 
     Notes
     -----
@@ -1150,6 +1297,24 @@ class Wavefront(WavefrontBase):
     - Fourier transforms use norm='ortho' to preserve Plancherel's theorem:
       ∫∫∫ |E(x,y,z)|² dx dy dz = ∫∫∫ |Ẽ(kx,ky,kz)|² dkx dky dkz
     - Statistical moments (mean, sigma) are intensity-weighted
+
+    **Frames.** There are two longitudinal quantities and they belong to different
+    frames. The mesh's own `z` axis, positioned by `zmid`, is the intra-pulse
+    coordinate: it is co-moving, and `drift` leaves it alone because the paraxial
+    kernel is transverse, applied slice by slice with no piston term. `s_position`
+    is the position of this plane along the beamline, and `drift` does advance it,
+    by the propagation distance.
+
+    That split follows `ParticleGroup`, where `drift` moves the coordinates that
+    exist rather than a separate register: there, `z` records that the particles
+    propagated. Here the mesh is co-moving and cannot record it, so `s_position` is
+    the only place the information can go. Operations that do not move the
+    wavefront along the beamline -- `crop`, `pad`, `to_kspace`, an applied lens
+    phase -- leave it alone, just as they leave `ParticleGroup.z` alone.
+
+    `s_position` is measured in whatever frame the caller picked, so the default of
+    0.0 is the origin of that frame rather than an unknown. It is written as the
+    EXT_Wavefront `zCoordinate` and as Genesis4's `refposition`.
 
     """
 
@@ -1161,7 +1326,43 @@ class Wavefront(WavefrontBase):
     dz: float = 1.0  # m  # type: ignore[override]
     wavelength: float = 1.0  # m
 
+    # Provenance carried through from file I/O. Not interpreted by this class.
+    attrs: WavefrontAttrs = field(default_factory=WavefrontAttrs)
+
+    # Grid midpoint. The default of 0 is a grid centered on the origin.
+    xmid: float = 0.0  # m
+    ymid: float = 0.0  # m
+    zmid: float = 0.0  # m
+
+    # Beamline position of this plane. Advanced by `drift`.
+    s_position: float = 0.0  # m
+
     axis_labels: ClassVar[tuple[str, str, str]] = ("x", "y", "z")
+
+    def _resized_mids(self, nx, ny, nz):
+        """
+        Grid midpoint fields that keep the surviving samples where they were.
+
+        Removing `a` elements from the start of an axis and `b` from the end moves
+        the midpoint of the remaining grid by ``(a - b) * d / 2``, so the stored
+        midpoint has to move with it. Without this, an asymmetric crop would
+        silently translate the field.
+
+        Parameters
+        ----------
+        nx, ny, nz : tuple of (int, int)
+            Elements removed from the (start, end) of each axis. Negative values
+            mean elements were added.
+
+        Returns
+        -------
+        dict
+        """
+        return {
+            "xmid": self.xmid + (nx[0] - nx[1]) * self.dx / 2,
+            "ymid": self.ymid + (ny[0] - ny[1]) * self.dy / 2,
+            "zmid": self.zmid + (nz[0] - nz[1]) * self.dz / 2,
+        }
 
     @property
     def spatial_domain(self) -> SpatialDomain:
@@ -1323,6 +1524,11 @@ class Wavefront(WavefrontBase):
             dky=self.dky,
             dkz=self.dkz,
             wavelength=self.wavelength,
+            attrs=self.attrs.copy(),
+            xmid=self.xmid,
+            ymid=self.ymid,
+            zmid=self.zmid,
+            s_position=self.s_position,
         )
 
     def plot_power(
@@ -1544,6 +1750,8 @@ class Wavefront(WavefrontBase):
         -----
         - The field data is extracted and converted into an electric field representation.
         - The grid spacing (`dx` and `dz`) and wavelength are obtained from the file metadata.
+        - Genesis4's `refposition` is the position of this dump along the undulator
+          line, so it is read into `s_position`.
         """
 
         if isinstance(file, (str, pathlib.Path)):
@@ -1567,6 +1775,7 @@ class Wavefront(WavefrontBase):
             dy=float(dx),
             dz=float(dz),
             wavelength=float(wavelength),
+            s_position=float(param["refposition"]),
         )
 
     def write_genesis4(
@@ -1593,6 +1802,8 @@ class Wavefront(WavefrontBase):
         -----
         - If `file` is a path or string, a new HDF5 file is created and written to.
         - If `file` is an `h5py.Group`, the data is written directly into the provided group.
+        - `s_position` is written as Genesis4's `refposition`; `attrs` has nowhere
+          to go in this format and is dropped.
         """
         if isinstance(file, (str, pathlib.Path)):
             with h5py.File(file, "w") as h5:
@@ -1600,6 +1811,114 @@ class Wavefront(WavefrontBase):
             return
         elif isinstance(file, h5py.Group):
             wavefront_write_genesis4(self, file)
+            return
+        else:
+            raise ValueError(
+                f"file must be a str, pathlib.Path, or h5py.Group, got {type(file)}"
+            )
+
+    @classmethod
+    def from_openpmd(
+        cls,
+        file: Union[pathlib.Path, str, h5py.Group],
+        iteration: int | None = None,
+    ):
+        """
+        Create a Wavefront from an openPMD file using the EXT_Wavefront extension.
+
+        Parameters
+        ----------
+        file : Union[pathlib.Path, str, h5py.Group]
+            Path to the openPMD HDF5 file, or an open `h5py.Group` to use as the
+            series root.
+        iteration : int, optional
+            openPMD iteration to read. If None, the file must hold exactly one.
+
+        Returns
+        -------
+        Wavefront
+            A new instance holding the field data, with the extension's
+            `zCoordinate` in `s_position` and any other record attributes carried
+            in `.attrs`.
+
+        Raises
+        ------
+        ValueError
+            If the file is not a valid path, string, or `h5py.Group`; if a required
+            attribute is missing; or if the file holds a frequency-domain or k-space
+            field, neither of which this class can represent.
+
+        Notes
+        -----
+        Any `axisLabels` permutation of (x, y, z) is honored on read, though the
+        writer always stores (z, y, x).
+        """
+        if isinstance(file, (str, pathlib.Path)):
+            with h5py.File(file, "r") as h5:
+                kwargs = load_wavefront_openpmd(h5, iteration=iteration)
+        elif isinstance(file, h5py.Group):
+            kwargs = load_wavefront_openpmd(file, iteration=iteration)
+        else:
+            raise ValueError(
+                f"file must be a str, pathlib.Path, or h5py.Group, got {type(file)}"
+            )
+
+        return cls(**kwargs)
+
+    def write_openpmd(
+        self,
+        file: pathlib.Path | str | h5py.Group,
+        iteration: int = 1,
+        **extension_attrs,
+    ):
+        """
+        Write the Wavefront as an openPMD file using the EXT_Wavefront extension.
+
+        Parameters
+        ----------
+        file : Union[pathlib.Path, str, h5py.Group]
+            Path for a new HDF5 file, or an open `h5py.Group` to use as the series
+            root.
+        iteration : int, default=1
+            openPMD iteration index to write.
+        **extension_attrs
+            `WavefrontAttrs` field names (`beamline`, `radius_of_curvature_x`,
+            `radius_of_curvature_y`, `delta_radius_of_curvature_x`,
+            `delta_radius_of_curvature_y`), taking precedence over `.attrs`.
+
+        Raises
+        ------
+        ValueError
+            If the file is not a valid path, string, or `h5py.Group`.
+        TypeError
+            If an attribute name is not a `WavefrontAttrs` field.
+
+        Notes
+        -----
+        Both transverse polarizations are written into one file as components `x`
+        and `y` of the `electricField` record; the `z` component is never written.
+
+        The required `zCoordinate` is written from `s_position`. There is no
+        write-time override: it is a coordinate the propagators maintain, so a
+        keyword here could put a value in the file that disagrees with the
+        wavefront it came from. Set `s_position` on the wavefront instead.
+        """
+        if isinstance(file, (str, pathlib.Path)):
+            with h5py.File(file, "w") as h5:
+                write_wavefront_openpmd(
+                    self,
+                    h5,
+                    iteration=iteration,
+                    **extension_attrs,
+                )
+            return
+        elif isinstance(file, h5py.Group):
+            write_wavefront_openpmd(
+                self,
+                file,
+                iteration=iteration,
+                **extension_attrs,
+            )
             return
         else:
             raise ValueError(

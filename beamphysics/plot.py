@@ -1566,6 +1566,15 @@ def wakefield_plot(
     fig : matplotlib.figure.Figure
         The matplotlib figure containing the plot.
     """
+    if not hasattr(wake, "particle_kicks"):
+        raise TypeError(
+            f"wakefield_plot requires a longitudinal wakefield providing "
+            f"particle_kicks(z, weight); got {type(wake).__name__}. For 3D "
+            f"Taylor wakefields, apply the wake with "
+            f"ParticleGroup.apply_wakefield and plot the momentum changes "
+            f"directly."
+        )
+
     if key is None:
         if particle_group.in_t_coordinates:
             key = "delta_z/c"

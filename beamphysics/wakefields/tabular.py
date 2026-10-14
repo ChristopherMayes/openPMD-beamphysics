@@ -33,7 +33,7 @@ class TabularWakefield(WakefieldBase):
     ----------
     z : np.ndarray
         Longitudinal positions [m]. Should be negative (behind source)
-        and sorted in ascending order.
+        and must be strictly increasing.
     W : np.ndarray
         Wakefield values [V/C/m] at each z position.
     fill_value : float, optional
@@ -45,7 +45,7 @@ class TabularWakefield(WakefieldBase):
     --------
     ::
 
-        z_data = -np.linspace(1e-6, 1e-3, 100)
+        z_data = -np.linspace(1e-3, 0, 100)
         W_data = 1e15 * np.exp(z_data / 100e-6) * np.sin(1e5 * z_data)
         wake = TabularWakefield(z_data, W_data)
         wake.wake(-50e-6)  # Interpolated wake at 50 µm behind source
@@ -65,6 +65,8 @@ class TabularWakefield(WakefieldBase):
             raise ValueError(f"Shape mismatch: z.shape={z.shape}, W.shape={W.shape}")
         if len(z) < 4:
             raise ValueError("Need at least 4 points for cubic interpolation")
+        if np.any(np.diff(z) <= 0):
+            raise ValueError("z must be strictly increasing")
 
         # Store data
         self._z = z

@@ -518,6 +518,16 @@ def test_nonuniform_source_table_is_sampled_at_its_finest_spacing():
         create_impact_z_wakefield_rfdata(source)
 
 
+@pytest.mark.parametrize(
+    "z",
+    [-np.linspace(0, 1e-3, 10), np.array([-3e-6, -2e-6, -2e-6, -1e-6, 0.0])],
+    ids=["descending", "repeated"],
+)
+def test_tabular_rejects_a_non_increasing_grid(z):
+    with pytest.raises(ValueError, match="strictly increasing"):
+        TabularWakefield(z, np.ones_like(z))
+
+
 def test_from_wakefield_rejects_a_source_table_short_of_the_origin():
     """A table that stops before z = 0 would export the fill value at the source."""
     table = TabularWakefield(np.linspace(-1e-3, -1e-6, 100), np.full(100, 1e15))

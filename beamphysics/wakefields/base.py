@@ -29,6 +29,9 @@ __all__ = ["SAMPLES_PER_WAVELENGTH", "WakefieldBase"]
 # resulting row count stays within the 5000 rows IMPACT-Z accepts.
 SAMPLES_PER_WAVELENGTH = 128
 
+# Fewest samples accepted by the cubic interpolant of TabularWakefield.
+MIN_SAMPLES = 4
+
 
 class WakefieldBase(ABC):
     """
@@ -166,7 +169,8 @@ class WakefieldBase(ABC):
         Number of uniform samples needed to represent the wake out to zmax.
 
         The count follows from :attr:`min_wavelength` at
-        SAMPLES_PER_WAVELENGTH samples per length scale.
+        SAMPLES_PER_WAVELENGTH samples per length scale, and is never fewer than the
+        four points required by the cubic interpolant.
 
         Parameters
         ----------
@@ -179,7 +183,9 @@ class WakefieldBase(ABC):
         int
             Number of samples.
         """
-        return int(np.ceil(SAMPLES_PER_WAVELENGTH * zmax / self.min_wavelength)) + 1
+        n = int(np.ceil(SAMPLES_PER_WAVELENGTH * zmax / self.min_wavelength)) + 1
+
+        return max(n, MIN_SAMPLES)
 
     def convolve_density(
         self,

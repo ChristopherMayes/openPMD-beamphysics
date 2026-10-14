@@ -284,16 +284,26 @@ class PseudomodeWakefield(WakefieldBase):
         """
         Shortest length scale the wake resolves [m].
 
-        The shorter of the period of the fastest mode and the decay length, so that a
-        purely damped mode, which has no period, still sets a sampling requirement.
+        The shorter of the period of the fastest mode and the decay length of the most
+        strongly damped mode, so that a purely damped mode, which has no period, still
+        sets a sampling requirement. The decay length of the most weakly damped mode,
+        reported by :attr:`decay_length`, sets the range instead.
 
         Returns
         -------
         float
             Shortest length scale [m].
+
+        Raises
+        ------
+        ValueError
+            If any mode has a non-positive decay rate.
         """
+        # Raises for any undamped mode.
+        self.decay_length
+
         k = np.abs([mode.k for mode in self.modes]).max()
-        decay_length = self.decay_length
+        decay_length = float(1 / max(mode.d for mode in self.modes))
 
         if k == 0:
             return decay_length

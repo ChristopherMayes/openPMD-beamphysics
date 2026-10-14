@@ -16,7 +16,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 from ..units import c_light
-from .base import WakefieldBase
+from .base import MIN_SAMPLES, WakefieldBase
 from .impedance import ImpedanceWakefield
 
 __all__ = ["TabularWakefield"]
@@ -148,12 +148,6 @@ class TabularWakefield(WakefieldBase):
         if zmax <= 0:
             raise ValueError(f"zmax must be a positive trailing distance, got {zmax}")
 
-        if n is None:
-            n = wakefield.default_n_samples(zmax)
-
-        if n < 4:
-            raise ValueError(f"Need at least 4 points for interpolation, got n={n}")
-
         if isinstance(wakefield, TabularWakefield):
             zmax_source = wakefield.default_zmax
             if zmax > zmax_source:
@@ -163,16 +157,30 @@ class TabularWakefield(WakefieldBase):
                     "range would return the fill value, giving a silently zero "
                     "padded result."
                 )
+            z_end = float(np.max(wakefield.z_data))
+            if z_end < 0:
+                raise ValueError(
+                    f"The source table ends at z={z_end:.6e} m, short of the source "
+                    "particle at z = 0. Resampling there would return the fill "
+                    "value, giving a silently zero padded result."
+                )
+
+        if n is None:
+            n = wakefield.default_n_samples(zmax)
+
+        if n < 4:
+            raise ValueError(f"Need at least 4 points for interpolation, got n={n}")
 
         # Ascending in z, from -zmax up to the source particle at z = 0.
         z = -np.linspace(zmax, 0.0, n)
 
         if isinstance(wakefield, ImpedanceWakefield):
             # The array branch of ImpedanceWakefield.wake inverts the impedance on a
-            # grid reaching a trailing distance of 2*pi*(n_fft - 1)/k_max. Enlarge
-            # n_fft when required so that zmax lies inside that grid, because beyond
-            # it the transform wraps around and the tail of the table is aliased.
-            n_required = int(np.ceil(zmax * wakefield._k_max / (2 * np.pi))) + 2
+            # grid of period L = 2*pi*(n_fft - 1)/k_max. The cosine transform is even,
+            # so the wake at s is aliased by its mirror at L - s. Enlarging n_fft until
+            # L >= 2*zmax keeps every mirror beyond zmax, which bounds the aliasing by
+            # the wake that truncation at zmax already discards.
+            n_required = int(np.ceil(zmax * wakefield._k_max / np.pi)) + 2
             n_fft = max(4096, 1 << int(n_required - 1).bit_length())
             W = wakefield.wake(z, n_fft=n_fft)
         else:
@@ -248,8 +256,9 @@ class TabularWakefield(WakefieldBase):
         """
         Number of uniform samples needed to represent the wake out to zmax.
 
-        The spacing of the table itself, since resampling it more finely than the
-        data it holds recovers nothing beyond the interpolant.
+        The finest spacing of the table within the requested range, so that a
+        non-uniform table loses none of its detail when resampled uniformly.
+        Resampling more finely than that recovers nothing beyond the interpolant.
 
         Parameters
         ----------
@@ -262,9 +271,13 @@ class TabularWakefield(WakefieldBase):
         int
             Number of samples.
         """
-        dz = (self._z[-1] - self._z[0]) / (len(self._z) - 1)
+        dz = np.diff(self._z)
+        # Only intervals overlapping the requested range [-zmax, 0] matter.
+        dz = dz[self._z[1:] > -zmax]
+        # Tolerate rounding in the spacing of a nominally uniform grid.
+        intervals = np.ceil(zmax / dz.min() * (1 - 1e-9))
 
-        return int(np.ceil(zmax / dz)) + 1
+        return max(int(intervals) + 1, MIN_SAMPLES)
 
     def wake(self, z: np.ndarray | float) -> np.ndarray | float:
         """

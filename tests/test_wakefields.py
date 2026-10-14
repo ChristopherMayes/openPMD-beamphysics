@@ -95,6 +95,22 @@ def test_from_wakefield_avoids_transform_wraparound():
     assert np.abs(table.W_data[:100]).max() < 0.01 * wakefield.W0
 
 
+def test_from_wakefield_avoids_the_mirrored_transform_tail(impedance_model):
+    """
+    A range just inside one transform period must not alias either.
+
+    The cosine transform is even, so the second half of its period mirrors the first.
+    """
+    period = 2 * np.pi * (4096 - 1) / impedance_model.k_max
+    zmax = 0.999 * period
+    table = TabularWakefield.from_wakefield(impedance_model, zmax=zmax, n=2000)
+
+    reference = impedance_model.wake(table.z_data, n_fft=1 << 16)
+    error = np.abs(table.W_data - reference)
+
+    assert error.max() < 1e-4 * impedance_model.W0
+
+
 @pytest.mark.parametrize("zmax", [0.0, -1e-3])
 def test_from_wakefield_rejects_nonpositive_zmax(pseudomode_model, zmax):
     with pytest.raises(ValueError, match="positive trailing distance"):
@@ -232,6 +248,36 @@ def test_pseudomode_min_wavelength_falls_back_to_the_decay_length():
     model = PseudomodeWakefield([Pseudomode(A=1e15, d=1e4, k=0.0, phi=np.pi / 2)])
 
     assert model.min_wavelength == pytest.approx(1e-4)
+
+
+def test_pseudomode_min_wavelength_follows_the_fastest_decay():
+    """The most strongly damped mode sets the sampling, while the weakest sets the range."""
+    model = PseudomodeWakefield(
+        [
+            Pseudomode(A=1e15, d=1e3, k=0.0, phi=np.pi / 2),
+            Pseudomode(A=1e15, d=1e7, k=0.0, phi=np.pi / 2),
+        ]
+    )
+
+    assert model.min_wavelength == pytest.approx(1e-7)
+    assert model.decay_length == pytest.approx(1e-3)
+
+    table = TabularWakefield.from_wakefield(model, zmax=1e-5)
+    z = -np.geomspace(1e-9, 1e-5, 101)
+    error = np.abs(table.wake(z) - model.wake(z))
+
+    assert error.max() < 1e-4 * 1e15
+
+
+def test_default_n_samples_is_at_least_four(impedance_model, pseudomode_model):
+    """A range shorter than one sampling interval must still give a usable table."""
+    assert impedance_model.default_n_samples(1e-7) == 4
+
+    rfdata = create_impact_z_wakefield_rfdata(impedance_model, zmax=1e-7)
+    assert rfdata.shape == (4, 4)
+
+    table = pseudomode_model.to_tabular(zmax=1e-4, n=64)
+    assert table.default_n_samples(1e-7) == 4
 
 
 def test_impedance_model_min_wavelength_follows_the_round_pipe_form(impedance_model):
@@ -458,6 +504,29 @@ def test_from_wakefield_rejects_range_beyond_a_source_table(impedance_model):
     # The full range of the source table remains available.
     resampled = TabularWakefield.from_wakefield(table, zmax=zmax, n=128)
     assert resampled.z_data[0] == pytest.approx(-zmax)
+
+
+def test_nonuniform_source_table_is_sampled_at_its_finest_spacing():
+    """A fine feature in a non-uniform table must survive, or the export must warn."""
+    z = np.r_[-np.geomspace(1e-3, 1e-8, 100), 0.0]
+    source = TabularWakefield(z, np.exp(z / 1e-7))
+
+    resampled = TabularWakefield.from_wakefield(source, zmax=1e-6)
+    assert resampled.wake(-1e-7) == pytest.approx(source.wake(-1e-7), rel=1e-3)
+
+    with pytest.warns(UserWarning, match="under-resolved"):
+        create_impact_z_wakefield_rfdata(source)
+
+
+def test_from_wakefield_rejects_a_source_table_short_of_the_origin():
+    """A table that stops before z = 0 would export the fill value at the source."""
+    table = TabularWakefield(np.linspace(-1e-3, -1e-6, 100), np.full(100, 1e15))
+
+    with pytest.raises(ValueError, match="short of the source particle"):
+        TabularWakefield.from_wakefield(table)
+
+    with pytest.raises(ValueError, match="short of the source particle"):
+        create_impact_z_wakefield_rfdata(table)
 
 
 def test_parse_impact_z_wakefield_rejects_nonuniform_grid(tmp_path):

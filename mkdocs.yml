@@ -33,6 +33,7 @@ nav:
 
   - API:
       - Particles: api/particles.md
+      - Readers: api/readers.md
       - Fields: api/fields.md
       - Wakefields: api/wakefields.md
 

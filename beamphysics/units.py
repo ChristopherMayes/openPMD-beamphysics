@@ -17,6 +17,8 @@ from typing import Optional, Sequence
 import numpy as np
 import scipy.constants
 
+from .statistics import StatisticKey, StatisticOperator
+
 mec2 = scipy.constants.value("electron mass energy equivalent in MeV") * 1e6
 mpc2 = scipy.constants.value("proton mass energy equivalent in MeV") * 1e6
 c_light = scipy.constants.c
@@ -1516,18 +1518,12 @@ def pg_units(key: str) -> pmd_unit:
     if key in PARTICLEGROUP_UNITS:
         return PARTICLEGROUP_UNITS[key]
 
-    # Operators
-    for prefix in ["sigma_", "mean_", "min_", "max_", "ptp_", "delta_"]:
-        if key.startswith(prefix):
-            nkey = key[len(prefix) :]
-            return pg_units(nkey)
-
-    if key.startswith("cov_"):
-        # NB: removeprefix, not strip("cov_") -- str.strip removes any leading/
-        # trailing chars in the set {c,o,v,_}, which mangles subkeys like
-        # "charge" (-> "harge"). removeprefix drops exactly the "cov_" prefix.
-        subkeys = key.removeprefix("cov_").split("__")
-        return PARTICLEGROUP_UNITS[subkeys[0]] * PARTICLEGROUP_UNITS[subkeys[1]]
+    split = StatisticKey.from_string(key)
+    if split is not None:
+        op, names = split
+        if op is StatisticOperator.COV:
+            return PARTICLEGROUP_UNITS[names[0]] * PARTICLEGROUP_UNITS[names[1]]
+        return pg_units(names[0])
 
     # Fields
     if key.startswith("electricField"):

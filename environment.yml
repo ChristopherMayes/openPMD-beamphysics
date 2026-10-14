@@ -10,6 +10,7 @@ dependencies:
   - h5py
   - python-dateutil
   # Developer
+  - pre-commit
   - pytest
   - pytest-benchmark
   - pytest-cov

@@ -1033,7 +1033,6 @@ def wavefront_write_genesis4(
     w,
     h5: File,
     polarization: str = None,
-    refposition: float = 0,
 ) -> None:
     """
     Write the wavefront field data to a Genesis4-style HDF5 file.
@@ -1068,15 +1067,13 @@ def wavefront_write_genesis4(
         - If only `Ey` exists, it will be written.
         - If both components exist, a `ValueError` is raised.
 
-    refposition : float, optional
-        The reference position in meters, stored as metadata in the output file. Default is `0`.
-
     Raises
     ------
     ValueError
         - If both `Ex` and `Ey` exist but no polarization is explicitly specified.
         - If `nx != ny`, as Genesis4 requires a square grid.
         - If `dx != dy`, as Genesis4 requires equal grid spacing in both transverse directions.
+        - If `xmid` or `ymid` is nonzero, as Genesis4 grids are centered on the axis.
         - If `polarization` is specified but not `"x"` or `"y"`.
 
     Notes
@@ -1084,6 +1081,9 @@ def wavefront_write_genesis4(
     - The function ensures that the grid size and spacing meet Genesis4's requirements.
     - The data is stored in slices, following the indexing convention of Genesis4:
       The x-coordinates are stored as the inner loop, requiring a transpose before flattening.
+    - `refposition` is written from `w.zmin`. Genesis4 places slice `i` (1-based)
+      at `refposition + (i - 1) * slicespacing`, so it is the coordinate of the
+      first slice. `w.s_position` has no representation in this format.
 
     """
     nx, ny, nz = w.shape
@@ -1113,9 +1113,16 @@ def wavefront_write_genesis4(
     if dx != dy:
         raise ValueError(f"Genesis4 requires dx = dy. This data has {dx=}, {dy=}")
 
+    if (w.xmid, w.ymid) != (0.0, 0.0):
+        raise ValueError(
+            "Genesis4 transverse grids are centered on the axis, so it has nowhere "
+            "to record a transverse grid origin. Writing this wavefront would "
+            f"silently re-center it. This data has xmid={w.xmid}, ymid={w.ymid}."
+        )
+
     h5["gridpoints"] = np.asarray([nx])
     h5["gridsize"] = np.asarray([dx])
-    h5["refposition"] = np.asarray([refposition])
+    h5["refposition"] = np.asarray([w.zmin])
     h5["wavelength"] = np.asarray([wavelength])
     h5["slicecount"] = np.asarray([nz])
     h5["slicespacing"] = np.asarray([dz])

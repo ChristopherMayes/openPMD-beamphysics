@@ -152,6 +152,16 @@ def test_gaussian_propagation():
 
     assert np.isclose(W1.sigma_x, W3.sigma_x, rtol=0.01)
 
+    # Complex field and curvature sign must agree with drift (exp(-iwt + ikz)).
+    assert np.linalg.norm(W1.Ex - W2.Ex) / np.linalg.norm(W2.Ex) < 1e-3
+    assert W1.estimate_curvature() == pytest.approx(1 / (2 * zR), rel=1e-3)
+    assert W2.estimate_curvature() == pytest.approx(1 / (2 * zR), rel=1e-3)
+
+    # z0 is a distance from the waist, not a mesh z shift or a beamline position.
+    assert W1.s_position == 0.0
+    assert W1.zmid == 0.0
+    assert W1.mean_z == pytest.approx(W0.mean_z, abs=1e-12)
+
 
 def test_gaussian_smoke():
     W = make_gaussian()
@@ -731,6 +741,45 @@ def test_derived_wavefronts_do_not_share_attrs():
     assert W.attrs.beamline == "SXR"
 
 
+@pytest.mark.parametrize("domain", ["real", "reciprocal", "advanced"])
+@pytest.mark.parametrize("distance", [-1.0, 0.0, 1.0])
+def test_drift_invalidates_curvature_attrs(tmp_path, domain, distance):
+    source = make_small()
+    source.attrs = WavefrontAttrs(
+        beamline="SXR",
+        radius_of_curvature_x=2.5,
+        radius_of_curvature_y=3.5,
+        delta_radius_of_curvature_x=0.1,
+        delta_radius_of_curvature_y=0.2,
+        other={"sourceName": "test"},
+    )
+    original_attrs = source.attrs.copy()
+    if domain == "reciprocal":
+        propagated = source.to_kspace().drift(distance).to_rspace()
+    else:
+        propagated = source.drift(
+            distance, curvature=0.5 if domain == "advanced" else 0.0
+        )
+
+    assert source.attrs == original_attrs
+    assert propagated.attrs is not source.attrs
+    assert propagated.attrs.beamline == "SXR"
+    assert propagated.attrs.other == {"sourceName": "test"}
+    path = tmp_path / "propagated.h5"
+    propagated.write_openpmd(path)
+    with h5py.File(path) as h5:
+        stored = h5["data/1/meshes/electricField"].attrs
+        for name, key in source.attrs.pmd_keys().items():
+            if "curvature" not in name:
+                continue
+            if distance == 0:
+                assert getattr(propagated.attrs, name) == getattr(source.attrs, name)
+                assert stored[key] == getattr(source.attrs, name)
+            else:
+                assert getattr(propagated.attrs, name) is None
+                assert key not in stored
+
+
 def test_advanced_drift_magnifies_the_grid_midpoint():
     """
     The curved propagator rescales the grid about the optical axis.
@@ -793,34 +842,39 @@ def test_openpmd_read_without_grid_global_offset(tmp_path):
     assert W2.xmin == pytest.approx(-(W.nx - 1) * W.dx / 2)
 
 
-def test_genesis4_write_refuses_offset_grid(tmp_path):
+def test_genesis4_write_refuses_transverse_offset(tmp_path):
     """
-    Genesis4 stores a point count and a spacing, with nowhere to put an origin.
+    Genesis4 transverse grids are centered on the axis, with nowhere to put an origin.
 
     Writing anyway would silently re-center the wavefront.
     """
     W = replace(make_small(shape=(8, 8, 4)), dy=1e-6, xmid=1e-5)
 
-    with pytest.raises(ValueError, match="grid origin"):
+    with pytest.raises(ValueError, match="transverse grid origin"):
         W.write_genesis4(tmp_path / "genesis.h5")
 
 
-def test_genesis4_round_trips_s_position_as_refposition(tmp_path):
+def test_genesis4_refposition_is_the_first_slice(tmp_path):
     """
-    Genesis4's `refposition` is the same quantity as `s_position`.
+    Genesis4's `refposition` is the coordinate of the first slice, i.e. `zmin`.
 
-    It is the position of the dump along the undulator line, so it is written from
-    `s_position` and read back into it rather than being dropped at both ends.
+    Genesis4 reads slice i (1-based) at `refposition + (i - 1) * slicespacing`, so
+    writing a beamline position there would put every slice outside the window.
     """
-    W = replace(make_small(shape=(8, 8, 4)), dy=1e-6, s_position=7.25)
+    W = replace(make_small(shape=(8, 8, 4)), dy=1e-6, zmid=5e-6, s_position=1.0)
+    W = W.drift(1.0)
     path = tmp_path / "genesis.h5"
 
     W.write_genesis4(path)
 
     with h5py.File(path) as h5:
-        assert h5["refposition"][0] == pytest.approx(7.25)
+        assert h5["refposition"][0] == pytest.approx(W.zmin)
 
-    assert Wavefront.from_genesis4(path).s_position == pytest.approx(7.25)
+    W2 = Wavefront.from_genesis4(path)
+    assert W2.zmid == pytest.approx(W.zmid)
+    assert np.allclose(W2.zvec, W.zvec)
+    # Genesis4 has no beamline position, so it is dropped rather than misplaced.
+    assert W2.s_position == 0.0
 
 
 def test_openpmd_read_constant_component(tmp_path):
@@ -847,6 +901,119 @@ def test_openpmd_read_constant_component(tmp_path):
 
     assert W2.shape == (nx, ny, nz)
     assert np.all(W2.Ex == 2.0 + 3.0j)
+
+
+def test_openpmd_read_constant_component_shape_from_sibling(tmp_path):
+    """A constant component may omit `shape` and `unitSI` when a sibling has one."""
+    W = make_small()
+    path = tmp_path / "constant_sibling.h5"
+    W.write_openpmd(path)
+
+    with h5py.File(path, "r+") as h5:
+        constant = h5["data/1/meshes/electricField"].create_group("y")
+        constant.attrs["value"] = 1j
+
+    W2 = Wavefront.from_openpmd(path)
+
+    assert np.array_equal(W2.Ex, W.Ex)
+    assert W2.Ey.shape == W.shape
+    assert np.all(W2.Ey == 1j)
+
+
+def test_openpmd_read_constant_component_without_any_shape(tmp_path):
+    """With no shape anywhere, the error names the problem."""
+    path = tmp_path / "constant_no_shape.h5"
+    make_small().write_openpmd(path)
+
+    with h5py.File(path, "r+") as h5:
+        mesh = h5["data/1/meshes/electricField"]
+        del mesh["x"]
+        mesh.create_group("x").attrs["value"] = 1j
+
+    with pytest.raises(ValueError, match="no shape"):
+        Wavefront.from_openpmd(path)
+
+
+@pytest.mark.parametrize("constant", [False, True])
+@pytest.mark.parametrize("value", [0j, 1j, 1e-30 + 0j])
+def test_openpmd_longitudinal_component(tmp_path, constant, value):
+    source = make_small()
+    path = tmp_path / "longitudinal.h5"
+    source.write_openpmd(path)
+    with h5py.File(path, "r+") as h5:
+        mesh = h5["data/1/meshes/electricField"]
+        if constant:
+            longitudinal = mesh.create_group("z")
+            longitudinal.attrs["value"] = value
+        else:
+            values = np.zeros(mesh["x"].shape, dtype=complex)
+            values[-1, -1, -1] = value
+            longitudinal = mesh.create_dataset("z", data=values)
+        longitudinal.attrs["position"] = np.zeros(3)
+        longitudinal.attrs["unitSI"] = 1.0
+
+    if value != 0:
+        with pytest.raises(ValueError, match="nonzero electricField/z"):
+            Wavefront.from_openpmd(path)
+    else:
+        restored = Wavefront.from_openpmd(path)
+        assert np.array_equal(restored.Ex, source.Ex)
+        assert restored.Ey is None
+        assert restored.energy == source.energy
+
+
+def test_openpmd_read_applies_component_position(tmp_path):
+    """
+    Sample i sits at gridGlobalOffset + (i + position) * gridSpacing.
+
+    Ignoring `position` would put cell-centered samples half a cell off.
+    """
+    W = make_small(polarization="xy")
+    path = tmp_path / "centered.h5"
+    W.write_openpmd(path)
+
+    # Same samples, described as cell-centered in cells that start half a cell early.
+    with h5py.File(path, "r+") as h5:
+        mesh = h5["data/1/meshes/electricField"]
+        mesh.attrs["gridGlobalOffset"] = mesh.attrs["gridGlobalOffset"] - (
+            mesh.attrs["gridSpacing"] / 2
+        )
+        for component in ("x", "y"):
+            mesh[component].attrs["position"] = np.full(3, 0.5)
+
+    W2 = Wavefront.from_openpmd(path)
+
+    assert np.allclose([W2.xmin, W2.ymin, W2.zmin], [W.xmin, W.ymin, W.zmin])
+
+
+def test_openpmd_read_refuses_staggered_components(tmp_path):
+    """x and y at different positions cannot share the class's single grid."""
+    path = tmp_path / "staggered.h5"
+    make_small(polarization="xy").write_openpmd(path)
+
+    with h5py.File(path, "r+") as h5:
+        h5["data/1/meshes/electricField/y"].attrs["position"] = [0.0, 0.0, 0.5]
+
+    with pytest.raises(ValueError, match="different positions"):
+        Wavefront.from_openpmd(path)
+
+
+@pytest.mark.parametrize(
+    "real, complex_", [(np.float32, np.complex64), (np.float64, np.complex128)]
+)
+def test_openpmd_write_promotes_real_fields(tmp_path, real, complex_):
+    """EXT_Wavefront components are complex, so a real field is promoted."""
+    W = make_small()
+    W = replace(W, Ex=W.Ex.real.astype(real))
+    path = tmp_path / "real.h5"
+    W.write_openpmd(path)
+
+    with h5py.File(path) as h5:
+        dataset = h5["data/1/meshes/electricField/x"]
+        assert dataset.id.get_type().get_class() == h5py.h5t.COMPOUND
+        assert dataset.dtype == complex_
+
+    assert np.array_equal(Wavefront.from_openpmd(path).Ex, W.Ex)
 
 
 def test_openpmd_attrs_round_trip(tmp_path):

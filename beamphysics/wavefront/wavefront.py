@@ -96,7 +96,7 @@ class WavefrontBase(ABC):
     # Position of this plane along the beamline in m, in whatever frame the caller
     # picked. Advanced by `drift`, since the mesh is co-moving and has nowhere else
     # to record that the wavefront has propagated. Written as the extension's
-    # `zCoordinate` and as Genesis4's `refposition`.
+    # `zCoordinate`.
     s_position: float = 0.0
 
     def __setattr__(self, name, value):
@@ -1314,7 +1314,8 @@ class Wavefront(WavefrontBase):
 
     `s_position` is measured in whatever frame the caller picked, so the default of
     0.0 is the origin of that frame rather than an unknown. It is written as the
-    EXT_Wavefront `zCoordinate` and as Genesis4's `refposition`.
+    EXT_Wavefront `zCoordinate`. Genesis4's `refposition` is not this quantity: it
+    is the coordinate of the first slice, and corresponds to `zmin`.
 
     """
 
@@ -1750,8 +1751,8 @@ class Wavefront(WavefrontBase):
         -----
         - The field data is extracted and converted into an electric field representation.
         - The grid spacing (`dx` and `dz`) and wavelength are obtained from the file metadata.
-        - Genesis4's `refposition` is the position of this dump along the undulator
-          line, so it is read into `s_position`.
+        - Genesis4's `refposition` is the coordinate of the first slice, so it sets
+          `zmin`. The transverse grid is centered on the axis.
         """
 
         if isinstance(file, (str, pathlib.Path)):
@@ -1775,7 +1776,7 @@ class Wavefront(WavefrontBase):
             dy=float(dx),
             dz=float(dz),
             wavelength=float(wavelength),
-            s_position=float(param["refposition"]),
+            zmid=float(param["refposition"]) + (Ex.shape[2] - 1) * float(dz) / 2,
         )
 
     def write_genesis4(
@@ -1802,8 +1803,8 @@ class Wavefront(WavefrontBase):
         -----
         - If `file` is a path or string, a new HDF5 file is created and written to.
         - If `file` is an `h5py.Group`, the data is written directly into the provided group.
-        - `s_position` is written as Genesis4's `refposition`; `attrs` has nowhere
-          to go in this format and is dropped.
+        - `zmin` is written as Genesis4's `refposition`. `s_position` and `attrs`
+          have nowhere to go in this format and are dropped.
         """
         if isinstance(file, (str, pathlib.Path)):
             with h5py.File(file, "w") as h5:
@@ -2083,7 +2084,10 @@ class Wavefront(WavefrontBase):
             Related to waist size w0 via: w0 = 2·σ₀
             Related to Rayleigh length via: z_R = 4π·σ₀² / λ = π·w0² / λ
         z0 : float, default=0.0
-            Distance from waist position (m)
+            Propagation distance from the waist (m), the same quantity `drift`
+            advances. Sets the transverse size, curvature and Gouy phase. It does
+            not shift the pulse along the mesh `z` axis (set `zmid`), nor set the
+            beamline position (set `s_position`).
         x0 : float, default=0.0
             Beam center position in x (m)
         y0 : float, default=0.0
@@ -2111,11 +2115,12 @@ class Wavefront(WavefrontBase):
 
         Notes
         -----
-        The Gaussian beam uses the complex beam parameter formalism:
+        The Gaussian beam uses the complex beam parameter formalism in the
+        exp(-i·ω·t + i·k·z) convention shared by `drift` and openPMD EXT_Wavefront:
 
-        q(z) = z + i·z_R  where z_R = 4π·σ₀² / λ = π·w0² / λ
+        q(z) = z - i·z_R  where z_R = 4π·σ₀² / λ = π·w0² / λ
 
-        u_xy(x,y,z) = (1/q) · exp(-i·k·(x² + y²)/(2q))
+        u_xy(x,y,z) = (1/q) · exp(i·k·(x² + y²)/(2q))
 
         For sigma_z > 0:
             u_z(z) = exp(-z²/(4σ_z²)) / √(√(2π)·σ_z)
@@ -2156,11 +2161,11 @@ class Wavefront(WavefrontBase):
 
         k = 2 * pi / wavelength
 
-        # Complex beam parameter at position z0 from waist
-        q = z0 + 1j * zR
+        # Complex beam parameter at position z0 from waist (exp(-iwt + ikz) convention)
+        q = z0 - 1j * zR
 
         # Transverse Gaussian beam profile
-        uxy = (1 / q) * np.exp(-0.5j * k * ((X - x0) ** 2 + (Y - y0) ** 2) / q)
+        uxy = (1 / q) * np.exp(0.5j * k * ((X - x0) ** 2 + (Y - y0) ** 2) / q)
 
         # Analytic integral of |u_xy|² over transverse plane
         integral_uxy_squared = pi / (k * zR)

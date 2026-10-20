@@ -33,10 +33,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
 
+import h5py
 import numpy as np
 from scipy.constants import h as h_planck
 
-from ..readers import constant_component_value, is_constant_component
 from ..tools import decode_attr, encode_attr
 from ..units import c_light, dimension
 
@@ -459,11 +459,11 @@ def write_wavefront_openpmd(
         # A view, not a copy: the transpose is realized one slice at a time below.
         stored_view = np.asarray(field_array).transpose(to_stored)
 
-        dataset = mesh.create_dataset(
-            name, shape=stored_view.shape, dtype=field_array.dtype
-        )
+        # EXT_Wavefront components are complex, so a real input is promoted.
+        dtype = np.result_type(field_array.dtype, np.complex64)
+        dataset = mesh.create_dataset(name, shape=stored_view.shape, dtype=dtype)
         for islice in range(stored_view.shape[0]):
-            dataset[islice] = stored_view[islice]
+            dataset[islice] = stored_view[islice].astype(dtype, copy=False)
 
         dataset.attrs["unitSI"] = 1.0
         dataset.attrs["position"] = np.zeros(len(_STORED_AXIS_LABELS), dtype=float)
@@ -584,6 +584,38 @@ def _required_attr(mesh, name, fallback=None):
     raise ValueError(f"required EXT_Wavefront attribute {name!r} is missing")
 
 
+def _constant_shape(mesh, component):
+    """
+    Stored shape of a constant component, taken from a sibling if it has none.
+
+    Parameters
+    ----------
+    mesh : h5py.Group
+        The mesh record.
+    component : h5py.Group
+        The constant component.
+
+    Returns
+    -------
+    tuple of int
+        Shape in the file's axis order.
+
+    Raises
+    ------
+    ValueError
+        If neither the component nor any sibling records a shape.
+    """
+    for candidate in (component, *mesh.values()):
+        if isinstance(candidate, h5py.Dataset):
+            return candidate.shape
+        if "shape" in candidate.attrs:
+            return tuple(int(n) for n in np.atleast_1d(candidate.attrs["shape"]))
+    raise ValueError(
+        f"constant component {component.name} has no shape, and no sibling "
+        "component supplies one"
+    )
+
+
 def load_wavefront_openpmd(h5, iteration=None):
     """
     Read an openPMD EXT_Wavefront series into `Wavefront` constructor arguments.
@@ -606,19 +638,40 @@ def load_wavefront_openpmd(h5, iteration=None):
     ------
     ValueError
         If a required attribute is missing, or if the file holds something this
-        class cannot represent: a frequency-domain field, a k-space field, or
-        `axisLabels` that are not a permutation of x, y and z.
+        class cannot represent: a frequency-domain field, a k-space field,
+        `axisLabels` that are not a permutation of x, y and z, or x and y
+        components with different `position` values, or a nonzero z component.
 
     Notes
     -----
     Any `axisLabels` permutation of ``(x, y, z)`` is honored, with `gridSpacing`
     permuted alongside it. Scalar attributes stored as length-1 arrays and strings
-    stored as bytes are both tolerated. `gridUnitSI`, `gridGlobalOffset` and the
-    per-component `unitSI` are applied, so a file written in non-SI units reads
-    correctly; `gridUnitSI` is accepted either as the openPMD 2.0 per-axis array or
-    as the 1.x scalar.
+    stored as bytes are both tolerated. `gridUnitSI`, `gridGlobalOffset`, the
+    per-component `position` and the per-component `unitSI` are applied, so a file
+    written in non-SI units or with cell-centered samples reads correctly;
+    `gridUnitSI` is accepted either as the openPMD 2.0 per-axis array or as the 1.x
+    scalar. A constant component may take its `shape` from a sibling.
     """
     mesh = _mesh_record(h5, iteration)
+
+    if "z" in mesh:
+        longitudinal = mesh["z"]
+        if isinstance(longitudinal, h5py.Group):
+            if "value" not in longitudinal.attrs:
+                raise ValueError(
+                    f"component {longitudinal.name} is a group without a 'value'"
+                )
+            nonzero = np.any(np.asarray(longitudinal.attrs["value"]) != 0)
+        else:
+            nonzero = any(
+                np.any(longitudinal[index] != 0)
+                for index in range(longitudinal.shape[0])
+            )
+        if nonzero:
+            raise ValueError(
+                "nonzero electricField/z is not supported; Wavefront represents "
+                "only transverse fields"
+            )
 
     temporal_domain = _required_attr(mesh, "temporalDomain")
     if temporal_domain != "time":
@@ -712,50 +765,74 @@ def load_wavefront_openpmd(h5, iteration=None):
     # Permutation of the class's (x, y, z) axes into the file's stored order, so the
     # transposed view of the output array lines up with the dataset slice by slice.
     class_to_stored = _axis_permutation(_CLASS_AXIS_LABELS, labels)
+    positions = []
     for name, key in (("x", "Ex"), ("y", "Ey")):
         if name not in mesh:
             continue
-        dataset = mesh[name]
+        component = mesh[name]
 
-        # openPMD allows a uniform component to be stored as a group carrying only
-        # `value` and `shape` instead of a dataset. It has no axes to permute.
-        if is_constant_component(dataset):
-            stored_shape = tuple(decode_attr(dataset.attrs["shape"]))
-            kwargs[key] = np.full(
+        # Sample i sits at gridGlobalOffset + (i + position) * gridSpacing.
+        raw_position = np.atleast_1d(
+            component.attrs.get("position", np.zeros(len(labels)))
+        ).astype(float)
+        if len(raw_position) != len(labels):
+            raise ValueError(
+                f"component {name!r} position has {len(raw_position)} values but "
+                f"axisLabels has {len(labels)}"
+            )
+        positions.append(dict(zip(labels, raw_position)))
+
+        # Component values are in the file's own units; unitSI converts to V/m.
+        unit_si = float(
+            np.atleast_1d(decode_attr(component.attrs.get("unitSI", 1.0)))[0]
+        )
+
+        # openPMD allows a uniform component to be stored as a group carrying
+        # `value` instead of a dataset. It has no axes to permute.
+        if isinstance(component, h5py.Group):
+            if "value" not in component.attrs:
+                raise ValueError(
+                    f"component {component.name} is a group without a 'value'"
+                )
+            stored_shape = _constant_shape(mesh, component)
+            out = np.full(
                 tuple(
                     stored_shape[labels.index(label)] for label in _CLASS_AXIS_LABELS
                 ),
-                constant_component_value(dataset),
+                decode_attr(component.attrs["value"]),
             )
-            continue
+        else:
+            shape = tuple(
+                component.shape[labels.index(label)] for label in _CLASS_AXIS_LABELS
+            )
+            out = np.empty(shape, dtype=component.dtype)
 
-        shape = tuple(
-            dataset.shape[labels.index(label)] for label in _CLASS_AXIS_LABELS
-        )
-        out = np.empty(shape, dtype=dataset.dtype)
+            # A view of `out` in the file's axis order. Filling it slice by slice
+            # avoids allocating a second full-size array for the transpose.
+            stored_view = out.transpose(class_to_stored)
+            for islice in range(component.shape[0]):
+                stored_view[islice] = component[islice]
 
-        # A view of `out` in the file's axis order. Filling it slice by slice avoids
-        # allocating a second full-size array for the transpose.
-        stored_view = out.transpose(class_to_stored)
-        for islice in range(dataset.shape[0]):
-            stored_view[islice] = dataset[islice]
-
-        # Component values are in the file's own units; unitSI converts to V/m.
         # Multiply in place so that a complex64 field is not silently widened.
-        unit_si = float(np.atleast_1d(decode_attr(dataset.attrs.get("unitSI", 1.0)))[0])
         if unit_si != 1.0:
             out *= unit_si
 
         kwargs[key] = out
 
+    if len(positions) == 2 and positions[0] != positions[1]:
+        raise ValueError(
+            f"components x and y have different positions {positions[0]} and "
+            f"{positions[1]}; a staggered field cannot share one grid"
+        )
+
     # The class's grid fields are the axis *midpoint*, while gridGlobalOffset is
-    # the first sample, so converting between them needs the sample count.
+    # the first cell, so converting between them needs the sample count.
     sample = kwargs["Ex"] if kwargs["Ex"] is not None else kwargs["Ey"]
     if global_offset is not None and sample is not None:
         counts = dict(zip(_CLASS_AXIS_LABELS, sample.shape))
         for label in _CLASS_AXIS_LABELS:
-            kwargs[f"{label}mid"] = (
-                global_offset[label] + (counts[label] - 1) * spacing[label] / 2
+            kwargs[f"{label}mid"] = global_offset[label] + spacing[label] * (
+                positions[0][label] + (counts[label] - 1) / 2
             )
 
     return kwargs

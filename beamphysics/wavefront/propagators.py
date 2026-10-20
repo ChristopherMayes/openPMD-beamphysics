@@ -32,7 +32,17 @@ def drift_wavefront_basic(w, z, backend=np, device="cpu"):
 
     Experimental: works with torch and device='mps'
 
+    Nonzero propagation clears stored curvature radii and their uncertainties.
+    Other attributes are preserved in an independent copy.
+
     """
+
+    attrs = w.attrs.copy()
+    if z != 0:
+        attrs.radius_of_curvature_x = None
+        attrs.radius_of_curvature_y = None
+        attrs.delta_radius_of_curvature_x = None
+        attrs.delta_radius_of_curvature_y = None
 
     fft2 = backend.fft.fft2
     ifft2 = backend.fft.ifft2
@@ -60,7 +70,7 @@ def drift_wavefront_basic(w, z, backend=np, device="cpu"):
             w,
             Ex=Ex_drifted,
             Ey=Ey_drifted,
-            attrs=w.attrs.copy(),
+            attrs=attrs,
             s_position=w.s_position + z,
         )
 
@@ -113,7 +123,7 @@ def drift_wavefront_basic(w, z, backend=np, device="cpu"):
         w,
         Ex=Ex_drifted,
         Ey=Ey_drifted,
-        attrs=w.attrs.copy(),
+        attrs=attrs,
         s_position=w.s_position + z,
     )
 

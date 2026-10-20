@@ -795,11 +795,13 @@ def load_wavefront_openpmd(h5, iteration=None):
                     f"component {component.name} is a group without a 'value'"
                 )
             stored_shape = _constant_shape(mesh, component)
+            value = decode_attr(component.attrs["value"])
             out = np.full(
                 tuple(
                     stored_shape[labels.index(label)] for label in _CLASS_AXIS_LABELS
                 ),
-                decode_attr(component.attrs["value"]),
+                value,
+                dtype=np.result_type(value, np.float64),
             )
         else:
             shape = tuple(

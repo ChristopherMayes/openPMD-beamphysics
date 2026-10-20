@@ -920,6 +920,23 @@ def test_openpmd_read_constant_component_shape_from_sibling(tmp_path):
     assert np.all(W2.Ey == 1j)
 
 
+def test_openpmd_read_integer_constant_component_with_unit(tmp_path):
+    """An integer constant scaled by a non-unit `unitSI` is read, not a casting error."""
+    W = make_small()
+    path = tmp_path / "constant_integer.h5"
+    W.write_openpmd(path)
+
+    with h5py.File(path, "r+") as h5:
+        constant = h5["data/1/meshes/electricField"].create_group("y")
+        constant.attrs["value"] = 3
+        constant.attrs["unitSI"] = 2.0
+
+    W2 = Wavefront.from_openpmd(path)
+
+    assert np.issubdtype(W2.Ey.dtype, np.floating)
+    assert np.all(W2.Ey == 6.0)
+
+
 def test_openpmd_read_constant_component_without_any_shape(tmp_path):
     """With no shape anywhere, the error names the problem."""
     path = tmp_path / "constant_no_shape.h5"

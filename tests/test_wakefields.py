@@ -1,12 +1,12 @@
 """
 Tests for wakefield tabulation and IMPACT-Z interoperability.
 
-The reference table ``data/rfdata41.in`` holds the first 200 rows of the IMPACT-Z
+The reference table ``data/rfdata41.in`` holds the first 10 rows of the IMPACT-Z
 distribution file ``examples/Example3/rfdata41.in``
 (https://github.com/ChristopherMayes/IMPACT-Z, commit
 18a3fc1d8ae3ef94ae4ce094b8681450410760b2). The rows are unmodified, so the fixture
 exercises the Fortran-formatted columns that IMPACT-Z actually writes; only the
-length was reduced, since the trailing 4800 rows add no coverage.
+length was reduced, since the remaining rows add no coverage.
 """
 
 import pathlib

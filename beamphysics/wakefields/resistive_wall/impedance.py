@@ -160,11 +160,10 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase, ImpedanceWakefield):
         """
         Trailing distance beyond which the wake may be truncated [m].
 
-        One hundred characteristic lengths s0, the same range used by
-        :meth:`plot`. The wake obtained from the impedance has no closed-form
-        envelope, so the range is set from s0 rather than from a decay rate. Over the
-        tabulated materials and radii from 1 to 10 mm, the residual there is below
-        1e-05 of W0.
+        The range is one hundred characteristic lengths s0. The wake obtained from the
+        impedance has no closed-form envelope, so the range is set from s0 rather than
+        from a decay rate. Over the tabulated materials and radii from 1 to 10 mm, the
+        residual there is below 1e-05 of W0.
 
         Returns
         -------

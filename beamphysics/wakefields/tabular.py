@@ -244,8 +244,8 @@ class TabularWakefield(WakefieldBase):
         """
         Trailing distance beyond which the wake may be truncated [m].
 
-        The range the table itself covers. Beyond it the interpolator returns the
-        fill value rather than the wake.
+        This is the range the table itself covers. Beyond it the interpolator returns
+        the fill value rather than the wake.
 
         Returns
         -------
@@ -258,9 +258,10 @@ class TabularWakefield(WakefieldBase):
         """
         Number of uniform samples needed to represent the wake out to zmax.
 
-        The finest spacing of the table within the requested range, so that a
-        non-uniform table loses none of its detail when resampled uniformly.
-        Resampling more finely than that recovers nothing beyond the interpolant.
+        The count follows from the finest spacing of the table within the requested
+        range, so that a non-uniform table loses none of its detail when resampled
+        uniformly. Resampling more finely than that recovers nothing beyond the
+        interpolant.
 
         Parameters
         ----------

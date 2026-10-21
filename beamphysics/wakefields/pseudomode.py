@@ -268,9 +268,9 @@ class PseudomodeWakefield(WakefieldBase):
         """
         Trailing distance beyond which the wake may be truncated [m].
 
-        Ten decay lengths, at which the envelope has fallen to exp(-10), or about
-        5e-05 of its initial value. The residual is far below the accuracy of the
-        pseudomode fit itself.
+        The range is ten decay lengths, at which the envelope has fallen to exp(-10),
+        or about 5e-05 of its initial value. The residual is far below the accuracy of
+        the pseudomode fit itself.
 
         Returns
         -------
@@ -284,10 +284,10 @@ class PseudomodeWakefield(WakefieldBase):
         """
         Shortest length scale the wake resolves [m].
 
-        The shorter of the period of the fastest mode and the decay length of the most
-        strongly damped mode, so that a purely damped mode, which has no period, still
-        sets a sampling requirement. The decay length of the most weakly damped mode,
-        reported by :attr:`decay_length`, sets the range instead.
+        This is the shorter of the period of the fastest mode and the decay length of
+        the most strongly damped mode, so that a purely damped mode, which has no
+        period, still sets a sampling requirement. The decay length of the most weakly
+        damped mode, reported by :attr:`decay_length`, sets the range instead.
 
         Returns
         -------

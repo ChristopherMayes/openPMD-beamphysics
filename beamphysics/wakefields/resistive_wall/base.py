@@ -727,8 +727,9 @@ class ResistiveWallWakefieldBase(WakefieldBase):
         """
         Resample this resistive wall model onto a uniform table.
 
-        The table is the interchange format used to hand a resistive wall wake to an
-        external code, and it is far cheaper to evaluate than either parent model.
+        The table can be written for tracking codes that read a short-range wake as a
+        uniform table, such as IMPACT-Z, and it is far cheaper to evaluate than the
+        impedance model.
 
         Parameters
         ----------

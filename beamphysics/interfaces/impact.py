@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import warnings
 
 import numpy as np
@@ -253,6 +254,9 @@ def write_impact(
 # A longer table overruns them without any diagnostic.
 IMPACT_Z_MAX_WAKEFIELD_ROWS = 5000
 
+# Seventeen significant digits round-trip a double exactly.
+_WAKEFIELD_FMT = "%25.17e"
+
 
 def parse_impact_z_wakefield(source):
     """
@@ -404,6 +408,12 @@ def create_impact_z_wakefield_rfdata(
     The transverse columns take plain callables rather than wakefield models, because
     :class:`beamphysics.wakefields.WakefieldBase` is longitudinal only.
 
+    From version 2.7.9, IMPACT-Z interpolates the table linearly onto its own slice
+    grid. Earlier versions omitted the normalization of the interpolation weight, so
+    that each slice took the value of the next row, with an error that falls only in
+    proportion to the row spacing. Beyond the last row IMPACT-Z extrapolates linearly
+    from the last two rows, so the table should cover the full length of the bunch.
+
     See Also
     --------
     write_impact_z_wakefield : Writes this table to a file.
@@ -418,6 +428,36 @@ def create_impact_z_wakefield_rfdata(
         )
         rfdata = create_impact_z_wakefield_rfdata(wake)
     """
+    s, Wz, Wx, Wy = _tabulate_impact_wakefield(
+        wakefield,
+        zmax,
+        n,
+        wake_x,
+        wake_y,
+        code="IMPACT-Z",
+        max_rows=IMPACT_Z_MAX_WAKEFIELD_ROWS,
+        limit_reason=(
+            "(Ndataini in src/DataStruct/Data.f90). A longer table overruns the "
+            "IMPACT-Z arrays without any diagnostic."
+        ),
+    )
+
+    return np.column_stack([s, Wz, Wx, Wy])
+
+
+def _external_stacklevel():
+    """Return the warnings stacklevel of the first caller outside beamphysics."""
+    package = os.path.join(os.path.dirname(os.path.dirname(__file__)), "")
+    frame, level = sys._getframe(1), 1
+    while frame is not None and frame.f_code.co_filename.startswith(package):
+        frame, level = frame.f_back, level + 1
+    return level
+
+
+def _tabulate_impact_wakefield(
+    wakefield, zmax, n, wake_x, wake_y, code, max_rows, limit_reason
+):
+    """Sample a wake for an IMPACT code, returning s, Wz, Wx and Wy with s ascending."""
     from ..wakefields.tabular import TabularWakefield
 
     if zmax is None:
@@ -425,28 +465,25 @@ def create_impact_z_wakefield_rfdata(
 
     if n is None:
         n = wakefield.default_n_samples(zmax)
-        if n > IMPACT_Z_MAX_WAKEFIELD_ROWS:
+        if n > max_rows:
             warnings.warn(
                 f"Resolving this wake over {zmax:.6e} m needs {n} rows, above the "
-                f"IMPACT-Z limit of {IMPACT_Z_MAX_WAKEFIELD_ROWS}. The table is "
-                "written at the limit and the wake is under-resolved. Reduce zmax to "
-                "recover the resolution.",
+                f"{code} limit of {max_rows}. The table is written at the limit and "
+                "the wake is under-resolved. Reduce zmax to recover the resolution.",
                 UserWarning,
-                stacklevel=2,
+                stacklevel=_external_stacklevel(),
             )
-            n = IMPACT_Z_MAX_WAKEFIELD_ROWS
-    elif n > IMPACT_Z_MAX_WAKEFIELD_ROWS:
+            n = max_rows
+    elif n > max_rows:
         raise ValueError(
-            f"n={n} exceeds the IMPACT-Z limit of {IMPACT_Z_MAX_WAKEFIELD_ROWS} rows "
-            "(Ndataini in src/DataStruct/Data.f90). A longer table overruns the "
-            "IMPACT-Z arrays without any diagnostic."
+            f"n={n} exceeds the {code} limit of {max_rows} rows {limit_reason}"
         )
 
     # Sampling through TabularWakefield keeps the table identical to the one an
     # in-memory resample would produce.
     table = TabularWakefield.from_wakefield(wakefield, zmax=zmax, n=n)
 
-    # The table ascends in z from -zmax to 0; IMPACT-Z ascends in s from 0 to zmax.
+    # The table ascends in z from -zmax to 0; IMPACT ascends in s from 0 to zmax.
     z = table.z_data[::-1]
     Wz = table.W_data[::-1]
     s = -z
@@ -454,7 +491,7 @@ def create_impact_z_wakefield_rfdata(
     Wx = np.zeros_like(s) if wake_x is None else np.broadcast_to(wake_x(z), s.shape)
     Wy = np.zeros_like(s) if wake_y is None else np.broadcast_to(wake_y(z), s.shape)
 
-    return np.column_stack([s, Wz, Wx, Wy])
+    return s, Wz, Wx, Wy
 
 
 def write_impact_z_wakefield(
@@ -518,8 +555,265 @@ def write_impact_z_wakefield(
     np.savetxt(
         filename,
         create_impact_z_wakefield_rfdata(wakefield, zmax, n, wake_x, wake_y),
-        fmt="%25.17e",
+        fmt=_WAKEFIELD_FMT,
     )
+
+
+# =============================================================================
+# IMPACT-T read-in short-range wakefield tables
+# =============================================================================
+
+# IMPACT-T reads at most ndatawkmax rows in src/Contrl/AccSimulator.f90 and silently
+# ignores the rest, while still taking the row spacing from V7.
+IMPACT_T_MAX_WAKEFIELD_ROWS = 1000
+
+
+def parse_impact_t_wakefield(source, length):
+    """
+    Parse an IMPACT-T read-in short-range wakefield table.
+
+    IMPACT-T applies a tabulated short-range wake through the -6 element when Bnseg
+    is positive and V6 is not positive, reading the file fort.{Bmpstp}. The file has
+    no position column. Its rows are the longitudinal wake and the horizontal and
+    vertical dipole wakes at distances s = -z >= 0 behind the source particle,
+    equally spaced from zero to the length V7 given on the element. The sign
+    convention is the one used throughout this package, in which a positive
+    longitudinal wake is energy-losing.
+
+    Parameters
+    ----------
+    source : str, pathlib.Path or array_like
+        Path to the wake table, conventionally named fort.{Bmpstp}, or the table
+        itself as an array of shape (n, 3). A two-column table, as read by IMPACT-T
+        before version 3.0, is also accepted, and its single transverse column is
+        used for both planes.
+    length : float
+        Distance covered by the table [m], given as V7 on the -6 element.
+
+    Returns
+    -------
+    dict
+        Dictionary with keys:
+
+        - 's': distance behind the source particle [m], ascending from zero
+        - 'Wz': longitudinal wake [V/C/m]
+        - 'Wx': horizontal dipole wake [V/C/m^2]
+        - 'Wy': vertical dipole wake [V/C/m^2]
+
+    Raises
+    ------
+    ValueError
+        If length is not positive, or if the table does not have two or three
+        columns, has fewer than two rows, or has more than the 1000 rows IMPACT-T
+        reads.
+
+    See Also
+    --------
+    write_impact_t_wakefield : Corresponding writer.
+    create_impact_t_wakefield_data : Builds the same table from a wakefield model.
+    beamphysics.wakefields.TabularWakefield.from_impact_t : Reader returning a model.
+    """
+    if length <= 0:
+        raise ValueError(f"length must be positive, got {length}")
+
+    if isinstance(source, (str, os.PathLike)):
+        dat = np.loadtxt(source, ndmin=2)
+        label = str(source)
+    else:
+        dat = np.atleast_2d(np.asarray(source, dtype=float))
+        label = f"the array of shape {dat.shape}"
+
+    if dat.shape[1] not in (2, 3):
+        raise ValueError(
+            f"Expected 3 columns (Wz, Wx, Wy) or 2 columns (Wz, Wt) in {label}, "
+            f"got {dat.shape[1]}"
+        )
+    n = dat.shape[0]
+    if n < 2:
+        raise ValueError(f"Expected at least 2 rows in {label}, got {n}")
+    if n > IMPACT_T_MAX_WAKEFIELD_ROWS:
+        raise ValueError(
+            f"{label} has {n} rows, above the IMPACT-T limit of "
+            f"{IMPACT_T_MAX_WAKEFIELD_ROWS}. IMPACT-T would ignore the excess rows "
+            "and misplace the rest."
+        )
+
+    return {
+        "s": np.linspace(0.0, length, n),
+        "Wz": dat[:, 0],
+        "Wx": dat[:, 1],
+        "Wy": dat[:, -1],
+    }
+
+
+def create_impact_t_wakefield_data(
+    wakefield,
+    zmax=None,
+    n=None,
+    wake_x=None,
+    wake_y=None,
+):
+    """
+    Build the IMPACT-T read-in short-range wakefield table for a wakefield model.
+
+    The model is resampled onto a uniform grid of n trailing distances spanning zero
+    to zmax behind the source particle, in the same way as for IMPACT-Z. IMPACT-T
+    reads no position column and instead takes the row spacing as V7 / (n - 1), so
+    the length covered by the table is returned with it and must be given as V7 on
+    the -6 element. The wake itself is unchanged, since IMPACT-T uses the convention
+    in which a positive longitudinal wake is energy-losing.
+
+    Parameters
+    ----------
+    wakefield : beamphysics.wakefields.WakefieldBase
+        Longitudinal wakefield model to sample.
+    zmax : float, optional
+        Largest trailing distance behind the source particle to tabulate [m], given
+        as a positive number. Defaults to the natural range of the model, reported by
+        its default_zmax.
+    n : int, optional
+        Number of rows. Defaults to the number the model needs over that range,
+        reported by its default_n_samples, clamped to the 1000 rows IMPACT-T reads.
+    wake_x : callable, optional
+        Horizontal dipole wake as a function of z <= 0 [m], returning [V/C/m^2].
+        The second column is zero when this is not supplied.
+    wake_y : callable, optional
+        Vertical dipole wake as a function of z <= 0 [m], returning [V/C/m^2].
+        The third column is zero when this is not supplied.
+
+    Returns
+    -------
+    data : np.ndarray
+        Array of shape (n, 3) holding the columns Wz [V/C/m], Wx [V/C/m^2] and
+        Wy [V/C/m^2], ordered by increasing distance behind the source particle.
+    length : float
+        Distance covered by the table [m], to be given as V7 on the -6 element.
+
+    Raises
+    ------
+    ValueError
+        If n exceeds the IMPACT-T limit of 1000 rows, or if zmax or n are otherwise
+        unsuitable for tabulation.
+    NotImplementedError
+        If zmax or n is omitted and the model defines no natural range or no shortest
+        length scale.
+
+    Warns
+    -----
+    UserWarning
+        If the model needs more than 1000 rows over the requested range, in which case
+        the table is written at the limit and the wake is under-resolved.
+
+    Notes
+    -----
+    The -6 element must have a positive Bnseg, so that the file is read, and a V6
+    that is not positive, so that the read-in table is used rather than an analytic
+    wake. V3 and V4 give the positions [m] between which the wake is applied. V5 is
+    overwritten by IMPACT-T with the number of rows.
+
+    IMPACT-T reads three columns from version 3.0. Earlier versions read a single
+    transverse column, used for both planes, so their tables should be written from
+    the first two columns only.
+
+    IMPACT-T interpolates the table linearly onto its own slice grid and halves the
+    first row to obtain the self-kick, so the first row holds the wake immediately
+    behind the source particle. Beyond the last row it extrapolates linearly from the
+    last two rows and prints a warning, so the table should cover the full length of
+    the bunch.
+
+    See Also
+    --------
+    write_impact_t_wakefield : Writes this table to a file.
+    parse_impact_t_wakefield : Reads this table back, from a file or from an array.
+
+    Examples
+    --------
+    ::
+
+        wake = ResistiveWallPseudomode.from_material(
+            "copper-slac-pub-10707", radius=2.5e-3
+        )
+        data, length = create_impact_t_wakefield_data(wake)
+    """
+    s, Wz, Wx, Wy = _tabulate_impact_wakefield(
+        wakefield,
+        zmax,
+        n,
+        wake_x,
+        wake_y,
+        code="IMPACT-T",
+        max_rows=IMPACT_T_MAX_WAKEFIELD_ROWS,
+        limit_reason=(
+            "(ndatawkmax in src/Contrl/AccSimulator.f90). IMPACT-T silently ignores "
+            "further rows while still taking the row spacing from V7."
+        ),
+    )
+
+    return np.column_stack([Wz, Wx, Wy]), float(s[-1])
+
+
+def write_impact_t_wakefield(
+    filename, wakefield, zmax=None, n=None, wake_x=None, wake_y=None
+):
+    """
+    Write a wakefield model as an IMPACT-T read-in short-range wakefield table.
+
+    The table is built by :func:`create_impact_t_wakefield_data` and written with
+    seventeen significant digits.
+
+    Parameters
+    ----------
+    filename : str or pathlib.Path
+        Output path. IMPACT-T expects the name fort.{Bmpstp}, where Bmpstp is given on
+        the -6 element.
+    wakefield : beamphysics.wakefields.WakefieldBase
+        Longitudinal wakefield model to sample.
+    zmax : float, optional
+        Largest trailing distance behind the source particle to tabulate [m], given
+        as a positive number. Defaults to the natural range of the model, reported by
+        its default_zmax.
+    n : int, optional
+        Number of rows. Defaults to the number the model needs over that range,
+        reported by its default_n_samples, clamped to the 1000 rows IMPACT-T reads.
+    wake_x : callable, optional
+        Horizontal dipole wake as a function of z <= 0 [m], returning [V/C/m^2].
+        The second column is zero when this is not supplied.
+    wake_y : callable, optional
+        Vertical dipole wake as a function of z <= 0 [m], returning [V/C/m^2].
+        The third column is zero when this is not supplied.
+
+    Returns
+    -------
+    float
+        Distance covered by the table [m], to be given as V7 on the -6 element.
+
+    Raises
+    ------
+    ValueError
+        If n exceeds the IMPACT-T limit of 1000 rows, or if zmax or n are otherwise
+        unsuitable for tabulation.
+    NotImplementedError
+        If zmax or n is omitted and the model defines no natural range or no shortest
+        length scale.
+
+    See Also
+    --------
+    create_impact_t_wakefield_data : Returns the same table as an array.
+    parse_impact_t_wakefield : Corresponding reader.
+
+    Examples
+    --------
+    ::
+
+        wake = ResistiveWallPseudomode.from_material(
+            "copper-slac-pub-10707", radius=2.5e-3
+        )
+        length = write_impact_t_wakefield("fort.41", wake)  # V7 = length
+    """
+    data, length = create_impact_t_wakefield_data(wakefield, zmax, n, wake_x, wake_y)
+    np.savetxt(filename, data, fmt=_WAKEFIELD_FMT)
+
+    return length
 
 
 def riffle(a, b):

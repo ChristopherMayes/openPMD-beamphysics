@@ -22,11 +22,11 @@ from ..units import c_light
 __all__ = ["SAMPLES_PER_WAVELENGTH", "WakefieldBase"]
 
 # Samples per shortest length scale used when a table is built without an explicit
-# number of rows. A consumer that interpolates the table linearly, as IMPACT-Z does,
-# incurs an error of about (2*pi/m)^2/8 of the local amplitude at m samples per
-# wavelength. At 128 the measured error is below 3e-04 of W0 for the resistive wall
-# models, over the tabulated materials and for pipe radii from 1 mm to 10 mm, and the
-# resulting row count stays within the 5000 rows IMPACT-Z accepts.
+# number of rows. A consumer that interpolates the table linearly, as IMPACT-Z does
+# from version 2.7.9, incurs an error of about (2*pi/m)^2/8 of the local amplitude at
+# m samples per wavelength. At 128 the measured error is below 3e-04 of W0 for the
+# resistive wall models, over the tabulated materials and for pipe radii from 1 mm to
+# 10 mm, and the resulting row count stays within the 5000 rows IMPACT-Z accepts.
 SAMPLES_PER_WAVELENGTH = 128
 
 # Fewest samples accepted by the cubic interpolant of TabularWakefield.

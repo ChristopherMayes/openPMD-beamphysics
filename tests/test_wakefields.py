@@ -9,15 +9,20 @@ exercises the Fortran-formatted columns that IMPACT-Z actually writes; only the
 length was reduced, since the remaining rows add no coverage.
 """
 
+import os
 import pathlib
 
 import numpy as np
 import pytest
 
 from beamphysics.interfaces.impact import (
+    IMPACT_T_MAX_WAKEFIELD_ROWS,
     IMPACT_Z_MAX_WAKEFIELD_ROWS,
+    create_impact_t_wakefield_data,
     create_impact_z_wakefield_rfdata,
+    parse_impact_t_wakefield,
     parse_impact_z_wakefield,
+    write_impact_t_wakefield,
     write_impact_z_wakefield,
 )
 from beamphysics.wakefields import (
@@ -304,7 +309,7 @@ def test_default_n_samples_scales_with_the_range(pseudomode_model):
     "model_class", [ResistiveWallPseudomode, ResistiveWallWakefield]
 )
 def test_default_n_samples_resolves_the_wake_for_a_linear_consumer(model_class):
-    """IMPACT-Z interpolates the table linearly, so test the error of that estimate."""
+    """IMPACT-Z (from 2.7.9) interpolates the table linearly, so test that estimate."""
     model = model_class.from_material(MATERIAL, radius=RADIUS)
     zmax = model.default_zmax
     n = model.default_n_samples(zmax)
@@ -571,6 +576,160 @@ def test_parse_impact_z_wakefield_shifts_the_origin(tmp_path):
 
     assert data["s"][0] == 0.0
     np.testing.assert_allclose(data["s"], s - s[0], rtol=1e-12, atol=0)
+
+
+# -----------------------------------------------------------------------------
+# IMPACT-T reader and writer
+# -----------------------------------------------------------------------------
+
+
+def test_impact_t_data_matches_the_impact_z_columns(pseudomode_model):
+    """Both codes tabulate the same wake; IMPACT-T drops the position column."""
+    zmax = 1e-4
+    data, length = create_impact_t_wakefield_data(pseudomode_model, zmax=zmax, n=128)
+    rfdata = create_impact_z_wakefield_rfdata(pseudomode_model, zmax=zmax, n=128)
+
+    assert data.shape == (128, 3)
+    assert length == pytest.approx(zmax)
+    np.testing.assert_array_equal(data, rfdata[:, 1:])
+
+
+def test_impact_t_round_trip(impedance_model, tmp_path):
+    zmax = 100 * impedance_model.s0
+    filename = tmp_path / "fort.41"
+
+    length = write_impact_t_wakefield(
+        filename, impedance_model, zmax=zmax, n=1000, wake_x=lambda z: 1e18 * z
+    )
+    data = parse_impact_t_wakefield(filename, length)
+    table = TabularWakefield.from_impact_t(filename, length)
+
+    np.testing.assert_allclose(data["s"][[0, -1]], [0.0, zmax], rtol=1e-15)
+    np.testing.assert_allclose(data["Wx"], -1e18 * data["s"], rtol=1e-12, atol=1e-6)
+    assert np.all(data["Wy"] == 0)
+
+    z = -np.linspace(0.01 * zmax, 0.99 * zmax, 401)
+    error = np.abs(table.wake(z) - impedance_model.wake(z))
+    assert error.max() < 1e-4 * impedance_model.W0
+
+
+def test_impact_t_rows_are_limited(pseudomode_model):
+    with pytest.raises(ValueError, match="1000"):
+        create_impact_t_wakefield_data(
+            pseudomode_model, zmax=1e-4, n=IMPACT_T_MAX_WAKEFIELD_ROWS + 1
+        )
+
+    with pytest.warns(UserWarning, match="under-resolved"):
+        data, _ = create_impact_t_wakefield_data(
+            pseudomode_model, zmax=10 * pseudomode_model.default_zmax
+        )
+    assert len(data) == IMPACT_T_MAX_WAKEFIELD_ROWS
+
+
+def test_row_limit_warning_points_at_the_caller(pseudomode_model):
+    """The warning names the caller's line, whether a function or a method is used."""
+    table = pseudomode_model.to_tabular()
+    calls = [
+        lambda: create_impact_t_wakefield_data(table),
+        lambda: write_impact_t_wakefield(os.devnull, table),
+        lambda: table.to_impact_t(),
+    ]
+
+    for call in calls:
+        with pytest.warns(UserWarning, match="under-resolved") as record:
+            call()
+        assert record[0].filename == __file__
+
+
+def test_parse_impact_t_wakefield_accepts_two_columns():
+    """Before version 3.0 IMPACT-T applied one transverse column to both planes."""
+    dat = np.column_stack([np.linspace(2, 1, 5), np.linspace(0, 4, 5)])
+
+    data = parse_impact_t_wakefield(dat, length=4e-6)
+
+    np.testing.assert_allclose(data["s"], [0, 1e-6, 2e-6, 3e-6, 4e-6])
+    np.testing.assert_array_equal(data["Wx"], data["Wy"])
+
+
+@pytest.mark.parametrize(
+    "dat, length, match",
+    [
+        (np.zeros((10, 4)), 1e-4, "3 columns"),
+        (np.zeros((IMPACT_T_MAX_WAKEFIELD_ROWS + 1, 3)), 1e-4, "1000"),
+        (np.zeros((10, 3)), 0.0, "length must be positive"),
+    ],
+    ids=["columns", "rows", "length"],
+)
+def test_parse_impact_t_wakefield_rejects_invalid_tables(dat, length, match):
+    with pytest.raises(ValueError, match=match):
+        parse_impact_t_wakefield(dat, length)
+
+
+def test_tabular_impact_methods_match_the_writers(pseudomode_model, tmp_path):
+    """The methods are the module functions applied to the table itself."""
+    table = pseudomode_model.to_tabular(zmax=1e-4, n=64)
+
+    rfdata = table.to_impact_z(tmp_path / "rfdata41.in")
+    write_impact_z_wakefield(tmp_path / "reference.in", table)
+    np.testing.assert_array_equal(rfdata, create_impact_z_wakefield_rfdata(table))
+    assert (tmp_path / "rfdata41.in").read_text() == (
+        tmp_path / "reference.in"
+    ).read_text()
+
+    data, length = table.to_impact_t(tmp_path / "fort.41")
+    reference_length = write_impact_t_wakefield(tmp_path / "fort.42", table)
+    assert length == reference_length == pytest.approx(1e-4)
+    np.testing.assert_array_equal(data, rfdata[:, 1:])
+    assert (tmp_path / "fort.41").read_text() == (tmp_path / "fort.42").read_text()
+
+    # A uniform table that already ends at z = 0 is written at its own samples.
+    np.testing.assert_allclose(rfdata[::-1, 1], table.W_data, rtol=1e-12)
+
+
+# -----------------------------------------------------------------------------
+# Bmad z_long wake table
+# -----------------------------------------------------------------------------
+
+
+def _bmad_z_long_rows(s: str) -> np.ndarray:
+    """Return the (z, w) rows of a z_long table written by TabularWakefield.to_bmad."""
+    body = s.split("w = {", 1)[1].rsplit("}}}", 1)[0]
+    rows = [line.rstrip(",").split() for line in body.splitlines() if line.strip()]
+    return np.array(rows, dtype=float)
+
+
+def test_to_bmad_writes_a_uniform_table_unchanged(pseudomode_model):
+    table = pseudomode_model.to_tabular(zmax=1e-4, n=64)
+    s = table.to_bmad()
+
+    assert s.startswith("{amp_scale = 1, z_scale = 1, scale_with_length = T,")
+    rows = _bmad_z_long_rows(s)
+    np.testing.assert_array_equal(rows[:, 0], table.z_data)
+    np.testing.assert_array_equal(rows[:, 1], table.W_data)
+    # Bmad requires a z = 0 row; a negative zero is written as zero.
+    assert "-0.00000000000000000e+00" not in s
+
+
+def test_to_bmad_resamples_a_nonuniform_table():
+    """Bmad requires equal spacing and a z = 0 row."""
+    z = np.r_[-np.geomspace(1e-4, 1e-7, 50), 0.0]
+    table = TabularWakefield(z, np.exp(z / 1e-5))
+
+    rows = _bmad_z_long_rows(table.to_bmad())
+
+    assert rows[-1, 0] == 0.0
+    np.testing.assert_allclose(np.diff(rows[:, 0]), rows[1, 0] - rows[0, 0], rtol=1e-9)
+    np.testing.assert_allclose(rows[:, 1], table.wake(rows[:, 0]), rtol=1e-12)
+
+
+def test_to_bmad_writes_parameters_and_file(pseudomode_model, tmp_path):
+    table = pseudomode_model.to_tabular(zmax=1e-4, n=64)
+    filename = tmp_path / "wake.bmad"
+
+    s = table.to_bmad(filename, amp_scale=2.5, z_scale=0.5, scale_with_length=False)
+
+    assert s.startswith("{amp_scale = 2.5, z_scale = 0.5, scale_with_length = F,")
+    assert filename.read_text() == s
 
 
 # -----------------------------------------------------------------------------

@@ -35,7 +35,9 @@ class TabularWakefield(WakefieldBase):
         Longitudinal positions [m]. Should be negative (behind source)
         and must be strictly increasing.
     W : np.ndarray
-        Wakefield values [V/C/m] at each z position.
+        Wakefield values [V/C/m] at each z position. These are point values
+        W(z_i) of the wake, not averages over a bin. At z = 0 the value is
+        W(0-), the wake immediately behind the source particle.
     fill_value : float, optional
         Value to return outside the interpolation range. Default is 0.
     kind : str, optional
@@ -101,8 +103,9 @@ class TabularWakefield(WakefieldBase):
         Tabulation is the practical way to reuse an expensive model. The wake of
         :class:`ResistiveWallWakefield` is obtained from its impedance by a transform
         on every call, which is far too slow to evaluate inside a tracking loop or an
-        export routine, and even the analytic :class:`ResistiveWallPseudomode` must be
-        tabulated before it can be handed to an external code.
+        export routine. A uniform table is also the form in which some tracking codes
+        read a short-range wake: IMPACT-Z requires one, and Bmad accepts one as an
+        alternative to pseudomodes.
 
         Parameters
         ----------
@@ -239,6 +242,51 @@ class TabularWakefield(WakefieldBase):
 
         return cls(z, W, kind=kind)
 
+    @classmethod
+    def from_impact_t(
+        cls, source, length: float, kind: str = "cubic"
+    ) -> TabularWakefield:
+        """
+        Read the longitudinal wake from an IMPACT-T wake table.
+
+        An IMPACT-T table has no position column. Its rows are equally spaced in the
+        distance s = -z >= 0 behind the source particle, from zero to the length V7
+        given on the -6 element, which must therefore be supplied. IMPACT-T shares
+        the sign convention of this package, and the transverse columns are ignored,
+        because :class:`WakefieldBase` is longitudinal only.
+
+        Parameters
+        ----------
+        source : str, pathlib.Path or array_like
+            Path to an IMPACT-T wake table, conventionally named fort.{Bmpstp}, or the
+            table itself as an array of shape (n, 3) or (n, 2).
+        length : float
+            Distance covered by the table [m], given as V7 on the -6 element.
+        kind : str, optional
+            Interpolation method passed to the constructor. Default is 'cubic'.
+
+        Returns
+        -------
+        TabularWakefield
+            Longitudinal wake [V/C/m] as a function of z <= 0 [m].
+
+        See Also
+        --------
+        beamphysics.interfaces.impact.parse_impact_t_wakefield : Underlying reader.
+        beamphysics.interfaces.impact.write_impact_t_wakefield : Corresponding writer.
+
+        Examples
+        --------
+        ::
+
+            table = TabularWakefield.from_impact_t("fort.41", length=3.55e-4)
+        """
+        from ..interfaces.impact import parse_impact_t_wakefield
+
+        data = parse_impact_t_wakefield(source, length)
+
+        return cls(-data["s"][::-1], data["Wz"][::-1], kind=kind)
+
     @property
     def default_zmax(self) -> float:
         """
@@ -281,6 +329,187 @@ class TabularWakefield(WakefieldBase):
         intervals = np.ceil(zmax / dz.min() * (1 - 1e-9))
 
         return max(int(intervals) + 1, MIN_SAMPLES)
+
+    def to_bmad(
+        self,
+        file=None,
+        amp_scale: float = 1,
+        z_scale: float = 1,
+        scale_with_length: bool = True,
+    ) -> str:
+        """
+        Format this table as a Bmad short-range wake with a z_long wake table.
+
+        Bmad requires the table to be equally spaced, increasing in z and to contain
+        the point z = 0. A table that does not already satisfy these conditions is
+        first resampled with :meth:`from_wakefield`. Bmad uses the same conventions
+        as this package: z <= 0 lies behind the source particle, a positive wake is
+        energy-losing, and the wake is in V/C/m when scale_with_length is True. Bmad
+        sets the wake to zero ahead of the source particle and halves the z = 0
+        entry itself, so the table is written unchanged.
+
+        Parameters
+        ----------
+        file : str or pathlib.Path, optional
+            Output path. If given, the string is also written there, so that it can
+            be used in a lattice as ``sr_wake = call::<file>``.
+        amp_scale : float, optional
+            Bmad wake amplitude scale factor. Default is 1.
+        z_scale : float, optional
+            Bmad z-distance scale factor. Default is 1.
+        scale_with_length : bool, optional
+            Whether Bmad multiplies the wake by the length of the element that
+            carries it. Default is True, in which case the table is read as a wake
+            per unit length in V/C/m, as it is throughout this package, and the
+            sr_wake should be attached to an element whose length equals that of the
+            wake-producing structure. If False, Bmad applies the table once as a wake
+            in V/C, so a table in V/C/m must first be multiplied by the length of the
+            structure, for example through amp_scale.
+
+        Returns
+        -------
+        str
+            The sr_wake value, beginning with ``{``.
+
+        Notes
+        -----
+        Bmad applies the table by a circular FFT convolution over a window equal to
+        the table extended symmetrically about z = 0. The tabulated range must
+        therefore exceed the full length of the bunch, or the wake of the tail wraps
+        onto the head. A longer table can be built from the source model with
+        :meth:`from_wakefield`.
+
+        Examples
+        --------
+        ::
+
+            table = wake.to_tabular()
+            print(table.to_bmad())
+            table.to_bmad("wake.bmad")  # sr_wake = call::wake.bmad
+        """
+        dz = np.diff(self._z)
+        uniform = np.allclose(dz, dz[0], rtol=1e-9, atol=0) and self._z[-1] == 0
+        table = self if uniform else TabularWakefield.from_wakefield(self)
+
+        logical = "T" if scale_with_length else "F"
+        lines = [
+            f"{{amp_scale = {amp_scale}, z_scale = {z_scale}, "
+            f"scale_with_length = {logical},",
+            "z_long = {w = {",
+        ]
+        # Adding 0.0 turns -0.0 into 0.0.
+        for z, W in zip(table._z + 0.0, table._W):
+            lines.append(f"{z:.17e} {W:.17e},")
+        lines.append("}}}")
+        s = "\n".join(lines) + "\n"
+
+        if file is not None:
+            with open(file, "w") as f:
+                f.write(s)
+
+        return s
+
+    def to_impact_z(
+        self, file=None, zmax=None, n=None, wake_x=None, wake_y=None
+    ) -> np.ndarray:
+        """
+        Build the IMPACT-Z read-in short-range wakefield table for this wake.
+
+        This is :func:`beamphysics.interfaces.impact.create_impact_z_wakefield_rfdata`
+        applied to this table, which describes the format, the defaults and the row
+        limit.
+
+        Parameters
+        ----------
+        file : str or pathlib.Path, optional
+            Output path. If given, the table is also written there. IMPACT-Z expects
+            the name rfdata{file_id}.in, where file_id is given on the -41 element.
+        zmax : float, optional
+            Largest trailing distance behind the source particle to tabulate [m].
+            Defaults to the range of this table.
+        n : int, optional
+            Number of rows. Defaults to the number needed to keep the finest spacing
+            of this table, clamped to the 5000 rows IMPACT-Z accepts.
+        wake_x, wake_y : callable, optional
+            Horizontal and vertical dipole wakes as functions of z <= 0 [m],
+            returning [V/C/m^2]. Their columns are zero when they are not supplied.
+
+        Returns
+        -------
+        np.ndarray
+            Array of shape (n, 4) holding the columns s [m], Wz [V/C/m], Wx [V/C/m^2]
+            and Wy [V/C/m^2], with s ascending from zero.
+
+        Examples
+        --------
+        ::
+
+            table = wake.to_tabular()
+            table.to_impact_z("rfdata41.in")
+        """
+        from ..interfaces.impact import (
+            _WAKEFIELD_FMT,
+            create_impact_z_wakefield_rfdata,
+        )
+
+        rfdata = create_impact_z_wakefield_rfdata(self, zmax, n, wake_x, wake_y)
+
+        if file is not None:
+            np.savetxt(file, rfdata, fmt=_WAKEFIELD_FMT)
+
+        return rfdata
+
+    def to_impact_t(
+        self, file=None, zmax=None, n=None, wake_x=None, wake_y=None
+    ) -> tuple[np.ndarray, float]:
+        """
+        Build the IMPACT-T read-in short-range wakefield table for this wake.
+
+        This is :func:`beamphysics.interfaces.impact.create_impact_t_wakefield_data`
+        applied to this table, which describes the format, the element parameters,
+        the defaults and the row limit.
+
+        Parameters
+        ----------
+        file : str or pathlib.Path, optional
+            Output path. If given, the table is also written there. IMPACT-T expects
+            the name fort.{Bmpstp}, where Bmpstp is given on the -6 element.
+        zmax : float, optional
+            Largest trailing distance behind the source particle to tabulate [m].
+            Defaults to the range of this table.
+        n : int, optional
+            Number of rows. Defaults to the number needed to keep the finest spacing
+            of this table, clamped to the 1000 rows IMPACT-T reads.
+        wake_x, wake_y : callable, optional
+            Horizontal and vertical dipole wakes as functions of z <= 0 [m],
+            returning [V/C/m^2]. Their columns are zero when they are not supplied.
+
+        Returns
+        -------
+        data : np.ndarray
+            Array of shape (n, 3) holding the columns Wz [V/C/m], Wx [V/C/m^2] and
+            Wy [V/C/m^2], ordered by increasing distance behind the source particle.
+        length : float
+            Distance covered by the table [m], to be given as V7 on the -6 element.
+
+        Examples
+        --------
+        ::
+
+            table = wake.to_tabular()
+            data, length = table.to_impact_t("fort.41", n=1000)  # V7 = length
+        """
+        from ..interfaces.impact import (
+            _WAKEFIELD_FMT,
+            create_impact_t_wakefield_data,
+        )
+
+        data, length = create_impact_t_wakefield_data(self, zmax, n, wake_x, wake_y)
+
+        if file is not None:
+            np.savetxt(file, data, fmt=_WAKEFIELD_FMT)
+
+        return data, length
 
     def wake(self, z: np.ndarray | float) -> np.ndarray | float:
         """

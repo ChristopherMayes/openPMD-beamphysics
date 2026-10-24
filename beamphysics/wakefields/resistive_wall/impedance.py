@@ -178,9 +178,10 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase, ImpedanceWakefield):
         Shortest length scale the wake resolves [m].
 
         The DC-conductivity wake of a round pipe oscillates as cos(sqrt(3) z / s0),
-        giving a period of 2 pi s0 / sqrt(3). A finite relaxation time shifts the
-        wavenumber by less than 15 percent over the tabulated materials, which is
-        immaterial once it is multiplied by the samples per wavelength.
+        giving a period of 2 pi s0 / sqrt(3). Over the tabulated materials and radii
+        from 1 to 10 mm, a finite relaxation time shifts the wavenumber of a round
+        pipe by between -19 and +6 percent, so the density ranges from about 120 to
+        158 samples per period, which the measured interpolation errors include.
 
         Returns
         -------

@@ -25,7 +25,7 @@ from .interfaces.litrack import write_litrack
 from .interfaces.lucretia import write_lucretia
 from .interfaces.opal import write_opal
 from .interfaces.simion import write_simion
-from .plot import density_plot, marginal_plot, slice_plot, wakefield_plot
+from .plot_dispatch import get_backend
 from .readers import (
     _only_iteration_only_species_group,
     load_bunch_data,
@@ -1633,6 +1633,7 @@ class ParticleGroup:
         tex=True,
         nice=True,
         ellipse=False,
+        backend=None,
         **kwargs,
     ):
         """
@@ -1649,7 +1650,7 @@ class ParticleGroup:
 
         Parameters
         ----------
-        key1 : str, default = 't'
+        key1 : str, default = 'x'
             Key to bin on the x-axis
 
         key2 : str, default = None
@@ -1675,25 +1676,28 @@ class ParticleGroup:
             2x2 sigma matrix
 
         return_figure : bool, default = False
-            If true, return a matplotlib.figure.Figure object
+            If true, return the figure/layout object
+
+        backend : str, optional
+            Plot backend: ``'mpl'`` or ``'bokeh'``.
+            Defaults to the module-level setting (see ``set_default_backend``).
 
         **kwargs
-            Any additional kwargs to send to the the plot in: plt.subplots(**kwargs)
-
+            Additional keyword arguments passed to the backend plot function.
 
         Returns
         -------
-        None or fig: matplotlib.figure.Figure
-            This only returns a figure object if return_figure=T, otherwise returns None
-
+        None or figure object
+            Returns the figure only if ``return_figure=True``.
         """
+        be = get_backend(backend)
 
         if not key2:
-            fig = density_plot(
+            fig = be.density_plot(
                 self, key=key1, bins=bins, xlim=xlim, tex=tex, nice=nice, **kwargs
             )
         else:
-            fig = marginal_plot(
+            fig = be.marginal_plot(
                 self,
                 key1=key1,
                 key2=key2,
@@ -1766,6 +1770,7 @@ class ParticleGroup:
         return_figure=False,
         xlim=None,
         ylim=None,
+        backend=None,
         **kwargs,
     ):
         """
@@ -1785,20 +1790,23 @@ class ParticleGroup:
         nice : bool, optional
             Scale to nice units. Default is True.
         return_figure : bool, optional
-            If True, return the matplotlib Figure. Default is False.
+            If True, return the figure/layout object. Default is False.
         xlim : tuple of float, optional
             Manual x-axis limits in raw units.
         ylim : tuple of float, optional
             Manual y-axis limits in raw units.
+        backend : str, optional
+            Plot backend: ``'mpl'`` or ``'bokeh'``.
         **kwargs
-            Additional keyword arguments passed to ``plt.subplots``.
+            Additional keyword arguments passed to the backend plot function.
 
         Returns
         -------
-        None or matplotlib.figure.Figure
-            Returns a Figure only if ``return_figure=True``.
+        None or figure object
+            Returns the figure only if ``return_figure=True``.
         """
-        fig = slice_plot(
+        be = get_backend(backend)
+        fig = be.slice_plot(
             self,
             *keys,
             n_slice=n_slice,
@@ -1876,6 +1884,7 @@ class ParticleGroup:
         ylim=None,
         tex=True,
         bins=None,
+        backend=None,
         **kwargs,
     ):
         """
@@ -1899,9 +1908,6 @@ class ParticleGroup:
         nice : bool, default=True
             If True, applies unit-aware scaling using SI prefixes (e.g., mm, ns).
 
-        ax : matplotlib.axes.Axes, optional
-            An existing Axes to plot into. If None, a new figure and axes are created.
-
         xlim : tuple of float, optional
             Limits to apply to the x-axis, in native units.
 
@@ -1914,21 +1920,27 @@ class ParticleGroup:
         bins : int or str, optional
             Number of bins to use for the density histogram.
 
-        kwargs : dict
-            Additional keyword arguments passed to `plt.subplots()` if a new axis is created.
+        ax : matplotlib.axes.Axes, optional
+            Matplotlib only: an existing Axes to plot into.
+
+        backend : str, optional
+            Plot backend: ``'mpl'`` or ``'bokeh'``.
+
+        **kwargs
+            Additional keyword arguments passed to the backend plot function.
 
         Returns
         -------
-        fig : matplotlib.figure.Figure
-            The matplotlib figure containing the plot.
+        figure object
         """
-
-        wakefield_plot(
+        be = get_backend(backend)
+        if ax is not None:
+            kwargs["ax"] = ax
+        return be.wakefield_plot(
             self,
             wake,
             key=key,
             nice=nice,
-            ax=ax,
             xlim=xlim,
             ylim=ylim,
             tex=tex,

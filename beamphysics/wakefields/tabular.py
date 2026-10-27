@@ -292,6 +292,118 @@ class TabularWakefield(WakefieldBase):
 
         return cls(-data["s"][::-1], data["Wz"][::-1], kind=kind)
 
+    @classmethod
+    def from_bmad(
+        cls,
+        source,
+        amp_scale: float = 1,
+        z_scale: float = 1,
+        kind: str = "cubic",
+    ) -> TabularWakefield:
+        """
+        Read the longitudinal wake from a Bmad z_long wake table.
+
+        This is the inverse of :meth:`to_bmad`. The table is taken as the array
+        returned by Tao for an element with a z_long short-range wake, which pytao
+        provides as ``tao.ele_wake(ele_id, who="sr_z_long_table")``. Reading a Bmad
+        lattice or wake file directly is not supported, because parsing Bmad syntax
+        belongs to Bmad.
+
+        Bmad uses the same conventions as this package: z <= 0 lies behind the source
+        particle and a positive wake is energy-losing. When Bmad parses a table it
+        extends it symmetrically about z = 0, so the rows ahead of the source particle
+        are dropped here. Bmad stores the z = 0 entry as given and halves it only in
+        its convolution kernel, so the value read back is W(0-) and is used unchanged.
+
+        Parameters
+        ----------
+        source : array_like
+            Table of shape (n, 2) holding z [m] and W [V/C/m], uniformly spaced and
+            increasing in z, as returned by ``Tao.ele_wake`` with
+            ``who="sr_z_long_table"``.
+        amp_scale : float, optional
+            Bmad wake amplitude scale factor, sr%amp_scale. Default is 1.
+        z_scale : float, optional
+            Bmad z-distance scale factor, sr%z_scale. Default is 1.
+        kind : str, optional
+            Interpolation method passed to the constructor. Default is 'cubic'.
+
+        Returns
+        -------
+        TabularWakefield
+            Longitudinal wake as a function of z <= 0 [m]. Bmad evaluates the table
+            at z_scale * z and multiplies the kick by amp_scale, so the result is
+            amp_scale * W_table(z_scale * z).
+
+        Raises
+        ------
+        ValueError
+            If the table is empty, as Tao returns for an element without a z_long
+            wake, if z_scale is not positive, or if the table does not have two
+            columns, is not uniformly spaced and increasing, has no row at z = 0, or
+            is nonzero ahead of the source particle. TabularWakefield is causal, so
+            dropping nonzero values ahead of the source would silently change the
+            wake.
+
+        Notes
+        -----
+        Tao currently prints the table with nine significant digits, which limits the
+        accuracy of a round trip through Tao to about 1e-09. The positions are rebuilt
+        on an exactly uniform grid ending at z = 0, so that :meth:`to_bmad` writes the
+        result back without resampling. Each row must lie within one percent of the
+        spacing of that grid.
+
+        If scale_with_length is False, Bmad reads the table as a wake in V/C rather
+        than V/C/m. Passing amp_scale divided by the length of the structure then
+        gives the wake per unit length. The smoothing_sigma and position_dependence
+        settings of the wake have no counterpart here and are ignored; they are
+        reported by ``tao.ele_wake(ele_id, who="sr_z_long")``.
+
+        Examples
+        --------
+        ::
+
+            rows = tao.ele_wake("pipe1", who="sr_z_long_table")
+            table = TabularWakefield.from_bmad(rows)
+        """
+        dat = np.asarray(source, dtype=float)
+        if dat.size == 0:
+            raise ValueError(
+                "The table is empty. The element has no z_long wake; a wake given only "
+                "by pseudomodes has no table."
+            )
+        if dat.ndim != 2 or dat.shape[1] != 2 or dat.shape[0] < 2:
+            raise ValueError(
+                f"Expected an array of shape (n, 2) holding z and W, got {dat.shape}"
+            )
+        if z_scale <= 0:
+            raise ValueError(f"z_scale must be positive, got {z_scale}")
+        z, W = dat[:, 0], dat[:, 1]
+
+        dz = (z[-1] - z[0]) / (len(z) - 1)
+        # A fraction of the spacing, so the check does not depend on Tao's print format.
+        atol = 1e-2 * abs(dz)
+        if dz <= 0 or not np.allclose(np.diff(z), dz, rtol=0, atol=atol):
+            raise ValueError(
+                "The z column must be uniformly spaced and increasing, as Bmad stores "
+                "z_long tables."
+            )
+
+        ahead = z > dz / 2
+        if np.any(W[ahead] != 0):
+            raise ValueError(
+                "The table is nonzero ahead of the source particle, up to "
+                f"{np.abs(W[ahead]).max():.6e}. TabularWakefield is causal, and "
+                "dropping these values would change the wake."
+            )
+        m = np.count_nonzero(~ahead)
+        if m == 0 or abs(z[m - 1]) > atol:
+            raise ValueError("The table has no row at z = 0.")
+
+        z = -dz * np.arange(m - 1, -1, -1)
+
+        return cls(z / z_scale, amp_scale * W[:m], kind=kind)
+
     @property
     def default_zmax(self) -> float:
         """

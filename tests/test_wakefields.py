@@ -755,6 +755,106 @@ def test_to_bmad_writes_parameters_and_file(pseudomode_model, tmp_path):
     assert filename.read_text() == s
 
 
+def _tao_sr_z_long_table(table: TabularWakefield, digits: int = 8) -> np.ndarray:
+    """Reproduce the array Tao returns for a z_long table written by to_bmad."""
+    dz = table.z_data[1] - table.z_data[0]
+    nn = len(table.z_data) - 1
+    # Bmad extends the table symmetrically about z = 0, and Tao prints
+    # z(i) = -z0 + (i-1)*dz with es18.8, that is with 8 digits after the point.
+    z = -nn * dz + np.arange(2 * nn + 1) * dz
+    W = np.concatenate([table.W_data, np.zeros(nn)])
+    rows = np.array(
+        [[float(f"{a:.{digits}e}"), float(f"{b:.{digits}e}")] for a, b in zip(z, W)]
+    )
+    # Tao prints a rounding residue at z = 0, which NumPy computes exactly.
+    rows[nn, 0] = 1.5e-20
+    return rows
+
+
+@pytest.fixture(scope="module")
+def bmad_rows(pseudomode_model) -> tuple[TabularWakefield, np.ndarray]:
+    table = pseudomode_model.to_tabular()
+    return table, _tao_sr_z_long_table(table)
+
+
+def test_from_bmad_recovers_the_table(bmad_rows):
+    table, rows = bmad_rows
+    result = TabularWakefield.from_bmad(rows)
+
+    assert len(result.z_data) == len(table.z_data)
+    assert result.z_data[-1] == 0
+    np.testing.assert_allclose(
+        np.diff(result.z_data), table.z_data[1] - table.z_data[0]
+    )
+    np.testing.assert_allclose(result.W_data, table.W_data, rtol=1e-8)
+
+
+@pytest.mark.parametrize("digits", [6, 8, 15])
+def test_from_bmad_does_not_depend_on_the_print_precision(pseudomode_model, digits):
+    """Tao prints es18.8 today; coarser or finer output must be read the same way."""
+    table = pseudomode_model.to_tabular()
+    result = TabularWakefield.from_bmad(_tao_sr_z_long_table(table, digits))
+
+    assert len(result.z_data) == len(table.z_data)
+    assert result.z_data[-1] == 0
+    np.testing.assert_allclose(result.W_data, table.W_data, rtol=10.0**-digits)
+
+
+def test_from_bmad_table_is_written_back_unchanged(bmad_rows, recwarn):
+    """The rebuilt grid ends at exactly zero, so to_bmad does not resample."""
+    result = TabularWakefield.from_bmad(bmad_rows[1])
+
+    rows = _bmad_z_long_rows(result.to_bmad())
+
+    assert len(recwarn) == 0
+    np.testing.assert_array_equal(rows[:, 0], result.z_data)
+
+
+def test_from_bmad_applies_the_scale_factors(bmad_rows):
+    """Bmad applies amp_scale * W_table(z_scale * z)."""
+    _, rows = bmad_rows
+    plain = TabularWakefield.from_bmad(rows)
+    scaled = TabularWakefield.from_bmad(rows, amp_scale=2, z_scale=0.5)
+
+    np.testing.assert_allclose(scaled.W_data, 2 * plain.W_data)
+    np.testing.assert_allclose(scaled.z_data, 2 * plain.z_data)
+
+
+def test_from_bmad_rejects_a_wake_ahead_of_the_source(bmad_rows):
+    rows = bmad_rows[1].copy()
+    rows[-1, 1] = 1e12
+
+    with pytest.raises(ValueError, match="ahead of the source"):
+        TabularWakefield.from_bmad(rows)
+
+
+def test_from_bmad_rejects_a_nonuniform_grid(bmad_rows):
+    rows = bmad_rows[1].copy()
+    rows[10, 0] += 0.3 * (rows[1, 0] - rows[0, 0])
+
+    with pytest.raises(ValueError, match="uniformly spaced"):
+        TabularWakefield.from_bmad(rows)
+
+
+def test_from_bmad_rejects_a_table_without_the_origin():
+    rows = np.column_stack([-np.linspace(1e-4, 1e-6, 50), np.ones(50)])
+
+    with pytest.raises(ValueError, match="no row at z = 0"):
+        TabularWakefield.from_bmad(rows)
+
+
+def test_from_bmad_explains_an_empty_table():
+    """Tao returns an empty array for an element whose wake has no z_long table."""
+    with pytest.raises(ValueError, match="no z_long wake"):
+        TabularWakefield.from_bmad(np.empty((0,)))
+
+
+@pytest.mark.parametrize("z_scale", [0.0, -1.0])
+def test_from_bmad_rejects_a_nonpositive_z_scale(bmad_rows, z_scale):
+    with pytest.raises(ValueError, match="z_scale must be positive"):
+        TabularWakefield.from_bmad(bmad_rows[1], z_scale=z_scale)
+
+
 # -----------------------------------------------------------------------------
 # IMPACT-Z reference table
 # -----------------------------------------------------------------------------

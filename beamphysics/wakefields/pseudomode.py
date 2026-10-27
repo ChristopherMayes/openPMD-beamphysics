@@ -35,13 +35,13 @@ class Pseudomode:
     Parameters
     ----------
     A : float
-        Amplitude coefficient [V/C/m].
+        Amplitude coefficient (V/C/m).
     d : float
-        Exponential decay rate [1/m].
+        Exponential decay rate (1/m).
     k : float
-        Oscillation wavenumber [1/m].
+        Oscillation wavenumber (1/m).
     phi : float
-        Phase offset [rad].
+        Phase offset (rad).
     """
 
     A: float
@@ -114,12 +114,12 @@ class Pseudomode:
         Parameters
         ----------
         k : float or np.ndarray
-            Wavenumber [1/m].
+            Wavenumber (1/m).
 
         Returns
         -------
         Z : complex or np.ndarray
-            Impedance [Ohm/m].
+            Impedance (Ohm/m).
         """
         k = np.asarray(k)
         scalar_input = k.ndim == 0
@@ -164,11 +164,7 @@ class Pseudomode:
 
         Notes
         -----
-        Bmad expresses the phase in units of 2 pi, whereas `phi` is in radians,
-        so the fourth field is written as `phi / (2 * pi)`. Reading such an entry
-        back therefore requires multiplying that field by 2 pi. Every other field is
-        written unchanged, since the amplitude, decay rate and wavenumber follow the
-        same conventions in both representations.
+        Bmad gives the phase in units of 2 pi, so the fourth field is `phi / (2 * pi)`.
         """
         return (
             f"{type} = {{{self.A}, {self.d}, {self.k}, "
@@ -237,23 +233,14 @@ class PseudomodeWakefield(WakefieldBase):
     @property
     def decay_length(self) -> float:
         """
-        Envelope decay length of the most slowly damped mode [m].
+        Envelope decay length of the most slowly damped mode (m).
 
         $$L = \\frac{1}{\\min_i d_i}$$
-
-        Each mode falls off as exp(-|z| * d), so the sum has decayed to exp(-1) of
-        its envelope after the largest of the 1/d.
-
-        Returns
-        -------
-        float
-            Decay length [m].
 
         Raises
         ------
         ValueError
-            If any mode has a non-positive decay rate, in which case the wake does
-            not decay and cannot be truncated.
+            If any mode has d <= 0, so that the wake does not decay.
         """
         d = np.array([mode.d for mode in self.modes], dtype=float)
 
@@ -268,44 +255,29 @@ class PseudomodeWakefield(WakefieldBase):
     @property
     def default_zmax(self) -> float:
         """
-        Trailing distance beyond which the wake may be truncated [m].
+        Distance behind the source particle beyond which the wake is negligible (m).
 
         $$z_{\\max} = 10 \\, L$$
 
-        Here L is `decay_length`. At ten decay lengths the envelope has fallen to
-        exp(-10), or about 5e-05 of its initial value. The residual is far below the
-        accuracy of the pseudomode fit itself.
-
-        Returns
-        -------
-        float
-            Largest trailing distance behind the source particle worth tabulating.
+        Here L is `decay_length`, so the envelope has fallen to exp(-10).
         """
         return 10 * self.decay_length
 
     @property
     def min_wavelength(self) -> float:
         """
-        Shortest length scale the wake resolves [m].
+        Shortest length scale of the wake (m).
 
         $$\\lambda_{\\min} = \\min\\left( \\frac{2 \\pi}{\\max_i |k_i|},
         \\frac{1}{\\max_i d_i} \\right)$$
 
-        This is the shorter of the period of the fastest mode and the decay length of
-        the most strongly damped mode, so that a purely damped mode, which has no
-        period, still sets a sampling requirement. If every k_i is zero, only the
-        decay length remains. The decay length of the most weakly damped mode, reported
-        by `decay_length`, sets the range instead.
-
-        Returns
-        -------
-        float
-            Shortest length scale [m].
+        The period of the fastest mode or the decay length of the most strongly
+        damped mode, whichever is shorter.
 
         Raises
         ------
         ValueError
-            If any mode has a non-positive decay rate.
+            If any mode has d <= 0.
         """
         # Raises for any undamped mode.
         self.decay_length
@@ -325,12 +297,12 @@ class PseudomodeWakefield(WakefieldBase):
         Parameters
         ----------
         z : float or np.ndarray
-            Longitudinal position [m]. Negative z is behind the source.
+            Longitudinal position (m). Negative z is behind the source.
 
         Returns
         -------
         W : float or np.ndarray
-            Wakefield value [V/C/m]. Returns 0 for z > 0.
+            Wakefield value (V/C/m). Returns 0 for z > 0.
         """
         z = np.asarray(z)
         scalar_input = z.ndim == 0
@@ -358,12 +330,12 @@ class PseudomodeWakefield(WakefieldBase):
         Parameters
         ----------
         k : float or np.ndarray
-            Wavenumber [1/m].
+            Wavenumber (1/m).
 
         Returns
         -------
         Z : complex or np.ndarray
-            Impedance [Ohm/m].
+            Impedance (Ohm/m).
         """
         k = np.asarray(k)
         scalar_input = k.ndim == 0
@@ -396,16 +368,16 @@ class PseudomodeWakefield(WakefieldBase):
         Parameters
         ----------
         z : np.ndarray
-            Particle positions [m].
+            Particle positions (m).
         weight : np.ndarray
-            Particle charges [C].
+            Particle charges (C).
         include_self_kick : bool, optional
             If True, applies the self-kick. Default is True.
 
         Returns
         -------
         kicks : np.ndarray
-            Wake-induced energy kick per unit length [eV/m].
+            Wake-induced energy kick per unit length (eV/m).
         """
         z = np.asarray(z)
         weight = np.asarray(weight)
@@ -473,11 +445,6 @@ class PseudomodeWakefield(WakefieldBase):
         -------
         str
             Bmad-formatted string (one line per mode).
-
-        Notes
-        -----
-        See `Pseudomode.to_bmad` for the phase convention, which is the one
-        field that differs between the two representations.
         """
         lines = [mode.to_bmad(type, transverse_dependence) for mode in self._modes]
         return "\n".join(lines)

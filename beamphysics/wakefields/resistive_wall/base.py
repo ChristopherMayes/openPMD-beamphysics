@@ -124,16 +124,16 @@ def ac_conductivity(
     Parameters
     ----------
     k : float or np.ndarray
-        Longitudinal wave number [1/m]
+        Longitudinal wave number (1/m)
     sigma0 : float
-        DC conductivity [S/m]
+        DC conductivity (S/m)
     ctau : float
-        Relaxation distance c·τ [m]
+        Relaxation distance c·τ (m)
 
     Returns
     -------
     sigma : complex or np.ndarray of complex
-        AC conductivity [S/m]
+        AC conductivity (S/m)
     """
     return sigma0 / (1 - 1j * k * ctau)
 
@@ -151,16 +151,16 @@ def surface_impedance(
     Parameters
     ----------
     k : float or np.ndarray
-        Longitudinal wave number [1/m]
+        Longitudinal wave number (1/m)
     sigma0 : float
-        DC conductivity [S/m]
+        DC conductivity (S/m)
     ctau : float
-        Relaxation distance c·τ [m]
+        Relaxation distance c·τ (m)
 
     Returns
     -------
     zeta : complex or np.ndarray of complex
-        Surface impedance [dimensionless]
+        Surface impedance (dimensionless)
     """
     sigma = ac_conductivity(k, sigma0, ctau)
     return (1 - 1j) * np.sqrt(k * c_light / (2 * sigma * Z0 * c_light))
@@ -202,18 +202,18 @@ def longitudinal_impedance_flat(
     Parameters
     ----------
     k : float or np.ndarray
-        Longitudinal wave number [1/m]
+        Longitudinal wave number (1/m)
     a : float
-        Half-gap height between parallel plates [m]
+        Half-gap height between parallel plates (m)
     sigma0 : float
-        DC conductivity [S/m]
+        DC conductivity (S/m)
     ctau : float
-        Relaxation distance c·τ [m]
+        Relaxation distance c·τ (m)
 
     Returns
     -------
     Zk : complex or np.ndarray of complex
-        Longitudinal impedance [Ohm/m]
+        Longitudinal impedance (Ohm/m)
     """
 
     @np.vectorize
@@ -243,18 +243,18 @@ def longitudinal_impedance_round(
     Parameters
     ----------
     k : float or np.ndarray
-        Longitudinal wave number [1/m]
+        Longitudinal wave number (1/m)
     a : float
-        Pipe radius [m]
+        Pipe radius (m)
     sigma0 : float
-        DC conductivity [S/m]
+        DC conductivity (S/m)
     ctau : float
-        Relaxation distance c·τ [m]
+        Relaxation distance c·τ (m)
 
     Returns
     -------
     Zk : complex or np.ndarray of complex
-        Longitudinal impedance [Ohm/m]
+        Longitudinal impedance (Ohm/m)
     """
     k = np.asarray(k)
     scalar_input = k.ndim == 0
@@ -291,11 +291,11 @@ def wakefield_from_impedance(
     Parameters
     ----------
     z : float or np.ndarray
-        Longitudinal position [m]. Negative z is behind the source.
+        Longitudinal position (m). Negative z is behind the source.
     Zk_func : callable
-        Function returning complex impedance Z(k) [Ohm/m]
+        Function returning complex impedance Z(k) (Ohm/m)
     k_max : float, optional
-        Upper limit of k integration [1/m]. Default is 1e7.
+        Upper limit of k integration (1/m). Default is 1e7.
     epsabs : float, optional
         Absolute tolerance. Default is 1e-9.
     epsrel : float, optional
@@ -304,7 +304,7 @@ def wakefield_from_impedance(
     Returns
     -------
     Wz : float or np.ndarray
-        Wakefield [V/C/m]
+        Wakefield (V/C/m)
     """
 
     def _wakefield_scalar(z_val):
@@ -338,18 +338,18 @@ def wakefield_from_impedance_fft(
     Parameters
     ----------
     z : np.ndarray
-        Longitudinal positions [m]. Negative z is behind the source.
+        Longitudinal positions (m). Negative z is behind the source.
     Zk_func : callable
-        Function returning complex impedance Z(k) [Ohm/m]
+        Function returning complex impedance Z(k) (Ohm/m)
     k_max : float, optional
-        Upper limit of k integration [1/m]. Default is 1e7.
+        Upper limit of k integration (1/m). Default is 1e7.
     n_fft : int, optional
         Number of FFT points. Default is 8192.
 
     Returns
     -------
     Wz : np.ndarray
-        Wakefield [V/C/m]
+        Wakefield (V/C/m)
     """
     from scipy.fft import irfft
     from scipy.interpolate import interp1d
@@ -387,14 +387,14 @@ def characteristic_length(a: float, sigma0: float) -> float:
     Parameters
     ----------
     a : float
-        Half-gap height (flat) or radius (round) [m]
+        Half-gap height (flat) or radius (round) (m)
     sigma0 : float
-        DC conductivity [S/m]
+        DC conductivity (S/m)
 
     Returns
     -------
     s0 : float
-        Characteristic length [m]
+        Characteristic length (m)
     """
     return (2 * a**2 / (Z0 * sigma0)) ** (1 / 3)
 
@@ -541,11 +541,11 @@ def Gammaf(relaxation_time: float, radius: float, conductivity: float) -> float:
     Parameters
     ----------
     relaxation_time : float
-        Drude relaxation time τ [s]
+        Drude relaxation time τ (s)
     radius : float
-        Pipe radius (round) or half-gap (flat) [m]
+        Pipe radius (round) or half-gap (flat) (m)
     conductivity : float
-        DC conductivity [S/m]
+        DC conductivity (S/m)
 
     Returns
     -------
@@ -568,24 +568,24 @@ class ResistiveWallWakefieldBase(WakefieldBase):
     This abstract base class provides shared properties and methods for
     resistive wall wakefield calculations. Use the concrete subclasses:
 
-    - :class:`ResistiveWallWakefield`: Accurate impedance-based model
-    - :class:`ResistiveWallPseudomode`: Fast pseudomode-based model
+    - `ResistiveWallWakefield`: Accurate impedance-based model
+    - `ResistiveWallPseudomode`: Fast pseudomode-based model
 
     Parameters
     ----------
     radius : float
-        Radius of the beam pipe [m]. For flat geometry, this is half the gap.
+        Radius of the beam pipe (m). For flat geometry, this is half the gap.
     conductivity : float
-        Electrical conductivity of the wall material [S/m].
+        Electrical conductivity of the wall material (S/m).
     relaxation_time : float
-        Drude-model relaxation time of the conductor [s].
+        Drude-model relaxation time of the conductor (s).
     geometry : str, optional
         Geometry of the beam pipe: 'round' or 'flat'. Default is 'round'.
 
     Attributes
     ----------
     s0 : float
-        Characteristic length scale [m]
+        Characteristic length scale (m)
 
     References
     ----------
@@ -645,7 +645,7 @@ class ResistiveWallWakefieldBase(WakefieldBase):
         material : str
             Material name. Must be in list(cls.MATERIALS)
         radius : float
-            Pipe radius [m]
+            Pipe radius (m)
         geometry : str
             Geometry type: 'round' or 'flat'
         """
@@ -690,7 +690,7 @@ class ResistiveWallWakefieldBase(WakefieldBase):
     @property
     def s0(self):
         """
-        Characteristic length scale s₀ of the resistive wall wakefield [m].
+        Characteristic length scale s₀ of the resistive wall wakefield (m).
 
         From SLAC-PUB-10707 Eq. (5):
 
@@ -704,7 +704,7 @@ class ResistiveWallWakefieldBase(WakefieldBase):
     @property
     def W0(self):
         """
-        Characteristic wake amplitude W₀ at z=0 [V/C/m].
+        Characteristic wake amplitude W₀ at z=0 (V/C/m).
 
         From SLAC-PUB-10707:
         - Round: W₀ = c·Z₀ / (π·a²)
@@ -726,40 +726,27 @@ class ResistiveWallWakefieldBase(WakefieldBase):
         self, zmax: float | None = None, n: int | None = None
     ) -> TabularWakefield:
         """
-        Resample this resistive wall model onto a uniform table.
+        Resample this model onto a uniform `TabularWakefield`.
 
-        The table can be written for tracking codes that read a short-range wake as a
-        uniform table, such as IMPACT-Z, and it is far cheaper to evaluate than the
-        impedance model.
+        See `TabularWakefield.from_wakefield`.
 
         Parameters
         ----------
         zmax : float, optional
-            Largest trailing distance behind the source particle to tabulate [m],
-            given as a positive number. Defaults to the natural range of the model,
-            reported by its default_zmax. The pseudomode model uses ten envelope
-            decay lengths, and the impedance model, which has no closed-form envelope,
-            uses 100 * s0. Over the tabulated materials and for pipe radii from 1 mm
-            to 10 mm, the residual wake beyond the pseudomode range is below 5e-05 of
-            W0, and beyond the impedance range it is about 1e-04 of W0 for a round
-            pipe.
+            Largest distance behind the source particle (m). Defaults to
+            `default_zmax`.
         n : int, optional
-            Number of samples. Defaults to the number the model needs over that range,
-            reported by its default_n_samples.
+            Number of samples. Defaults to `default_n_samples(zmax)`.
 
         Returns
         -------
         TabularWakefield
-            Table covering -zmax <= z <= 0, in the convention that z <= 0 lies behind
-            the source particle and a positive wake is energy-losing.
 
         Examples
         --------
-        ::
-
-            wake = ResistiveWallPseudomode.from_material(
-                "copper-slac-pub-10707", radius=2.5e-3
-            )
-            table = wake.to_tabular()
+        >>> wake = ResistiveWallPseudomode.from_material(
+        ...     "copper-slac-pub-10707", radius=2.5e-3
+        ... )
+        >>> table = wake.to_tabular()
         """
         return TabularWakefield.from_wakefield(self, zmax=zmax, n=n)

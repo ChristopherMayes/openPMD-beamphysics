@@ -1,6 +1,17 @@
 import datetime
+import os
+import sys
 
 import numpy as np
+
+
+def find_stacklevel() -> int:
+    """Return the warnings stacklevel of the first caller outside beamphysics."""
+    package = os.path.join(os.path.dirname(__file__), "")
+    frame, level = sys._getframe(1), 1
+    while frame is not None and frame.f_code.co_filename.startswith(package):
+        frame, level = frame.f_back, level + 1
+    return level
 
 
 def fstr(s):

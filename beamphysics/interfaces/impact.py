@@ -1,11 +1,19 @@
+from __future__ import annotations
+
 import os
 import re
 import sys
 import warnings
+from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy import pi
 from scipy import fft
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from ..wakefields.base import WakefieldBase
 
 
 c_light = 299792458.0
@@ -259,7 +267,9 @@ IMPACT_Z_MAX_WAKEFIELD_ROWS = 5000
 _WAKEFIELD_FMT = "%25.17e"
 
 
-def parse_impact_z_wakefield(source):
+def parse_impact_z_wakefield(
+    source: str | os.PathLike | np.ndarray,
+) -> dict[str, np.ndarray]:
     """
     Parse an IMPACT-Z read-in short-range wakefield table.
 
@@ -346,12 +356,12 @@ def parse_impact_z_wakefield(source):
 
 
 def create_impact_z_wakefield_rfdata(
-    wakefield,
-    zmax=None,
-    n=None,
-    wake_x=None,
-    wake_y=None,
-):
+    wakefield: WakefieldBase,
+    zmax: float | None = None,
+    n: int | None = None,
+    wake_x: Callable[[np.ndarray], np.ndarray] | None = None,
+    wake_y: Callable[[np.ndarray], np.ndarray] | None = None,
+) -> np.ndarray:
     """
     Build the IMPACT-Z read-in short-range wakefield table for a wakefield model.
 
@@ -406,7 +416,7 @@ def create_impact_z_wakefield_rfdata(
     Notes
     -----
     The transverse columns take plain callables rather than wakefield models, because
-    :class:`beamphysics.wakefields.WakefieldBase` is longitudinal only.
+    `beamphysics.wakefields.WakefieldBase` is longitudinal only.
 
     From version 2.7.9, IMPACT-Z interpolates the table linearly onto its own slice
     grid. Earlier versions omitted the normalization of the interpolation weight, so
@@ -444,7 +454,7 @@ def create_impact_z_wakefield_rfdata(
     return np.column_stack([s, Wz, Wx, Wy])
 
 
-def _external_stacklevel():
+def _external_stacklevel() -> int:
     """Return the warnings stacklevel of the first caller outside beamphysics."""
     package = os.path.join(os.path.dirname(os.path.dirname(__file__)), "")
     frame, level = sys._getframe(1), 1
@@ -454,8 +464,15 @@ def _external_stacklevel():
 
 
 def _tabulate_impact_wakefield(
-    wakefield, zmax, n, wake_x, wake_y, code, max_rows, limit_reason
-):
+    wakefield: WakefieldBase,
+    zmax: float | None,
+    n: int | None,
+    wake_x: Callable[[np.ndarray], np.ndarray] | None,
+    wake_y: Callable[[np.ndarray], np.ndarray] | None,
+    code: str,
+    max_rows: int,
+    limit_reason: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Sample a wake for an IMPACT code, returning s, Wz, Wx and Wy with s ascending."""
     from ..wakefields.tabular import TabularWakefield
 
@@ -494,12 +511,17 @@ def _tabulate_impact_wakefield(
 
 
 def write_impact_z_wakefield(
-    filename, wakefield, zmax=None, n=None, wake_x=None, wake_y=None
-):
+    filename: str | os.PathLike,
+    wakefield: WakefieldBase,
+    zmax: float | None = None,
+    n: int | None = None,
+    wake_x: Callable[[np.ndarray], np.ndarray] | None = None,
+    wake_y: Callable[[np.ndarray], np.ndarray] | None = None,
+) -> None:
     """
     Write a wakefield model as an IMPACT-Z read-in short-range wakefield table.
 
-    The table is built by :func:`create_impact_z_wakefield_rfdata` and written with
+    The table is built by `create_impact_z_wakefield_rfdata` and written with
     seventeen significant digits, which round-trip a double exactly, so that re-reading
     the file reproduces the sampled grid rather than a slightly narrower one.
 
@@ -568,7 +590,9 @@ def write_impact_z_wakefield(
 IMPACT_T_MAX_WAKEFIELD_ROWS = 1000
 
 
-def parse_impact_t_wakefield(source, length):
+def parse_impact_t_wakefield(
+    source: str | os.PathLike | np.ndarray, length: float
+) -> dict[str, np.ndarray]:
     """
     Parse an IMPACT-T read-in short-range wakefield table.
 
@@ -647,12 +671,12 @@ def parse_impact_t_wakefield(source, length):
 
 
 def create_impact_t_wakefield_data(
-    wakefield,
-    zmax=None,
-    n=None,
-    wake_x=None,
-    wake_y=None,
-):
+    wakefield: WakefieldBase,
+    zmax: float | None = None,
+    n: int | None = None,
+    wake_x: Callable[[np.ndarray], np.ndarray] | None = None,
+    wake_y: Callable[[np.ndarray], np.ndarray] | None = None,
+) -> tuple[np.ndarray, float]:
     """
     Build the IMPACT-T read-in short-range wakefield table for a wakefield model.
 
@@ -753,12 +777,17 @@ def create_impact_t_wakefield_data(
 
 
 def write_impact_t_wakefield(
-    filename, wakefield, zmax=None, n=None, wake_x=None, wake_y=None
-):
+    filename: str | os.PathLike,
+    wakefield: WakefieldBase,
+    zmax: float | None = None,
+    n: int | None = None,
+    wake_x: Callable[[np.ndarray], np.ndarray] | None = None,
+    wake_y: Callable[[np.ndarray], np.ndarray] | None = None,
+) -> float:
     """
     Write a wakefield model as an IMPACT-T read-in short-range wakefield table.
 
-    The table is built by :func:`create_impact_t_wakefield_data` and written with
+    The table is built by `create_impact_t_wakefield_data` and written with
     seventeen significant digits.
 
     Parameters

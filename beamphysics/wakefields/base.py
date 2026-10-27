@@ -172,7 +172,7 @@ class WakefieldBase(ABC):
         $$n = \\max\\left( \\left\\lceil \\frac{128 \\, z_{\\max}}{\\lambda_{\\min}}
         \\right\\rceil + 1, \\; 4 \\right)$$
 
-        Here lambda_min is :attr:`min_wavelength` and 128 is SAMPLES_PER_WAVELENGTH.
+        Here lambda_min is `min_wavelength` and 128 is `SAMPLES_PER_WAVELENGTH`.
         The lower limit of four is the number of points required by the cubic
         interpolant.
 

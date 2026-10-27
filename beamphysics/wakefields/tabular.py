@@ -13,6 +13,7 @@ TabularWakefield
 from __future__ import annotations
 
 import warnings
+from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy.interpolate import interp1d
@@ -20,6 +21,10 @@ from scipy.interpolate import interp1d
 from ..units import c_light
 from .base import MIN_SAMPLES, WakefieldBase
 from .impedance import ImpedanceWakefield
+
+if TYPE_CHECKING:
+    import os
+    from collections.abc import Callable
 
 __all__ = ["TabularWakefield"]
 
@@ -106,7 +111,7 @@ class TabularWakefield(WakefieldBase):
         z <= 0 behind the source and a positive wake is energy-losing.
 
         Tabulation is the practical way to reuse an expensive model. The wake of
-        :class:`ResistiveWallWakefield` is obtained from its impedance by a transform
+        `ResistiveWallWakefield` is obtained from its impedance by a transform
         on every call, which is far too slow to evaluate inside a tracking loop or an
         export routine. A uniform table is also the form in which some tracking codes
         read a short-range wake: IMPACT-Z requires one, and Bmad accepts one as an
@@ -135,7 +140,7 @@ class TabularWakefield(WakefieldBase):
         ------
         ValueError
             If zmax is not positive, if n is smaller than the four points required by
-            the interpolator, or if the source is itself a :class:`TabularWakefield`
+            the interpolator, or if the source is itself a `TabularWakefield`
             that does not cover the requested range. Resampling beyond the range of a
             table would return the fill value rather than the wake, so the result
             would be silently zero padded.
@@ -181,7 +186,6 @@ class TabularWakefield(WakefieldBase):
         if n < 4:
             raise ValueError(f"Need at least 4 points for interpolation, got n={n}")
 
-        # Ascending in z, from -zmax up to the source particle at z = 0.
         z = -np.linspace(zmax, 0.0, n)
 
         if isinstance(wakefield, ImpedanceWakefield):
@@ -194,21 +198,23 @@ class TabularWakefield(WakefieldBase):
             n_fft = max(4096, 1 << int(n_required - 1).bit_length())
             W = wakefield.wake(z, n_fft=n_fft)
         else:
-            # A single array call. The scalar branch of some models uses quadrature
-            # and is prohibitively slow point by point.
+            # The scalar branch of some models uses quadrature, which is
+            # prohibitively slow point by point.
             W = wakefield.wake(z)
 
         return cls(z, np.asarray(W, dtype=float), kind=kind)
 
     @classmethod
-    def from_impact_z(cls, source, kind: str = "cubic") -> TabularWakefield:
+    def from_impact_z(
+        cls, source: str | os.PathLike | np.ndarray, kind: str = "cubic"
+    ) -> TabularWakefield:
         """
         Read the longitudinal wake from an IMPACT-Z wake table.
 
         IMPACT-Z tabulates the wake against the distance s = -z >= 0 behind the source
         particle, whereas this package uses z <= 0. The two share the sign convention
         for the wake itself, so only the abscissa is reversed. The transverse columns
-        of the table are ignored, because :class:`WakefieldBase` is longitudinal only.
+        of the table are ignored, because `WakefieldBase` is longitudinal only.
 
         Parameters
         ----------
@@ -249,7 +255,7 @@ class TabularWakefield(WakefieldBase):
 
     @classmethod
     def from_impact_t(
-        cls, source, length: float, kind: str = "cubic"
+        cls, source: str | os.PathLike | np.ndarray, length: float, kind: str = "cubic"
     ) -> TabularWakefield:
         """
         Read the longitudinal wake from an IMPACT-T wake table.
@@ -258,7 +264,7 @@ class TabularWakefield(WakefieldBase):
         distance s = -z >= 0 behind the source particle, from zero to the length V7
         given on the -6 element, which must therefore be supplied. IMPACT-T shares
         the sign convention of this package, and the transverse columns are ignored,
-        because :class:`WakefieldBase` is longitudinal only.
+        because `WakefieldBase` is longitudinal only.
 
         Parameters
         ----------
@@ -295,7 +301,7 @@ class TabularWakefield(WakefieldBase):
     @classmethod
     def from_bmad(
         cls,
-        source,
+        source: np.ndarray,
         amp_scale: float = 1,
         z_scale: float = 1,
         kind: str = "cubic",
@@ -303,9 +309,9 @@ class TabularWakefield(WakefieldBase):
         """
         Read the longitudinal wake from a Bmad z_long wake table.
 
-        This is the inverse of :meth:`to_bmad`. The table is taken as the array
+        This is the inverse of `to_bmad`. The table is taken as the array
         returned by Tao for an element with a z_long short-range wake, which pytao
-        provides as ``tao.ele_wake(ele_id, who="sr_z_long_table")``. Reading a Bmad
+        provides as `tao.ele_wake(ele_id, who="sr_z_long_table")`. Reading a Bmad
         lattice or wake file directly is not supported, because parsing Bmad syntax
         belongs to Bmad.
 
@@ -319,8 +325,8 @@ class TabularWakefield(WakefieldBase):
         ----------
         source : array_like
             Table of shape (n, 2) holding z [m] and W [V/C/m], uniformly spaced and
-            increasing in z, as returned by ``Tao.ele_wake`` with
-            ``who="sr_z_long_table"``.
+            increasing in z, as returned by `Tao.ele_wake` with
+            `who="sr_z_long_table"`.
         amp_scale : float, optional
             Bmad wake amplitude scale factor, sr%amp_scale. Default is 1.
         z_scale : float, optional
@@ -349,7 +355,7 @@ class TabularWakefield(WakefieldBase):
         -----
         Tao currently prints the table with nine significant digits, which limits the
         accuracy of a round trip through Tao to about 1e-09. The positions are rebuilt
-        on an exactly uniform grid ending at z = 0, so that :meth:`to_bmad` writes the
+        on an exactly uniform grid ending at z = 0, so that `to_bmad` writes the
         result back without resampling. Each row must lie within one percent of the
         spacing of that grid.
 
@@ -357,7 +363,7 @@ class TabularWakefield(WakefieldBase):
         than V/C/m. Passing amp_scale divided by the length of the structure then
         gives the wake per unit length. The smoothing_sigma and position_dependence
         settings of the wake have no counterpart here and are ignored; they are
-        reported by ``tao.ele_wake(ele_id, who="sr_z_long")``.
+        reported by `tao.ele_wake(ele_id, who="sr_z_long")`.
 
         Examples
         --------
@@ -445,7 +451,6 @@ class TabularWakefield(WakefieldBase):
             Number of samples.
         """
         dz = np.diff(self._z)
-        # Only intervals overlapping the requested range [-zmax, 0] matter.
         dz = dz[self._z[1:] > -zmax]
         # Tolerate rounding in the spacing of a nominally uniform grid.
         intervals = np.ceil(zmax / dz.min() * (1 - 1e-9))
@@ -454,7 +459,7 @@ class TabularWakefield(WakefieldBase):
 
     def to_bmad(
         self,
-        file=None,
+        file: str | os.PathLike | None = None,
         amp_scale: float = 1,
         z_scale: float = 1,
         scale_with_length: bool = True,
@@ -464,7 +469,7 @@ class TabularWakefield(WakefieldBase):
 
         Bmad requires the table to be equally spaced, increasing in z and to contain
         the point z = 0. A table that does not already satisfy these conditions is
-        first resampled with :meth:`from_wakefield` at its finest spacing, limited to
+        first resampled with `from_wakefield` at its finest spacing, limited to
         10000 rows. Bmad uses the same conventions as this package: z <= 0 lies behind
         the source particle, a positive wake is energy-losing, and the wake is in
         V/C/m when scale_with_length is True. Bmad sets the wake to zero ahead of the
@@ -475,7 +480,7 @@ class TabularWakefield(WakefieldBase):
         ----------
         file : str or pathlib.Path, optional
             Output path. If given, the string is also written there, so that it can
-            be used in a lattice as ``sr_wake = call::<file>``.
+            be used in a lattice as `sr_wake = call::<file>`.
         amp_scale : float, optional
             Bmad wake amplitude scale factor. Default is 1.
         z_scale : float, optional
@@ -492,7 +497,7 @@ class TabularWakefield(WakefieldBase):
         Returns
         -------
         str
-            The sr_wake value, beginning with ``{``.
+            The sr_wake value, beginning with `{`.
 
         Warns
         -----
@@ -501,7 +506,7 @@ class TabularWakefield(WakefieldBase):
             10000 rows, in which case the table is resampled at 10000 rows. Bmad bins
             the bunch at the table spacing, so a finer table mainly adds binning
             noise. A table of any size can be built explicitly with
-            :meth:`from_wakefield`.
+            `from_wakefield`.
 
         Notes
         -----
@@ -509,7 +514,7 @@ class TabularWakefield(WakefieldBase):
         the table extended symmetrically about z = 0. The tabulated range must
         therefore exceed the full length of the bunch, or the wake of the tail wraps
         onto the head. A longer table can be built from the source model with
-        :meth:`from_wakefield`.
+        `from_wakefield`.
 
         Examples
         --------
@@ -557,12 +562,17 @@ class TabularWakefield(WakefieldBase):
         return s
 
     def to_impact_z(
-        self, file=None, zmax=None, n=None, wake_x=None, wake_y=None
+        self,
+        file: str | os.PathLike | None = None,
+        zmax: float | None = None,
+        n: int | None = None,
+        wake_x: Callable[[np.ndarray], np.ndarray] | None = None,
+        wake_y: Callable[[np.ndarray], np.ndarray] | None = None,
     ) -> np.ndarray:
         """
         Build the IMPACT-Z read-in short-range wakefield table for this wake.
 
-        This is :func:`beamphysics.interfaces.impact.create_impact_z_wakefield_rfdata`
+        This is `beamphysics.interfaces.impact.create_impact_z_wakefield_rfdata`
         applied to this table, which describes the format, the defaults and the row
         limit.
 
@@ -607,12 +617,17 @@ class TabularWakefield(WakefieldBase):
         return rfdata
 
     def to_impact_t(
-        self, file=None, zmax=None, n=None, wake_x=None, wake_y=None
+        self,
+        file: str | os.PathLike | None = None,
+        zmax: float | None = None,
+        n: int | None = None,
+        wake_x: Callable[[np.ndarray], np.ndarray] | None = None,
+        wake_y: Callable[[np.ndarray], np.ndarray] | None = None,
     ) -> tuple[np.ndarray, float]:
         """
         Build the IMPACT-T read-in short-range wakefield table for this wake.
 
-        This is :func:`beamphysics.interfaces.impact.create_impact_t_wakefield_data`
+        This is `beamphysics.interfaces.impact.create_impact_t_wakefield_data`
         applied to this table, which describes the format, the element parameters,
         the defaults and the row limit.
 

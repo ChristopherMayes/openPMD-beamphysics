@@ -160,12 +160,12 @@ class Pseudomode:
         Returns
         -------
         str
-            One Bmad mode entry of the form ``type = {A, d, k, phi, dependence}``.
+            One Bmad mode entry of the form `type = {A, d, k, phi, dependence}`.
 
         Notes
         -----
-        Bmad expresses the phase in units of 2 pi, whereas :attr:`phi` is in radians,
-        so the fourth field is written as ``phi / (2 * pi)``. Reading such an entry
+        Bmad expresses the phase in units of 2 pi, whereas `phi` is in radians,
+        so the fourth field is written as `phi / (2 * pi)`. Reading such an entry
         back therefore requires multiplying that field by 2 pi. Every other field is
         written unchanged, since the amplitude, decay rate and wavenumber follow the
         same conventions in both representations.
@@ -272,7 +272,7 @@ class PseudomodeWakefield(WakefieldBase):
 
         $$z_{\\max} = 10 \\, L$$
 
-        Here L is :attr:`decay_length`. At ten decay lengths the envelope has fallen to
+        Here L is `decay_length`. At ten decay lengths the envelope has fallen to
         exp(-10), or about 5e-05 of its initial value. The residual is far below the
         accuracy of the pseudomode fit itself.
 
@@ -295,7 +295,7 @@ class PseudomodeWakefield(WakefieldBase):
         the most strongly damped mode, so that a purely damped mode, which has no
         period, still sets a sampling requirement. If every k_i is zero, only the
         decay length remains. The decay length of the most weakly damped mode, reported
-        by :attr:`decay_length`, sets the range instead.
+        by `decay_length`, sets the range instead.
 
         Returns
         -------
@@ -476,7 +476,7 @@ class PseudomodeWakefield(WakefieldBase):
 
         Notes
         -----
-        See :meth:`Pseudomode.to_bmad` for the phase convention, which is the one
+        See `Pseudomode.to_bmad` for the phase convention, which is the one
         field that differs between the two representations.
         """
         lines = [mode.to_bmad(type, transverse_dependence) for mode in self._modes]

@@ -1,8 +1,8 @@
 """
 Tests for wakefield tabulation and IMPACT-Z interoperability.
 
-The reference table ``data/rfdata41.in`` holds the first 10 rows of the IMPACT-Z
-distribution file ``examples/Example3/rfdata41.in``
+The reference table `data/rfdata41.in` holds the first 10 rows of the IMPACT-Z
+distribution file `examples/Example3/rfdata41.in`
 (https://github.com/impact-lbl/IMPACT-Z, commit
 18a3fc1d8ae3ef94ae4ce094b8681450410760b2). The rows are unmodified, so the fixture
 exercises the Fortran-formatted columns that IMPACT-Z actually writes; only the
@@ -54,6 +54,18 @@ def pseudomode_model() -> ResistiveWallPseudomode:
     return ResistiveWallPseudomode.from_material(MATERIAL, radius=RADIUS)
 
 
+@pytest.fixture(scope="module")
+def uniform_table(pseudomode_model) -> TabularWakefield:
+    """Small uniform table of the pseudomode model, ending at z = 0."""
+    return pseudomode_model.to_tabular(zmax=1e-4, n=64)
+
+
+@pytest.fixture(scope="module")
+def pseudomode_table(pseudomode_model) -> TabularWakefield:
+    """Pseudomode model tabulated at its default range and density."""
+    return pseudomode_model.to_tabular()
+
+
 # -----------------------------------------------------------------------------
 # TabularWakefield.from_wakefield
 # -----------------------------------------------------------------------------
@@ -97,7 +109,6 @@ def test_from_wakefield_avoids_transform_wraparound():
     )
     table = wakefield.to_tabular()
 
-    # The far tail must be small compared with the amplitude at the source particle.
     assert np.abs(table.W_data[:100]).max() < 0.01 * wakefield.W0
 
 
@@ -220,11 +231,9 @@ def test_impedance_model_default_zmax_leaves_a_small_tail(impedance_model):
     assert np.abs(W).max() < 1.5e-4 * impedance_model.W0
 
 
-def test_tabular_default_zmax_is_its_own_range(pseudomode_model):
+def test_tabular_default_zmax_is_its_own_range(uniform_table):
     """A table can only be resampled over the range it covers."""
-    table = pseudomode_model.to_tabular(zmax=1e-4, n=64)
-
-    assert table.default_zmax == pytest.approx(1e-4)
+    assert uniform_table.default_zmax == pytest.approx(1e-4)
 
 
 def test_default_zmax_is_not_offered_without_a_natural_range():
@@ -284,15 +293,14 @@ def test_pseudomode_min_wavelength_follows_the_fastest_decay():
     assert error.max() < 1e-4 * 1e15
 
 
-def test_default_n_samples_is_at_least_four(impedance_model, pseudomode_model):
+def test_default_n_samples_is_at_least_four(impedance_model, uniform_table):
     """A range shorter than one sampling interval must still give a usable table."""
     assert impedance_model.default_n_samples(1e-7) == 4
 
     rfdata = create_impact_z_wakefield_rfdata(impedance_model, zmax=1e-7)
     assert rfdata.shape == (4, 4)
 
-    table = pseudomode_model.to_tabular(zmax=1e-4, n=64)
-    assert table.default_n_samples(1e-7) == 4
+    assert uniform_table.default_n_samples(1e-7) == 4
 
 
 def test_impedance_model_min_wavelength_follows_the_round_pipe_form(impedance_model):
@@ -334,12 +342,10 @@ def test_default_n_samples_resolves_the_wake_for_a_linear_consumer(model_class):
     assert np.abs(linear - fine.W_data[1::2]).max() < 1e-3 * model.W0
 
 
-def test_tabular_default_n_samples_preserves_its_own_spacing(pseudomode_model):
+def test_tabular_default_n_samples_preserves_its_own_spacing(uniform_table):
     """Resampling a table more finely than its data recovers only the interpolant."""
-    table = pseudomode_model.to_tabular(zmax=1e-4, n=64)
-
-    assert table.default_n_samples(1e-4) == 64
-    assert table.default_n_samples(5e-5) == 33
+    assert uniform_table.default_n_samples(1e-4) == 64
+    assert uniform_table.default_n_samples(5e-5) == 33
 
 
 def test_default_n_samples_is_not_offered_without_a_length_scale():
@@ -418,7 +424,6 @@ def test_impact_z_writer_uses_the_impact_z_abscissa(impedance_model, tmp_path):
     assert data["Wz"][0] > 0
     assert data["Wz"][0] == pytest.approx(impedance_model.wake(np.array([0.0]))[0])
 
-    # The transverse columns are zero when no callables are supplied.
     assert np.all(data["Wx"] == 0)
     assert np.all(data["Wy"] == 0)
 
@@ -636,19 +641,21 @@ def test_impact_t_rows_are_limited(pseudomode_model):
     assert len(data) == IMPACT_T_MAX_WAKEFIELD_ROWS
 
 
-def test_row_limit_warning_points_at_the_caller(pseudomode_model):
+@pytest.mark.parametrize(
+    "call",
+    [
+        create_impact_t_wakefield_data,
+        lambda table: write_impact_t_wakefield(os.devnull, table),
+        lambda table: table.to_impact_t(),
+    ],
+    ids=["function", "writer", "method"],
+)
+def test_row_limit_warning_points_at_the_caller(pseudomode_table, call):
     """The warning names the caller's line, whether a function or a method is used."""
-    table = pseudomode_model.to_tabular()
-    calls = [
-        lambda: create_impact_t_wakefield_data(table),
-        lambda: write_impact_t_wakefield(os.devnull, table),
-        lambda: table.to_impact_t(),
-    ]
+    with pytest.warns(UserWarning, match="under-resolved") as record:
+        call(pseudomode_table)
 
-    for call in calls:
-        with pytest.warns(UserWarning, match="under-resolved") as record:
-            call()
-        assert record[0].filename == __file__
+    assert record[0].filename == __file__
 
 
 def test_parse_impact_t_wakefield_accepts_two_columns():
@@ -675,9 +682,9 @@ def test_parse_impact_t_wakefield_rejects_invalid_tables(dat, length, match):
         parse_impact_t_wakefield(dat, length)
 
 
-def test_tabular_impact_methods_match_the_writers(pseudomode_model, tmp_path):
+def test_tabular_impact_methods_match_the_writers(uniform_table, tmp_path):
     """The methods are the module functions applied to the table itself."""
-    table = pseudomode_model.to_tabular(zmax=1e-4, n=64)
+    table = uniform_table
 
     rfdata = table.to_impact_z(tmp_path / "rfdata41.in")
     write_impact_z_wakefield(tmp_path / "reference.in", table)
@@ -708,14 +715,13 @@ def _bmad_z_long_rows(s: str) -> np.ndarray:
     return np.array(rows, dtype=float)
 
 
-def test_to_bmad_writes_a_uniform_table_unchanged(pseudomode_model):
-    table = pseudomode_model.to_tabular(zmax=1e-4, n=64)
-    s = table.to_bmad()
+def test_to_bmad_writes_a_uniform_table_unchanged(uniform_table):
+    s = uniform_table.to_bmad()
 
     assert s.startswith("{amp_scale = 1, z_scale = 1, scale_with_length = T,")
     rows = _bmad_z_long_rows(s)
-    np.testing.assert_array_equal(rows[:, 0], table.z_data)
-    np.testing.assert_array_equal(rows[:, 1], table.W_data)
+    np.testing.assert_array_equal(rows[:, 0], uniform_table.z_data)
+    np.testing.assert_array_equal(rows[:, 1], uniform_table.W_data)
     # Bmad requires a z = 0 row; a negative zero is written as zero.
     assert "-0.00000000000000000e+00" not in s
 
@@ -745,11 +751,12 @@ def test_to_bmad_limits_the_resample_of_a_finely_spaced_table():
     assert len(_bmad_z_long_rows(s)) == BMAD_MAX_AUTOMATIC_ROWS
 
 
-def test_to_bmad_writes_parameters_and_file(pseudomode_model, tmp_path):
-    table = pseudomode_model.to_tabular(zmax=1e-4, n=64)
+def test_to_bmad_writes_parameters_and_file(uniform_table, tmp_path):
     filename = tmp_path / "wake.bmad"
 
-    s = table.to_bmad(filename, amp_scale=2.5, z_scale=0.5, scale_with_length=False)
+    s = uniform_table.to_bmad(
+        filename, amp_scale=2.5, z_scale=0.5, scale_with_length=False
+    )
 
     assert s.startswith("{amp_scale = 2.5, z_scale = 0.5, scale_with_length = F,")
     assert filename.read_text() == s
@@ -772,9 +779,8 @@ def _tao_sr_z_long_table(table: TabularWakefield, digits: int = 8) -> np.ndarray
 
 
 @pytest.fixture(scope="module")
-def bmad_rows(pseudomode_model) -> tuple[TabularWakefield, np.ndarray]:
-    table = pseudomode_model.to_tabular()
-    return table, _tao_sr_z_long_table(table)
+def bmad_rows(pseudomode_table) -> tuple[TabularWakefield, np.ndarray]:
+    return pseudomode_table, _tao_sr_z_long_table(pseudomode_table)
 
 
 def test_from_bmad_recovers_the_table(bmad_rows):
@@ -790,9 +796,9 @@ def test_from_bmad_recovers_the_table(bmad_rows):
 
 
 @pytest.mark.parametrize("digits", [6, 8, 15])
-def test_from_bmad_does_not_depend_on_the_print_precision(pseudomode_model, digits):
+def test_from_bmad_does_not_depend_on_the_print_precision(pseudomode_table, digits):
     """Tao prints es18.8 today; coarser or finer output must be read the same way."""
-    table = pseudomode_model.to_tabular()
+    table = pseudomode_table
     result = TabularWakefield.from_bmad(_tao_sr_z_long_table(table, digits))
 
     assert len(result.z_data) == len(table.z_data)
@@ -886,5 +892,4 @@ def test_reference_table_as_tabular_wakefield():
     smax = data["s"][-1]
     assert table.wake(-smax) < table.wake(-smax / 2) < table.wake(0.0)
 
-    # Causality: nothing ahead of the source particle.
     assert table.wake(1e-6) == 0.0

@@ -48,7 +48,7 @@ IMPACT-T applies a tabulated short-range wake through its `-6` element when `Bns
 
 ### Bmad
 
-Bmad reads a tabulated longitudinal wake through the `z_long` substructure of `sr_wake`. `TabularWakefield.to_bmad` returns the `sr_wake` value and can also write it to a file for use as `sr_wake = call::<file>`. The tabulated range must exceed the full length of the bunch, because Bmad applies the table by a circular convolution over that range.
+Bmad reads a tabulated longitudinal wake through the `z_long` substructure of `sr_wake`. `TabularWakefield.to_bmad` returns the `sr_wake` value and can also write it to a file for use as `sr_wake = call::<file>`. The tabulated range must exceed the full length of the bunch, because Bmad applies the table by a circular convolution over that range. A table that is not uniform is resampled at its finest spacing, limited to 10000 rows with a warning, because Bmad bins the bunch at the table spacing.
 
 The `scale_with_length` setting determines how Bmad interprets the table. With the default of `True`, the table is a wake per unit length in V/C/m, as it is throughout this package, and Bmad multiplies it by the length of the element that carries it. The `sr_wake` should then be attached to an element whose length equals that of the wake-producing structure, such as a pipe. With `False`, Bmad applies the table once as a wake in V/C regardless of the element length.
 

@@ -160,10 +160,13 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase, ImpedanceWakefield):
         """
         Trailing distance beyond which the wake may be truncated [m].
 
-        The range is one hundred characteristic lengths s0. The wake obtained from the
-        impedance has no closed-form envelope, so the range is set from s0 rather than
-        from a decay rate. Over the tabulated materials and radii from 1 to 10 mm, the
-        residual there is below 1e-05 of W0.
+        $$z_{\\max} = 100 \\, s_0$$
+
+        The wake obtained from the impedance has no closed-form envelope, so the range
+        is set from s0 rather than from a decay rate. The tail falls only as
+        |z|^(-3/2), so the residual there is about 1e-04 of W0 for a round pipe, over
+        the tabulated materials and radii from 1 to 10 mm. For a flat copper pipe with
+        a half-gap of 5 mm it is about 1.6e-04 of W0.
 
         Returns
         -------
@@ -177,8 +180,10 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase, ImpedanceWakefield):
         """
         Shortest length scale the wake resolves [m].
 
-        The DC-conductivity wake of a round pipe oscillates as cos(sqrt(3) z / s0),
-        giving a period of 2 pi s0 / sqrt(3). Over the tabulated materials and radii
+        $$\\lambda_{\\min} = \\frac{2 \\pi s_0}{\\sqrt{3}}$$
+
+        This is the period of the DC-conductivity wake of a round pipe, which
+        oscillates as cos(sqrt(3) z / s0). Over the tabulated materials and radii
         from 1 to 10 mm, a finite relaxation time shifts the wavenumber of a round
         pipe by between -19 and +6 percent, so the density ranges from about 120 to
         158 samples per period, which the measured interpolation errors include.

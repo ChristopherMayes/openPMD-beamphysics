@@ -25,8 +25,9 @@ __all__ = ["SAMPLES_PER_WAVELENGTH", "WakefieldBase"]
 # number of rows. A consumer that interpolates the table linearly, as IMPACT-Z does
 # from version 2.7.9, incurs an error of about (2*pi/m)^2/8 of the local amplitude at
 # m samples per wavelength. At 128 the measured error is below 3e-04 of W0 for the
-# resistive wall models, over the tabulated materials and for pipe radii from 1 mm to
-# 10 mm, and the resulting row count stays within the 5000 rows IMPACT-Z accepts.
+# pseudomode model and below 9e-04 of W0 for the impedance model, over the tabulated
+# materials, both geometries and pipe radii from 1 mm to 10 mm, and the resulting row
+# count stays within the 5000 rows IMPACT-Z accepts.
 SAMPLES_PER_WAVELENGTH = 128
 
 # Fewest samples accepted by the cubic interpolant of TabularWakefield.
@@ -168,9 +169,12 @@ class WakefieldBase(ABC):
         """
         Number of uniform samples needed to represent the wake out to zmax.
 
-        The count follows from :attr:`min_wavelength` at
-        SAMPLES_PER_WAVELENGTH samples per length scale, and is never fewer than the
-        four points required by the cubic interpolant.
+        $$n = \\max\\left( \\left\\lceil \\frac{128 \\, z_{\\max}}{\\lambda_{\\min}}
+        \\right\\rceil + 1, \\; 4 \\right)$$
+
+        Here lambda_min is :attr:`min_wavelength` and 128 is SAMPLES_PER_WAVELENGTH.
+        The lower limit of four is the number of points required by the cubic
+        interpolant.
 
         Parameters
         ----------

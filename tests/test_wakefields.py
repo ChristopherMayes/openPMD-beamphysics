@@ -34,6 +34,7 @@ from beamphysics.wakefields import (
     WakefieldBase,
 )
 from beamphysics.wakefields.base import SAMPLES_PER_WAVELENGTH
+from beamphysics.wakefields.tabular import BMAD_MAX_AUTOMATIC_ROWS
 
 test_data = pathlib.Path(__file__).resolve().parent / "data"
 
@@ -208,6 +209,15 @@ def test_pseudomode_default_zmax_leaves_a_negligible_tail(pseudomode_model):
 def test_impedance_model_default_zmax_is_a_multiple_of_s0(impedance_model):
     """The impedance model has no closed-form envelope, so the range follows s0."""
     assert impedance_model.default_zmax == pytest.approx(100 * impedance_model.s0)
+
+
+def test_impedance_model_default_zmax_leaves_a_small_tail(impedance_model):
+    """The |z|^(-3/2) tail of a round pipe is about 1e-04 of W0 at 100 * s0."""
+    zmax = impedance_model.default_zmax
+    z = -np.linspace(zmax, 2 * zmax, 101)
+    W = impedance_model.wake(z, n_fft=1 << 17)
+
+    assert np.abs(W).max() < 1.5e-4 * impedance_model.W0
 
 
 def test_tabular_default_zmax_is_its_own_range(pseudomode_model):
@@ -720,6 +730,19 @@ def test_to_bmad_resamples_a_nonuniform_table():
     assert rows[-1, 0] == 0.0
     np.testing.assert_allclose(np.diff(rows[:, 0]), rows[1, 0] - rows[0, 0], rtol=1e-9)
     np.testing.assert_allclose(rows[:, 1], table.wake(rows[:, 0]), rtol=1e-12)
+
+
+def test_to_bmad_limits_the_resample_of_a_finely_spaced_table():
+    """Logarithmic spacing near the origin must not produce millions of rows."""
+    z = np.r_[-np.geomspace(1e-3, 1e-9, 200), 0.0]
+    table = TabularWakefield(z, np.exp(z / 1e-4))
+    assert table.default_n_samples(table.default_zmax) > BMAD_MAX_AUTOMATIC_ROWS
+
+    with pytest.warns(UserWarning, match="finest spacing") as record:
+        s = table.to_bmad()
+
+    assert record[0].filename == __file__
+    assert len(_bmad_z_long_rows(s)) == BMAD_MAX_AUTOMATIC_ROWS
 
 
 def test_to_bmad_writes_parameters_and_file(pseudomode_model, tmp_path):

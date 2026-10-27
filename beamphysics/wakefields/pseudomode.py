@@ -239,6 +239,8 @@ class PseudomodeWakefield(WakefieldBase):
         """
         Envelope decay length of the most slowly damped mode [m].
 
+        $$L = \\frac{1}{\\min_i d_i}$$
+
         Each mode falls off as exp(-|z| * d), so the sum has decayed to exp(-1) of
         its envelope after the largest of the 1/d.
 
@@ -268,9 +270,11 @@ class PseudomodeWakefield(WakefieldBase):
         """
         Trailing distance beyond which the wake may be truncated [m].
 
-        The range is ten decay lengths, at which the envelope has fallen to exp(-10),
-        or about 5e-05 of its initial value. The residual is far below the accuracy of
-        the pseudomode fit itself.
+        $$z_{\\max} = 10 \\, L$$
+
+        Here L is :attr:`decay_length`. At ten decay lengths the envelope has fallen to
+        exp(-10), or about 5e-05 of its initial value. The residual is far below the
+        accuracy of the pseudomode fit itself.
 
         Returns
         -------
@@ -284,10 +288,14 @@ class PseudomodeWakefield(WakefieldBase):
         """
         Shortest length scale the wake resolves [m].
 
+        $$\\lambda_{\\min} = \\min\\left( \\frac{2 \\pi}{\\max_i |k_i|},
+        \\frac{1}{\\max_i d_i} \\right)$$
+
         This is the shorter of the period of the fastest mode and the decay length of
         the most strongly damped mode, so that a purely damped mode, which has no
-        period, still sets a sampling requirement. The decay length of the most weakly
-        damped mode, reported by :attr:`decay_length`, sets the range instead.
+        period, still sets a sampling requirement. If every k_i is zero, only the
+        decay length remains. The decay length of the most weakly damped mode, reported
+        by :attr:`decay_length`, sets the range instead.
 
         Returns
         -------

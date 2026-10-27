@@ -12,6 +12,8 @@ TabularWakefield
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from scipy.interpolate import interp1d
 
@@ -20,6 +22,9 @@ from .base import MIN_SAMPLES, WakefieldBase
 from .impedance import ImpedanceWakefield
 
 __all__ = ["TabularWakefield"]
+
+# Bmad bins the bunch at the table spacing, so a finer table mainly adds binning noise.
+BMAD_MAX_AUTOMATIC_ROWS = 10000
 
 
 class TabularWakefield(WakefieldBase):
@@ -292,6 +297,8 @@ class TabularWakefield(WakefieldBase):
         """
         Trailing distance beyond which the wake may be truncated [m].
 
+        $$z_{\\max} = -\\min_i z_i$$
+
         This is the range the table itself covers. Beyond it the interpolator returns
         the fill value rather than the wake.
 
@@ -306,10 +313,13 @@ class TabularWakefield(WakefieldBase):
         """
         Number of uniform samples needed to represent the wake out to zmax.
 
-        The count follows from the finest spacing of the table within the requested
-        range, so that a non-uniform table loses none of its detail when resampled
-        uniformly. Resampling more finely than that recovers nothing beyond the
-        interpolant.
+        $$n = \\max\\left( \\left\\lceil \\frac{z_{\\max}}{\\Delta z_{\\min}}
+        \\right\\rceil + 1, \\; 4 \\right)$$
+
+        Here Delta z_min is the finest spacing of the table within the requested range,
+        so that a non-uniform table loses none of its detail when resampled uniformly.
+        Resampling more finely than that recovers nothing beyond the interpolant. The
+        lower limit of four is the number of points required by the cubic interpolant.
 
         Parameters
         ----------
@@ -342,11 +352,12 @@ class TabularWakefield(WakefieldBase):
 
         Bmad requires the table to be equally spaced, increasing in z and to contain
         the point z = 0. A table that does not already satisfy these conditions is
-        first resampled with :meth:`from_wakefield`. Bmad uses the same conventions
-        as this package: z <= 0 lies behind the source particle, a positive wake is
-        energy-losing, and the wake is in V/C/m when scale_with_length is True. Bmad
-        sets the wake to zero ahead of the source particle and halves the z = 0
-        entry itself, so the table is written unchanged.
+        first resampled with :meth:`from_wakefield` at its finest spacing, limited to
+        10000 rows. Bmad uses the same conventions as this package: z <= 0 lies behind
+        the source particle, a positive wake is energy-losing, and the wake is in
+        V/C/m when scale_with_length is True. Bmad sets the wake to zero ahead of the
+        source particle and halves the z = 0 entry itself, so the table is written
+        unchanged.
 
         Parameters
         ----------
@@ -371,6 +382,15 @@ class TabularWakefield(WakefieldBase):
         str
             The sr_wake value, beginning with ``{``.
 
+        Warns
+        -----
+        UserWarning
+            If resampling a non-uniform table at its finest spacing needs more than
+            10000 rows, in which case the table is resampled at 10000 rows. Bmad bins
+            the bunch at the table spacing, so a finer table mainly adds binning
+            noise. A table of any size can be built explicitly with
+            :meth:`from_wakefield`.
+
         Notes
         -----
         Bmad applies the table by a circular FFT convolution over a window equal to
@@ -389,7 +409,22 @@ class TabularWakefield(WakefieldBase):
         """
         dz = np.diff(self._z)
         uniform = np.allclose(dz, dz[0], rtol=1e-9, atol=0) and self._z[-1] == 0
-        table = self if uniform else TabularWakefield.from_wakefield(self)
+        if uniform:
+            table = self
+        else:
+            n = self.default_n_samples(self.default_zmax)
+            if n > BMAD_MAX_AUTOMATIC_ROWS:
+                warnings.warn(
+                    f"Preserving the finest spacing of this table needs {n} rows. The "
+                    f"Bmad table is resampled at {BMAD_MAX_AUTOMATIC_ROWS} rows instead, "
+                    "which is coarser than that spacing. Use "
+                    "TabularWakefield.from_wakefield with an explicit n to choose the "
+                    "size.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                n = BMAD_MAX_AUTOMATIC_ROWS
+            table = TabularWakefield.from_wakefield(self, n=n)
 
         logical = "T" if scale_with_length else "F"
         lines = [

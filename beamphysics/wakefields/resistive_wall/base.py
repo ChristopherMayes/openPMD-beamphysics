@@ -196,7 +196,8 @@ def longitudinal_impedance_flat(
     """
     Compute longitudinal impedance Z(k) for flat (parallel plate) geometry.
 
-    Uses numerical integration over transverse modes (SLAC-PUB-10707 Eq. 52).
+    Uses numerical integration over the transverse wavenumber (SLAC-PUB-10707
+    Eq. 13, after Henke and Napoly).
 
     Parameters
     ----------
@@ -739,7 +740,9 @@ class ResistiveWallWakefieldBase(WakefieldBase):
             reported by its default_zmax. The pseudomode model uses ten envelope
             decay lengths, and the impedance model, which has no closed-form envelope,
             uses 100 * s0. Over the tabulated materials and for pipe radii from 1 mm
-            to 10 mm, the residual wake beyond either range is below 1e-04 of W0.
+            to 10 mm, the residual wake beyond the pseudomode range is below 5e-05 of
+            W0, and beyond the impedance range it is about 1e-04 of W0 for a round
+            pipe.
         n : int, optional
             Number of samples. Defaults to the number the model needs over that range,
             reported by its default_n_samples.

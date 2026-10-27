@@ -250,8 +250,9 @@ def write_impact(
 # IMPACT-Z read-in short-range wakefield tables
 # =============================================================================
 
-# IMPACT-Z dimensions its wakefield arrays as Ndataini in src/DataStruct/Data.f90.
-# A longer table overruns them without any diagnostic.
+# IMPACT-Z (https://github.com/impact-lbl/IMPACT-Z) dimensions its wakefield arrays as
+# Ndataini in src/DataStruct/Data.f90. A longer table overruns them without any
+# diagnostic.
 IMPACT_Z_MAX_WAKEFIELD_ROWS = 5000
 
 # Seventeen significant digits round-trip a double exactly.
@@ -269,8 +270,8 @@ def parse_impact_z_wakefield(source):
     convention is the one used throughout this package, in which a positive
     longitudinal wake is energy-losing.
 
-    The abscissa is shifted so that it starts at zero, reproducing the behavior of
-    read1wk_Data in src/DataStruct/Data.f90.
+    The abscissa is shifted so that it starts at zero, as IMPACT-Z itself does when
+    it reads the table.
 
     Parameters
     ----------
@@ -295,9 +296,8 @@ def parse_impact_z_wakefield(source):
     ValueError
         If the table does not have four columns, has fewer than two rows, or is not
         sampled on a uniformly spaced, strictly increasing grid. IMPACT-Z takes the
-        step size from the first two rows in wakefieldread_FieldQuant and then indexes
-        the table arithmetically, so a non-uniform grid would be silently
-        misinterpreted.
+        step size from the first two rows and then indexes the table arithmetically,
+        so a non-uniform grid would be silently misinterpreted.
 
     See Also
     --------
@@ -437,8 +437,7 @@ def create_impact_z_wakefield_rfdata(
         code="IMPACT-Z",
         max_rows=IMPACT_Z_MAX_WAKEFIELD_ROWS,
         limit_reason=(
-            "(Ndataini in src/DataStruct/Data.f90). A longer table overruns the "
-            "IMPACT-Z arrays without any diagnostic."
+            "A longer table overruns the IMPACT-Z arrays without any diagnostic."
         ),
     )
 
@@ -476,7 +475,7 @@ def _tabulate_impact_wakefield(
             n = max_rows
     elif n > max_rows:
         raise ValueError(
-            f"n={n} exceeds the {code} limit of {max_rows} rows {limit_reason}"
+            f"n={n} exceeds the {code} limit of {max_rows} rows. {limit_reason}"
         )
 
     # Sampling through TabularWakefield keeps the table identical to the one an
@@ -563,8 +562,9 @@ def write_impact_z_wakefield(
 # IMPACT-T read-in short-range wakefield tables
 # =============================================================================
 
-# IMPACT-T reads at most ndatawkmax rows in src/Contrl/AccSimulator.f90 and silently
-# ignores the rest, while still taking the row spacing from V7.
+# IMPACT-T (https://github.com/impact-lbl/IMPACT-T) reads at most ndatawkmax rows in
+# src/Contrl/AccSimulator.f90 and silently ignores the rest, while still taking the
+# row spacing from V7.
 IMPACT_T_MAX_WAKEFIELD_ROWS = 1000
 
 
@@ -744,8 +744,8 @@ def create_impact_t_wakefield_data(
         code="IMPACT-T",
         max_rows=IMPACT_T_MAX_WAKEFIELD_ROWS,
         limit_reason=(
-            "(ndatawkmax in src/Contrl/AccSimulator.f90). IMPACT-T silently ignores "
-            "further rows while still taking the row spacing from V7."
+            "IMPACT-T silently ignores further rows while still taking the row "
+            "spacing from V7."
         ),
     )
 

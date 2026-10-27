@@ -3,7 +3,7 @@ Tests for wakefield tabulation and IMPACT-Z interoperability.
 
 The reference table ``data/rfdata41.in`` holds the first 10 rows of the IMPACT-Z
 distribution file ``examples/Example3/rfdata41.in``
-(https://github.com/ChristopherMayes/IMPACT-Z, commit
+(https://github.com/impact-lbl/IMPACT-Z, commit
 18a3fc1d8ae3ef94ae4ce094b8681450410760b2). The rows are unmodified, so the fixture
 exercises the Fortran-formatted columns that IMPACT-Z actually writes; only the
 length was reduced, since the remaining rows add no coverage.
@@ -443,7 +443,7 @@ def test_impact_z_writer_transverse_columns(impedance_model, tmp_path):
 
 
 def test_impact_z_writer_rejects_too_many_rows(impedance_model, tmp_path):
-    """A table longer than Ndataini overruns the IMPACT-Z arrays."""
+    """A table longer than 5000 rows overruns the IMPACT-Z arrays."""
     with pytest.raises(ValueError, match="5000"):
         write_impact_z_wakefield(
             tmp_path / "rfdata41.in",
@@ -575,7 +575,7 @@ def test_parse_impact_z_wakefield_rejects_wrong_column_count(tmp_path):
 
 
 def test_parse_impact_z_wakefield_shifts_the_origin(tmp_path):
-    """read1wk_Data subtracts the first abscissa from the whole column."""
+    """IMPACT-Z subtracts the first abscissa from the whole column on reading."""
     s = 5e-6 + np.arange(10) * 2e-6
     dat = np.column_stack([s, np.ones_like(s), np.zeros_like(s), np.zeros_like(s)])
 

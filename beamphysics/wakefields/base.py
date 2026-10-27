@@ -19,7 +19,14 @@ import numpy as np
 
 from ..units import c_light
 
-__all__ = ["WakefieldBase"]
+__all__ = ["SAMPLES_PER_WAVELENGTH", "WakefieldBase"]
+
+# Linear interpolation, as in IMPACT-Z, errs by about (2*pi/m)^2/8 at m samples per
+# wavelength; 128 keeps the resistive wall wakes within 1e-03 of W0 and 5000 rows.
+SAMPLES_PER_WAVELENGTH = 128
+
+# Fewest samples accepted by the cubic interpolant of TabularWakefield.
+MIN_SAMPLES = 4
 
 
 class WakefieldBase(ABC):
@@ -43,13 +50,13 @@ class WakefieldBase(ABC):
     Methods
     -------
     wake(z)
-        Evaluate the wakefield at position z [V/C/m]
+        Evaluate the wakefield at position z (V/C/m)
     impedance(k)
-        Evaluate the impedance at wavenumber k [Ohm/m]
+        Evaluate the impedance at wavenumber k (Ohm/m)
     convolve_density(density, dz, offset=0)
-        Compute integrated wake from a charge density distribution [V/m]
+        Compute integrated wake from a charge density distribution (V/m)
     particle_kicks(z, weight, include_self_kick=True)
-        Compute momentum kicks for a distribution of particles [eV/m]
+        Compute momentum kicks for a distribution of particles (eV/m)
     plot(zmax=None, zmin=0, n=200)
         Plot the wakefield over a range of z values
     plot_impedance(kmax=None, kmin=0, n=200)
@@ -68,12 +75,12 @@ class WakefieldBase(ABC):
         Parameters
         ----------
         z : float or np.ndarray
-            Longitudinal position [m]. Negative z is behind the source.
+            Longitudinal position (m). Negative z is behind the source.
 
         Returns
         -------
         W : float or np.ndarray
-            Wakefield value [V/C/m]. Returns 0 for z > 0 (causality).
+            Wakefield value (V/C/m). Returns 0 for z > 0 (causality).
         """
         pass
 
@@ -85,12 +92,12 @@ class WakefieldBase(ABC):
         Parameters
         ----------
         k : float or np.ndarray
-            Wavenumber [1/m].
+            Wavenumber (1/m).
 
         Returns
         -------
         Z : complex or np.ndarray
-            Impedance [Ohm/m].
+            Impedance (Ohm/m).
         """
         pass
 
@@ -101,6 +108,61 @@ class WakefieldBase(ABC):
         This is equivalent to calling wake(z).
         """
         return self.wake(z)
+
+    @property
+    def default_zmax(self) -> float:
+        """
+        Distance behind the source particle beyond which the wake is negligible (m).
+
+        Used as the default range when tabulating.
+
+        Raises
+        ------
+        NotImplementedError
+            If the model defines no default; pass zmax explicitly.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not define a natural tabulation range. "
+            "Pass zmax explicitly."
+        )
+
+    @property
+    def min_wavelength(self) -> float:
+        """
+        Shortest length scale of the wake (m), which sets the default sampling.
+
+        Raises
+        ------
+        NotImplementedError
+            If the model defines no length scale; pass n explicitly.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not define a shortest length scale. "
+            "Pass n explicitly."
+        )
+
+    def default_n_samples(self, zmax: float) -> int:
+        """
+        Default number of uniform samples out to zmax.
+
+        $$n = \\max\\left( \\left\\lceil \\frac{128 \\, z_{\\max}}{\\lambda_{\\min}}
+        \\right\\rceil + 1, \\; 4 \\right)$$
+
+        Here lambda_min is `min_wavelength`, and 4 is the minimum for cubic
+        interpolation.
+
+        Parameters
+        ----------
+        zmax : float
+            Largest distance behind the source particle (m).
+
+        Returns
+        -------
+        int
+        """
+        n = int(np.ceil(SAMPLES_PER_WAVELENGTH * zmax / self.min_wavelength)) + 1
+
+        return max(n, MIN_SAMPLES)
 
     def convolve_density(
         self,
@@ -125,12 +187,12 @@ class WakefieldBase(ABC):
         Parameters
         ----------
         density : np.ndarray
-            Charge density array [C/m]. Index 0 is the tail (back),
+            Charge density array (C/m). Index 0 is the tail (back),
             index n-1 is the head (front).
         dz : float
-            Grid spacing [m].
+            Grid spacing (m).
         offset : float, optional
-            Offset for the z coordinate [m]. Default is 0.
+            Offset for the z coordinate (m). Default is 0.
         include_self_kick : bool, optional
             Whether to include the half self-kick term. Default is True.
         plot : bool, optional
@@ -141,12 +203,12 @@ class WakefieldBase(ABC):
         Returns
         -------
         integrated_wake : np.ndarray
-            Integrated longitudinal wakefield [V/m].
+            Integrated longitudinal wakefield (V/m).
         """
         from scipy.signal import correlate
 
         n = len(density)
-        charge = density * dz  # Convert to charge per bin [C]
+        charge = density * dz  # Convert to charge per bin (C)
 
         # Build causal wake array: W[k] = wake at lag k*dz
         # W[0] = W(0), W[1] = W(-dz), W[2] = W(-2*dz), ...
@@ -192,7 +254,7 @@ class WakefieldBase(ABC):
 
         # Density as current on secondary axis (I = ρ * c)
         ax2 = ax.twinx()
-        current = density * c_light  # [A]
+        current = density * c_light  # (A)
         ax2.fill_between((z - z0) * 1e6, current, alpha=0.3, color="C1")
         ax2.set_ylabel(r"Current (A)", color="C1")
         ax2.tick_params(axis="y", labelcolor="C1")
@@ -213,16 +275,16 @@ class WakefieldBase(ABC):
         Parameters
         ----------
         z : np.ndarray
-            Particle positions [m].
+            Particle positions (m).
         weight : np.ndarray
-            Particle charges [C].
+            Particle charges (C).
         include_self_kick : bool, optional
             Whether to include the self-kick term. Default is True.
 
         Returns
         -------
         kicks : np.ndarray
-            Energy kick per unit length at each particle [eV/m].
+            Energy kick per unit length at each particle (eV/m).
         """
         z = np.asarray(z)
         weight = np.asarray(weight)
@@ -258,9 +320,9 @@ class WakefieldBase(ABC):
         Parameters
         ----------
         zmax : float, optional
-            Maximum trailing distance [m]. If None, uses a sensible default.
+            Maximum trailing distance (m). If None, uses a sensible default.
         zmin : float, optional
-            Minimum trailing distance [m]. Default is 0.
+            Minimum trailing distance (m). Default is 0.
         n : int, optional
             Number of points. Default is 200.
         ax : matplotlib.axes.Axes, optional
@@ -287,9 +349,9 @@ class WakefieldBase(ABC):
         Parameters
         ----------
         kmax : float, optional
-            Maximum wavenumber [1/m]. If None, uses a sensible default.
+            Maximum wavenumber (1/m). If None, uses a sensible default.
         kmin : float, optional
-            Minimum wavenumber [1/m]. Default is 0.
+            Minimum wavenumber (1/m). Default is 0.
         n : int, optional
             Number of points. Default is 200.
         ax : matplotlib.axes.Axes, optional

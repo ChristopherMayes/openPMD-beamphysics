@@ -32,13 +32,13 @@ class ImpedanceWakefield(WakefieldBase):
     Parameters
     ----------
     impedance_func : callable
-        Function that returns complex impedance Z(k) [Ohm/m] for
-        wave number k [1/m]. Should handle arrays.
+        Function that returns complex impedance Z(k) (Ohm/m) for
+        wave number k (1/m). Should handle arrays.
     wakefield_func : callable, optional
-        Function that returns wakefield W(z) [V/C/m] for position z [m].
+        Function that returns wakefield W(z) (V/C/m) for position z (m).
         If not provided, uses numerical cosine transform of impedance.
     k_max : float, optional
-        Maximum wavenumber for integration [1/m]. Default is 1e7.
+        Maximum wavenumber for integration (1/m). Default is 1e7.
 
     Notes
     -----
@@ -53,11 +53,9 @@ class ImpedanceWakefield(WakefieldBase):
 
     Examples
     --------
-    ::
-
-        def my_impedance(k):
-            return 100 / (1 + 1j * k * 1e-6)  # Simple resonator
-        wake = ImpedanceWakefield(my_impedance)
+    >>> def my_impedance(k):
+    ...     return 100 / (1 + 1j * k * 1e-6)  # Simple resonator
+    >>> wake = ImpedanceWakefield(my_impedance)
     """
 
     def __init__(
@@ -77,12 +75,12 @@ class ImpedanceWakefield(WakefieldBase):
         Parameters
         ----------
         k : float or np.ndarray
-            Wavenumber [1/m].
+            Wavenumber (1/m).
 
         Returns
         -------
         Z : complex or np.ndarray
-            Impedance [Ohm/m].
+            Impedance (Ohm/m).
         """
         return self._impedance_func(k)
 
@@ -98,14 +96,14 @@ class ImpedanceWakefield(WakefieldBase):
         Parameters
         ----------
         z : float or np.ndarray
-            Longitudinal position [m].
+            Longitudinal position (m).
         n_fft : int, optional
             Number of FFT points for array evaluation. Default is 4096.
 
         Returns
         -------
         W : float or np.ndarray
-            Wakefield value [V/C/m]. Returns 0 for z > 0.
+            Wakefield value (V/C/m). Returns 0 for z > 0.
         """
         if self._wakefield_func is not None:
             return self._wakefield_func(z)
@@ -173,9 +171,9 @@ class ImpedanceWakefield(WakefieldBase):
         Parameters
         ----------
         z : np.ndarray
-            Particle positions [m].
+            Particle positions (m).
         weight : np.ndarray
-            Particle charges [C].
+            Particle charges (C).
         include_self_kick : bool, optional
             Whether to include the self-kick term. Default is True.
         n_bins : int, optional
@@ -184,7 +182,7 @@ class ImpedanceWakefield(WakefieldBase):
         Returns
         -------
         kicks : np.ndarray
-            Energy kick per unit length at each particle [eV/m].
+            Energy kick per unit length at each particle (eV/m).
         """
         from scipy.interpolate import interp1d
 
@@ -213,7 +211,7 @@ class ImpedanceWakefield(WakefieldBase):
         density, bin_edges = np.histogram(
             z, bins=n_bins, range=(z_min_padded, z_max_padded), weights=weight
         )
-        # Convert to charge density [C/m]
+        # Convert to charge density (C/m)
         density = density / dz
 
         # Compute wake potential via FFT convolution

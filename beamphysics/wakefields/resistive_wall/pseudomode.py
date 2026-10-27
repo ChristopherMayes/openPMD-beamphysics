@@ -86,11 +86,11 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase, PseudomodeWakefield):
     Parameters
     ----------
     radius : float
-        Radius of the beam pipe [m]. For flat geometry, this is half the gap.
+        Radius of the beam pipe (m). For flat geometry, this is half the gap.
     conductivity : float
-        Electrical DC conductivity of the wall material [S/m].
+        Electrical DC conductivity of the wall material (S/m).
     relaxation_time : float
-        Drude-model relaxation time τ of the conductor [s].
+        Drude-model relaxation time τ of the conductor (s).
         Typical values: Cu ≈ 27 fs, Al ≈ 8 fs.
     geometry : str, optional
         Geometry of the beam pipe: 'round' or 'flat'. Default is 'round'.
@@ -98,11 +98,11 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase, PseudomodeWakefield):
     Attributes
     ----------
     s0 : float
-        Characteristic length scale [m]
+        Characteristic length scale (m)
     Gamma : float
         Dimensionless relaxation parameter Γ = cτ/s₀
     kr : float
-        Resonant wavenumber [1/m]
+        Resonant wavenumber (1/m)
     Qr : float
         Quality factor of the pseudomode
 
@@ -133,12 +133,10 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase, PseudomodeWakefield):
 
     Examples
     --------
-    ::
-
-        wake = ResistiveWallPseudomode.from_material(
-            "copper-slac-pub-10707", radius=2.5e-3, geometry="round"
-        )
-        wake.wake(-10e-6)  # Wake at 10 µm behind source
+    >>> wake = ResistiveWallPseudomode.from_material(
+    ...     "copper-slac-pub-10707", radius=2.5e-3, geometry="round"
+    ... )
+    >>> wake.wake(-10e-6)  # Wake at 10 µm behind source
     """
 
     def __post_init__(self):
@@ -176,7 +174,7 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase, PseudomodeWakefield):
 
     @property
     def kr(self):
-        """Real-valued wave number k_r of the wakefield pseudomode [1/m]."""
+        """Real-valued wave number k_r of the wakefield pseudomode (1/m)."""
         if self.geometry == Geometry.ROUND:
             return krs0_round(self.Gamma) / self.s0
         if self.geometry == Geometry.FLAT:
@@ -216,9 +214,9 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase, PseudomodeWakefield):
         Parameters
         ----------
         zmax : float, optional
-            Maximum trailing distance [m]. Defaults to 10 decay lengths.
+            Maximum trailing distance (m). Defaults to 10 decay lengths.
         zmin : float, optional
-            Minimum trailing distance [m]. Default is 0.
+            Minimum trailing distance (m). Default is 0.
         n : int, optional
             Number of points. Default is 200.
         normalized : bool, optional
@@ -254,9 +252,9 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase, PseudomodeWakefield):
         Parameters
         ----------
         kmax : float, optional
-            Maximum wavenumber [1/m]. Defaults to 10/s0.
+            Maximum wavenumber (1/m). Defaults to 10/s0.
         kmin : float, optional
-            Minimum wavenumber [1/m]. Default is 0.
+            Minimum wavenumber (1/m). Default is 0.
         n : int, optional
             Number of points. Default is 500.
         ax : matplotlib.axes.Axes, optional
@@ -301,7 +299,7 @@ class ResistiveWallPseudomode(ResistiveWallWakefieldBase, PseudomodeWakefield):
         if self.geometry == Geometry.ROUND:
             s += f"!    Radius          : {self.radius} m\n"
         elif self.geometry == Geometry.FLAT:
-            s += f"!    full gap        : {2*self.radius} m\n"
+            s += f"!    full gap        : {2 * self.radius} m\n"
 
         s += f"!    s₀              : {self.s0}  m\n"
         s += f"!    Γ               : {self.Gamma} \n"

@@ -35,13 +35,13 @@ class Pseudomode:
     Parameters
     ----------
     A : float
-        Amplitude coefficient [V/C/m].
+        Amplitude coefficient (V/C/m).
     d : float
-        Exponential decay rate [1/m].
+        Exponential decay rate (1/m).
     k : float
-        Oscillation wavenumber [1/m].
+        Oscillation wavenumber (1/m).
     phi : float
-        Phase offset [rad].
+        Phase offset (rad).
     """
 
     A: float
@@ -114,12 +114,12 @@ class Pseudomode:
         Parameters
         ----------
         k : float or np.ndarray
-            Wavenumber [1/m].
+            Wavenumber (1/m).
 
         Returns
         -------
         Z : complex or np.ndarray
-            Impedance [Ohm/m].
+            Impedance (Ohm/m).
         """
         k = np.asarray(k)
         scalar_input = k.ndim == 0
@@ -147,7 +147,25 @@ class Pseudomode:
         type: str = "longitudinal",
         transverse_dependence: str = "none",
     ) -> str:
-        """Format as Bmad-compatible string."""
+        """
+        Format this mode as a Bmad short-range wake specification.
+
+        Parameters
+        ----------
+        type : str, optional
+            Wake type. Default is "longitudinal".
+        transverse_dependence : str, optional
+            Transverse dependence. Default is "none".
+
+        Returns
+        -------
+        str
+            One Bmad mode entry of the form `type = {A, d, k, phi, dependence}`.
+
+        Notes
+        -----
+        Bmad gives the phase in units of 2 pi, so the fourth field is `phi / (2 * pi)`.
+        """
         return (
             f"{type} = {{{self.A}, {self.d}, {self.k}, "
             f"{self.phi / (2 * np.pi)}, {transverse_dependence}}}"
@@ -212,6 +230,66 @@ class PseudomodeWakefield(WakefieldBase):
         """Number of pseudomodes."""
         return len(self._modes)
 
+    @property
+    def decay_length(self) -> float:
+        """
+        Envelope decay length of the most slowly damped mode (m).
+
+        $$L = \\frac{1}{\\min_i d_i}$$
+
+        Raises
+        ------
+        ValueError
+            If any mode has d <= 0, so that the wake does not decay.
+        """
+        d = np.array([mode.d for mode in self.modes], dtype=float)
+
+        if np.any(d <= 0):
+            raise ValueError(
+                "Every pseudomode must have a positive decay rate d for the wake to "
+                f"decay, got d={d}"
+            )
+
+        return float(1 / d.min())
+
+    @property
+    def default_zmax(self) -> float:
+        """
+        Distance behind the source particle beyond which the wake is negligible (m).
+
+        $$z_{\\max} = 10 \\, L$$
+
+        Here L is `decay_length`, so the envelope has fallen to exp(-10).
+        """
+        return 10 * self.decay_length
+
+    @property
+    def min_wavelength(self) -> float:
+        """
+        Shortest length scale of the wake (m).
+
+        $$\\lambda_{\\min} = \\min\\left( \\frac{2 \\pi}{\\max_i |k_i|},
+        \\frac{1}{\\max_i d_i} \\right)$$
+
+        The period of the fastest mode or the decay length of the most strongly
+        damped mode, whichever is shorter.
+
+        Raises
+        ------
+        ValueError
+            If any mode has d <= 0.
+        """
+        # Raises for any undamped mode.
+        self.decay_length
+
+        k = np.abs([mode.k for mode in self.modes]).max()
+        decay_length = float(1 / max(mode.d for mode in self.modes))
+
+        if k == 0:
+            return decay_length
+
+        return min(2 * np.pi / k, decay_length)
+
     def wake(self, z: np.ndarray | float) -> np.ndarray | float:
         """
         Evaluate the pseudomode wakefield at position z.
@@ -219,12 +297,12 @@ class PseudomodeWakefield(WakefieldBase):
         Parameters
         ----------
         z : float or np.ndarray
-            Longitudinal position [m]. Negative z is behind the source.
+            Longitudinal position (m). Negative z is behind the source.
 
         Returns
         -------
         W : float or np.ndarray
-            Wakefield value [V/C/m]. Returns 0 for z > 0.
+            Wakefield value (V/C/m). Returns 0 for z > 0.
         """
         z = np.asarray(z)
         scalar_input = z.ndim == 0
@@ -252,12 +330,12 @@ class PseudomodeWakefield(WakefieldBase):
         Parameters
         ----------
         k : float or np.ndarray
-            Wavenumber [1/m].
+            Wavenumber (1/m).
 
         Returns
         -------
         Z : complex or np.ndarray
-            Impedance [Ohm/m].
+            Impedance (Ohm/m).
         """
         k = np.asarray(k)
         scalar_input = k.ndim == 0
@@ -290,16 +368,16 @@ class PseudomodeWakefield(WakefieldBase):
         Parameters
         ----------
         z : np.ndarray
-            Particle positions [m].
+            Particle positions (m).
         weight : np.ndarray
-            Particle charges [C].
+            Particle charges (C).
         include_self_kick : bool, optional
             If True, applies the self-kick. Default is True.
 
         Returns
         -------
         kicks : np.ndarray
-            Wake-induced energy kick per unit length [eV/m].
+            Wake-induced energy kick per unit length (eV/m).
         """
         z = np.asarray(z)
         weight = np.asarray(weight)

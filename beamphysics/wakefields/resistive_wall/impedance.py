@@ -85,11 +85,11 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase, ImpedanceWakefield):
     Parameters
     ----------
     radius : float
-        Radius of the beam pipe [m]. For flat geometry, this is the half-gap.
+        Radius of the beam pipe (m). For flat geometry, this is the half-gap.
     conductivity : float
-        Electrical DC conductivity of the wall material [S/m].
+        Electrical DC conductivity of the wall material (S/m).
     relaxation_time : float
-        Drude-model relaxation time τ of the conductor [s].
+        Drude-model relaxation time τ of the conductor (s).
         Typical values: Cu ≈ 27 fs, Al ≈ 8 fs.
     geometry : str, optional
         Geometry of the beam pipe: 'round' or 'flat'. Default is 'round'.
@@ -97,9 +97,9 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase, ImpedanceWakefield):
     Attributes
     ----------
     s0 : float
-        Characteristic length scale [m]
+        Characteristic length scale (m)
     W0 : float
-        Characteristic wake amplitude [V/C/m]
+        Characteristic wake amplitude (V/C/m)
 
     Notes
     -----
@@ -125,13 +125,11 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase, ImpedanceWakefield):
 
     Examples
     --------
-    ::
-
-        wake = ResistiveWallWakefield.from_material(
-            "copper-slac-pub-10707", radius=2.5e-3, geometry="round"
-        )
-        wake.wake(-10e-6)  # Wake at 10 µm behind source
-        wake.impedance(1e5)  # Impedance at k = 100/mm
+    >>> wake = ResistiveWallWakefield.from_material(
+    ...     "copper-slac-pub-10707", radius=2.5e-3, geometry="round"
+    ... )
+    >>> wake.wake(-10e-6)  # Wake at 10 µm behind source
+    >>> wake.impedance(1e5)  # Impedance at k = 100/mm
     """
 
     def __post_init__(self):
@@ -155,6 +153,29 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase, ImpedanceWakefield):
             f"→ s₀={self.s0:.3e} m"
         )
 
+    @property
+    def default_zmax(self) -> float:
+        """
+        Distance behind the source particle beyond which the wake is negligible (m).
+
+        $$z_{\\max} = 100 \\, s_0$$
+
+        The tail falls as |z|^(-3/2); at 100 s0 it is about 1e-04 of W0 for a round
+        pipe.
+        """
+        return 100 * self.s0
+
+    @property
+    def min_wavelength(self) -> float:
+        """
+        Shortest length scale of the wake (m).
+
+        $$\\lambda_{\\min} = \\frac{2 \\pi s_0}{\\sqrt{3}}$$
+
+        This is the period of the DC-conductivity wake of a round pipe.
+        """
+        return 2 * np.pi * self.s0 / np.sqrt(3)
+
     def impedance(self, k):
         """
         Evaluate the impedance at wavenumber k.
@@ -162,12 +183,12 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase, ImpedanceWakefield):
         Parameters
         ----------
         k : float or np.ndarray
-            Wavenumber [1/m].
+            Wavenumber (1/m).
 
         Returns
         -------
         Z : complex or np.ndarray
-            Impedance [Ohm/m].
+            Impedance (Ohm/m).
         """
         if self.geometry == Geometry.ROUND:
             return longitudinal_impedance_round(
@@ -189,9 +210,9 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase, ImpedanceWakefield):
         Parameters
         ----------
         zmax : float, optional
-            Maximum trailing distance [m]. Defaults to 100 * s0.
+            Maximum trailing distance (m). Defaults to 100 * s0.
         zmin : float, optional
-            Minimum trailing distance [m]. Default is 0.
+            Minimum trailing distance (m). Default is 0.
         n : int, optional
             Number of points. Default is 200.
         normalized : bool, optional
@@ -227,9 +248,9 @@ class ResistiveWallWakefield(ResistiveWallWakefieldBase, ImpedanceWakefield):
         Parameters
         ----------
         kmax : float, optional
-            Maximum wavenumber [1/m]. Defaults to 10/s0.
+            Maximum wavenumber (1/m). Defaults to 10/s0.
         kmin : float, optional
-            Minimum wavenumber [1/m]. Default is 0.
+            Minimum wavenumber (1/m). Default is 0.
         n : int, optional
             Number of points. Default is 500.
         ax : matplotlib.axes.Axes, optional

@@ -11,7 +11,7 @@ dependencies:
   - python-dateutil
   # Developer
   - pre-commit
-  - pytest
+  - pytest<9.2  # pytest-benchmark 5.3 uses Item._nodeid, removed in pytest 9.2
   - pytest-benchmark
   - pytest-cov
   - pyyaml

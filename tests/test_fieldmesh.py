@@ -69,6 +69,16 @@ def test_fieldmesh_limits(fm_dipole_corrector):
 
 
 @pytest.mark.parametrize(
+    ("key", "unit"),
+    [("x", "m"), ("y", "m"), ("z", "m"), ("r", "m"), ("theta", "rad"), ("Bx", "T")],
+)
+def test_fieldmesh_units(fm_dipole_corrector, key, unit):
+    from beamphysics.units import pmd_unit
+
+    assert fm_dipole_corrector.units(key) == pmd_unit(unit)
+
+
+@pytest.mark.parametrize(
     "component_keys",
     [
         ("electricField/z", "Ez"),  # canonical first

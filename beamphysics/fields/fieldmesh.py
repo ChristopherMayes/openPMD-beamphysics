@@ -589,6 +589,9 @@ class FieldMesh:
         if key in component_from_alias:
             key = component_from_alias[key]
 
+        # pg_units knows coordinates by their bare name ('x', not 'position/x')
+        key = key.removeprefix("position/")
+
         return pg_units(key)
 
     # openPMD

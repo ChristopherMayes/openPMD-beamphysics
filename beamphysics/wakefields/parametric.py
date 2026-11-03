@@ -26,8 +26,9 @@ from .base import WakefieldBase
 __all__ = ["ParametricWakefield", "ZAGORODNOV_2021_TABLE_IV"]
 
 # Table IV of Zagorodnov, Tomin, Chen and Brinker, NIM A (2021),
-# doi:10.1016/j.nima.2021.165111 (arXiv:2010.10204). Units are those of the paper:
-# A, C in V/pC, B in V mm^(1/2)/pC, D in V mm/pC, k0, k1, k3 in 1/mm, k2 in 1/mm^(1/2).
+# doi:10.1016/j.nima.2021.165111 (arXiv:2010.10204), as printed. The table labels
+# A, B, C, D in V/pC and k0 to k3 in 1/mm; see from_zagorodnov_2021 for how the
+# numbers enter Eq. 18.
 ZAGORODNOV_2021_TABLE_IV: dict[str, dict[str, float]] = {
     # TESLA cryomodule: 8 nine-cell 1.3 GHz cavities with bellows
     "A1": dict(
@@ -131,8 +132,8 @@ class ParametricWakefield(WakefieldBase):
 
     Notes
     -----
-    The paper lists its coefficients in mm and V/pC; use `from_mm_pC` or
-    `from_zagorodnov_2021` for those.
+    Use `from_zagorodnov_2021` for the published coefficient sets, and `from_mm_pC`
+    for coefficients quoted with s in mm and w in V/pC.
 
     The C term does not decay and the B term falls only as 1/s, so there is no
     distance beyond which the wake is negligible. `default_zmax` covers one period
@@ -200,11 +201,14 @@ class ParametricWakefield(WakefieldBase):
         D: float = 0.0,
     ) -> ParametricWakefield:
         """
-        Construct from coefficients in the units of Zagorodnov et al. (2021).
+        Construct from coefficients quoted with s in mm and w in V/pC.
 
-        The paper writes s in mm and w in V/pC for the whole module. For Eq. 18 to
-        be dimensionally consistent the coefficients are then A, C in V/pC, B in
-        V mm^(1/2)/pC, D in V mm/pC, k0, k1, k3 in 1/mm and k2 in 1/mm^(1/2).
+        For Eq. 18 to be dimensionally consistent in these units, A and C are in
+        V/pC, B in V mm^(1/2)/pC, D in V mm/pC, k0, k1 and k3 in 1/mm and k2 in
+        1/mm^(1/2).
+
+        Table IV of Zagorodnov et al. (2021) is not in these units, although its
+        column labels suggest so; use `from_zagorodnov_2021` for those sets.
 
         Parameters
         ----------
@@ -220,12 +224,9 @@ class ParametricWakefield(WakefieldBase):
 
         Examples
         --------
-        The TESLA cryomodule row of Table IV:
+        A pure diffraction-model wake of 10 V/pC at s = 1 mm for a 1 m structure:
 
-        >>> wake = ParametricWakefield.from_mm_pC(
-        ...     length=12.2, A=287, k0=0.413, B=4.75, k1=35.0, alpha=0.746,
-        ...     k2=1.52, C=12.1, k3=0.181, D=0,
-        ... )
+        >>> wake = ParametricWakefield.from_mm_pC(length=1.0, B=10.0)
         """
         mm = 1e-3
         pC = 1e-12
@@ -266,19 +267,42 @@ class ParametricWakefield(WakefieldBase):
         KeyError
             If structure is not one of the published sets.
 
+        Notes
+        -----
+        The table labels A to D in V/pC and k0 to k3 in 1/mm. Evaluated with s in
+        mm as those labels suggest, Eq. 18 does not reproduce the wake potentials
+        of the paper's Fig. 7. It does, to the resolution of the figure, when the
+        labels are converted literally (V/pC to V/C, 1/mm to 1/m) and the numbers
+        are used in SI units with s in metres, so that for AH1 B is
+        1.5 V m^(1/2)/pC, k2 is 201 m^(-1/2) and D is 0.0114 V m/pC. That is the
+        convention applied here; the example notebook shows the comparison.
+
         Examples
         --------
         >>> wake = ParametricWakefield.from_zagorodnov_2021("A1", length=12.2)
         """
         try:
-            coefficients = ZAGORODNOV_2021_TABLE_IV[structure]
+            c = ZAGORODNOV_2021_TABLE_IV[structure]
         except KeyError:
             raise KeyError(
                 f"Unknown structure {structure!r}. Choose from "
                 f"{sorted(ZAGORODNOV_2021_TABLE_IV)}."
             ) from None
 
-        return cls.from_mm_pC(length=length, **coefficients)
+        per_pC = 1e12
+        per_mm = 1e3
+        return cls(
+            length=length,
+            A=c["A"] * per_pC,
+            k0=c["k0"] * per_mm,
+            B=c["B"] * per_pC,
+            k1=c["k1"] * per_mm,
+            alpha=c["alpha"],
+            k2=c["k2"] * per_mm,
+            C=c["C"] * per_pC,
+            k3=c["k3"] * per_mm,
+            D=c["D"] * per_pC,
+        )
 
     def __repr__(self) -> str:
         fields = ", ".join(

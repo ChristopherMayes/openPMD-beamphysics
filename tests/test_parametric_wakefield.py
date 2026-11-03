@@ -3,6 +3,8 @@ Tests for the parametric cavity wake of Zagorodnov et al. (2021) and the
 bin-averaged tabulation that a wake singular at the source particle requires.
 """
 
+import pathlib
+
 import numpy as np
 import pytest
 from scipy.integrate import quad
@@ -22,6 +24,12 @@ from beamphysics.wakefields import (
 )
 
 STRUCTURES = ["A1", "AH1", "TDS"]
+
+# ECHO curves of Fig. 7 of the paper, digitized by scripts/digitize_zagorodnov_fig7.py.
+FIG7_DATA = (
+    pathlib.Path(__file__).resolve().parents[1]
+    / "docs/examples/data/zagorodnov_2021_fig7_echo.csv"
+)
 
 # Lengths over which the module wakes are spread (m). The TDS length is from
 # Table 1 of the paper; the cryomodule lengths are nominal.
@@ -51,9 +59,9 @@ def gaussian(z: np.ndarray, sigma: float) -> np.ndarray:
 # -----------------------------------------------------------------------------
 
 
-def test_from_mm_pC_reproduces_the_paper_formula():
-    """The SI wake at s must equal the paper's formula evaluated in mm and V/pC."""
-    c = ZAGORODNOV_2021_TABLE_IV["AH1"]
+def test_from_mm_pC_reproduces_the_formula_in_mm_units():
+    """The SI wake at s must equal Eq. 18 evaluated with s in mm and w in V/pC."""
+    c = dict(A=711, k0=1.94, B=47.4, k1=106, alpha=0.661, k2=6.36, C=49.2, k3=0.154)
     wake = ParametricWakefield.from_mm_pC(length=1.0, **c)
 
     s_mm = 0.37
@@ -85,13 +93,41 @@ def test_from_mm_pC_converts_each_coefficient():
 
 
 def test_length_scales_the_wake_per_metre():
-    c = ZAGORODNOV_2021_TABLE_IV["TDS"]
-    one = ParametricWakefield.from_mm_pC(length=1.0, **c)
-    two = ParametricWakefield.from_mm_pC(length=2.0, **c)
+    one = ParametricWakefield.from_zagorodnov_2021("TDS", length=1.0)
+    two = ParametricWakefield.from_zagorodnov_2021("TDS", length=2.0)
     z = -np.array([1e-5, 1e-4, 1e-3])
 
     np.testing.assert_allclose(two.wake(z), one.wake(z) / 2)
     np.testing.assert_allclose(two.antiderivative(z), one.antiderivative(z) / 2)
+
+
+def test_from_zagorodnov_2021_converts_the_labels_literally(ah1):
+    c = ZAGORODNOV_2021_TABLE_IV["AH1"]
+
+    assert ah1.A == c["A"] * 1e12
+    assert ah1.k0 == c["k0"] * 1e3
+    assert ah1.B == c["B"] * 1e12
+    assert ah1.k1 == c["k1"] * 1e3
+    assert ah1.k2 == c["k2"] * 1e3
+    assert ah1.D == c["D"] * 1e12
+
+
+def test_from_zagorodnov_2021_reproduces_the_digitized_fig7():
+    """
+    The AH1 wake potentials must match the ECHO curves of Fig. 7 to the
+    resolution of the figure, about 6 V/pC in W for a peak of 1120 V/pC.
+    """
+    data = np.loadtxt(FIG7_DATA, delimiter=",")
+    wake = ParametricWakefield.from_zagorodnov_2021("AH1", length=1.0)
+
+    for sigma_um in np.unique(data[:, 0]):
+        rows = data[data[:, 0] == sigma_um]
+        sigma = sigma_um * 1e-6
+        V = wake.wake_potential(-rows[:, 1] * sigma, sigma) * 1e-12
+        residual = V - rows[:, 2]
+
+        assert np.sqrt(np.mean(residual**2)) < 10
+        assert np.abs(residual).max() < 30
 
 
 def test_from_zagorodnov_2021_rejects_an_unknown_structure():

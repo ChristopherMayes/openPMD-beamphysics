@@ -1,5 +1,11 @@
 # Wakefields
 
+## 3D Taylor-Expanded Wakefield Classes
+
+::: beamphysics.wakefields.TaylorWakefield
+
+::: beamphysics.wakefields.TaylorWakeComponent
+
 ## Resistive Wall Wakefield Classes
 
 ::: beamphysics.wakefields.ResistiveWallWakefield

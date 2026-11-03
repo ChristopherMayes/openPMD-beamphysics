@@ -53,6 +53,28 @@ class Pseudomode:
         """Evaluate this mode at position z (array input assumed)."""
         return self.A * np.exp(self.d * z) * np.sin(self.k * z + self.phi)
 
+    def antiderivative(self, z: np.ndarray) -> np.ndarray:
+        """
+        Integral of this mode from z up to the source particle (array input assumed).
+
+        $$F(z) = \\int_z^0 A e^{d z'} \\sin(k z' + \\phi) \\, dz'
+        = A \\, \\mathrm{Im}\\left[ e^{i\\phi} \\, \\frac{1 - e^{(d + ik) z}}{d + ik} \\right]$$
+
+        Parameters
+        ----------
+        z : np.ndarray
+            Longitudinal position (m), z <= 0.
+
+        Returns
+        -------
+        np.ndarray
+            Integrated wake (V/C).
+        """
+        s = self.d + 1j * self.k
+        if s == 0:
+            return -self.A * np.sin(self.phi) * z
+        return self.A * np.imag(np.exp(1j * self.phi) * (1 - np.exp(s * z)) / s)
+
     def impedance(self, k: np.ndarray | float) -> np.ndarray | complex:
         """
         Compute the impedance Z(k) for this pseudomode analytically.
@@ -315,6 +337,39 @@ class PseudomodeWakefield(WakefieldBase):
         # Sum contributions from all modes
         for mode in self._modes:
             out[mask] += mode(z_masked)
+
+        if scalar_input:
+            return float(out[0])
+        return out
+
+    def antiderivative(self, z: np.ndarray | float) -> np.ndarray | float:
+        """
+        Integral of the wake from z up to the source particle.
+
+        $$F(z) = \\int_z^0 W(z') \\, dz'$$
+
+        Summed in closed form over the modes, see `Pseudomode.antiderivative`.
+
+        Parameters
+        ----------
+        z : float or np.ndarray
+            Longitudinal position (m). Negative z is behind the source.
+
+        Returns
+        -------
+        F : float or np.ndarray
+            Integrated wake (V/C). Returns 0 for z >= 0.
+        """
+        z = np.asarray(z, dtype=float)
+        scalar_input = z.ndim == 0
+        z = np.atleast_1d(z)
+
+        out = np.zeros_like(z)
+        mask = z < 0
+        z_masked = z[mask]
+
+        for mode in self._modes:
+            out[mask] += mode.antiderivative(z_masked)
 
         if scalar_input:
             return float(out[0])

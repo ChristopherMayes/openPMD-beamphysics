@@ -16,6 +16,8 @@ TabularWakefield
     Interpolation-based wakefield from user-supplied data
 ImpedanceWakefield
     Wakefield defined through its impedance Z(k)
+ParametricWakefield
+    Parametric cavity-chain wake of Zagorodnov et al. (2021), singular at z = 0
 ResistiveWallWakefieldBase
     Base class for resistive wall wakefield models
 ResistiveWallWakefield
@@ -31,6 +33,7 @@ resistive_wall
 
 from .base import WakefieldBase
 from .impedance import ImpedanceWakefield
+from .parametric import ZAGORODNOV_2021_TABLE_IV, ParametricWakefield
 from .pseudomode import Pseudomode, PseudomodeWakefield
 from .resistive_wall import (
     Geometry,
@@ -56,6 +59,8 @@ __all__ = [
     "PseudomodeWakefield",
     "TabularWakefield",
     "ImpedanceWakefield",
+    "ParametricWakefield",
+    "ZAGORODNOV_2021_TABLE_IV",
     # Resistive wall
     "Geometry",
     "ResistiveWallWakefieldBase",

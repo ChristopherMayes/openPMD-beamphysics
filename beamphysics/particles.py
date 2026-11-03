@@ -1819,6 +1819,7 @@ class ParticleGroup:
         length: float,
         inplace: bool = False,
         include_self_kick: bool = True,
+        dz: float | None = None,
     ):
         """
         Apply wakefield momentum kicks to this ParticleGroup.
@@ -1834,6 +1835,11 @@ class ParticleGroup:
             Default is False.
         include_self_kick : bool, optional
             Whether to include the self-kick term. Default is True.
+        dz : float, optional
+            Bin width (m) for `wakefield.binned_particle_kicks`, which deposits the
+            charge on a grid and convolves it with the bin-averaged wake. That path
+            is used when dz is given or when the wake is singular at z = 0, as
+            `ParametricWakefield` is; otherwise `wakefield.particle_kicks` is used.
 
         Returns
         -------
@@ -1860,7 +1866,14 @@ class ParticleGroup:
             z = -c_light * np.asarray(P.t)
 
         weight = np.asarray(P.weight)
-        kicks = wakefield.particle_kicks(z, weight, include_self_kick=include_self_kick)
+        if dz is not None or wakefield.is_singular:
+            kicks = wakefield.binned_particle_kicks(
+                z, weight, dz=dz, include_self_kick=include_self_kick
+            )
+        else:
+            kicks = wakefield.particle_kicks(
+                z, weight, include_self_kick=include_self_kick
+            )
         P.pz += kicks * length
 
         if not inplace:

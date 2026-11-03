@@ -96,12 +96,13 @@ class TabularWakefield(WakefieldBase):
         wakefield: WakefieldBase,
         zmax: float | None = None,
         n: int | None = None,
-        kind: str = "cubic",
+        kind: str | None = None,
+        method: str = "auto",
     ) -> TabularWakefield:
         """
         Resample a wakefield model onto a uniform table.
 
-        The wake is evaluated at n equally spaced points from z = -zmax to z = 0.
+        The wake is tabulated at n equally spaced points from z = -zmax to z = 0.
         This makes an expensive model, such as `ResistiveWallWakefield`, cheap to
         evaluate, and gives the uniform table that IMPACT-Z and Bmad read.
 
@@ -115,7 +116,15 @@ class TabularWakefield(WakefieldBase):
         n : int, optional
             Number of samples. Defaults to `wakefield.default_n_samples(zmax)`.
         kind : str, optional
-            Interpolation method. Default is 'cubic'.
+            Interpolation method. Defaults to 'cubic' for point samples and to
+            'linear' for bin averages, which are not point values and would ring
+            under a cubic spline at the jump in the first row.
+        method : str, optional
+            'sample' stores the point values W(z). 'bin_average' stores
+            `wakefield.bin_averaged_wake`, the averages of the wake over bins of
+            the table spacing centred on each row, with the first row doubled as
+            Bmad and the IMPACT codes expect. 'auto' (default) uses 'bin_average'
+            when `wakefield.is_singular` and 'sample' otherwise.
 
         Returns
         -------
@@ -125,10 +134,19 @@ class TabularWakefield(WakefieldBase):
         Raises
         ------
         ValueError
-            If zmax is not positive, if n < 4, or if a `TabularWakefield` source does
-            not cover -zmax <= z <= 0, which would silently pad the result with zeros.
+            If zmax is not positive, if n < 4, if method is 'sample' for a singular
+            wake, or if a `TabularWakefield` source does not cover -zmax <= z <= 0,
+            which would silently pad the result with zeros.
         NotImplementedError
-            If zmax or n is omitted and the model defines no default for it.
+            If zmax or n is omitted and the model defines no default for it, or if
+            method is 'bin_average' and the model defines no antiderivative.
+
+        Notes
+        -----
+        A bin-averaged table is correct only at the bin width the consuming code
+        bins the bunch at. Bmad bins at the table spacing, so any spacing is right
+        for Bmad. IMPACT-T and IMPACT-Z bin at their own mesh width and read the
+        table by linear interpolation; use `rebin` to match that width.
 
         Examples
         --------
@@ -136,7 +154,26 @@ class TabularWakefield(WakefieldBase):
         ...     "copper-slac-pub-10707", radius=2.5e-3
         ... )
         >>> table = TabularWakefield.from_wakefield(wake)
+
+        A singular wake is tabulated as bin averages:
+
+        >>> wake = ParametricWakefield.from_zagorodnov_2021("AH1", length=10.5)
+        >>> table = TabularWakefield.from_wakefield(wake, zmax=20e-3, n=2001)
         """
+        if method == "auto":
+            method = "bin_average" if wakefield.is_singular else "sample"
+        if method not in ("sample", "bin_average"):
+            raise ValueError(
+                f"method must be 'auto', 'sample' or 'bin_average', got {method!r}"
+            )
+        if method == "sample" and wakefield.is_singular:
+            raise ValueError(
+                f"{type(wakefield).__name__} is singular at z = 0 and cannot be "
+                "sampled at points. Use method='bin_average'."
+            )
+        if kind is None:
+            kind = "linear" if method == "bin_average" else "cubic"
+
         if zmax is None:
             zmax = wakefield.default_zmax
 
@@ -168,7 +205,10 @@ class TabularWakefield(WakefieldBase):
 
         z = -np.linspace(zmax, 0.0, n)
 
-        if isinstance(wakefield, ImpedanceWakefield):
+        if method == "bin_average":
+            # Row k from z = 0 holds the average over the bin centred on k * dz.
+            W = wakefield.bin_averaged_wake(zmax / (n - 1), n)[::-1]
+        elif isinstance(wakefield, ImpedanceWakefield):
             # The cosine transform has period L = 2*pi*(n_fft - 1)/k_max and is even,
             # so W(s) is aliased by W(L - s). L >= 2*zmax keeps the mirror beyond zmax.
             n_required = int(np.ceil(zmax * wakefield._k_max / np.pi)) + 2
@@ -374,6 +414,106 @@ class TabularWakefield(WakefieldBase):
         intervals = np.ceil(zmax / dz.min() * (1 - 1e-9))
 
         return max(int(intervals) + 1, MIN_SAMPLES)
+
+    def rebin(
+        self,
+        dz: float,
+        zmax: float | None = None,
+        max_rows: int | None = None,
+    ) -> TabularWakefield:
+        """
+        Rebin a bin-averaged table to another spacing, preserving its integral.
+
+        A table built with `from_wakefield(method='bin_average')`, or read from a
+        Bmad `z_long` wake, holds bin averages of the wake and is correct only at
+        the bin width it was built for. IMPACT-T and IMPACT-Z bin the bunch at
+        their own mesh width and read the table by linear interpolation, so the
+        table is rebinned to that width:
+
+        1. the antiderivative F is rebuilt at the bin edges (k + 1/2) Delta from
+           the cumulative sum, after halving the first row, which holds twice the
+           self-kick bin average;
+        2. F is interpolated linearly at the new edges (k + 1/2) dz;
+        3. the differences are taken and the first row is doubled again.
+
+        This is exact when dz is an odd multiple of the table spacing Delta, where
+        the edges coincide, and otherwise accurate to well under 0.1% in the
+        energy loss and spread of a bunch. A table at its own spacing passes
+        through unchanged. For a smooth wake, a bin average equals the point value
+        to second order in the bin width, so a table of point samples is handled
+        correctly as well.
+
+        Parameters
+        ----------
+        dz : float
+            Target spacing (m).
+        zmax : float, optional
+            Smallest trailing distance (m) the result should cover. The result
+            covers at least the range of this table, beyond which the wake is
+            taken as zero.
+        max_rows : int, optional
+            Largest number of rows. A longer table is shortened in range, never
+            coarsened, which would lose the self-kick resolution.
+
+        Returns
+        -------
+        TabularWakefield
+            Table with spacing dz and linear interpolation.
+
+        Raises
+        ------
+        ValueError
+            If this table is not uniform and ending at z = 0, or if dz is not
+            positive.
+
+        Warns
+        -----
+        UserWarning
+            If max_rows shortens the table below zmax.
+
+        Examples
+        --------
+        >>> table = TabularWakefield.from_wakefield(wake, zmax=20e-3, n=2001)
+        >>> impact = table.rebin(dz=50e-6)
+        """
+        z = self._z
+        delta = (z[-1] - z[0]) / (len(z) - 1)
+        if z[-1] != 0 or not np.allclose(np.diff(z), delta, rtol=1e-6, atol=0):
+            raise ValueError("The table must be uniform and end at z = 0")
+        if dz <= 0:
+            raise ValueError(f"dz must be positive, got {dz}")
+        h = float(dz)
+
+        table_range = -float(z[0])
+        target_range = table_range if zmax is None else max(table_range, zmax)
+        n = max(int(np.ceil(target_range / h * (1 - 1e-9))) + 1, MIN_SAMPLES)
+        if max_rows is not None and n > max_rows:
+            n = max_rows
+            if zmax is not None and (n - 1) * h < zmax:
+                warnings.warn(
+                    f"The table at spacing {h:.6e} m is limited to {max_rows} rows, "
+                    f"covering {(n - 1) * h:.6e} m, which is shorter than "
+                    f"zmax = {zmax:.6e} m. The spacing is kept to resolve the "
+                    "self-kick.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+        # Rows ascending in the trailing distance s = -z.
+        K = self._W[::-1].astype(float)
+        if np.isclose(h, delta, rtol=1e-9, atol=0):
+            W = np.zeros(n)
+            m = min(n, len(K))
+            W[:m] = K[:m]
+        else:
+            K[0] /= 2
+            edges = np.concatenate([[0.0], (np.arange(len(K)) + 0.5) * delta])
+            F = np.concatenate([[0.0], np.cumsum(K) * delta])
+            F_h = np.interp((np.arange(n) + 0.5) * h, edges, F)
+            W = np.diff(F_h, prepend=0.0) / h
+            W[0] *= 2
+
+        return TabularWakefield(-h * np.arange(n)[::-1], W[::-1], kind="linear")
 
     def to_bmad(
         self,

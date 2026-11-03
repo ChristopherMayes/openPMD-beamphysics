@@ -39,15 +39,15 @@ LENGTHS = {"A1": 12.2, "AH1": 10.5, "TDS": 0.7}
 @pytest.fixture(scope="module", params=STRUCTURES)
 def published(request) -> ParametricWakefield:
     """One of the three published coefficient sets."""
-    return ParametricWakefield.from_zagorodnov_2021(
-        request.param, length=LENGTHS[request.param]
+    return ParametricWakefield(
+        length=LENGTHS[request.param], **ZAGORODNOV_2021_TABLE_IV[request.param]
     )
 
 
 @pytest.fixture(scope="module")
 def ah1() -> ParametricWakefield:
     """The 3.9 GHz module, the only set with a delta-function term."""
-    return ParametricWakefield.from_zagorodnov_2021("AH1", length=LENGTHS["AH1"])
+    return ParametricWakefield(length=LENGTHS["AH1"], **ZAGORODNOV_2021_TABLE_IV["AH1"])
 
 
 def gaussian(z: np.ndarray, sigma: float) -> np.ndarray:
@@ -93,32 +93,22 @@ def test_from_mm_pC_converts_each_coefficient():
 
 
 def test_length_scales_the_wake_per_metre():
-    one = ParametricWakefield.from_zagorodnov_2021("TDS", length=1.0)
-    two = ParametricWakefield.from_zagorodnov_2021("TDS", length=2.0)
+    tds = ZAGORODNOV_2021_TABLE_IV["TDS"]
+    one = ParametricWakefield(length=1.0, **tds)
+    two = ParametricWakefield(length=2.0, **tds)
     z = -np.array([1e-5, 1e-4, 1e-3])
 
     np.testing.assert_allclose(two.wake(z), one.wake(z) / 2)
     np.testing.assert_allclose(two.antiderivative(z), one.antiderivative(z) / 2)
 
 
-def test_from_zagorodnov_2021_converts_the_labels_literally(ah1):
-    c = ZAGORODNOV_2021_TABLE_IV["AH1"]
-
-    assert ah1.A == c["A"] * 1e12
-    assert ah1.k0 == c["k0"] * 1e3
-    assert ah1.B == c["B"] * 1e12
-    assert ah1.k1 == c["k1"] * 1e3
-    assert ah1.k2 == c["k2"] * 1e3
-    assert ah1.D == c["D"] * 1e12
-
-
-def test_from_zagorodnov_2021_reproduces_the_digitized_fig7():
+def test_table_iv_reproduces_the_digitized_fig7():
     """
     The AH1 wake potentials must match the ECHO curves of Fig. 7 to the
     resolution of the figure, about 6 V/pC in W for a peak of 1120 V/pC.
     """
     data = np.loadtxt(FIG7_DATA, delimiter=",")
-    wake = ParametricWakefield.from_zagorodnov_2021("AH1", length=1.0)
+    wake = ParametricWakefield(length=1.0, **ZAGORODNOV_2021_TABLE_IV["AH1"])
 
     for sigma_um in np.unique(data[:, 0]):
         rows = data[data[:, 0] == sigma_um]
@@ -128,11 +118,6 @@ def test_from_zagorodnov_2021_reproduces_the_digitized_fig7():
 
         assert np.sqrt(np.mean(residual**2)) < 10
         assert np.abs(residual).max() < 30
-
-
-def test_from_zagorodnov_2021_rejects_an_unknown_structure():
-    with pytest.raises(KeyError, match="A1"):
-        ParametricWakefield.from_zagorodnov_2021("L1", length=1.0)
 
 
 @pytest.mark.parametrize(

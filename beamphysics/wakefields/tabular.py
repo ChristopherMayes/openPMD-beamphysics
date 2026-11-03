@@ -157,7 +157,7 @@ class TabularWakefield(WakefieldBase):
 
         A singular wake is tabulated as bin averages:
 
-        >>> wake = ParametricWakefield.from_zagorodnov_2021("AH1", length=10.5)
+        >>> wake = ParametricWakefield(length=10.5, **ZAGORODNOV_2021_TABLE_IV["AH1"])
         >>> table = TabularWakefield.from_wakefield(wake, zmax=20e-3, n=2001)
         """
         if method == "auto":

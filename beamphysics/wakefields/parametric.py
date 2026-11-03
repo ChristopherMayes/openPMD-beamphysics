@@ -14,7 +14,7 @@ ParametricWakefield
 Data
 ----
 ZAGORODNOV_2021_TABLE_IV
-    Published coefficient sets for the European XFEL injector modules
+    Published coefficient sets for the European XFEL injector modules, in SI units
 """
 
 from __future__ import annotations
@@ -26,29 +26,48 @@ from .base import WakefieldBase
 __all__ = ["ParametricWakefield", "ZAGORODNOV_2021_TABLE_IV"]
 
 # Table IV of Zagorodnov, Tomin, Chen and Brinker, NIM A (2021),
-# doi:10.1016/j.nima.2021.165111 (arXiv:2010.10204), as printed. The table labels
-# A, B, C, D in V/pC and k0 to k3 in 1/mm; see from_zagorodnov_2021 for how the
-# numbers enter Eq. 18.
+# doi:10.1016/j.nima.2021.165111 (arXiv:2010.10204), as keyword arguments to
+# ParametricWakefield. The table labels A to D in V/pC and k0 to k3 in 1/mm, but
+# Eq. 18 reproduces the paper's Fig. 7 only when those labels are converted
+# literally (V/pC to V/C, 1/mm to 1/m) and the formula is evaluated in SI units,
+# which gives B in V m^(1/2)/C, k2 in m^(-1/2) and D in V m/C. The printed digits
+# are kept visible in each value.
 ZAGORODNOV_2021_TABLE_IV: dict[str, dict[str, float]] = {
     # TESLA cryomodule: 8 nine-cell 1.3 GHz cavities with bellows
     "A1": dict(
-        A=287, k0=0.413, B=4.75, k1=35.0, alpha=0.746, k2=1.52, C=12.1, k3=0.181, D=0
+        A=287e12,
+        k0=0.413e3,
+        B=4.75e12,
+        k1=35.0e3,
+        alpha=0.746,
+        k2=1.52e3,
+        C=12.1e12,
+        k3=0.181e3,
+        D=0.0,
     ),
     # Third-harmonic 3.9 GHz cryomodule: 8 cavities with bellows and an input taper
     "AH1": dict(
-        A=711,
-        k0=1.94,
-        B=1.50,
-        k1=106,
+        A=711e12,
+        k0=1.94e3,
+        B=1.50e12,
+        k1=106e3,
         alpha=0.661,
-        k2=0.201,
-        C=49.2,
-        k3=0.154,
-        D=0.0114,
+        k2=0.201e3,
+        C=49.2e12,
+        k3=0.154e3,
+        D=0.0114e12,
     ),
     # Transverse deflecting structure: 16 cells
     "TDS": dict(
-        A=40.7, k0=0.239, B=0.524, k1=6.54, alpha=0.655, k2=0.140, C=1.57, k3=0.159, D=0
+        A=40.7e12,
+        k0=0.239e3,
+        B=0.524e12,
+        k1=6.54e3,
+        alpha=0.655,
+        k2=0.140e3,
+        C=1.57e12,
+        k3=0.159e3,
+        D=0.0,
     ),
 }
 
@@ -132,8 +151,8 @@ class ParametricWakefield(WakefieldBase):
 
     Notes
     -----
-    Use `from_zagorodnov_2021` for the published coefficient sets, and `from_mm_pC`
-    for coefficients quoted with s in mm and w in V/pC.
+    `ZAGORODNOV_2021_TABLE_IV` holds the published coefficient sets in these
+    units. Use `from_mm_pC` for coefficients quoted with s in mm and w in V/pC.
 
     The C term does not decay and the B term falls only as 1/s, so there is no
     distance beyond which the wake is negligible. `default_zmax` covers one period
@@ -147,7 +166,7 @@ class ParametricWakefield(WakefieldBase):
 
     Examples
     --------
-    >>> wake = ParametricWakefield.from_zagorodnov_2021("AH1", length=10.5)
+    >>> wake = ParametricWakefield(length=10.5, **ZAGORODNOV_2021_TABLE_IV["AH1"])
     >>> table = TabularWakefield.from_wakefield(wake, zmax=20e-3, n=2001)
     >>> V = wake.wake_potential(z, sigma=100e-6)  # Gaussian bunch, V/C/m
     """
@@ -208,7 +227,7 @@ class ParametricWakefield(WakefieldBase):
         1/mm^(1/2).
 
         Table IV of Zagorodnov et al. (2021) is not in these units, although its
-        column labels suggest so; use `from_zagorodnov_2021` for those sets.
+        column labels suggest so; use `ZAGORODNOV_2021_TABLE_IV` for those sets.
 
         Parameters
         ----------
@@ -241,67 +260,6 @@ class ParametricWakefield(WakefieldBase):
             C=C / pC,
             k3=k3 / mm,
             D=D * mm / pC,
-        )
-
-    @classmethod
-    def from_zagorodnov_2021(cls, structure: str, length: float) -> ParametricWakefield:
-        """
-        Construct from a row of Table IV of Zagorodnov et al. (2021).
-
-        Parameters
-        ----------
-        structure : str
-            'A1' for the TESLA 1.3 GHz cryomodule, 'AH1' for the 3.9 GHz
-            third-harmonic cryomodule, or 'TDS' for the transverse deflecting
-            structure of the European XFEL injector.
-        length : float
-            Length of the structure (m), over which the wake of the whole module
-            is spread.
-
-        Returns
-        -------
-        ParametricWakefield
-
-        Raises
-        ------
-        KeyError
-            If structure is not one of the published sets.
-
-        Notes
-        -----
-        The table labels A to D in V/pC and k0 to k3 in 1/mm. Evaluated with s in
-        mm as those labels suggest, Eq. 18 does not reproduce the wake potentials
-        of the paper's Fig. 7. It does, to the resolution of the figure, when the
-        labels are converted literally (V/pC to V/C, 1/mm to 1/m) and the numbers
-        are used in SI units with s in metres, so that for AH1 B is
-        1.5 V m^(1/2)/pC, k2 is 201 m^(-1/2) and D is 0.0114 V m/pC. That is the
-        convention applied here; the example notebook shows the comparison.
-
-        Examples
-        --------
-        >>> wake = ParametricWakefield.from_zagorodnov_2021("A1", length=12.2)
-        """
-        try:
-            c = ZAGORODNOV_2021_TABLE_IV[structure]
-        except KeyError:
-            raise KeyError(
-                f"Unknown structure {structure!r}. Choose from "
-                f"{sorted(ZAGORODNOV_2021_TABLE_IV)}."
-            ) from None
-
-        per_pC = 1e12
-        per_mm = 1e3
-        return cls(
-            length=length,
-            A=c["A"] * per_pC,
-            k0=c["k0"] * per_mm,
-            B=c["B"] * per_pC,
-            k1=c["k1"] * per_mm,
-            alpha=c["alpha"],
-            k2=c["k2"] * per_mm,
-            C=c["C"] * per_pC,
-            k3=c["k3"] * per_mm,
-            D=c["D"] * per_pC,
         )
 
     def __repr__(self) -> str:

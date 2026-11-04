@@ -1,4 +1,4 @@
-# ECHO wake potentials digitized from Fig. 7 (left) of Zagorodnov, Tomin, Chen, Brinker, NIM A 995, 165111 (2021), arXiv:2010.10204v2, by scripts/digitize_zagorodnov_fig7.py. Pixel resolution is about 0.03 in s/sigma and 6 V/pC in W.
+# ECHO wake potentials digitized from Fig. 7 (left) of Zagorodnov, Tomin, Chen, Brinker, NIM A 995, 165111 (2021), arXiv:2010.10204v2 (https://arxiv.org/html/2010.10204v2/Fig007.png), with the axes calibrated from the tick labels. Points are kept only where the solid blue ECHO curve is clear of the red dashed fit. Pixel resolution is about 0.03 in s/sigma and 6 V/pC in W.
 # sigma_um,s_over_sigma,W_V_per_pC
 10,-0.496,815.6
 10,-0.364,890.6

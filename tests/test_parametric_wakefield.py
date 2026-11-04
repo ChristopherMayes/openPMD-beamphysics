@@ -25,7 +25,7 @@ from beamphysics.wakefields import (
 
 STRUCTURES = ["A1", "AH1", "TDS"]
 
-# ECHO curves of Fig. 7 of the paper, digitized by scripts/digitize_zagorodnov_fig7.py.
+# ECHO curves digitized from Fig. 7 of the paper.
 FIG7_DATA = (
     pathlib.Path(__file__).resolve().parents[1]
     / "docs/examples/data/zagorodnov_2021_fig7_echo.csv"

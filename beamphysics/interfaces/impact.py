@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from ..wakefields.base import WakefieldBase
+    from ..wakefields.binned import BinnedWakefield
 
 
 c_light = 299792458.0
@@ -335,7 +336,7 @@ def parse_impact_z_wakefield(
 
 
 def create_impact_z_wakefield_rfdata(
-    wakefield: WakefieldBase,
+    wakefield: WakefieldBase | BinnedWakefield,
     zmax: float | None = None,
     n: int | None = None,
     wake_x: Callable[[np.ndarray], np.ndarray] | None = None,
@@ -349,7 +350,7 @@ def create_impact_z_wakefield_rfdata(
 
     Parameters
     ----------
-    wakefield : WakefieldBase
+    wakefield : WakefieldBase or BinnedWakefield
         Longitudinal wakefield model.
     zmax : float, optional
         Largest distance behind the source particle (m). Defaults to
@@ -407,7 +408,7 @@ def create_impact_z_wakefield_rfdata(
 
 
 def _tabulate_impact_wakefield(
-    wakefield: WakefieldBase,
+    wakefield: WakefieldBase | BinnedWakefield,
     zmax: float | None,
     n: int | None,
     wake_x: Callable[[np.ndarray], np.ndarray] | None,
@@ -417,6 +418,7 @@ def _tabulate_impact_wakefield(
     limit_reason: str,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Sample a wake for an IMPACT code, returning s, Wz, Wx and Wy with s ascending."""
+    from ..wakefields.binned import BinnedWakefield
     from ..wakefields.tabular import TabularWakefield
 
     if zmax is None:
@@ -438,9 +440,12 @@ def _tabulate_impact_wakefield(
             f"n={n} exceeds the {code} limit of {max_rows} rows. {limit_reason}"
         )
 
-    # Sampling through TabularWakefield keeps the table identical to the one an
-    # in-memory resample would produce.
-    table = TabularWakefield.from_wakefield(wakefield, zmax=zmax, n=n)
+    factory = (
+        BinnedWakefield
+        if isinstance(wakefield, BinnedWakefield) or wakefield.is_singular
+        else TabularWakefield
+    )
+    table = factory.from_wakefield(wakefield, zmax=zmax, n=n)
 
     # The table ascends in z from -zmax to 0; IMPACT ascends in s from 0 to zmax.
     z = table.z_data[::-1]
@@ -455,7 +460,7 @@ def _tabulate_impact_wakefield(
 
 def write_impact_z_wakefield(
     filename: str | os.PathLike,
-    wakefield: WakefieldBase,
+    wakefield: WakefieldBase | BinnedWakefield,
     zmax: float | None = None,
     n: int | None = None,
     wake_x: Callable[[np.ndarray], np.ndarray] | None = None,
@@ -554,7 +559,7 @@ def parse_impact_t_wakefield(
 
 
 def create_impact_t_wakefield_data(
-    wakefield: WakefieldBase,
+    wakefield: WakefieldBase | BinnedWakefield,
     zmax: float | None = None,
     n: int | None = None,
     wake_x: Callable[[np.ndarray], np.ndarray] | None = None,
@@ -622,7 +627,7 @@ def create_impact_t_wakefield_data(
 
 def write_impact_t_wakefield(
     filename: str | os.PathLike,
-    wakefield: WakefieldBase,
+    wakefield: WakefieldBase | BinnedWakefield,
     zmax: float | None = None,
     n: int | None = None,
     wake_x: Callable[[np.ndarray], np.ndarray] | None = None,

@@ -17,6 +17,7 @@ from beamphysics.interfaces.impact import (
 from beamphysics.wakefields import (
     ZAGORODNOV_2021_TABLE_IV,
     ParametricWakefield,
+    BinnedWakefield,
     Pseudomode,
     PseudomodeWakefield,
     ResistiveWallWakefield,
@@ -99,7 +100,7 @@ def test_length_scales_the_wake_per_metre():
     z = -np.array([1e-5, 1e-4, 1e-3])
 
     np.testing.assert_allclose(two.wake(z), one.wake(z) / 2)
-    np.testing.assert_allclose(two.antiderivative(z), one.antiderivative(z) / 2)
+    np.testing.assert_allclose(two.integrated_wake(z), one.integrated_wake(z) / 2)
 
 
 def test_table_iv_reproduces_the_digitized_fig7():
@@ -161,12 +162,16 @@ def test_wake_without_the_diffraction_term_is_finite_at_the_source():
 def test_delta_term_alone_is_singular():
     D, L, dz = 3.0, 2.0, 1e-4
     wake = ParametricWakefield(length=L, D=D)
-    table = TabularWakefield.from_wakefield(wake, zmax=3 * dz, n=4)
+    table = BinnedWakefield.from_wakefield(wake, zmax=3 * dz, n=4)
 
     assert wake.is_singular
     assert table.W_data[-1] == pytest.approx(2 * D / L / dz)
-    with pytest.raises(ValueError, match="binned_particle_kicks"):
-        wake.particle_kicks(np.array([0.0, -1e-6]), np.array([1e-12, 1e-12]))
+    positions = np.array([0.0, -1e-6])
+    weights = np.array([1e-12, 1e-12])
+    np.testing.assert_allclose(
+        wake.particle_kicks(positions, weights),
+        wake.binned_particle_kicks(positions, weights),
+    )
 
 
 def test_wake_scalar_and_array_agree(published):
@@ -176,60 +181,60 @@ def test_wake_scalar_and_array_agree(published):
 
 
 # -----------------------------------------------------------------------------
-# Antiderivative
+# Integrated wake
 # -----------------------------------------------------------------------------
 
 S_VALUES = [1e-7, 1e-5, 1e-4, 1e-3, 1e-2, 3e-2]
 
 
-def test_antiderivative_vanishes_ahead_of_and_at_the_source(ah1):
-    np.testing.assert_array_equal(ah1.antiderivative(np.array([0.0, 1e-9, 1.0])), 0)
-    assert ah1.antiderivative(0.0) == 0.0
+def test_integrated_wake_vanishes_ahead_of_and_at_the_source(ah1):
+    np.testing.assert_array_equal(ah1.integrated_wake(np.array([0.0, 1e-9, 1.0])), 0)
+    assert ah1.integrated_wake(0.0) == 0.0
 
 
-def test_antiderivative_of_the_A_term():
+def test_integrated_wake_of_the_A_term():
     A, k0, L = 2.0, 300.0, 1.5
     wake = ParametricWakefield(length=L, A=A, k0=k0)
 
     for s in S_VALUES:
         # Integrate in u = sqrt(t), where the integrand is smooth.
         ref, _ = quad(lambda u: 2 * u * A * np.exp(-np.sqrt(k0) * u), 0, np.sqrt(s))
-        assert wake.antiderivative(-s) == pytest.approx(ref / L, rel=1e-10)
+        assert wake.integrated_wake(-s) == pytest.approx(ref / L, rel=1e-10)
 
 
-def test_antiderivative_of_the_C_term():
+def test_integrated_wake_of_the_C_term():
     C, k3, L = 5.0, 200.0, 2.0
     wake = ParametricWakefield(length=L, C=C, k3=k3)
 
     for s in S_VALUES:
         ref, _ = quad(lambda t: C * np.cos(k3 * t), 0, s)
-        assert wake.antiderivative(-s) == pytest.approx(ref / L, rel=1e-10)
+        assert wake.integrated_wake(-s) == pytest.approx(ref / L, rel=1e-10)
 
 
-def test_antiderivative_of_the_delta_term_is_a_step():
+def test_integrated_wake_of_the_delta_term_is_a_step():
     wake = ParametricWakefield(length=4.0, D=2.0)
 
-    assert wake.antiderivative(-1e-9) == pytest.approx(0.5)
-    assert wake.antiderivative(-1.0) == pytest.approx(0.5)
-    assert wake.antiderivative(0.0) == 0.0
+    assert wake.integrated_wake(-1e-9) == pytest.approx(0.5)
+    assert wake.integrated_wake(-1.0) == pytest.approx(0.5)
+    assert wake.integrated_wake(0.0) == 0.0
 
 
-def test_antiderivative_of_the_diffraction_term_without_oscillation():
+def test_integrated_wake_of_the_diffraction_term_without_oscillation():
     """With k1 = 0 the B term integrates to 2B/k2 ln(1 + k2 sqrt(s))."""
     B, k2, L = 3.0, 40.0, 1.0
     wake = ParametricWakefield(length=L, B=B, k2=k2)
 
     for s in S_VALUES:
         expected = 2 * B / k2 * np.log1p(k2 * np.sqrt(s))
-        assert wake.antiderivative(-s) == pytest.approx(expected, rel=1e-12)
+        assert wake.integrated_wake(-s) == pytest.approx(expected, rel=1e-12)
 
     # Pure diffraction model.
     pure = ParametricWakefield(length=L, B=B)
     for s in S_VALUES:
-        assert pure.antiderivative(-s) == pytest.approx(2 * B * np.sqrt(s), rel=1e-12)
+        assert pure.integrated_wake(-s) == pytest.approx(2 * B * np.sqrt(s), rel=1e-12)
 
 
-def test_antiderivative_of_the_general_diffraction_term_by_substitution(published):
+def test_integrated_wake_of_the_general_diffraction_term_by_substitution(published):
     """Check against quadrature of the bounded integrand after s = u^2."""
     B, k1, alpha, k2, L = (
         published.B,
@@ -247,10 +252,10 @@ def test_antiderivative_of_the_general_diffraction_term_by_substitution(publishe
             np.sqrt(s),
             limit=500,
         )
-        assert wake.antiderivative(-s) == pytest.approx(ref / L, rel=1e-9, abs=err)
+        assert wake.integrated_wake(-s) == pytest.approx(ref / L, rel=1e-9, abs=err)
 
 
-def test_antiderivative_of_the_general_diffraction_term_by_the_paper_split(
+def test_integrated_wake_of_the_general_diffraction_term_by_the_paper_split(
     published,
 ):
     """
@@ -276,13 +281,13 @@ def test_antiderivative_of_the_general_diffraction_term_by_the_paper_split(
             s,
             limit=500,
         )
-        assert wake.antiderivative(-s) == pytest.approx(
+        assert wake.integrated_wake(-s) == pytest.approx(
             (smooth + rest) / L, rel=1e-7, abs=err
         )
 
 
-def test_antiderivative_sums_the_terms(published):
-    """The full antiderivative is the sum over the four terms."""
+def test_integrated_wake_sums_the_terms(published):
+    """The full integrated_wake is the sum over the four terms."""
     s = np.array(S_VALUES)
     z = -s
     L = published.length
@@ -298,16 +303,16 @@ def test_antiderivative_sums_the_terms(published):
         ParametricWakefield(length=L, C=published.C, k3=published.k3),
         ParametricWakefield(length=L, D=published.D),
     ]
-    total = sum(part.antiderivative(z) for part in parts)
+    total = sum(part.integrated_wake(z) for part in parts)
 
-    np.testing.assert_allclose(published.antiderivative(z), total, rtol=1e-12)
+    np.testing.assert_allclose(published.integrated_wake(z), total, rtol=1e-12)
 
 
-def test_antiderivative_derivative_recovers_the_wake(published):
+def test_integrated_wake_derivative_recovers_the_wake(published):
     """Away from the source, dF/ds must equal the wake."""
     s = np.geomspace(1e-5, 1e-2, 50)
     h = 1e-7 * s
-    dF = (published.antiderivative(-(s + h)) - published.antiderivative(-(s - h))) / (
+    dF = (published.integrated_wake(-(s + h)) - published.integrated_wake(-(s - h))) / (
         2 * h
     )
 
@@ -324,19 +329,19 @@ def test_bin_averaged_wake_follows_the_table_convention(ah1):
     K = ah1.bin_averaged_wake(dz, n)
     k = np.arange(n)
 
-    assert K[0] == pytest.approx(2 * ah1.antiderivative(-dz / 2) / dz)
-    upper = ah1.antiderivative(-(k[1:] + 0.5) * dz)
-    lower = ah1.antiderivative(-(k[1:] - 0.5) * dz)
+    assert K[0] == pytest.approx(2 * ah1.integrated_wake(-dz / 2) / dz)
+    upper = ah1.integrated_wake(-(k[1:] + 0.5) * dz)
+    lower = ah1.integrated_wake(-(k[1:] - 0.5) * dz)
     np.testing.assert_allclose(K[1:], (upper - lower) / dz)
 
 
-def test_bin_averaged_wake_telescopes_to_the_antiderivative(ah1):
+def test_bin_averaged_wake_telescopes_to_the_integrated_wake(ah1):
     """Halving the first row and summing the bins recovers F at the last edge."""
     dz, n = 1e-5, 200
     K = ah1.bin_averaged_wake(dz, n)
     K[0] /= 2
 
-    assert K.sum() * dz == pytest.approx(ah1.antiderivative(-(n - 0.5) * dz))
+    assert K.sum() * dz == pytest.approx(ah1.integrated_wake(-(n - 0.5) * dz))
 
 
 def test_bin_averaged_wake_includes_the_delta_term_in_the_first_row():
@@ -348,13 +353,13 @@ def test_bin_averaged_wake_includes_the_delta_term_in_the_first_row():
     np.testing.assert_array_equal(K[1:], 0)
 
 
-def test_bin_averaged_wake_requires_an_antiderivative():
+def test_bin_averaged_wake_requires_an_integrated_wake():
     wake = ResistiveWallWakefield.from_material("copper-slac-pub-10707", radius=2.5e-3)
-    with pytest.raises(NotImplementedError, match="antiderivative"):
+    with pytest.raises(NotImplementedError, match="integrated_wake"):
         wake.bin_averaged_wake(1e-6, 10)
 
 
-def test_pseudomode_antiderivative_matches_quadrature():
+def test_pseudomode_integrated_wake_matches_quadrature():
     modes = [
         Pseudomode(A=1e15, d=1e4, k=1e5, phi=np.pi / 3),
         Pseudomode(A=-4e14, d=3e4, k=0.0, phi=np.pi / 2),
@@ -364,10 +369,10 @@ def test_pseudomode_antiderivative_matches_quadrature():
 
     for s in [1e-6, 1e-5, 1e-4, 5e-4]:
         ref, _ = quad(lambda z: wake.wake(z), -s, 0, limit=200)
-        assert wake.antiderivative(-s) == pytest.approx(ref, rel=1e-9)
+        assert wake.integrated_wake(-s) == pytest.approx(ref, rel=1e-9)
 
-    assert wake.antiderivative(0.0) == 0.0
-    assert wake.antiderivative(1e-6) == 0.0
+    assert wake.integrated_wake(0.0) == 0.0
+    assert wake.integrated_wake(1e-6) == 0.0
 
 
 def test_pseudomode_bin_averages_approach_the_samples():
@@ -461,41 +466,39 @@ def test_loss_factor_decreases_with_bunch_length(published):
 
 def test_from_wakefield_bin_averages_a_singular_wake(ah1):
     zmax, n = 2e-3, 401
-    table = TabularWakefield.from_wakefield(ah1, zmax=zmax, n=n)
+    table = BinnedWakefield.from_wakefield(ah1, zmax=zmax, n=n)
 
     dz = zmax / (n - 1)
     np.testing.assert_allclose(table.W_data[::-1], ah1.bin_averaged_wake(dz, n))
     assert np.all(np.isfinite(table.W_data))
-    # Linear interpolation, so the midpoint is the mean of its neighbours.
-    z = table.z_data
-    mid = (z[10] + z[11]) / 2
-    assert table.wake(mid) == pytest.approx((table.W_data[10] + table.W_data[11]) / 2)
+    assert not hasattr(table, "wake")
+    assert not isinstance(table, TabularWakefield)
+    assert table.dz == pytest.approx(dz)
 
 
 def test_from_wakefield_rejects_point_samples_of_a_singular_wake(ah1):
-    with pytest.raises(ValueError, match="singular"):
-        TabularWakefield.from_wakefield(ah1, zmax=1e-3, n=11, method="sample")
+    with pytest.raises(ValueError, match="BinnedWakefield"):
+        TabularWakefield.from_wakefield(ah1, zmax=1e-3, n=11)
 
 
-def test_from_wakefield_rejects_an_unknown_method(ah1):
-    with pytest.raises(ValueError, match="method"):
-        TabularWakefield.from_wakefield(ah1, zmax=1e-3, n=11, method="midpoint")
+def test_point_table_cannot_sample_a_binned_wake(ah1):
+    bins = BinnedWakefield.from_wakefield(ah1, zmax=1e-3, n=11)
+    with pytest.raises(ValueError, match="BinnedWakefield"):
+        TabularWakefield.from_wakefield(bins)
 
 
-def test_from_wakefield_bin_average_needs_an_antiderivative():
+def test_from_wakefield_bin_average_needs_an_integrated_wake():
     wake = ResistiveWallWakefield.from_material("copper-slac-pub-10707", radius=2.5e-3)
-    with pytest.raises(NotImplementedError, match="antiderivative"):
-        TabularWakefield.from_wakefield(wake, zmax=1e-4, n=11, method="bin_average")
+    with pytest.raises(NotImplementedError, match="integrated_wake"):
+        BinnedWakefield.from_wakefield(wake, zmax=1e-4, n=11)
 
 
 def test_from_wakefield_bin_average_of_a_smooth_wake_is_close_to_the_samples():
     wake = PseudomodeWakefield([Pseudomode(A=1e15, d=1e4, k=1e5, phi=np.pi / 2)])
     sampled = TabularWakefield.from_wakefield(wake, zmax=1e-4, n=1001)
-    averaged = TabularWakefield.from_wakefield(
-        wake, zmax=1e-4, n=1001, method="bin_average"
-    )
-    assert not sampled.bin_averaged
-    assert averaged.bin_averaged
+    averaged = BinnedWakefield.from_wakefield(wake, zmax=1e-4, n=1001)
+    assert isinstance(sampled, TabularWakefield)
+    assert isinstance(averaged, BinnedWakefield)
 
     # Interior rows agree to second order. The first row holds twice the
     # self-kick average, which is W(0) to first order.
@@ -521,7 +524,7 @@ def test_tabulated_convolution_converges_to_the_wake_potential(published, sigma)
         half = int(np.ceil(8 * sigma / dz))
         z = dz * np.arange(-half, half + 1)
         density = Q * gaussian(z, sigma)
-        table = TabularWakefield.from_wakefield(
+        table = BinnedWakefield.from_wakefield(
             published, zmax=2 * half * dz, n=2 * half + 1
         )
         V = table.convolve_density(density, dz) / Q
@@ -540,7 +543,7 @@ def test_convolve_density_uses_bin_averages_for_a_singular_wake(ah1):
     density = 1e-9 * gaussian(z, sigma)
 
     direct = ah1.convolve_density(density, dz)
-    table = TabularWakefield.from_wakefield(ah1, zmax=2 * half * dz, n=2 * half + 1)
+    table = BinnedWakefield.from_wakefield(ah1, zmax=2 * half * dz, n=2 * half + 1)
     via_table = table.convolve_density(density, dz)
 
     np.testing.assert_allclose(
@@ -596,14 +599,14 @@ def _bmad_z_long_rows(s: str) -> np.ndarray:
 
 
 def test_bmad_round_trip_keeps_the_doubled_first_row(ah1):
-    table = TabularWakefield.from_wakefield(ah1, zmax=1e-3, n=101)
+    table = BinnedWakefield.from_wakefield(ah1, zmax=1e-3, n=101)
     dz = 1e-3 / 100
 
     rows = _bmad_z_long_rows(table.to_bmad())
     assert rows[-1, 0] == 0.0
-    assert rows[-1, 1] == pytest.approx(2 * ah1.antiderivative(-dz / 2) / dz)
+    assert rows[-1, 1] == pytest.approx(2 * ah1.integrated_wake(-dz / 2) / dz)
 
-    back = TabularWakefield.from_bmad(rows)
+    back = BinnedWakefield.from_bmad(rows)
     np.testing.assert_allclose(back.W_data, table.W_data)
     np.testing.assert_allclose(back.z_data, table.z_data, atol=1e-18)
 
@@ -622,14 +625,14 @@ def test_impact_tables_keep_the_doubled_first_row(ah1):
     np.testing.assert_allclose(rfdata[:, 0], dz * np.arange(n))
 
     # The table methods write the same rows.
-    table = TabularWakefield.from_wakefield(ah1, zmax=zmax, n=n)
+    table = BinnedWakefield.from_wakefield(ah1, zmax=zmax, n=n)
     np.testing.assert_allclose(table.to_impact_t(n=n)[0][:, 0], K)
 
 
 def test_impact_t_export_rebins_a_finer_table():
     """The IMPACT-T row limit coarsens a bin-averaged table conservatively."""
     wake = ParametricWakefield(length=1.0, B=1.0)
-    table = TabularWakefield.from_wakefield(wake, zmax=4e-3, n=4001)
+    table = BinnedWakefield.from_wakefield(wake, zmax=4e-3, n=4001)
     with pytest.warns(UserWarning, match="IMPACT-T limit"):
         data, length = table.to_impact_t()
 
@@ -638,30 +641,28 @@ def test_impact_t_export_rebins_a_finer_table():
     np.testing.assert_allclose(data[:-1, 0], K[:-1], rtol=1e-2)
 
 
-def test_readers_restore_the_bin_averaged_flag():
-    """A table round-tripped through a code keeps its meaning when flagged."""
+def test_binned_readers_preserve_the_kernel():
+    """The reader class selects the interpretation without flags."""
     wake = ParametricWakefield(length=1.0, D=1.0)
-    table = TabularWakefield.from_wakefield(wake, zmax=9e-3, n=10)
+    table = BinnedWakefield.from_wakefield(wake, zmax=9e-3, n=10)
     rows = _bmad_z_long_rows(table.to_bmad())
 
     restored = {
-        "impact_z": TabularWakefield.from_impact_z(
-            table.to_impact_z(), kind="linear", bin_averaged=True
-        ),
-        "impact_t": TabularWakefield.from_impact_t(
-            *table.to_impact_t(), kind="linear", bin_averaged=True
-        ),
-        "bmad": TabularWakefield.from_bmad(rows, kind="linear", bin_averaged=True),
+        "impact_z": BinnedWakefield.from_impact_z(table.to_impact_z()),
+        "impact_t": BinnedWakefield.from_impact_t(*table.to_impact_t()),
+        "bmad": BinnedWakefield.from_bmad(rows),
     }
-    coarse = TabularWakefield.from_wakefield(table, n=4)
+    coarse = BinnedWakefield.from_wakefield(table, n=4)
     for back in restored.values():
-        assert back.bin_averaged
-        assert back.bin_width == pytest.approx(1e-3)
+        assert isinstance(back, BinnedWakefield)
+        assert back.dz == pytest.approx(1e-3)
         np.testing.assert_allclose(
-            TabularWakefield.from_wakefield(back, n=4).W_data, coarse.W_data
+            BinnedWakefield.from_wakefield(back, n=4).W_data, coarse.W_data
         )
 
-    assert not TabularWakefield.from_impact_z(table.to_impact_z()).bin_averaged
+    assert isinstance(
+        TabularWakefield.from_impact_z(table.to_impact_z()), TabularWakefield
+    )
 
 
 @pytest.mark.parametrize(
@@ -673,8 +674,8 @@ def test_readers_restore_the_bin_averaged_flag():
     ids=["nonuniform", "short_of_the_source"],
 )
 def test_bin_averaged_table_must_be_uniform_and_end_at_the_source(z):
-    with pytest.raises(ValueError, match="uniform and end at z = 0"):
-        TabularWakefield(z, np.ones(4), kind="linear", bin_averaged=True)
+    with pytest.raises(ValueError, match="uniform|row at z = 0"):
+        BinnedWakefield.from_bmad(np.column_stack([z, np.ones(4)]))
     TabularWakefield(z, np.ones(4), kind="linear")
 
 
@@ -684,12 +685,12 @@ def test_bin_averaged_table_must_be_uniform_and_end_at_the_source(z):
 
 
 @pytest.fixture(scope="module")
-def fine_table(ah1) -> TabularWakefield:
+def fine_table(ah1) -> BinnedWakefield:
     """Bin-averaged table at 1 µm spacing over 2 mm."""
-    return TabularWakefield.from_wakefield(ah1, zmax=2e-3, n=2001)
+    return BinnedWakefield.from_wakefield(ah1, zmax=2e-3, n=2001)
 
 
-def _integral(table: TabularWakefield) -> float:
+def _integral(table: BinnedWakefield) -> float:
     """Integral of the bin averages, with the first row halved."""
     W = table.W_data[::-1].copy()
     W[0] /= 2
@@ -708,10 +709,56 @@ def test_rebin_is_exact_for_an_odd_multiple(ah1, fine_table):
     )
 
 
-def test_rebin_conserves_the_integral(fine_table):
-    for dz in [2e-6, 3e-6, 7.3e-6]:
-        rebinned = fine_table.rebin(dz)
-        assert _integral(rebinned) == pytest.approx(_integral(fine_table), rel=1e-3)
+@pytest.mark.parametrize("dz", [0.25e-6, 0.5e-6, 2e-6, 3e-6, 7.3e-6])
+def test_rebin_conserves_the_integral(fine_table, dz):
+    rebinned = fine_table.rebin(dz)
+    assert _integral(rebinned) == pytest.approx(_integral(fine_table), rel=1e-12)
+
+
+@pytest.mark.parametrize("dz", [0.0, -1.0, np.nan, np.inf])
+def test_binned_constructor_rejects_invalid_spacing(dz):
+    with pytest.raises(ValueError, match="dz"):
+        BinnedWakefield(dz, np.ones(2))
+
+
+@pytest.mark.parametrize(
+    "values", [[], [1.0], [[1.0, 2.0]], [np.nan, 1.0], [1.0, np.inf]]
+)
+def test_binned_constructor_rejects_invalid_values(values):
+    with pytest.raises(ValueError, match="W"):
+        BinnedWakefield(1e-6, values)
+
+
+def test_binned_data_and_spacing_are_protected():
+    values = np.array([4.0, 2.0, 1.0])
+    bins = BinnedWakefield(1e-6, values)
+    values[:] = 0
+    bins.W_data[:] = 0
+    np.testing.assert_array_equal(bins.W_data, [1.0, 2.0, 4.0])
+    with pytest.raises(AttributeError):
+        bins.dz = 2e-6
+
+
+@pytest.mark.parametrize("spacing", [0.5e-6, 2e-6])
+def test_binned_convolution_rejects_mismatched_spacing(fine_table, spacing):
+    with pytest.raises(ValueError, match="rebin"):
+        fine_table.convolve_density(np.ones(10), dz=spacing)
+    with pytest.raises(ValueError, match="rebin"):
+        fine_table.binned_particle_kicks(np.array([0.0]), np.array([1.0]), dz=spacing)
+
+
+@pytest.mark.parametrize("options", [{"method": "sample"}, {"offset": 1e-6}])
+def test_binned_convolution_rejects_pointwise_options(fine_table, options):
+    with pytest.raises(ValueError, match="sampled|offset"):
+        fine_table.convolve_density(np.ones(10), **options)
+
+
+def test_binned_convolution_defaults_to_its_own_spacing(fine_table):
+    density = np.ones(10)
+    np.testing.assert_allclose(
+        fine_table.convolve_density(density),
+        fine_table.convolve_density(density, dz=fine_table.dz),
+    )
 
 
 def test_rebin_passes_a_table_through_at_its_own_spacing(fine_table):
@@ -721,22 +768,19 @@ def test_rebin_passes_a_table_through_at_its_own_spacing(fine_table):
 
 
 def test_from_wakefield_rebins_a_bin_averaged_table(ah1, fine_table):
-    assert fine_table.bin_averaged
-    coarse = TabularWakefield.from_wakefield(fine_table, zmax=1.5e-3, n=501)
+    coarse = BinnedWakefield.from_wakefield(fine_table, zmax=1.5e-3, n=501)
 
-    assert coarse.bin_averaged
+    assert isinstance(coarse, BinnedWakefield)
     np.testing.assert_allclose(
         coarse.W_data[::-1], ah1.bin_averaged_wake(3e-6, 501), rtol=1e-9
     )
-    with pytest.raises(ValueError, match="bin averages"):
-        TabularWakefield.from_wakefield(fine_table, zmax=1e-3, n=11, method="sample")
 
 
 def test_rebin_is_close_for_a_non_multiple(ah1, fine_table):
     """A non-multiple spacing is accurate well below 0.1% in the bunch moments."""
     dz = 7.3e-6
     rebinned = fine_table.rebin(dz)
-    exact = TabularWakefield.from_wakefield(
+    exact = BinnedWakefield.from_wakefield(
         ah1, zmax=rebinned.default_zmax, n=len(rebinned.z_data)
     )
 
@@ -767,11 +811,7 @@ def test_rebin_limits_the_rows_with_a_warning(fine_table):
     assert len(short.z_data) == 500
 
 
-def test_rebin_rejects_a_nonuniform_table_and_a_bad_spacing(fine_table):
-    z = np.r_[-np.geomspace(1e-4, 1e-7, 50), 0.0]
-    nonuniform = TabularWakefield(z, np.exp(z / 1e-5))
-    with pytest.raises(ValueError, match="uniform"):
-        nonuniform.rebin(1e-6)
+def test_rebin_rejects_a_bad_spacing(fine_table):
     with pytest.raises(ValueError, match="dz"):
         fine_table.rebin(0.0)
 
@@ -781,9 +821,13 @@ def test_rebin_rejects_a_nonuniform_table_and_a_bad_spacing(fine_table):
 # -----------------------------------------------------------------------------
 
 
-def test_particle_kicks_refuses_a_singular_wake(ah1):
-    with pytest.raises(ValueError, match="binned_particle_kicks"):
-        ah1.particle_kicks(np.array([0.0, -1e-6]), np.array([1e-12, 1e-12]))
+def test_particle_kicks_bins_a_singular_wake(ah1):
+    positions = np.array([0.0, -1e-6])
+    weights = np.array([1e-12, 1e-12])
+    np.testing.assert_allclose(
+        ah1.particle_kicks(positions, weights),
+        ah1.binned_particle_kicks(positions, weights),
+    )
 
 
 def test_binned_particle_kicks_agree_with_the_exact_pseudomode_sum():
@@ -838,18 +882,19 @@ def test_binned_particle_kicks_exclude_the_whole_self_response(ah1, fraction):
 
 def test_bin_averaged_table_is_tracked_at_its_own_spacing(ah1):
     dz = 1e-5
-    table = TabularWakefield.from_wakefield(ah1, zmax=1e-3, n=101)
+    table = BinnedWakefield.from_wakefield(ah1, zmax=1e-3, n=101)
     rng = np.random.default_rng(4)
     z = rng.normal(0, 1e-4, 2000)
     weight = np.full(2000, 1e-13)
 
-    assert table.bin_width == pytest.approx(dz)
+    assert table.dz == pytest.approx(dz)
     np.testing.assert_allclose(
         table.binned_particle_kicks(z, weight),
         table.binned_particle_kicks(z, weight, dz=dz),
     )
-    with pytest.raises(ValueError, match="bin averages"):
-        table.particle_kicks(z[:2], weight[:2])
+    np.testing.assert_allclose(
+        table.particle_kicks(z, weight), table.binned_particle_kicks(z, weight)
+    )
 
     P = ParticleGroup(
         data=dict(

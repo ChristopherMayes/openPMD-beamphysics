@@ -46,7 +46,7 @@ from .statistics import (
 )
 from .units import c_light, parse_bunching_str, pg_units, pmd_unit
 from .utils import get_rotation_matrix
-from .wakefields import WakefieldBase
+from .wakefields import BinnedWakefield, WakefieldBase
 from .writers import pmd_init, write_pmd_bunch
 
 __all__ = [
@@ -1815,7 +1815,7 @@ class ParticleGroup:
 
     def apply_wakefield(
         self,
-        wakefield: WakefieldBase,
+        wakefield: WakefieldBase | BinnedWakefield,
         length: float,
         inplace: bool = False,
         include_self_kick: bool = True,
@@ -1826,7 +1826,7 @@ class ParticleGroup:
 
         Parameters
         ----------
-        wakefield : WakefieldBase
+        wakefield : WakefieldBase or BinnedWakefield
             A wakefield object providing the `particle_kicks(z, weight)` method.
         length : float
             Length over which the wakefield acts [m].
@@ -1836,12 +1836,10 @@ class ParticleGroup:
         include_self_kick : bool, optional
             Whether to include the self-kick term. Default is True.
         dz : float, optional
-            Bin width (m) for `wakefield.binned_particle_kicks`, which deposits the
-            charge on a grid and convolves it with the bin-averaged wake. That path
-            is used when dz is given, when the wake is singular at z = 0, as
-            `ParametricWakefield` is, or when it holds bin averages, as a
-            `TabularWakefield` built from one does; otherwise
-            `wakefield.particle_kicks` is used.
+            Bin width (m) for `wakefield.binned_particle_kicks`. If omitted,
+            `wakefield.particle_kicks` chooses the tracking method. Singular
+            models use a charge grid; `BinnedWakefield` uses its fixed spacing.
+            An explicit dz must match a binned wake's spacing; use `rebin` first.
 
         Returns
         -------
@@ -1868,7 +1866,7 @@ class ParticleGroup:
             z = -c_light * np.asarray(P.t)
 
         weight = np.asarray(P.weight)
-        if dz is not None or wakefield.is_singular or wakefield.bin_width is not None:
+        if dz is not None:
             kicks = wakefield.binned_particle_kicks(
                 z, weight, dz=dz, include_self_kick=include_self_kick
             )
@@ -1883,7 +1881,7 @@ class ParticleGroup:
 
     def wakefield_plot(
         self,
-        wake: WakefieldBase,
+        wake: WakefieldBase | BinnedWakefield,
         key=None,
         nice=True,
         ax=None,
@@ -1903,7 +1901,7 @@ class ParticleGroup:
 
         Parameters
         ----------
-        wake : WakefieldBase
+        wake : WakefieldBase or BinnedWakefield
             A wakefield object providing the `particle_kicks(z, weight)` method,
             returning longitudinal wakefield kicks in eV/m.
 

@@ -53,7 +53,7 @@ class Pseudomode:
         """Evaluate this mode at position z (array input assumed)."""
         return self.A * np.exp(self.d * z) * np.sin(self.k * z + self.phi)
 
-    def antiderivative(self, z: np.ndarray) -> np.ndarray:
+    def integrated_wake(self, z: np.ndarray) -> np.ndarray:
         """
         Integral of this mode from z up to the source particle (array input assumed).
 
@@ -342,13 +342,13 @@ class PseudomodeWakefield(WakefieldBase):
             return float(out[0])
         return out
 
-    def antiderivative(self, z: np.ndarray | float) -> np.ndarray | float:
+    def integrated_wake(self, z: np.ndarray | float) -> np.ndarray | float:
         """
         Integral of the wake from z up to the source particle.
 
         $$F(z) = \\int_z^0 W(z') \\, dz'$$
 
-        Summed in closed form over the modes, see `Pseudomode.antiderivative`.
+        Summed in closed form over the modes, see `Pseudomode.integrated_wake`.
 
         Parameters
         ----------
@@ -369,7 +369,7 @@ class PseudomodeWakefield(WakefieldBase):
         z_masked = z[mask]
 
         for mode in self._modes:
-            out[mask] += mode.antiderivative(z_masked)
+            out[mask] += mode.integrated_wake(z_masked)
 
         if scalar_input:
             return float(out[0])

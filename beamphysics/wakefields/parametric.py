@@ -4,7 +4,7 @@ Parametric short-range longitudinal wake of a chain of RF cavities.
 This module provides the analytical wake model of Zagorodnov et al. (2021),
 which fits the point-charge wake of a whole RF module, cavities together with
 their bellows and transitions, as a sum of four terms. The model is singular at
-the source particle, so it is tabulated and applied through its antiderivative.
+the source particle, so it is tabulated and applied through its integrated wake.
 
 Classes
 -------
@@ -120,8 +120,8 @@ class ParametricWakefield(WakefieldBase):
 
     The wake per unit length, as returned by `wake`, is w(s) / length. Because the
     B term diverges as $s^{-1/2}$, `wake` returns inf at z = 0 and the model must
-    be tabulated and applied through `antiderivative`, which also carries the D
-    term: `TabularWakefield.from_wakefield` and `convolve_density` do this
+    be tabulated and applied through `integrated_wake`, which also carries the D
+    term: `BinnedWakefield.from_wakefield` and `convolve_density` do this
     automatically.
 
     Parameters
@@ -167,7 +167,7 @@ class ParametricWakefield(WakefieldBase):
     Examples
     --------
     >>> wake = ParametricWakefield(length=10.5, **ZAGORODNOV_2021_TABLE_IV["AH1"])
-    >>> table = TabularWakefield.from_wakefield(wake, zmax=20e-3, n=2001)
+    >>> table = BinnedWakefield.from_wakefield(wake, zmax=20e-3, n=2001)
     >>> V = wake.wake_potential(z, sigma=100e-6)  # Gaussian bunch, V/C/m
     """
 
@@ -275,7 +275,7 @@ class ParametricWakefield(WakefieldBase):
         return self.B != 0 or self.D != 0
 
     # -------------------------------------------------------------------------
-    # Wake and antiderivative
+    # Wake and integrated wake
     # -------------------------------------------------------------------------
 
     def _wake_regular(self, s: np.ndarray) -> np.ndarray:
@@ -293,7 +293,7 @@ class ParametricWakefield(WakefieldBase):
         """
         Evaluate the wake per unit length at position z.
 
-        The delta-function term is excluded; it enters through `antiderivative`.
+        The delta-function term is excluded; it enters through `integrated_wake`.
 
         Parameters
         ----------
@@ -324,20 +324,20 @@ class ParametricWakefield(WakefieldBase):
             return float(out[0])
         return out
 
-    def _antiderivative_A(self, s: np.ndarray) -> np.ndarray:
+    def _integrated_wake_A(self, s: np.ndarray) -> np.ndarray:
         """Integral of the A term from 0 to s > 0."""
         if self.k0 == 0:
             return self.A * s
         r = np.sqrt(self.k0 * s)
         return 2 * self.A / self.k0 * (1 - (1 + r) * np.exp(-r))
 
-    def _antiderivative_B_smooth(self, s: np.ndarray) -> np.ndarray:
+    def _integrated_wake_B_smooth(self, s: np.ndarray) -> np.ndarray:
         """Integral of the B term from 0 to s > 0 with the cosine replaced by 1."""
         if self.k2 == 0:
             return 2 * self.B * np.sqrt(s)
         return 2 * self.B / self.k2 * np.log1p(self.k2 * np.sqrt(s))
 
-    def _antiderivative_B(self, s: np.ndarray) -> np.ndarray:
+    def _integrated_wake_B(self, s: np.ndarray) -> np.ndarray:
         """
         Integral of the B term from 0 to s > 0.
 
@@ -347,7 +347,7 @@ class ParametricWakefield(WakefieldBase):
         is accumulated at the panel edges once, and each s adds its partial panel.
         """
         if self.k1 == 0:
-            return self._antiderivative_B_smooth(s)
+            return self._integrated_wake_B_smooth(s)
 
         def g(u):
             return (
@@ -375,13 +375,13 @@ class ParametricWakefield(WakefieldBase):
 
         return F_edges[j] + half * (g(nodes) @ w)
 
-    def _antiderivative_C(self, s: np.ndarray) -> np.ndarray:
+    def _integrated_wake_C(self, s: np.ndarray) -> np.ndarray:
         """Integral of the C term from 0 to s > 0."""
         if self.k3 == 0:
             return self.C * s
         return self.C / self.k3 * np.sin(self.k3 * s)
 
-    def antiderivative(self, z: np.ndarray | float) -> np.ndarray | float:
+    def integrated_wake(self, z: np.ndarray | float) -> np.ndarray | float:
         """
         Integral of the wake per unit length from z up to the source particle.
 
@@ -416,9 +416,9 @@ class ParametricWakefield(WakefieldBase):
         behind = z < 0
         if np.any(behind):
             s = -z[behind]
-            F = self._antiderivative_A(s) + self._antiderivative_C(s) + self.D
+            F = self._integrated_wake_A(s) + self._integrated_wake_C(s) + self.D
             if self.B != 0:
-                F = F + self._antiderivative_B(s)
+                F = F + self._integrated_wake_B(s)
             out[behind] = F / self.length
 
         if scalar_input:
@@ -632,8 +632,7 @@ class ParametricWakefield(WakefieldBase):
         Not available for this model.
 
         The C term does not decay, so its impedance is a pair of delta functions,
-        and the B term has no closed-form transform. Tabulate the wake with
-        `TabularWakefield.from_wakefield` for a numerical impedance.
+        and the B term has no closed-form transform.
 
         Raises
         ------
@@ -641,6 +640,5 @@ class ParametricWakefield(WakefieldBase):
         """
         raise NotImplementedError(
             "ParametricWakefield has no closed-form impedance: the C term is "
-            "undamped and the B term has no analytic transform. Tabulate the wake "
-            "with TabularWakefield.from_wakefield for a numerical impedance."
+            "undamped and the B term has no analytic transform."
         )

@@ -1838,8 +1838,10 @@ class ParticleGroup:
         dz : float, optional
             Bin width (m) for `wakefield.binned_particle_kicks`, which deposits the
             charge on a grid and convolves it with the bin-averaged wake. That path
-            is used when dz is given or when the wake is singular at z = 0, as
-            `ParametricWakefield` is; otherwise `wakefield.particle_kicks` is used.
+            is used when dz is given, when the wake is singular at z = 0, as
+            `ParametricWakefield` is, or when it holds bin averages, as a
+            `TabularWakefield` built from one does; otherwise
+            `wakefield.particle_kicks` is used.
 
         Returns
         -------
@@ -1866,7 +1868,7 @@ class ParticleGroup:
             z = -c_light * np.asarray(P.t)
 
         weight = np.asarray(P.weight)
-        if dz is not None or wakefield.is_singular:
+        if dz is not None or wakefield.is_singular or wakefield.bin_width is not None:
             kicks = wakefield.binned_particle_kicks(
                 z, weight, dz=dz, include_self_kick=include_self_kick
             )

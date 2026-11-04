@@ -4,7 +4,10 @@ Digitize the ECHO wake potentials of Fig. 7 (left) of Zagorodnov et al. (2021).
 The figure, arXiv:2010.10204v2 Fig007.png, shows the longitudinal wake potentials
 of Gaussian bunches in the AH1 module for nine bunch lengths, from the code ECHO
 in solid blue with the analytical fit of Eq. 18 dashed in red. The curves are
-traced column by column from a seed column where all nine are separated, the
+traced column by column from a seed column where all nine are separated,
+following both colours because the red dashes hide the blue curves in places,
+but a point is kept only where the curve is entirely blue, so the result is
+independent of the fit. The
 axes are calibrated from the tick-label positions, and the result is written to
 docs/examples/data/zagorodnov_2021_fig7_echo.csv with columns sigma (µm),
 s/sigma and W (V/pC).
@@ -47,19 +50,19 @@ def load(source: str | None) -> np.ndarray:
     return rgba[..., :3] * alpha + (1 - alpha)
 
 
-def curve_runs(curve: np.ndarray, col: int) -> list[float]:
-    """Row centres of the curve pixels in one column."""
+def curve_runs(curve: np.ndarray, blue: np.ndarray, col: int) -> list[tuple]:
+    """Row centres of the curve pixels in one column, and whether each is all blue."""
     rows = np.where(curve[Y0 + 1 : Y1, col])[0] + Y0 + 1
     if len(rows) == 0:
         return []
     groups = np.split(rows, np.where(np.diff(rows) > 1)[0] + 1)
-    return [float(g.mean()) for g in groups]
+    return [(float(g.mean()), bool(blue[g, col].all())) for g in groups]
 
 
-def track(runs: dict[int, list[float]], seed: int, start: float, order, tol=2.5):
+def track(runs: dict[int, list[tuple]], seed: int, start: tuple, order, tol=2.5):
     """Follow one curve from the seed, predicting each row from the local slope."""
     points = {seed: start}
-    hist = [(seed, start)]
+    hist = [(seed, start[0])]
     for c in order:
         if len(hist) >= 2:
             (c1, r1), (c2, r2) = hist[-2], hist[-1]
@@ -68,10 +71,10 @@ def track(runs: dict[int, list[float]], seed: int, start: float, order, tol=2.5)
             pred = hist[-1][1]
         rs = runs[c]
         if rs:
-            j = int(np.argmin([abs(r - pred) for r in rs]))
-            if abs(rs[j] - pred) <= tol:
+            j = int(np.argmin([abs(r - pred) for r, _ in rs]))
+            if abs(rs[j][0] - pred) <= tol:
                 points[c] = rs[j]
-                hist.append((c, rs[j]))
+                hist.append((c, rs[j][0]))
         if abs(c - hist[-1][0]) > 12:
             break
     return points
@@ -93,7 +96,7 @@ def clean(cols: np.ndarray, rows: np.ndarray):
     return cols[longest], rows[longest]
 
 
-def enforce_order(tracks: list[dict[int, float]], tol=1.0) -> None:
+def enforce_order(tracks: list[dict[int, tuple]], tol=1.0) -> None:
     """
     Drop points where two tracks coincide or a shorter bunch lies below a longer one.
 
@@ -105,7 +108,7 @@ def enforce_order(tracks: list[dict[int, float]], tol=1.0) -> None:
     for i, (upper, lower) in enumerate(zip(tracks[:-1], tracks[1:])):
         limit = merge_col if i < 2 else X1
         for c in [c for c in upper if c in lower and c < limit]:
-            if lower[c] - upper[c] < tol:
+            if lower[c][0] - upper[c][0] < tol:
                 del upper[c]
                 del lower[c]
 
@@ -118,7 +121,7 @@ def main(source: str | None) -> None:
     curve = blue | red
 
     cols = np.arange(X0 + 1, X1)
-    runs = {c: curve_runs(curve, c) for c in cols}
+    runs = {c: curve_runs(curve, blue, c) for c in cols}
     # Seed near s = sigma, where the nine curves are ordered by bunch length.
     seed = min(
         (c for c in cols if len(runs[c]) == 9),
@@ -136,7 +139,10 @@ def main(source: str | None) -> None:
     for sigma, pts in zip(SIGMAS_UM, tracks):
         # Ahead of s = -1.5 sigma the curves pile up within a few pixels of zero.
         c = np.array([k for k in sorted(pts) if (k - COL0) / PX_PER_UNIT >= -1.5])
-        c, rr = clean(c, np.array([pts[k] for k in c]))
+        c, rr = clean(c, np.array([pts[k][0] for k in c]))
+        # Keep the ECHO curve only, where no red dash overlaps it.
+        is_blue = np.array([pts[k][1] for k in c], dtype=bool)
+        c, rr = c[is_blue], rr[is_blue]
         s_over_sigma = (c - COL0) / PX_PER_UNIT
         W = (ROW0 - rr) / PX_PER_V
         rows_out.append(np.column_stack([np.full(len(c), sigma), s_over_sigma, W]))

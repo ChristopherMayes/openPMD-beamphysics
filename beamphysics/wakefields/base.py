@@ -154,13 +154,24 @@ class WakefieldBase(ABC):
     @property
     def is_singular(self) -> bool:
         """
-        Whether the wake is unbounded at z = 0.
+        Whether the wake has no finite point value at z = 0.
 
-        A singular wake, such as the diffraction-model term of
+        A singular wake, such as the diffraction-model or delta-function term of
         `ParametricWakefield`, cannot be sampled at points. It is tabulated and
         applied through `bin_averaged_wake` instead.
         """
         return False
+
+    @property
+    def bin_width(self) -> float | None:
+        """
+        Bin width (m) at which the wake is defined, or None.
+
+        A table of bin averages, see `TabularWakefield.bin_averaged`, is correct
+        only at its own spacing. `binned_particle_kicks` bins the bunch at that
+        width by default, and `particle_kicks` refuses such a wake.
+        """
+        return None
 
     def bin_averaged_wake(self, dz: float, n: int) -> np.ndarray:
         """
@@ -321,30 +332,7 @@ class WakefieldBase(ABC):
         n = len(density)
         charge = density * dz  # Convert to charge per bin (C)
 
-        if method == "auto":
-            if offset == 0 and self._has_antiderivative():
-                method = "bin_average"
-            else:
-                method = "sample"
-
-        # Build causal wake array: W[k] = wake at lag k*dz
-        # W[0] = W(0), W[1] = W(-dz), W[2] = W(-2*dz), ...
-        if method == "bin_average":
-            if offset != 0:
-                raise ValueError("method='bin_average' does not support an offset")
-            W_causal = self.bin_averaged_wake(dz, n)
-        elif method == "sample":
-            if self.is_singular:
-                raise ValueError(
-                    f"{type(self).__name__} is singular at z = 0 and cannot be "
-                    "sampled at points. Use method='bin_average'."
-                )
-            z_wake = -np.arange(n) * dz + offset
-            W_causal = self.wake(z_wake)
-        else:
-            raise ValueError(
-                f"method must be 'auto', 'sample' or 'bin_average', got {method!r}"
-            )
+        W_causal = self._wake_kernel(dz, n, offset, method)
 
         # Correlation: result[i] = sum_k charge[i+k] * W[k]
         # This gives the wake from particles ahead (larger indices)
@@ -365,6 +353,29 @@ class WakefieldBase(ABC):
             self._plot_convolve_density(density, dz, integrated_wake, ax=ax)
 
         return integrated_wake
+
+    def _wake_kernel(self, dz: float, n: int, offset: float, method: str) -> np.ndarray:
+        """Wake at lags k dz for k = 0 to n - 1, as used by `convolve_density`."""
+        if method == "auto":
+            if offset == 0 and self._has_antiderivative():
+                method = "bin_average"
+            else:
+                method = "sample"
+
+        if method == "bin_average":
+            if offset != 0:
+                raise ValueError("method='bin_average' does not support an offset")
+            return self.bin_averaged_wake(dz, n)
+        if method == "sample":
+            if self.is_singular:
+                raise ValueError(
+                    f"{type(self).__name__} is singular at z = 0 and cannot be "
+                    "sampled at points. Use method='bin_average'."
+                )
+            return np.asarray(self.wake(-np.arange(n) * dz + offset), dtype=float)
+        raise ValueError(
+            f"method must be 'auto', 'sample' or 'bin_average', got {method!r}"
+        )
 
     def _plot_convolve_density(self, density, dz, integrated_wake, ax=None):
         """Plot density profile and wake potential from convolve_density."""
@@ -421,12 +432,18 @@ class WakefieldBase(ABC):
         ------
         ValueError
             If the wake is singular at z = 0, where the point-to-point sum is
-            dominated by the closest pairs. Use `binned_particle_kicks`.
+            dominated by the closest pairs, or if it holds bin averages, which are
+            not point values. Use `binned_particle_kicks`.
         """
         if self.is_singular:
             raise ValueError(
                 f"{type(self).__name__} is singular at z = 0, so point-to-point "
                 "kicks are undefined. Use binned_particle_kicks."
+            )
+        if self.bin_width is not None:
+            raise ValueError(
+                f"{type(self).__name__} holds bin averages, which are not point "
+                "values. Use binned_particle_kicks."
             )
 
         z = np.asarray(z)
@@ -472,11 +489,12 @@ class WakefieldBase(ABC):
         weight : np.ndarray
             Particle charges (C).
         dz : float, optional
-            Bin width (m). Defaults to the bunch length divided by
-            max(100, N // 10). A bin-averaged wake table from a tracking code is
-            correct only at its own spacing, so pass that spacing to reproduce it.
+            Bin width (m). Defaults to `bin_width` for a wake that holds bin
+            averages, which are correct only at their own spacing, and otherwise
+            to the bunch length divided by max(100, N // 10).
         include_self_kick : bool, optional
-            Whether to include the self-kick term. Default is True.
+            Whether to include the self-kick term. If False, the whole response of
+            each particle to its own deposited charge is removed. Default is True.
         method : str, optional
             Passed to `convolve_density`. Default is 'auto'.
 
@@ -494,6 +512,8 @@ class WakefieldBase(ABC):
             )
 
         z_min, z_max = z.min(), z.max()
+        if dz is None:
+            dz = self.bin_width
         if dz is None:
             z_range = z_max - z_min
             if z_range == 0:
@@ -514,13 +534,18 @@ class WakefieldBase(ABC):
         np.add.at(density, i + 1, weight * f)
         density /= dz
 
-        V = self.convolve_density(
-            density, dz, include_self_kick=include_self_kick, method=method
-        )
+        V = self.convolve_density(density, dz, method=method)
         centers = z0 + dz * np.arange(n)
 
         # Negative sign: an energy-losing wake is positive.
-        return -np.interp(z, centers, V)
+        kicks = -np.interp(z, centers, V)
+
+        if not include_self_kick:
+            # Cloud-in-cell spreads a particle over two nodes, which kick each other.
+            K0, K1 = self._wake_kernel(dz, 2, 0, method)
+            kicks += weight * (0.5 * K0 * ((1 - f) ** 2 + f**2) + K1 * f * (1 - f))
+
+        return kicks
 
     def _self_kick_value(self) -> float:
         """

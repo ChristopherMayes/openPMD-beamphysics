@@ -271,8 +271,8 @@ class ParametricWakefield(WakefieldBase):
 
     @property
     def is_singular(self) -> bool:
-        """Whether the diffraction term is present, which diverges at z = 0."""
-        return self.B != 0
+        """Whether the diffraction or delta-function term is present."""
+        return self.B != 0 or self.D != 0
 
     # -------------------------------------------------------------------------
     # Wake and antiderivative

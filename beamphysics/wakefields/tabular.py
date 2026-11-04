@@ -51,6 +51,11 @@ class TabularWakefield(WakefieldBase):
         Value to return outside the interpolation range. Default is 0.
     kind : str, optional
         Interpolation method. Default is 'cubic'.
+    bin_averaged : bool, optional
+        Whether W holds bin averages of the wake over a uniform table spacing, with
+        the first row doubled, rather than point values. Such a table must be
+        uniform and end at z = 0. `from_wakefield` resamples it through `rebin`.
+        Default is False.
 
     Examples
     --------
@@ -65,6 +70,7 @@ class TabularWakefield(WakefieldBase):
         W: np.ndarray,
         fill_value: float = 0.0,
         kind: str = "cubic",
+        bin_averaged: bool = False,
     ) -> None:
         z = np.asarray(z)
         W = np.asarray(W)
@@ -75,11 +81,18 @@ class TabularWakefield(WakefieldBase):
             raise ValueError("Need at least 4 points for cubic interpolation")
         if np.any(np.diff(z) <= 0):
             raise ValueError("z must be strictly increasing")
+        if bin_averaged:
+            delta = (z[-1] - z[0]) / (len(z) - 1)
+            if z[-1] != 0 or not np.allclose(np.diff(z), delta, rtol=1e-6, atol=0):
+                raise ValueError(
+                    "A bin-averaged table must be uniform and end at z = 0"
+                )
 
         # Store data
         self._z = z
         self._W = W
         self._fill_value = fill_value
+        self._bin_averaged = bool(bin_averaged)
 
         # Create interpolator
         self._interp = interp1d(
@@ -124,7 +137,8 @@ class TabularWakefield(WakefieldBase):
             `wakefield.bin_averaged_wake`, the averages of the wake over bins of
             the table spacing centred on each row, with the first row doubled as
             Bmad and the IMPACT codes expect. 'auto' (default) uses 'bin_average'
-            when `wakefield.is_singular` and 'sample' otherwise.
+            when `wakefield.is_singular` or the source is a bin-averaged table,
+            and 'sample' otherwise. A bin-averaged table is resampled with `rebin`.
 
         Returns
         -------
@@ -135,8 +149,8 @@ class TabularWakefield(WakefieldBase):
         ------
         ValueError
             If zmax is not positive, if n < 4, if method is 'sample' for a singular
-            wake, or if a `TabularWakefield` source does not cover -zmax <= z <= 0,
-            which would silently pad the result with zeros.
+            wake or a bin-averaged table, or if a `TabularWakefield` source does not
+            cover -zmax <= z <= 0, which would silently pad the result with zeros.
         NotImplementedError
             If zmax or n is omitted and the model defines no default for it, or if
             method is 'bin_average' and the model defines no antiderivative.
@@ -160,8 +174,12 @@ class TabularWakefield(WakefieldBase):
         >>> wake = ParametricWakefield(length=10.5, **ZAGORODNOV_2021_TABLE_IV["AH1"])
         >>> table = TabularWakefield.from_wakefield(wake, zmax=20e-3, n=2001)
         """
+        averaged_source = isinstance(wakefield, TabularWakefield) and (
+            wakefield.bin_averaged
+        )
         if method == "auto":
-            method = "bin_average" if wakefield.is_singular else "sample"
+            singular = wakefield.is_singular or averaged_source
+            method = "bin_average" if singular else "sample"
         if method not in ("sample", "bin_average"):
             raise ValueError(
                 f"method must be 'auto', 'sample' or 'bin_average', got {method!r}"
@@ -170,6 +188,11 @@ class TabularWakefield(WakefieldBase):
             raise ValueError(
                 f"{type(wakefield).__name__} is singular at z = 0 and cannot be "
                 "sampled at points. Use method='bin_average'."
+            )
+        if method == "sample" and averaged_source:
+            raise ValueError(
+                "The source table holds bin averages, which are not point values. "
+                "Use method='bin_average', which rebins it."
             )
         if kind is None:
             kind = "linear" if method == "bin_average" else "cubic"
@@ -206,8 +229,13 @@ class TabularWakefield(WakefieldBase):
         z = -np.linspace(zmax, 0.0, n)
 
         if method == "bin_average":
-            # Row k from z = 0 holds the average over the bin centred on k * dz.
-            W = wakefield.bin_averaged_wake(zmax / (n - 1), n)[::-1]
+            dz = zmax / (n - 1)
+            if averaged_source:
+                # The source covers zmax, so rebin yields at least n rows.
+                W = wakefield.rebin(dz, max_rows=n).W_data
+            else:
+                # Row k from z = 0 holds the average over the bin centred on k * dz.
+                W = wakefield.bin_averaged_wake(dz, n)[::-1]
         elif isinstance(wakefield, ImpedanceWakefield):
             # The cosine transform has period L = 2*pi*(n_fft - 1)/k_max and is even,
             # so W(s) is aliased by W(L - s). L >= 2*zmax keeps the mirror beyond zmax.
@@ -219,11 +247,19 @@ class TabularWakefield(WakefieldBase):
             # prohibitively slow point by point.
             W = wakefield.wake(z)
 
-        return cls(z, np.asarray(W, dtype=float), kind=kind)
+        return cls(
+            z,
+            np.asarray(W, dtype=float),
+            kind=kind,
+            bin_averaged=method == "bin_average",
+        )
 
     @classmethod
     def from_impact_z(
-        cls, source: str | os.PathLike | np.ndarray, kind: str = "cubic"
+        cls,
+        source: str | os.PathLike | np.ndarray,
+        kind: str = "cubic",
+        bin_averaged: bool = False,
     ) -> TabularWakefield:
         """
         Read the longitudinal wake from an IMPACT-Z wake table.
@@ -238,6 +274,9 @@ class TabularWakefield(WakefieldBase):
             as an entry of the `file_data` of a lume-impact `ImpactZInput`.
         kind : str, optional
             Interpolation method. Default is 'cubic'.
+        bin_averaged : bool, optional
+            Whether the table holds bin averages, as `to_impact_z` writes for a
+            bin-averaged table. Default is False.
 
         Returns
         -------
@@ -255,11 +294,15 @@ class TabularWakefield(WakefieldBase):
         z = -data["s"][::-1]
         W = data["Wz"][::-1]
 
-        return cls(z, W, kind=kind)
+        return cls(z, W, kind=kind, bin_averaged=bin_averaged)
 
     @classmethod
     def from_impact_t(
-        cls, source: str | os.PathLike | np.ndarray, length: float, kind: str = "cubic"
+        cls,
+        source: str | os.PathLike | np.ndarray,
+        length: float,
+        kind: str = "cubic",
+        bin_averaged: bool = False,
     ) -> TabularWakefield:
         """
         Read the longitudinal wake from an IMPACT-T wake table.
@@ -277,6 +320,9 @@ class TabularWakefield(WakefieldBase):
             Distance covered by the table (m), given as V7 on the -6 element.
         kind : str, optional
             Interpolation method. Default is 'cubic'.
+        bin_averaged : bool, optional
+            Whether the table holds bin averages, as `to_impact_t` writes for a
+            bin-averaged table. Default is False.
 
         Returns
         -------
@@ -290,7 +336,9 @@ class TabularWakefield(WakefieldBase):
 
         data = parse_impact_t_wakefield(source, length)
 
-        return cls(-data["s"][::-1], data["Wz"][::-1], kind=kind)
+        return cls(
+            -data["s"][::-1], data["Wz"][::-1], kind=kind, bin_averaged=bin_averaged
+        )
 
     @classmethod
     def from_bmad(
@@ -299,6 +347,7 @@ class TabularWakefield(WakefieldBase):
         amp_scale: float = 1,
         z_scale: float = 1,
         kind: str = "cubic",
+        bin_averaged: bool = False,
     ) -> TabularWakefield:
         """
         Read the longitudinal wake from a Bmad z_long wake table.
@@ -320,6 +369,9 @@ class TabularWakefield(WakefieldBase):
             Bmad `sr%z_scale`. Default is 1.
         kind : str, optional
             Interpolation method. Default is 'cubic'.
+        bin_averaged : bool, optional
+            Whether the table holds bin averages, as `to_bmad` writes for a
+            bin-averaged table. Default is False.
 
         Returns
         -------
@@ -379,7 +431,7 @@ class TabularWakefield(WakefieldBase):
 
         z = -dz * np.arange(m - 1, -1, -1)
 
-        return cls(z / z_scale, amp_scale * W[:m], kind=kind)
+        return cls(z / z_scale, amp_scale * W[:m], kind=kind, bin_averaged=bin_averaged)
 
     @property
     def default_zmax(self) -> float:
@@ -458,7 +510,7 @@ class TabularWakefield(WakefieldBase):
         Returns
         -------
         TabularWakefield
-            Table with spacing dz and linear interpolation.
+            Bin-averaged table with spacing dz and linear interpolation.
 
         Raises
         ------
@@ -513,7 +565,9 @@ class TabularWakefield(WakefieldBase):
             W = np.diff(F_h, prepend=0.0) / h
             W[0] *= 2
 
-        return TabularWakefield(-h * np.arange(n)[::-1], W[::-1], kind="linear")
+        return TabularWakefield(
+            -h * np.arange(n)[::-1], W[::-1], kind="linear", bin_averaged=True
+        )
 
     def to_bmad(
         self,
@@ -753,6 +807,18 @@ class TabularWakefield(WakefieldBase):
         # Use the closest point to z=0
         idx = np.argmax(self._z)
         return float(self._W[idx])
+
+    @property
+    def bin_averaged(self) -> bool:
+        """Whether the table holds bin averages rather than point values."""
+        return self._bin_averaged
+
+    @property
+    def bin_width(self) -> float | None:
+        """Spacing of a bin-averaged table (m), or None for point values."""
+        if not self._bin_averaged:
+            return None
+        return float(self._z[-1] - self._z[-2])
 
     @property
     def z_data(self) -> np.ndarray:

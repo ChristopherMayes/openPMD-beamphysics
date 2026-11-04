@@ -158,6 +158,17 @@ def test_wake_without_the_diffraction_term_is_finite_at_the_source():
     assert wake.wake(-1e-12) == pytest.approx((3.0 + 1.0) / 2.0, rel=1e-5)
 
 
+def test_delta_term_alone_is_singular():
+    D, L, dz = 3.0, 2.0, 1e-4
+    wake = ParametricWakefield(length=L, D=D)
+    table = TabularWakefield.from_wakefield(wake, zmax=3 * dz, n=4)
+
+    assert wake.is_singular
+    assert table.W_data[-1] == pytest.approx(2 * D / L / dz)
+    with pytest.raises(ValueError, match="binned_particle_kicks"):
+        wake.particle_kicks(np.array([0.0, -1e-6]), np.array([1e-12, 1e-12]))
+
+
 def test_wake_scalar_and_array_agree(published):
     z = -2.5e-4
     assert published.wake(z) == published.wake(np.array([z]))[0]
@@ -483,6 +494,8 @@ def test_from_wakefield_bin_average_of_a_smooth_wake_is_close_to_the_samples():
     averaged = TabularWakefield.from_wakefield(
         wake, zmax=1e-4, n=1001, method="bin_average"
     )
+    assert not sampled.bin_averaged
+    assert averaged.bin_averaged
 
     # Interior rows agree to second order. The first row holds twice the
     # self-kick average, which is W(0) to first order.
@@ -613,6 +626,58 @@ def test_impact_tables_keep_the_doubled_first_row(ah1):
     np.testing.assert_allclose(table.to_impact_t(n=n)[0][:, 0], K)
 
 
+def test_impact_t_export_rebins_a_finer_table():
+    """The IMPACT-T row limit coarsens a bin-averaged table conservatively."""
+    wake = ParametricWakefield(length=1.0, B=1.0)
+    table = TabularWakefield.from_wakefield(wake, zmax=4e-3, n=4001)
+    with pytest.warns(UserWarning, match="IMPACT-T limit"):
+        data, length = table.to_impact_t()
+
+    K = wake.bin_averaged_wake(length / (len(data) - 1), len(data))
+    # The last bin reaches beyond the source table, so it is partial.
+    np.testing.assert_allclose(data[:-1, 0], K[:-1], rtol=1e-2)
+
+
+def test_readers_restore_the_bin_averaged_flag():
+    """A table round-tripped through a code keeps its meaning when flagged."""
+    wake = ParametricWakefield(length=1.0, D=1.0)
+    table = TabularWakefield.from_wakefield(wake, zmax=9e-3, n=10)
+    rows = _bmad_z_long_rows(table.to_bmad())
+
+    restored = {
+        "impact_z": TabularWakefield.from_impact_z(
+            table.to_impact_z(), kind="linear", bin_averaged=True
+        ),
+        "impact_t": TabularWakefield.from_impact_t(
+            *table.to_impact_t(), kind="linear", bin_averaged=True
+        ),
+        "bmad": TabularWakefield.from_bmad(rows, kind="linear", bin_averaged=True),
+    }
+    coarse = TabularWakefield.from_wakefield(table, n=4)
+    for back in restored.values():
+        assert back.bin_averaged
+        assert back.bin_width == pytest.approx(1e-3)
+        np.testing.assert_allclose(
+            TabularWakefield.from_wakefield(back, n=4).W_data, coarse.W_data
+        )
+
+    assert not TabularWakefield.from_impact_z(table.to_impact_z()).bin_averaged
+
+
+@pytest.mark.parametrize(
+    "z",
+    [
+        np.array([-9e-3, -4e-3, -1e-3, 0.0]),
+        np.array([-4e-3, -3e-3, -2e-3, -1e-3]),
+    ],
+    ids=["nonuniform", "short_of_the_source"],
+)
+def test_bin_averaged_table_must_be_uniform_and_end_at_the_source(z):
+    with pytest.raises(ValueError, match="uniform and end at z = 0"):
+        TabularWakefield(z, np.ones(4), kind="linear", bin_averaged=True)
+    TabularWakefield(z, np.ones(4), kind="linear")
+
+
 # -----------------------------------------------------------------------------
 # Rebin
 # -----------------------------------------------------------------------------
@@ -653,6 +718,18 @@ def test_rebin_passes_a_table_through_at_its_own_spacing(fine_table):
     same = fine_table.rebin(1e-6)
     np.testing.assert_array_equal(same.W_data, fine_table.W_data)
     np.testing.assert_allclose(same.z_data, fine_table.z_data, rtol=0, atol=1e-18)
+
+
+def test_from_wakefield_rebins_a_bin_averaged_table(ah1, fine_table):
+    assert fine_table.bin_averaged
+    coarse = TabularWakefield.from_wakefield(fine_table, zmax=1.5e-3, n=501)
+
+    assert coarse.bin_averaged
+    np.testing.assert_allclose(
+        coarse.W_data[::-1], ah1.bin_averaged_wake(3e-6, 501), rtol=1e-9
+    )
+    with pytest.raises(ValueError, match="bin averages"):
+        TabularWakefield.from_wakefield(fine_table, zmax=1e-3, n=11, method="sample")
 
 
 def test_rebin_is_close_for_a_non_multiple(ah1, fine_table):
@@ -744,6 +821,54 @@ def test_binned_particle_kicks_default_spacing(ah1):
     assert kicks.shape == z.shape
     assert np.all(np.isfinite(kicks))
     assert kicks[0] < 0  # the tail loses energy
+
+
+@pytest.mark.parametrize("fraction", [0.0, 0.3, 0.5, 0.8])
+def test_binned_particle_kicks_exclude_the_whole_self_response(ah1, fraction):
+    """A particle between two nodes must not kick itself through its deposit."""
+    dz = 1e-5
+    z = np.array([0.0, fraction * dz])
+    weight = np.array([0.0, 1e-12])  # the weightless particle sets the grid
+
+    without = ah1.binned_particle_kicks(z, weight, dz=dz, include_self_kick=False)
+    with_self = ah1.binned_particle_kicks(z, weight, dz=dz)
+
+    assert abs(without[1]) < 1e-10 * abs(with_self[1])
+
+
+def test_bin_averaged_table_is_tracked_at_its_own_spacing(ah1):
+    dz = 1e-5
+    table = TabularWakefield.from_wakefield(ah1, zmax=1e-3, n=101)
+    rng = np.random.default_rng(4)
+    z = rng.normal(0, 1e-4, 2000)
+    weight = np.full(2000, 1e-13)
+
+    assert table.bin_width == pytest.approx(dz)
+    np.testing.assert_allclose(
+        table.binned_particle_kicks(z, weight),
+        table.binned_particle_kicks(z, weight, dz=dz),
+    )
+    with pytest.raises(ValueError, match="bin averages"):
+        table.particle_kicks(z[:2], weight[:2])
+
+    P = ParticleGroup(
+        data=dict(
+            x=np.zeros(2000),
+            px=np.zeros(2000),
+            y=np.zeros(2000),
+            py=np.zeros(2000),
+            z=z,
+            pz=np.full(2000, 130e6),
+            t=np.zeros(2000),
+            status=np.ones(2000, dtype=int),
+            weight=weight,
+            species="electron",
+        )
+    )
+    P2 = P.apply_wakefield(table, length=1.0)
+    np.testing.assert_allclose(
+        P2.pz - P.pz, table.binned_particle_kicks(z, weight, dz=dz)
+    )
 
 
 def test_apply_wakefield_uses_the_binned_path_for_a_singular_wake(ah1):

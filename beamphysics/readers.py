@@ -16,7 +16,7 @@ from .exceptions import (
     NotOpenPMDError,
 )
 from .tools import decode_attr, decode_attrs
-from .units import SI_symbol, c_light, dimension, dimension_name, e_charge
+from .units import SI_symbol, c_light, dimension, dimension_name, e_charge, hbar
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +168,7 @@ expected_record_unit_dimension = {
     "pathLength": dimension("length"),
     "position": dimension("length"),
     "positionOffset": dimension("length"),
+    # Bmad writes spin with the angular momentum dimension (unitSI = hbar).
     "spin": dimension("1"),
     "time": dimension("time"),
     "timeOffset": dimension("time"),
@@ -186,6 +187,15 @@ component_from_alias = {
     "t": "time",
     "weight": "weight",
     "status": "particleStatus",
+    "s": "sPosition",
+    "ix_branch": "branchIndex",
+    "ix_ele": "elementIndex",
+    "location": "locationInElement",
+    "p0c": "totalMomentumOffset",
+    "spin_x": "spin/x",
+    "spin_y": "spin/y",
+    "spin_z": "spin/z",
+    "charge_state": "chargeState",
 }
 # Aliases for particles and fields
 for g, prefix in zip(
@@ -196,6 +206,24 @@ for g, prefix in zip(
         component_from_alias[alias] = g + "/" + c
 # Inverse
 component_alias = {v: k for k, v in component_from_alias.items()}
+
+# Optional per-particle records a ParticleGroup carries when present, keyed by
+# ParticleGroup name. `id` has no units and is a bare dataset; the rest are
+# openPMD records named in `component_from_alias`.
+OPTIONAL_PARTICLE_KEYS = [
+    "id",
+    "s",
+    "ix_branch",
+    "ix_ele",
+    "location",
+    "p0c",
+    "spin_x",
+    "spin_y",
+    "spin_z",
+    "charge_state",
+]
+
+ANGULAR_MOMENTUM_DIMENSION = (2, 1, -1, 0, 0, 0, 0)
 
 
 def particle_paths(h5, key="particlesPath"):
@@ -415,8 +443,18 @@ def particle_array(h5, component, slice=slice(None), include_offset=True):
     if component in component_from_alias:
         component = component_from_alias[component]
 
-    if component in ["momentum/x", "momentum/y", "momentum/z"]:
+    if component in [
+        "momentum/x",
+        "momentum/y",
+        "momentum/z",
+        "totalMomentum",
+        "totalMomentumOffset",
+    ]:
         unit_factor = c_light / e_charge  # convert J/(m/s) to eV/c
+    elif component.startswith("spin/") and _has_angular_momentum_dimension(
+        h5[component]
+    ):
+        unit_factor = 1.0 / hbar  # spin in units of hbar
     else:
         unit_factor = 1.0
 
@@ -430,6 +468,12 @@ def particle_array(h5, component, slice=slice(None), include_offset=True):
         dat += offset
 
     return dat
+
+
+def _has_angular_momentum_dimension(h5) -> bool:
+    if "unitDimension" not in h5.attrs:
+        return False
+    return tuple(h5.attrs["unitDimension"]) == ANGULAR_MOMENTUM_DIMENSION
 
 
 def _scalar_maybe_from_array(value):
@@ -594,7 +638,10 @@ def load_species_data(h5: Group, include_time_offset: bool = True) -> dict:
     -------
     dict
         Keys 'x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight' (arrays),
-        'species' (str), 'total_charge' (float), and optionally 'id' (array).
+        'species' (str), 'total_charge' (float), and whichever of the optional
+        per-particle records in `OPTIONAL_PARTICLE_KEYS` ('id', 's',
+        'ix_branch', 'ix_ele', 'location', 'p0c', 'spin_x', 'spin_y',
+        'spin_z', 'charge_state') the group holds, as arrays.
     """
     attrs = dict(h5.attrs)
     data = {}
@@ -626,10 +673,9 @@ def load_species_data(h5: Group, include_time_offset: bool = True) -> dict:
         weight = np.full(n_particle, data["total_charge"] / n_particle)
     data["weight"] = weight
 
-    # id should be a unique integer, no units
-    # optional
-    if "id" in h5:
-        data["id"] = h5["id"][:]
+    for key in OPTIONAL_PARTICLE_KEYS:
+        if component_from_alias.get(key, key) in h5:
+            data[key] = particle_array(h5, key)
 
     return data
 

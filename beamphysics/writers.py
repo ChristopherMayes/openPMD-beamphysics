@@ -1,6 +1,6 @@
 import numpy as np
 
-from .readers import component_from_alias, load_field_attrs
+from .readers import OPTIONAL_PARTICLE_KEYS, component_from_alias, load_field_attrs
 from .tools import encode_attrs, fstr
 from .units import pg_units, write_unit_h5
 
@@ -49,7 +49,9 @@ def write_pmd_bunch(h5, data, name=None, t_offset=0.0):
     data : dict or ParticleGroup
         Requires keys 'x', 'px', 'y', 'py', 'z', 'pz', 't', 'status', 'weight'
         (arrays), 'species' (str), 'n_particle' (int), 'charge' (float).
-        Optional key: 'id' (array).
+        The optional per-particle keys in `beamphysics.readers.OPTIONAL_PARTICLE_KEYS`
+        ('id', 's', 'ix_branch', 'ix_ele', 'location', 'p0c', 'spin_x', 'spin_y',
+        'spin_z', 'charge_state') are written when present.
     name : str, optional
         Subgroup to create for the bunch. If None, writes directly into `h5`.
     t_offset : float or numpy.ndarray, optional
@@ -86,9 +88,16 @@ def write_pmd_bunch(h5, data, name=None, t_offset=0.0):
         # Write
         write_component_data(g, g2_name, data[key], unit=u)
 
-    # Optional id. This does not have any units.
-    if "id" in data:
-        g["id"] = data["id"]
+    for key in OPTIONAL_PARTICLE_KEYS:
+        if key not in data:
+            continue
+        if key == "id":
+            # id has no units and is a bare dataset
+            g["id"] = data["id"]
+        else:
+            write_component_data(
+                g, component_from_alias[key], np.asarray(data[key]), unit=pg_units(key)
+            )
 
     # Optional time offset, with the same shape as the particle arrays.
     t_offset = np.asarray(t_offset, dtype=float)

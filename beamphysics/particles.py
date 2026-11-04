@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import warnings
 from collections.abc import Sequence
 from copy import deepcopy
 from typing import Any
@@ -27,7 +28,9 @@ from .interfaces.opal import write_opal
 from .interfaces.simion import write_simion
 from .plot import density_plot, marginal_plot, slice_plot, wakefield_plot
 from .readers import (
+    OPTIONAL_PARTICLE_KEYS,
     _only_iteration_only_species_group,
+    component_from_alias,
     load_bunch_data,
     load_species_data,
 )
@@ -44,6 +47,7 @@ from .statistics import (
     resample_particles,
     slice_statistics,
 )
+from .tools import find_stacklevel
 from .units import c_light, parse_bunching_str, pg_units, pmd_unit
 from .utils import get_rotation_matrix
 from .wakefields import WakefieldBase
@@ -59,6 +63,12 @@ __all__ = [
 
 # Legacy keys that are statistics of an array
 _LEGACY_KEYS = {"higher_order_energy_spread": "sigma_higher_order_energy"}
+
+
+# Per-particle arrays stored as integers; everything else is float.
+INT_ARRAY_KEYS = frozenset(
+    {"id", "status", "ix_branch", "ix_ele", "location", "charge_state"}
+)
 
 
 class ParticleGroup:
@@ -83,11 +93,22 @@ class ParticleGroup:
     - `weight` is the macro-charge weight in [C], used for all statistical calulations.
     - `species` is a proper species name: `'electron'`, etc.
 
-    Optional data:
+    Optional data, carried when present:
 
-    - `np.array`: `id`
+    - `np.array`: `id`, `s`, `ix_branch`, `ix_ele`, `location`, `p0c`,
+      `spin_x`, `spin_y`, `spin_z`, `charge_state`
 
-    where `id` is a list of unique integers that identify the particles.
+    where `id` is a list of unique integers that identify the particles,
+    `s` is the longitudinal lattice position (m), `ix_branch` and `ix_ele`
+    are the lattice branch and element indices, `location` is the position
+    relative to a hard-edge element (-1 upstream end, 0 inside, 1 downstream
+    end), `p0c` is the reference momentum (eV/c), `spin_x`, `spin_y`,
+    `spin_z` are the spin components (hbar), and `charge_state` is the
+    integer charge of an atom or molecule. These are the openPMD-beamphysics
+    records `id`, `sPosition`, `branchIndex`, `elementIndex`,
+    `locationInElement`, `totalMomentumOffset`, `spin` and `chargeState`,
+    named after the Bmad `coord_struct` fields. Accessing one that is absent
+    raises `AttributeError`; check with `'s' in P`.
 
 
     Derived data can be computed as attributes:
@@ -197,7 +218,8 @@ class ParticleGroup:
     data : dict, optional
         Raw particle data as a dict with keys ``'x'``, ``'px'``, ``'y'``,
         ``'py'``, ``'z'``, ``'pz'``, ``'t'``, ``'status'``, ``'weight'``,
-        and ``'species'``. Mutually exclusive with `h5`.
+        and ``'species'``. The optional keys listed above are kept when
+        present. Mutually exclusive with `h5`.
 
     Raises
     ------
@@ -236,7 +258,7 @@ class ParticleGroup:
             "weight",
         ]
         # Optional data
-        for k in ["id"]:
+        for k in OPTIONAL_PARTICLE_KEYS:
             if k in data:
                 self._settable_array_keys.append(k)
 
@@ -247,7 +269,7 @@ class ParticleGroup:
         def fix_dtype(key: str, arr: np.ndarray) -> np.ndarray:
             if key in self._settable_scalar_keys:
                 return arr  # passthrough
-            if key in {"id", "status"}:
+            if key in INT_ARRAY_KEYS:
                 return _round_to_int_array(arr)
             return np.asarray(arr, dtype=float)
 
@@ -369,6 +391,141 @@ class ParticleGroup:
         if "id" not in self._settable_array_keys:
             self._settable_array_keys.append("id")
         self._data["id"] = full_array(len(self), val, dtype=int)
+
+    @property
+    def s(self):
+        """
+        Longitudinal position in the curvilinear lattice coordinate system (m).
+
+        Optional; the openPMD `sPosition` record, Bmad `s`. Not updated by
+        `drift_to_z` or `drift_to_t`.
+        """
+        return self._optional_array("s")
+
+    @s.setter
+    def s(self, val):
+        self._set_optional_array("s", val)
+
+    @property
+    def ix_branch(self):
+        """
+        Index of the lattice branch the particle is in.
+
+        Optional; the openPMD `branchIndex` record, Bmad `ix_branch`.
+        """
+        return self._optional_array("ix_branch")
+
+    @ix_branch.setter
+    def ix_branch(self, val):
+        self._set_optional_array("ix_branch", val, dtype=int)
+
+    @property
+    def ix_ele(self):
+        """
+        Index of the lattice element the particle is in.
+
+        Optional; the openPMD `elementIndex` record, Bmad `ix_ele`.
+        """
+        return self._optional_array("ix_ele")
+
+    @ix_ele.setter
+    def ix_ele(self, val):
+        self._set_optional_array("ix_ele", val, dtype=int)
+
+    @property
+    def location(self):
+        """
+        Position relative to the hard edges of the lattice element.
+
+        -1 is the upstream end outside the fringe, 0 inside the element, and 1
+        the downstream end; see `beamphysics.status.LocationInElement`.
+        Optional; the openPMD `locationInElement` record, Bmad `location`.
+        """
+        return self._optional_array("location")
+
+    @location.setter
+    def location(self, val):
+        self._set_optional_array("location", val, dtype=int)
+
+    @property
+    def p0c(self):
+        """
+        Reference momentum (eV/c).
+
+        Optional; the openPMD `totalMomentumOffset` record, Bmad `p0c`.
+        """
+        return self._optional_array("p0c")
+
+    @p0c.setter
+    def p0c(self, val):
+        self._set_optional_array("p0c", val)
+
+    @property
+    def spin_x(self):
+        """
+        Spin x component (hbar).
+
+        Optional; the openPMD `spin/x` record, Bmad `spin(1)`.
+        """
+        return self._optional_array("spin_x")
+
+    @spin_x.setter
+    def spin_x(self, val):
+        self._set_optional_array("spin_x", val)
+
+    @property
+    def spin_y(self):
+        """
+        Spin y component (hbar).
+
+        Optional; the openPMD `spin/y` record, Bmad `spin(2)`.
+        """
+        return self._optional_array("spin_y")
+
+    @spin_y.setter
+    def spin_y(self, val):
+        self._set_optional_array("spin_y", val)
+
+    @property
+    def spin_z(self):
+        """
+        Spin z component (hbar).
+
+        Optional; the openPMD `spin/z` record, Bmad `spin(3)`.
+        """
+        return self._optional_array("spin_z")
+
+    @spin_z.setter
+    def spin_z(self, val):
+        self._set_optional_array("spin_z", val)
+
+    @property
+    def charge_state(self):
+        """
+        Integer charge of an atom or molecule.
+
+        Optional; the openPMD `chargeState` record. Not needed for fundamental
+        particles, whose charge follows from `species`.
+        """
+        return self._optional_array("charge_state")
+
+    @charge_state.setter
+    def charge_state(self, val):
+        self._set_optional_array("charge_state", val, dtype=int)
+
+    def _optional_array(self, key: str) -> np.ndarray:
+        try:
+            return self._data[key]
+        except KeyError:
+            raise AttributeError(
+                f"ParticleGroup has no {key!r} data (optional openPMD record "
+                f"{component_from_alias[key]!r})"
+            ) from None
+
+    def _set_optional_array(self, key: str, val, dtype=None) -> None:
+        if key not in self._settable_array_keys:
+            self._settable_array_keys.append(key)
+        self._data[key] = full_array(len(self), val, dtype=dtype)
 
     @property
     def species(self):
@@ -1186,11 +1343,16 @@ class ParticleGroup:
         Bmad pz = p/p0c - 1
         Bmad t  = t
 
+        Optional records present on this group are included: `s`,
+        `ix_branch`, `ix_ele`, `spin_x`, `spin_y`, `spin_z` as they are,
+        `location` converted to the Bmad integers, and `id` as `ix_user`.
+
         Parameters
         ----------
-        p0c : float, optional
-            Reference momentum times the speed of light (in eV).
-            Default is None, which uses self['mean_p'].
+        p0c : float or numpy.ndarray, optional
+            Reference momentum times the speed of light (in eV), scalar or
+            per particle. Default is None, which uses `self.p0c` when present
+            and otherwise self['mean_p'].
         tref : float, optional
             Reference time (in seconds).
             Default is None, which uses self['mean_t'].
@@ -1216,7 +1378,10 @@ class ParticleGroup:
             A dictionary containing Bmad phase space coordinates
             with keys:
             'x', 'px', 'y', 'py', 'z', 'pz',
-            'charge', 'species', 'tref', 'state'
+            'charge', 'species', 'p0c', 'tref', 'state'
+            and optionally 's', 'ix_branch', 'ix_ele', 'location',
+            'spin_x', 'spin_y', 'spin_z', 'ix_user'. A per-particle
+            'p0c' array is kept as the `p0c` record.
 
         Returns
         -------
@@ -1369,6 +1534,9 @@ class ParticleGroup:
             Reference time in seconds. Default is 0.
         verbose : bool, optional
             If True, print information during writing. Default is False.
+
+        Spin, `ix_ele` and `location` columns are written when the group
+        carries those records.
         """
         bmad.write_bmad(self, filePath, p0c=p0c, t_ref=t_ref, verbose=verbose)
 
@@ -2093,6 +2261,19 @@ class ParticleGroup:
                 if not np.allclose(self[key], other[key]):
                     return False
 
+            for key in OPTIONAL_PARTICLE_KEYS:
+                if key == "id":
+                    continue
+                if (key in self._data) != (key in other._data):
+                    return False
+                if key not in self._data:
+                    continue
+                if key in INT_ARRAY_KEYS:
+                    if not np.array_equal(self._data[key], other._data[key]):
+                        return False
+                elif not np.allclose(self._data[key], other._data[key]):
+                    return False
+
             # Compare ids without triggering assign_id as a side effect. If only
             # one operand has explicit ids, compare them against the default ids
             # (1..n) that assign_id would otherwise produce for the other.
@@ -2368,6 +2549,9 @@ def single_particle(
     """
     Convenience function to make ParticleGroup with a single particle.
 
+    Only the required keys are set; optional records such as `s` or `ix_ele`
+    are not.
+
     Units:
         x, y, z: m
         px, py, pz: eV/c
@@ -2396,6 +2580,8 @@ def centroid(particle_group: ParticleGroup) -> ParticleGroup:
     Convenience function to return a single particle representing
     the average of all coordinates. Only considers live particles.
 
+    Only the required keys are set; optional records such as `s` or `ix_ele`
+    are not carried over.
     """
     good = particle_group.status == 1
     pg = particle_group[good]
@@ -2552,9 +2738,23 @@ def join_particle_groups(*particle_groups):
     species0 = species[0]
     assert all([spe == species0 for spe in species]), "species must be the same to join"
 
+    # Optional records are kept only when every group carries them. `id` is
+    # excepted: its getter assigns default ids to a group without them.
+    keys = list(particle_groups[0]._settable_array_keys)
+    dropped = [
+        key
+        for key in keys
+        if key != "id" and any(key not in pg._data for pg in particle_groups)
+    ]
+    if dropped:
+        warnings.warn(
+            f"Dropping optional keys not present in every group: {dropped}",
+            stacklevel=find_stacklevel(),
+        )
     data = {}
-    for key in particle_groups[0]._settable_array_keys:
-        data[key] = np.hstack([pg[key] for pg in particle_groups])
+    for key in keys:
+        if key not in dropped:
+            data[key] = np.hstack([pg[key] for pg in particle_groups])
 
     data["species"] = species0
     data["n_particle"] = np.sum([pg["n_particle"] for pg in particle_groups])

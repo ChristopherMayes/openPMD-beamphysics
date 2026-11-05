@@ -75,71 +75,57 @@ class ParticleGroup:
     """
     Particle Group class
 
-    Initialized on on openPMD beamphysics particle group:
+    Initialized on an openPMD beamphysics particle group:
 
-    - **h5**: open h5 handle, or `str` that is a file
+    - **h5**: open h5 handle, or `str` / `pathlib.Path` that is a filename
     - **data**: raw data
 
-    The required bunch data is stored in `.data` with keys
+    The required bunch data is stored in `.data`:
 
-    - `np.array`: `x`, `px`, `y`, `py`, `z`, `pz`, `t`, `status`, `weight`
-    - `str`: `species`
+    | Key              | Type       | Unit | Description                                                |
+    | ---------------- | ---------- | ---- | ---------------------------------------------------------- |
+    | `x`, `y`, `z`    | `np.array` | m    | Positions                                                  |
+    | `px`, `py`, `pz` | `np.array` | eV/c | Momenta                                                    |
+    | `t`              | `np.array` | s    | Time                                                       |
+    | `status`         | `np.array` | 1    | 1 for alive; see `beamphysics.status.ParticleStatus`       |
+    | `weight`         | `np.array` | C    | Macro-charge weight, used for all statistical calculations |
+    | `species`        | `str`      |      | Species name, e.g. `'electron'`                            |
 
-    where:
+    Optional per-particle data, carried when present. The names follow the
+    Bmad `coord_struct` fields. Accessing an absent key raises
+    `AttributeError`; check with `'s' in P`.
 
-    - `x`, `y`, `z` are positions in units of [m]
-    - `px`, `py`, `pz` are momenta in units of [eV/c]
-    - `t` is time in [s]
-    - `weight` is the macro-charge weight in [C], used for all statistical calulations.
-    - `species` is a proper species name: `'electron'`, etc.
+    | Key                          | openPMD record               | Type  | Unit | Description                                 |
+    | ---------------------------- | ---------------------------- | ----- | ---- | ------------------------------------------- |
+    | `id`                         | `id`                         | int   | 1    | Unique particle identifier                  |
+    | `s`                          | `sPosition`                  | float | m    | Longitudinal lattice position               |
+    | `ix_branch`                  | `branchIndex`                | int   | 1    | Lattice branch index                        |
+    | `ix_ele`                     | `elementIndex`               | int   | 1    | Lattice element index                       |
+    | `location`                   | `locationInElement`          | int   | 1    | -1 upstream end, 0 inside, 1 downstream end |
+    | `p0c`                        | `totalMomentumOffset`        | float | eV/c | Reference momentum                          |
+    | `spin_x`, `spin_y`, `spin_z` | `spin/x`, `spin/y`, `spin/z` | float | hbar | Spin components                             |
+    | `charge_state`               | `chargeState`                | int   | 1    | Integer charge of an atom or molecule       |
 
-    Optional data, carried when present:
+    Derived per-particle data are computed as attributes:
 
-    - `np.array`: `id`, `s`, `ix_branch`, `ix_ele`, `location`, `p0c`,
-      `spin_x`, `spin_y`, `spin_z`, `charge_state`
+    | Attribute                                     | Unit    | Description                                              |
+    | --------------------------------------------- | ------- | -------------------------------------------------------- |
+    | `gamma`, `beta`, `beta_x`, `beta_y`, `beta_z` | 1       | Relativistic factors                                     |
+    | `r`, `theta`                                  | m, rad  | Cylindrical coordinates                                  |
+    | `pr`, `ptheta`                                | eV/c    | Momenta in the radial and angular directions             |
+    | `Lz`                                          | m*eV/c  | Angular momentum about the z axis                        |
+    | `energy`                                      | eV      | Total energy                                             |
+    | `kinetic_energy`                              | eV      | Total energy minus $mc^2$                                |
+    | `higher_order_energy`                         | eV      | Total energy with a quadratic fit in z or t subtracted   |
+    | `p`                                           | eV/c    | Total momentum                                           |
+    | `mass`                                        | eV      | Rest mass                                                |
+    | `xp`, `yp`                                    | rad     | Slopes $x' = dx/dz = p_x/p_z$ and $y' = dy/dz = p_y/p_z$ |
+    | `x_bar`, `px_bar`, `y_bar`, `py_bar`          | sqrt(m) | Normalized transverse coordinates                        |
+    | `Jx`, `Jy`                                    | m       | Amplitudes, `Jx = (x_bar^2 + px_bar^2)/2`                |
 
-    where `id` is a list of unique integers that identify the particles,
-    `s` is the longitudinal lattice position (m), `ix_branch` and `ix_ele`
-    are the lattice branch and element indices, `location` is the position
-    relative to a hard-edge element (-1 upstream end, 0 inside, 1 downstream
-    end), `p0c` is the reference momentum (eV/c), `spin_x`, `spin_y`,
-    `spin_z` are the spin components (hbar), and `charge_state` is the
-    integer charge of an atom or molecule. These are the openPMD-beamphysics
-    records `id`, `sPosition`, `branchIndex`, `elementIndex`,
-    `locationInElement`, `totalMomentumOffset`, `spin` and `chargeState`,
-    named after the Bmad `coord_struct` fields. Accessing one that is absent
-    raises `AttributeError`; check with `'s' in P`.
-
-
-    Derived data can be computed as attributes:
-
-    - `.gamma`, `.beta`, `.beta_x`, `.beta_y`, `.beta_z`: relativistic factors [1].
-    - `.r`, `.theta`: cylidrical coordinates [m], [1]
-    - `.pr`, `.ptheta`: momenta in the radial and angular coordinate directions [eV/c]
-    - `.Lz`: angular momentum about the z axis [m*eV/c]
-    - `.energy` : total energy [eV]
-    - `.kinetic_energy`: total energy - mc^2 in [eV].
-    - `.higher_order_energy`: total energy with quadratic fit in z or t subtracted [eV]
-    - `.p`: total momentum in [eV/c]
-    - `.mass`: rest mass in [eV]
-    - `.xp`, `.yp`: Slopes $x' = dx/dz = p_x/p_z$ and $y' = dy/dz = p_y/p_z$ [1].
-
-    Normalized transvere coordinates can also be calculated as attributes:
-
-    - `.x_bar`, `.px_bar`, `.y_bar`, `.py_bar` in [sqrt(m)]
-
-    The normalization is automatically calculated from the covariance matrix.
-    See functions in `.statistics` for more advanced usage.
-
-    Their cooresponding amplitudes are:
-
-    `.Jx`, `.Jy` [m]
-
-    where `Jx = (x_bar^2 + px_bar^2 )/2`.
-
-    The momenta are normalized by the mass, so that
-    `<Jx> = norm_emit_x`
-    and similar for `y`.
+    The normalization of `x_bar` and friends is computed from the covariance
+    matrix, with momenta normalized by the mass so that `<Jx> = norm_emit_x`
+    and similarly for `y`. See functions in `.statistics` for more advanced usage.
 
     Statistics of any of these are calculated with:
 
@@ -151,46 +137,48 @@ class ParticleGroup:
     - `.cov(X, Y, ...)`
     - `.histogramdd(X, Y, ..., bins=10, range=None)`
 
-    with a string `X` as the name any of the properties above.
+    with a string `X` as the name of any of the properties above.
 
     Useful beam physics quantities are given as attributes:
 
-    - `.norm_emit_x`
-    - `.norm_emit_y`
-    - `.norm_emit_4d`
-    - `.higher_order_energy_spread`
-    - `.average_current`
+    | Attribute                    | Unit | Description                                   |
+    | ---------------------------- | ---- | --------------------------------------------- |
+    | `charge`                     | C    | Sum of `weight`; setting it rescales `weight` |
+    | `norm_emit_x`, `norm_emit_y` | m    | Normalized emittances                         |
+    | `norm_emit_4d`               | m^2  | Normalized 4D emittance                       |
+    | `higher_order_energy_spread` | eV   | Standard deviation of `higher_order_energy`   |
+    | `average_current`            | A    | Charge divided by the bunch duration          |
 
     Twiss parameters, including dispersion, for the $x$ or $y$ plane:
 
-    - `.twiss(plane='x', fraction=0.95, p0C=None)`
+    - `.twiss(plane='x', fraction=1, p0c=None)`
 
     For convenience, `plane='xy'` will calculate twiss for both planes.
 
     Twiss matched particles, using a simple linear transformation:
 
-    - `.twiss_match(self, beta=None, alpha=None, plane='x', p0c=None, inplace=False)`
+    - `.twiss_match(beta=None, alpha=None, plane='x', p0c=None, inplace=False)`
 
-    The weight is required and must sum to > 0. The sum of the weights is in `.charge`.
-    This can also be set: `.charge = 1.234` # C, will rescale the .weight array
+    The weight is required and must sum to > 0.
 
-    All attributes can be accessed with brackets:
-        `[key]`
+    All attributes can be accessed with brackets, `P[key]`, and these
+    additional keys compute statistics:
 
-    Additional keys are allowed for convenience:
-        `['min_prop']`   will return  `.min('prop')`
-        `['max_prop']`   will return  `.max('prop')`
-        `['ptp_prop']`   will return  `.ptp('prop')`
-        `['mean_prop']`  will return  `.avg('prop')`
-        `['sigma_prop']` will return  `.std('prop')`
-        `['cov_prop1__prop2']` will return `.cov('prop1', 'prop2')[0,1]`
+    | Key                | Equivalent                     |
+    | ------------------ | ------------------------------ |
+    | `min_prop`         | `.min('prop')`                 |
+    | `max_prop`         | `.max('prop')`                 |
+    | `ptp_prop`         | `.ptp('prop')`                 |
+    | `mean_prop`        | `.avg('prop')`                 |
+    | `sigma_prop`       | `.std('prop')`                 |
+    | `cov_prop1__prop2` | `.cov('prop1', 'prop2')[0, 1]` |
 
     Units for all attributes can be accessed by:
 
     - `.units(key)`
 
     Particles are often stored at the same time (i.e. from a t-based code),
-    or with the same z position (i.e. from an s-based code.)
+    or with the same z position (i.e. from an s-based code).
     Routines:
 
     - `drift_to_z(z0)`
@@ -199,8 +187,8 @@ class ParticleGroup:
     help to convert these. If no argument is given, particles will be drifted to the mean.
     Related properties are:
 
-    - `.in_t_coordinates` returns `True` if all particles have the same $t$ corrdinate
-    - `.in_z_coordinates` returns `True` if all particles have the same $z$ corrdinate
+    - `.in_t_coordinates` returns `True` if all particles have the same $t$ coordinate
+    - `.in_z_coordinates` returns `True` if all particles have the same $z$ coordinate
 
     Convenient plotting is provided with:
 
@@ -216,10 +204,10 @@ class ParticleGroup:
         HDF5 file, an open ``h5py.File`` handle, or a dict-like object
         with openPMD particle data. Mutually exclusive with `data`.
     data : dict, optional
-        Raw particle data as a dict with keys ``'x'``, ``'px'``, ``'y'``,
-        ``'py'``, ``'z'``, ``'pz'``, ``'t'``, ``'status'``, ``'weight'``,
-        and ``'species'``. The optional keys listed above are kept when
-        present. Mutually exclusive with `h5`.
+        Raw particle data as a dict with keys `'x'`, `'px'`, `'y'`, `'py'`,
+        `'z'`, `'pz'`, `'t'`, `'status'`, `'weight'`, and `'species'`. The
+        optional keys listed above are kept when present. Mutually exclusive
+        with `h5`.
 
     Raises
     ------

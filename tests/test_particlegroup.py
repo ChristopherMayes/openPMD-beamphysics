@@ -272,10 +272,16 @@ def test_init_multiple_iterations():
         ParticleGroup("docs/examples/data/astra_particles.h5")
 
 
-@pytest.mark.parametrize("h5", [{"x": [0.0]}, 3, object()])
+@pytest.mark.parametrize("h5", [3, object()])
 def test_init_unsupported_type(h5):
     with pytest.raises(TypeError):
         ParticleGroup(h5)
+
+
+def test_init_dict_positional(simple_pg: ParticleGroup):
+    assert ParticleGroup(simple_pg.data) == simple_pg
+    with pytest.raises(NotImplementedError):
+        ParticleGroup(simple_pg.data, data=simple_pg.data)
 
 
 def test_init_nested_openpmd_root(simple_pg: ParticleGroup, tmp_path: pathlib.Path):

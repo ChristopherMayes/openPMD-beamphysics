@@ -199,10 +199,11 @@ class ParticleGroup:
 
     Parameters
     ----------
-    h5 : str, pathlib.Path, h5py.File, or dict, optional
+    h5 : str, pathlib.Path, h5py.File, or h5py.Group, optional
         Source of particle data. Can be a filename (str or Path) to an
-        HDF5 file, an open ``h5py.File`` handle, or a dict-like object
-        with openPMD particle data. Mutually exclusive with `data`.
+        HDF5 file, or an open ``h5py.File`` or ``h5py.Group`` handle. A
+        plain dict passed here is taken as `data`. Mutually exclusive with
+        `data`.
     data : dict, optional
         Raw particle data as a dict with keys `'x'`, `'px'`, `'y'`, `'py'`,
         `'z'`, `'pz'`, `'t'`, `'status'`, `'weight'`, and `'species'`. The
@@ -216,6 +217,10 @@ class ParticleGroup:
     """
 
     def __init__(self, h5=None, data=None):
+        if isinstance(h5, dict) and data is None:
+            # A data dict passed positionally
+            h5, data = None, h5
+
         if h5 is not None and data is not None:
             # TODO:
             # Allow merging or changing some array with extra data

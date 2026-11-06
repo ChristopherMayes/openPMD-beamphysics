@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from ..wakefields.base import WakefieldBase
+    from ..wakefields.binned import BinnedWakefield
 
 
 c_light = 299792458.0
@@ -335,7 +336,7 @@ def parse_impact_z_wakefield(
 
 
 def create_impact_z_wakefield_rfdata(
-    wakefield: WakefieldBase,
+    wakefield: WakefieldBase | BinnedWakefield,
     zmax: float | None = None,
     n: int | None = None,
     wake_x: Callable[[np.ndarray], np.ndarray] | None = None,
@@ -349,7 +350,7 @@ def create_impact_z_wakefield_rfdata(
 
     Parameters
     ----------
-    wakefield : WakefieldBase
+    wakefield : WakefieldBase or BinnedWakefield
         Longitudinal wakefield model.
     zmax : float, optional
         Largest distance behind the source particle (m). Defaults to
@@ -369,19 +370,25 @@ def create_impact_z_wakefield_rfdata(
     Raises
     ------
     ValueError
-        If n exceeds the 5000 rows IMPACT-Z allocates.
+        If n exceeds the 5000 rows IMPACT-Z allocates, or if zmax and n imply a
+        spacing other than that of a `BinnedWakefield`.
     NotImplementedError
         If zmax or n is omitted and the model defines no default for it.
 
     Warns
     -----
     UserWarning
-        If the default n exceeds 5000, in which case the wake is under-resolved.
+        If the default n exceeds 5000, in which case the wake is under-resolved,
+        or a `BinnedWakefield` is shortened to fit.
 
     Notes
     -----
     IMPACT-Z extrapolates linearly beyond the last row, so the table should cover
     the full bunch length.
+
+    A `BinnedWakefield` is always written at its own `dz`, which must match the
+    IMPACT-Z mesh width; zmax and n only set how far the table reaches. Use
+    `BinnedWakefield.rebin` to change the spacing.
 
     Examples
     --------
@@ -406,8 +413,59 @@ def create_impact_z_wakefield_rfdata(
     return np.column_stack([s, Wz, Wx, Wy])
 
 
+def _binned_impact_rows(
+    wakefield: BinnedWakefield,
+    zmax: float | None,
+    n: int | None,
+    code: str,
+    max_rows: int,
+    limit_reason: str,
+) -> BinnedWakefield:
+    """
+    Rows of a binned kernel for an IMPACT code, always at the kernel's own spacing.
+
+    The spacing must equal the bin width the code uses, so zmax and n only choose
+    how far the table reaches. A table too long for the code is shortened, never
+    coarsened. Use `BinnedWakefield.rebin` to change the spacing.
+    """
+    dz = wakefield.dz
+    if n is not None and n < 2:
+        raise ValueError(f"n must be at least 2, got n={n}")
+    if n is not None and n > max_rows:
+        raise ValueError(
+            f"n={n} exceeds the {code} limit of {max_rows} rows. {limit_reason}"
+        )
+    if (
+        zmax is not None
+        and n is not None
+        and not np.isclose(zmax / (n - 1), dz, rtol=1e-9, atol=0)
+    ):
+        raise ValueError(
+            f"zmax={zmax:.6e} m and n={n} give a spacing of {zmax / (n - 1):.6e} m, "
+            f"but this kernel's spacing is {dz:.6e} m. Use rebin to change the "
+            "spacing first."
+        )
+    if n is None:
+        rows = (
+            len(wakefield.z_data) if zmax is None else wakefield.default_n_samples(zmax)
+        )
+        if rows > max_rows:
+            warnings.warn(
+                f"Covering {(rows - 1) * dz:.6e} m at this kernel's spacing of "
+                f"{dz:.6e} m needs {rows} rows, above the {code} limit of "
+                f"{max_rows}. The table is shortened to {(max_rows - 1) * dz:.6e} m "
+                "and the spacing is kept.",
+                UserWarning,
+                stacklevel=find_stacklevel(),
+            )
+            rows = max_rows
+    else:
+        rows = n
+    return wakefield.rebin(dz, zmax=(rows - 1) * dz, max_rows=rows)
+
+
 def _tabulate_impact_wakefield(
-    wakefield: WakefieldBase,
+    wakefield: WakefieldBase | BinnedWakefield,
     zmax: float | None,
     n: int | None,
     wake_x: Callable[[np.ndarray], np.ndarray] | None,
@@ -417,7 +475,17 @@ def _tabulate_impact_wakefield(
     limit_reason: str,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Sample a wake for an IMPACT code, returning s, Wz, Wx and Wy with s ascending."""
+    from ..wakefields.binned import BinnedWakefield
     from ..wakefields.tabular import TabularWakefield
+
+    if isinstance(wakefield, BinnedWakefield):
+        table = _binned_impact_rows(wakefield, zmax, n, code, max_rows, limit_reason)
+        z = table.z_data[::-1]
+        s = -z
+        Wz = table.W_data[::-1]
+        Wx = np.zeros_like(s) if wake_x is None else np.broadcast_to(wake_x(z), s.shape)
+        Wy = np.zeros_like(s) if wake_y is None else np.broadcast_to(wake_y(z), s.shape)
+        return s, Wz, Wx, Wy
 
     if zmax is None:
         zmax = wakefield.default_zmax
@@ -438,9 +506,8 @@ def _tabulate_impact_wakefield(
             f"n={n} exceeds the {code} limit of {max_rows} rows. {limit_reason}"
         )
 
-    # Sampling through TabularWakefield keeps the table identical to the one an
-    # in-memory resample would produce.
-    table = TabularWakefield.from_wakefield(wakefield, zmax=zmax, n=n)
+    factory = BinnedWakefield if wakefield.is_singular else TabularWakefield
+    table = factory.from_wakefield(wakefield, zmax=zmax, n=n)
 
     # The table ascends in z from -zmax to 0; IMPACT ascends in s from 0 to zmax.
     z = table.z_data[::-1]
@@ -455,7 +522,7 @@ def _tabulate_impact_wakefield(
 
 def write_impact_z_wakefield(
     filename: str | os.PathLike,
-    wakefield: WakefieldBase,
+    wakefield: WakefieldBase | BinnedWakefield,
     zmax: float | None = None,
     n: int | None = None,
     wake_x: Callable[[np.ndarray], np.ndarray] | None = None,
@@ -554,7 +621,7 @@ def parse_impact_t_wakefield(
 
 
 def create_impact_t_wakefield_data(
-    wakefield: WakefieldBase,
+    wakefield: WakefieldBase | BinnedWakefield,
     zmax: float | None = None,
     n: int | None = None,
     wake_x: Callable[[np.ndarray], np.ndarray] | None = None,
@@ -585,19 +652,24 @@ def create_impact_t_wakefield_data(
     Raises
     ------
     ValueError
-        If n exceeds the 1000 rows IMPACT-T reads.
+        If n exceeds the 1000 rows IMPACT-T reads, or if zmax and n imply a
+        spacing other than that of a `BinnedWakefield`.
     NotImplementedError
         If zmax or n is omitted and the model defines no default for it.
 
     Warns
     -----
     UserWarning
-        If the default n exceeds 1000, in which case the wake is under-resolved.
+        If the default n exceeds 1000, in which case the wake is under-resolved,
+        or a `BinnedWakefield` is shortened to fit.
 
     Notes
     -----
     The -6 element reads the table when Bnseg > 0 and V6 <= 0. The three-column
     format requires IMPACT-T 3.0 or later.
+
+    A `BinnedWakefield` is written at its own `dz`, as for
+    `create_impact_z_wakefield_rfdata`.
 
     Examples
     --------
@@ -622,7 +694,7 @@ def create_impact_t_wakefield_data(
 
 def write_impact_t_wakefield(
     filename: str | os.PathLike,
-    wakefield: WakefieldBase,
+    wakefield: WakefieldBase | BinnedWakefield,
     zmax: float | None = None,
     n: int | None = None,
     wake_x: Callable[[np.ndarray], np.ndarray] | None = None,

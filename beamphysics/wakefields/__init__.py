@@ -13,9 +13,13 @@ Pseudomode
 PseudomodeWakefield
     Wakefield represented as a sum of damped sinusoidal modes
 TabularWakefield
-    Interpolation-based wakefield from user-supplied data
+    Interpolated point samples of a wakefield
+BinnedWakefield
+    Fixed-width bin averages for convolution, tracking and export
 ImpedanceWakefield
     Wakefield defined through its impedance Z(k)
+ParametricWakefield
+    Parametric cavity-chain wake of Zagorodnov et al. (2021), singular at z = 0
 ResistiveWallWakefieldBase
     Base class for resistive wall wakefield models
 ResistiveWallWakefield
@@ -30,7 +34,9 @@ resistive_wall
 """
 
 from .base import WakefieldBase
+from .binned import BinnedWakefield
 from .impedance import ImpedanceWakefield
+from .parametric import ZAGORODNOV_2021_TABLE_IV, ParametricWakefield
 from .pseudomode import Pseudomode, PseudomodeWakefield
 from .resistive_wall import (
     Geometry,
@@ -52,10 +58,13 @@ from .tabular import TabularWakefield
 __all__ = [
     # Base classes
     "WakefieldBase",
+    "BinnedWakefield",
     "Pseudomode",
     "PseudomodeWakefield",
     "TabularWakefield",
     "ImpedanceWakefield",
+    "ParametricWakefield",
+    "ZAGORODNOV_2021_TABLE_IV",
     # Resistive wall
     "Geometry",
     "ResistiveWallWakefieldBase",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import warnings
 from collections.abc import Sequence
 from copy import deepcopy
 from typing import Any
@@ -27,7 +28,9 @@ from .interfaces.opal import write_opal
 from .interfaces.simion import write_simion
 from .plot import density_plot, marginal_plot, slice_plot, wakefield_plot
 from .readers import (
+    OPTIONAL_PARTICLE_KEYS,
     _only_iteration_only_species_group,
+    component_from_alias,
     load_bunch_data,
     load_species_data,
 )
@@ -44,6 +47,7 @@ from .statistics import (
     resample_particles,
     slice_statistics,
 )
+from .tools import find_stacklevel
 from .units import c_light, parse_bunching_str, pg_units, pmd_unit
 from .utils import get_rotation_matrix
 from .wakefields import WakefieldBase
@@ -61,64 +65,67 @@ __all__ = [
 _LEGACY_KEYS = {"higher_order_energy_spread": "sigma_higher_order_energy"}
 
 
+# Per-particle arrays stored as integers; everything else is float.
+INT_ARRAY_KEYS = frozenset(
+    {"id", "status", "ix_branch", "ix_ele", "location", "charge_state"}
+)
+
+
 class ParticleGroup:
     """
     Particle Group class
 
-    Initialized on on openPMD beamphysics particle group:
+    Initialized on an openPMD beamphysics particle group:
 
-    - **h5**: open h5 handle, or `str` that is a file
+    - **h5**: open h5 handle, or `str` / `pathlib.Path` that is a filename
     - **data**: raw data
 
-    The required bunch data is stored in `.data` with keys
+    The required bunch data is stored in `.data`:
 
-    - `np.array`: `x`, `px`, `y`, `py`, `z`, `pz`, `t`, `status`, `weight`
-    - `str`: `species`
+    | Key              | Type       | Unit | Description                                                |
+    | ---------------- | ---------- | ---- | ---------------------------------------------------------- |
+    | `x`, `y`, `z`    | `np.array` | m    | Positions                                                  |
+    | `px`, `py`, `pz` | `np.array` | eV/c | Momenta                                                    |
+    | `t`              | `np.array` | s    | Time                                                       |
+    | `status`         | `np.array` | 1    | 1 for alive; see `beamphysics.status.ParticleStatus`       |
+    | `weight`         | `np.array` | C    | Macro-charge weight, used for all statistical calculations |
+    | `species`        | `str`      |      | Species name, e.g. `'electron'`                            |
 
-    where:
+    Optional per-particle data, carried when present. The names follow the
+    Bmad `coord_struct` fields. Accessing an absent key raises
+    `AttributeError`; check with `'s' in P`.
 
-    - `x`, `y`, `z` are positions in units of [m]
-    - `px`, `py`, `pz` are momenta in units of [eV/c]
-    - `t` is time in [s]
-    - `weight` is the macro-charge weight in [C], used for all statistical calulations.
-    - `species` is a proper species name: `'electron'`, etc.
+    | Key                          | openPMD record               | Type  | Unit | Description                                 |
+    | ---------------------------- | ---------------------------- | ----- | ---- | ------------------------------------------- |
+    | `id`                         | `id`                         | int   | 1    | Unique particle identifier                  |
+    | `s`                          | `sPosition`                  | float | m    | Longitudinal lattice position               |
+    | `ix_branch`                  | `branchIndex`                | int   | 1    | Lattice branch index                        |
+    | `ix_ele`                     | `elementIndex`               | int   | 1    | Lattice element index                       |
+    | `location`                   | `locationInElement`          | int   | 1    | -1 upstream end, 0 inside, 1 downstream end |
+    | `p0c`                        | `totalMomentumOffset`        | float | eV/c | Reference momentum                          |
+    | `spin_x`, `spin_y`, `spin_z` | `spin/x`, `spin/y`, `spin/z` | float | hbar | Spin components                             |
+    | `charge_state`               | `chargeState`                | int   | 1    | Integer charge of an atom or molecule       |
 
-    Optional data:
+    Derived per-particle data are computed as attributes:
 
-    - `np.array`: `id`
+    | Attribute                                     | Unit    | Description                                              |
+    | --------------------------------------------- | ------- | -------------------------------------------------------- |
+    | `gamma`, `beta`, `beta_x`, `beta_y`, `beta_z` | 1       | Relativistic factors                                     |
+    | `r`, `theta`                                  | m, rad  | Cylindrical coordinates                                  |
+    | `pr`, `ptheta`                                | eV/c    | Momenta in the radial and angular directions             |
+    | `Lz`                                          | m*eV/c  | Angular momentum about the z axis                        |
+    | `energy`                                      | eV      | Total energy                                             |
+    | `kinetic_energy`                              | eV      | Total energy minus $mc^2$                                |
+    | `higher_order_energy`                         | eV      | Total energy with a quadratic fit in z or t subtracted   |
+    | `p`                                           | eV/c    | Total momentum                                           |
+    | `mass`                                        | eV      | Rest mass                                                |
+    | `xp`, `yp`                                    | rad     | Slopes $x' = dx/dz = p_x/p_z$ and $y' = dy/dz = p_y/p_z$ |
+    | `x_bar`, `px_bar`, `y_bar`, `py_bar`          | sqrt(m) | Normalized transverse coordinates                        |
+    | `Jx`, `Jy`                                    | m       | Amplitudes, `Jx = (x_bar^2 + px_bar^2)/2`                |
 
-    where `id` is a list of unique integers that identify the particles.
-
-
-    Derived data can be computed as attributes:
-
-    - `.gamma`, `.beta`, `.beta_x`, `.beta_y`, `.beta_z`: relativistic factors [1].
-    - `.r`, `.theta`: cylidrical coordinates [m], [1]
-    - `.pr`, `.ptheta`: momenta in the radial and angular coordinate directions [eV/c]
-    - `.Lz`: angular momentum about the z axis [m*eV/c]
-    - `.energy` : total energy [eV]
-    - `.kinetic_energy`: total energy - mc^2 in [eV].
-    - `.higher_order_energy`: total energy with quadratic fit in z or t subtracted [eV]
-    - `.p`: total momentum in [eV/c]
-    - `.mass`: rest mass in [eV]
-    - `.xp`, `.yp`: Slopes $x' = dx/dz = p_x/p_z$ and $y' = dy/dz = p_y/p_z$ [1].
-
-    Normalized transvere coordinates can also be calculated as attributes:
-
-    - `.x_bar`, `.px_bar`, `.y_bar`, `.py_bar` in [sqrt(m)]
-
-    The normalization is automatically calculated from the covariance matrix.
-    See functions in `.statistics` for more advanced usage.
-
-    Their cooresponding amplitudes are:
-
-    `.Jx`, `.Jy` [m]
-
-    where `Jx = (x_bar^2 + px_bar^2 )/2`.
-
-    The momenta are normalized by the mass, so that
-    `<Jx> = norm_emit_x`
-    and similar for `y`.
+    The normalization of `x_bar` and friends is computed from the covariance
+    matrix, with momenta normalized by the mass so that `<Jx> = norm_emit_x`
+    and similarly for `y`. See functions in `.statistics` for more advanced usage.
 
     Statistics of any of these are calculated with:
 
@@ -130,46 +137,48 @@ class ParticleGroup:
     - `.cov(X, Y, ...)`
     - `.histogramdd(X, Y, ..., bins=10, range=None)`
 
-    with a string `X` as the name any of the properties above.
+    with a string `X` as the name of any of the properties above.
 
     Useful beam physics quantities are given as attributes:
 
-    - `.norm_emit_x`
-    - `.norm_emit_y`
-    - `.norm_emit_4d`
-    - `.higher_order_energy_spread`
-    - `.average_current`
+    | Attribute                    | Unit | Description                                   |
+    | ---------------------------- | ---- | --------------------------------------------- |
+    | `charge`                     | C    | Sum of `weight`; setting it rescales `weight` |
+    | `norm_emit_x`, `norm_emit_y` | m    | Normalized emittances                         |
+    | `norm_emit_4d`               | m^2  | Normalized 4D emittance                       |
+    | `higher_order_energy_spread` | eV   | Standard deviation of `higher_order_energy`   |
+    | `average_current`            | A    | Charge divided by the bunch duration          |
 
     Twiss parameters, including dispersion, for the $x$ or $y$ plane:
 
-    - `.twiss(plane='x', fraction=0.95, p0C=None)`
+    - `.twiss(plane='x', fraction=1, p0c=None)`
 
     For convenience, `plane='xy'` will calculate twiss for both planes.
 
     Twiss matched particles, using a simple linear transformation:
 
-    - `.twiss_match(self, beta=None, alpha=None, plane='x', p0c=None, inplace=False)`
+    - `.twiss_match(beta=None, alpha=None, plane='x', p0c=None, inplace=False)`
 
-    The weight is required and must sum to > 0. The sum of the weights is in `.charge`.
-    This can also be set: `.charge = 1.234` # C, will rescale the .weight array
+    The weight is required and must sum to > 0.
 
-    All attributes can be accessed with brackets:
-        `[key]`
+    All attributes can be accessed with brackets, `P[key]`, and these
+    additional keys compute statistics:
 
-    Additional keys are allowed for convenience:
-        `['min_prop']`   will return  `.min('prop')`
-        `['max_prop']`   will return  `.max('prop')`
-        `['ptp_prop']`   will return  `.ptp('prop')`
-        `['mean_prop']`  will return  `.avg('prop')`
-        `['sigma_prop']` will return  `.std('prop')`
-        `['cov_prop1__prop2']` will return `.cov('prop1', 'prop2')[0,1]`
+    | Key                | Equivalent                     |
+    | ------------------ | ------------------------------ |
+    | `min_prop`         | `.min('prop')`                 |
+    | `max_prop`         | `.max('prop')`                 |
+    | `ptp_prop`         | `.ptp('prop')`                 |
+    | `mean_prop`        | `.avg('prop')`                 |
+    | `sigma_prop`       | `.std('prop')`                 |
+    | `cov_prop1__prop2` | `.cov('prop1', 'prop2')[0, 1]` |
 
     Units for all attributes can be accessed by:
 
     - `.units(key)`
 
     Particles are often stored at the same time (i.e. from a t-based code),
-    or with the same z position (i.e. from an s-based code.)
+    or with the same z position (i.e. from an s-based code).
     Routines:
 
     - `drift_to_z(z0)`
@@ -178,8 +187,8 @@ class ParticleGroup:
     help to convert these. If no argument is given, particles will be drifted to the mean.
     Related properties are:
 
-    - `.in_t_coordinates` returns `True` if all particles have the same $t$ corrdinate
-    - `.in_z_coordinates` returns `True` if all particles have the same $z$ corrdinate
+    - `.in_t_coordinates` returns `True` if all particles have the same $t$ coordinate
+    - `.in_z_coordinates` returns `True` if all particles have the same $z$ coordinate
 
     Convenient plotting is provided with:
 
@@ -190,14 +199,16 @@ class ParticleGroup:
 
     Parameters
     ----------
-    h5 : str, pathlib.Path, h5py.File, or dict, optional
+    h5 : str, pathlib.Path, h5py.File, or h5py.Group, optional
         Source of particle data. Can be a filename (str or Path) to an
-        HDF5 file, an open ``h5py.File`` handle, or a dict-like object
-        with openPMD particle data. Mutually exclusive with `data`.
+        HDF5 file, or an open ``h5py.File`` or ``h5py.Group`` handle. A
+        plain dict passed here is taken as `data`. Mutually exclusive with
+        `data`.
     data : dict, optional
-        Raw particle data as a dict with keys ``'x'``, ``'px'``, ``'y'``,
-        ``'py'``, ``'z'``, ``'pz'``, ``'t'``, ``'status'``, ``'weight'``,
-        and ``'species'``. Mutually exclusive with `h5`.
+        Raw particle data as a dict with keys `'x'`, `'px'`, `'y'`, `'py'`,
+        `'z'`, `'pz'`, `'t'`, `'status'`, `'weight'`, and `'species'`. The
+        optional keys listed above are kept when present. Mutually exclusive
+        with `h5`.
 
     Raises
     ------
@@ -206,6 +217,10 @@ class ParticleGroup:
     """
 
     def __init__(self, h5=None, data=None):
+        if isinstance(h5, dict) and data is None:
+            # A data dict passed positionally
+            h5, data = None, h5
+
         if h5 is not None and data is not None:
             # TODO:
             # Allow merging or changing some array with extra data
@@ -236,7 +251,7 @@ class ParticleGroup:
             "weight",
         ]
         # Optional data
-        for k in ["id"]:
+        for k in OPTIONAL_PARTICLE_KEYS:
             if k in data:
                 self._settable_array_keys.append(k)
 
@@ -247,7 +262,7 @@ class ParticleGroup:
         def fix_dtype(key: str, arr: np.ndarray) -> np.ndarray:
             if key in self._settable_scalar_keys:
                 return arr  # passthrough
-            if key in {"id", "status"}:
+            if key in INT_ARRAY_KEYS:
                 return _round_to_int_array(arr)
             return np.asarray(arr, dtype=float)
 
@@ -369,6 +384,141 @@ class ParticleGroup:
         if "id" not in self._settable_array_keys:
             self._settable_array_keys.append("id")
         self._data["id"] = full_array(len(self), val, dtype=int)
+
+    @property
+    def s(self):
+        """
+        Longitudinal position in the curvilinear lattice coordinate system (m).
+
+        Optional; the openPMD `sPosition` record, Bmad `s`. Not updated by
+        `drift_to_z` or `drift_to_t`.
+        """
+        return self._optional_array("s")
+
+    @s.setter
+    def s(self, val):
+        self._set_optional_array("s", val)
+
+    @property
+    def ix_branch(self):
+        """
+        Index of the lattice branch the particle is in.
+
+        Optional; the openPMD `branchIndex` record, Bmad `ix_branch`.
+        """
+        return self._optional_array("ix_branch")
+
+    @ix_branch.setter
+    def ix_branch(self, val):
+        self._set_optional_array("ix_branch", val, dtype=int)
+
+    @property
+    def ix_ele(self):
+        """
+        Index of the lattice element the particle is in.
+
+        Optional; the openPMD `elementIndex` record, Bmad `ix_ele`.
+        """
+        return self._optional_array("ix_ele")
+
+    @ix_ele.setter
+    def ix_ele(self, val):
+        self._set_optional_array("ix_ele", val, dtype=int)
+
+    @property
+    def location(self):
+        """
+        Position relative to the hard edges of the lattice element.
+
+        -1 is the upstream end outside the fringe, 0 inside the element, and 1
+        the downstream end; see `beamphysics.status.LocationInElement`.
+        Optional; the openPMD `locationInElement` record, Bmad `location`.
+        """
+        return self._optional_array("location")
+
+    @location.setter
+    def location(self, val):
+        self._set_optional_array("location", val, dtype=int)
+
+    @property
+    def p0c(self):
+        """
+        Reference momentum (eV/c).
+
+        Optional; the openPMD `totalMomentumOffset` record, Bmad `p0c`.
+        """
+        return self._optional_array("p0c")
+
+    @p0c.setter
+    def p0c(self, val):
+        self._set_optional_array("p0c", val)
+
+    @property
+    def spin_x(self):
+        """
+        Spin x component (hbar).
+
+        Optional; the openPMD `spin/x` record, Bmad `spin(1)`.
+        """
+        return self._optional_array("spin_x")
+
+    @spin_x.setter
+    def spin_x(self, val):
+        self._set_optional_array("spin_x", val)
+
+    @property
+    def spin_y(self):
+        """
+        Spin y component (hbar).
+
+        Optional; the openPMD `spin/y` record, Bmad `spin(2)`.
+        """
+        return self._optional_array("spin_y")
+
+    @spin_y.setter
+    def spin_y(self, val):
+        self._set_optional_array("spin_y", val)
+
+    @property
+    def spin_z(self):
+        """
+        Spin z component (hbar).
+
+        Optional; the openPMD `spin/z` record, Bmad `spin(3)`.
+        """
+        return self._optional_array("spin_z")
+
+    @spin_z.setter
+    def spin_z(self, val):
+        self._set_optional_array("spin_z", val)
+
+    @property
+    def charge_state(self):
+        """
+        Integer charge of an atom or molecule.
+
+        Optional; the openPMD `chargeState` record. Not needed for fundamental
+        particles, whose charge follows from `species`.
+        """
+        return self._optional_array("charge_state")
+
+    @charge_state.setter
+    def charge_state(self, val):
+        self._set_optional_array("charge_state", val, dtype=int)
+
+    def _optional_array(self, key: str) -> np.ndarray:
+        try:
+            return self._data[key]
+        except KeyError:
+            raise AttributeError(
+                f"ParticleGroup has no {key!r} data (optional openPMD record "
+                f"{component_from_alias[key]!r})"
+            ) from None
+
+    def _set_optional_array(self, key: str, val, dtype=None) -> None:
+        if key not in self._settable_array_keys:
+            self._settable_array_keys.append(key)
+        self._data[key] = full_array(len(self), val, dtype=dtype)
 
     @property
     def species(self):
@@ -1186,11 +1336,16 @@ class ParticleGroup:
         Bmad pz = p/p0c - 1
         Bmad t  = t
 
+        Optional records present on this group are included: `s`,
+        `ix_branch`, `ix_ele`, `spin_x`, `spin_y`, `spin_z` as they are,
+        `location` converted to the Bmad integers, and `id` as `ix_user`.
+
         Parameters
         ----------
-        p0c : float, optional
-            Reference momentum times the speed of light (in eV).
-            Default is None, which uses self['mean_p'].
+        p0c : float or numpy.ndarray, optional
+            Reference momentum times the speed of light (in eV), scalar or
+            per particle. Default is None, which uses `self.p0c` when present
+            and otherwise self['mean_p'].
         tref : float, optional
             Reference time (in seconds).
             Default is None, which uses self['mean_t'].
@@ -1216,7 +1371,10 @@ class ParticleGroup:
             A dictionary containing Bmad phase space coordinates
             with keys:
             'x', 'px', 'y', 'py', 'z', 'pz',
-            'charge', 'species', 'tref', 'state'
+            'charge', 'species', 'p0c', 'tref', 'state'
+            and optionally 's', 'ix_branch', 'ix_ele', 'location',
+            'spin_x', 'spin_y', 'spin_z', 'ix_user'. A per-particle
+            'p0c' array is kept as the `p0c` record.
 
         Returns
         -------
@@ -1369,6 +1527,9 @@ class ParticleGroup:
             Reference time in seconds. Default is 0.
         verbose : bool, optional
             If True, print information during writing. Default is False.
+
+        Spin, `ix_ele` and `location` columns are written when the group
+        carries those records.
         """
         bmad.write_bmad(self, filePath, p0c=p0c, t_ref=t_ref, verbose=verbose)
 
@@ -2093,6 +2254,19 @@ class ParticleGroup:
                 if not np.allclose(self[key], other[key]):
                     return False
 
+            for key in OPTIONAL_PARTICLE_KEYS:
+                if key == "id":
+                    continue
+                if (key in self._data) != (key in other._data):
+                    return False
+                if key not in self._data:
+                    continue
+                if key in INT_ARRAY_KEYS:
+                    if not np.array_equal(self._data[key], other._data[key]):
+                        return False
+                elif not np.allclose(self._data[key], other._data[key]):
+                    return False
+
             # Compare ids without triggering assign_id as a side effect. If only
             # one operand has explicit ids, compare them against the default ids
             # (1..n) that assign_id would otherwise produce for the other.
@@ -2368,6 +2542,9 @@ def single_particle(
     """
     Convenience function to make ParticleGroup with a single particle.
 
+    Only the required keys are set; optional records such as `s` or `ix_ele`
+    are not.
+
     Units:
         x, y, z: m
         px, py, pz: eV/c
@@ -2396,6 +2573,8 @@ def centroid(particle_group: ParticleGroup) -> ParticleGroup:
     Convenience function to return a single particle representing
     the average of all coordinates. Only considers live particles.
 
+    Only the required keys are set; optional records such as `s` or `ix_ele`
+    are not carried over.
     """
     good = particle_group.status == 1
     pg = particle_group[good]
@@ -2552,9 +2731,23 @@ def join_particle_groups(*particle_groups):
     species0 = species[0]
     assert all([spe == species0 for spe in species]), "species must be the same to join"
 
+    # Optional records are kept only when every group carries them. `id` is
+    # excepted: its getter assigns default ids to a group without them.
+    keys = list(particle_groups[0]._settable_array_keys)
+    dropped = [
+        key
+        for key in keys
+        if key != "id" and any(key not in pg._data for pg in particle_groups)
+    ]
+    if dropped:
+        warnings.warn(
+            f"Dropping optional keys not present in every group: {dropped}",
+            stacklevel=find_stacklevel(),
+        )
     data = {}
-    for key in particle_groups[0]._settable_array_keys:
-        data[key] = np.hstack([pg[key] for pg in particle_groups])
+    for key in keys:
+        if key not in dropped:
+            data[key] = np.hstack([pg[key] for pg in particle_groups])
 
     data["species"] = species0
     data["n_particle"] = np.sum([pg["n_particle"] for pg in particle_groups])

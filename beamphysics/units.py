@@ -23,6 +23,7 @@ mec2 = scipy.constants.value("electron mass energy equivalent in MeV") * 1e6
 mpc2 = scipy.constants.value("proton mass energy equivalent in MeV") * 1e6
 c_light = scipy.constants.c
 e_charge = scipy.constants.e
+hbar = scipy.constants.hbar
 mu_0 = scipy.constants.mu_0  # Note that this is not 4pi*10^-7 !
 # Derived values. Note that scipy.constants.epsilon_0 is not consistent!
 epsilon_0 = 1 / (mu_0 * c_light**2)  # F/m
@@ -1457,7 +1458,17 @@ def plottable_array_and_units(
 # Units for ParticleGroup
 
 PARTICLEGROUP_UNITS = {}
-for k in ["n_particle", "status", "id", "n_alive", "n_dead"]:
+for k in [
+    "n_particle",
+    "status",
+    "id",
+    "n_alive",
+    "n_dead",
+    "ix_branch",
+    "ix_ele",
+    "location",
+    "charge_state",
+]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("1")
 for k in ["t", "z/c"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("s")
@@ -1469,10 +1480,14 @@ for k in [
     "higher_order_energy",
 ]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("eV")
-for k in ["px", "py", "pz", "p", "pr", "ptheta"]:
+for k in ["px", "py", "pz", "p", "pr", "ptheta", "p0c"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("eV/c")
-for k in ["x", "y", "z", "r", "Jx", "Jy"]:
+for k in ["x", "y", "z", "r", "s", "Jx", "Jy"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("m")
+# Spin in units of hbar, as Bmad writes it. Kept out of NAMED_UNITS so unit
+# simplification is unaffected.
+for k in ["spin_x", "spin_y", "spin_z"]:
+    PARTICLEGROUP_UNITS[k] = pmd_unit("hbar", hbar, (2, 1, -1, 0, 0, 0, 0))
 for k in ["beta", "beta_x", "beta_y", "beta_z", "gamma", "bunching"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("1")
 for k in ["theta", "bunching_phase"]:

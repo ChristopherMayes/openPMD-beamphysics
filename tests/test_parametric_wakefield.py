@@ -629,16 +629,50 @@ def test_impact_tables_keep_the_doubled_first_row(ah1):
     np.testing.assert_allclose(table.to_impact_t(n=n)[0][:, 0], K)
 
 
-def test_impact_t_export_rebins_a_finer_table():
-    """The IMPACT-T row limit coarsens a bin-averaged table conservatively."""
+@pytest.fixture(scope="module")
+def long_kernel() -> BinnedWakefield:
+    """Binned kernel at 1 µm spacing with more rows than IMPACT-T accepts."""
     wake = ParametricWakefield(length=1.0, B=1.0)
-    table = BinnedWakefield.from_wakefield(wake, zmax=4e-3, n=4001)
-    with pytest.warns(UserWarning, match="IMPACT-T limit"):
-        data, length = table.to_impact_t()
+    return BinnedWakefield.from_wakefield(wake, zmax=4e-3, n=4001)
 
-    K = wake.bin_averaged_wake(length / (len(data) - 1), len(data))
-    # The last bin reaches beyond the source table, so it is partial.
-    np.testing.assert_allclose(data[:-1, 0], K[:-1], rtol=1e-2)
+
+def test_impact_t_export_shortens_a_long_kernel(long_kernel):
+    """The IMPACT-T row limit shortens a binned kernel and keeps its spacing."""
+    with pytest.warns(UserWarning, match="spacing is kept"):
+        data, length = long_kernel.to_impact_t()
+
+    assert len(data) == 1000
+    assert length / (len(data) - 1) == pytest.approx(long_kernel.dz, rel=1e-12)
+    np.testing.assert_array_equal(data[:, 0], long_kernel.W_data[::-1][:1000])
+
+
+@pytest.mark.parametrize(
+    ("options", "rows"),
+    [({"n": 1000}, 1000), ({"zmax": 0.5e-3}, 501), ({"zmax": 0.5e-3, "n": 501}, 501)],
+    ids=["n", "zmax", "zmax_and_n"],
+)
+def test_impact_t_export_keeps_the_kernel_spacing(long_kernel, options, rows):
+    data, length = long_kernel.to_impact_t(**options)
+
+    assert len(data) == rows
+    assert length / (len(data) - 1) == pytest.approx(long_kernel.dz, rel=1e-12)
+    np.testing.assert_array_equal(data[:, 0], long_kernel.W_data[::-1][:rows])
+
+
+def test_impact_export_pads_beyond_the_kernel(long_kernel):
+    short = long_kernel.rebin(long_kernel.dz, max_rows=10)
+    rfdata = short.to_impact_z(n=20)
+
+    np.testing.assert_allclose(np.diff(rfdata[:, 0]), short.dz, rtol=1e-12)
+    np.testing.assert_array_equal(rfdata[:10, 1], short.W_data[::-1])
+    assert np.all(rfdata[10:, 1] == 0)
+
+
+@pytest.mark.parametrize("method", ["to_impact_t", "to_impact_z"])
+def test_impact_export_rejects_a_spacing_change(long_kernel, method):
+    """zmax and n together may not imply a spacing other than the kernel's."""
+    with pytest.raises(ValueError, match="rebin"):
+        getattr(long_kernel, method)(zmax=1e-3, n=251)
 
 
 def test_binned_readers_preserve_the_kernel():

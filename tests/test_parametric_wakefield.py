@@ -1001,6 +1001,37 @@ def test_min_wavelength_is_the_shortest_scale(published):
     assert published.min_wavelength == pytest.approx(expected)
 
 
+@pytest.mark.parametrize(
+    "coefficients",
+    [
+        ZAGORODNOV_2021_TABLE_IV["TDS"],
+        dict(B=1e12, C=1e13, k3=150.0),
+        dict(B=1e12),
+    ],
+    ids=["TDS", "B_and_C", "B_only"],
+)
+def test_default_spacing_resolves_the_b_term(coefficients):
+    wake = ParametricWakefield(length=1.0, **coefficients)
+    zmax = 20e-3
+    n = wake.default_n_samples(zmax)
+
+    assert zmax / (n - 1) <= 2e-6
+
+
+def test_default_spacing_keeps_a_finer_model_scale(ah1):
+    zmax = 20e-3
+    n = ah1.default_n_samples(zmax)
+
+    assert zmax / (n - 1) == pytest.approx(ah1.min_wavelength / 128, rel=1e-3)
+
+
+def test_default_spacing_is_unchanged_without_the_b_term():
+    wake = ParametricWakefield(length=1.0, A=1e14, k0=1e3, D=1e9)
+    zmax = 20e-3
+
+    assert wake.default_n_samples(zmax) == int(np.ceil(128 * zmax * wake.k0)) + 1
+
+
 def test_defaults_are_not_offered_without_a_scale():
     wake = ParametricWakefield(length=1.0, D=1.0)
     with pytest.raises(NotImplementedError):

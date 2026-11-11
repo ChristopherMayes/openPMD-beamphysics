@@ -80,6 +80,9 @@ _MAX_NODES = 2_000_000
 # Bunch density beyond this many sigma is neglected (exp(-32) ~ 1e-14).
 _GAUSSIAN_CUTOFF = 8.0
 
+# Largest default spacing with B != 0: a fifth of the shortest bunch the fit covers.
+_MAX_DZ_B_TERM = 2e-6
+
 
 def _gauss_legendre_panels(
     upper: np.ndarray, n_panels: int
@@ -157,6 +160,11 @@ class ParametricWakefield(WakefieldBase):
     The C term does not decay and the B term falls only as 1/s, so there is no
     distance beyond which the wake is negligible. `default_zmax` covers one period
     of the C term; pass zmax explicitly to cover the whole bunch.
+
+    The defaults only bound the resolution of the model. For tracking, the table
+    spacing is the bin width of the consuming code, so choose zmax and n from the
+    bunch: a spacing of about sigma_z / 10, and zmax a little beyond the bunch
+    length.
 
     References
     ----------
@@ -626,6 +634,37 @@ class ParametricWakefield(WakefieldBase):
         if not scales:
             return super().min_wavelength
         return min(scales)
+
+    def default_n_samples(self, zmax: float) -> int:
+        """
+        Default number of uniform samples out to zmax.
+
+        As for `WakefieldBase.default_n_samples`, except that with B != 0 the
+        spacing is at most 2 µm, a fifth of the 10 µm shortest bunch the fit
+        covers. The $s^{-1/2}$ singularity of the B term sets no length scale of
+        its own.
+
+        Parameters
+        ----------
+        zmax : float
+            Largest distance behind the source particle (m).
+
+        Returns
+        -------
+        int
+
+        Raises
+        ------
+        NotImplementedError
+            If B is zero and no term sets a length scale; pass n explicitly.
+        """
+        if self.B == 0:
+            return super().default_n_samples(zmax)
+        n = int(np.ceil(zmax / _MAX_DZ_B_TERM)) + 1
+        try:
+            return max(n, super().default_n_samples(zmax))
+        except NotImplementedError:
+            return n
 
     def impedance(self, k: np.ndarray | float) -> np.ndarray | complex:
         """

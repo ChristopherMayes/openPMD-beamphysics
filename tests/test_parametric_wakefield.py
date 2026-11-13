@@ -106,7 +106,7 @@ def test_length_scales_the_wake_per_metre():
 def test_table_iv_reproduces_the_digitized_fig7():
     """
     The AH1 wake potentials must match the ECHO curves of Fig. 7 to the
-    resolution of the figure, about 6 V/pC in W for a peak of 1120 V/pC.
+    resolution of the figure, about 6 V/pC in V for a peak of 1120 V/pC.
     """
     data = np.loadtxt(FIG7_DATA, delimiter=",")
     wake = ParametricWakefield(length=1.0, **ZAGORODNOV_2021_TABLE_IV["AH1"])
@@ -114,7 +114,7 @@ def test_table_iv_reproduces_the_digitized_fig7():
     for sigma_um in np.unique(data[:, 0]):
         rows = data[data[:, 0] == sigma_um]
         sigma = sigma_um * 1e-6
-        V = wake.wake_potential(-rows[:, 1] * sigma, sigma) * 1e-12
+        V = wake.wake_potential(rows[:, 1] * sigma, sigma) * 1e-12
         residual = V - rows[:, 2]
 
         assert np.sqrt(np.mean(residual**2)) < 10

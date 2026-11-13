@@ -83,6 +83,9 @@ _GAUSSIAN_CUTOFF = 8.0
 # Largest default spacing with B != 0: a fifth of the shortest bunch the fit covers.
 _MAX_DZ_B_TERM = 2e-6
 
+# Interpolation grid points per sigma when `wake_potential` is asked for many z.
+_POTENTIAL_GRID_PER_SIGMA = 64
+
 
 def _gauss_legendre_panels(
     upper: np.ndarray, n_panels: int
@@ -437,7 +440,9 @@ class ParametricWakefield(WakefieldBase):
     # Gaussian bunch
     # -------------------------------------------------------------------------
 
-    def wake_potential(self, z: np.ndarray | float, sigma: float) -> np.ndarray | float:
+    def wake_potential(
+        self, z: np.ndarray | float, sigma: float, dz: float | None = None
+    ) -> np.ndarray | float:
         """
         Wake potential of a Gaussian bunch per unit bunch charge.
 
@@ -451,7 +456,9 @@ class ParametricWakefield(WakefieldBase):
         Gauss-Legendre quadrature with enough panels to resolve the Gaussian and
         the oscillation of the B term. This is how the paper fits and checks the
         model (its Eqs. 20 and 21), and it is the reference for a tabulated or
-        binned convolution.
+        binned convolution. When many more positions are requested than a grid of
+        sigma / 64 spacing over them holds, the integral is evaluated on that grid
+        and interpolated.
 
         Parameters
         ----------
@@ -459,6 +466,9 @@ class ParametricWakefield(WakefieldBase):
             Position relative to the bunch centre (m).
         sigma : float
             Rms bunch length (m).
+        dz : float, optional
+            If given, return the binned convolution at this spacing instead, as
+            for `WakefieldBase.wake_potential`.
 
         Returns
         -------
@@ -466,6 +476,8 @@ class ParametricWakefield(WakefieldBase):
             Wake potential per unit charge (V/C/m). Multiply by the bunch charge
             for V/m.
         """
+        if dz is not None:
+            return super().wake_potential(z, sigma, dz)
         if sigma <= 0:
             raise ValueError(f"sigma must be positive, got {sigma}")
 
@@ -473,10 +485,31 @@ class ParametricWakefield(WakefieldBase):
         scalar_input = z.ndim == 0
         z = np.atleast_1d(z)
 
-        def density(x):
-            return np.exp(-0.5 * (x / sigma) ** 2) / (np.sqrt(2 * np.pi) * sigma)
+        out = self.D * self._gaussian(z, sigma)
+        n_grid = (
+            int(np.ceil((z.max() - z.min()) / sigma * _POTENTIAL_GRID_PER_SIGMA)) + 1
+            if z.size
+            else 0
+        )
+        if z.size and 4 * n_grid <= z.size:
+            grid = np.linspace(z.min(), z.max(), max(n_grid, 2))
+            out += np.interp(z, grid, self._wake_potential_integral(grid, sigma))
+        else:
+            out += self._wake_potential_integral(z, sigma)
 
-        out = self.D * density(z)
+        out /= self.length
+
+        if scalar_input:
+            return float(out[0])
+        return out
+
+    @staticmethod
+    def _gaussian(x: np.ndarray, sigma: float) -> np.ndarray:
+        return np.exp(-0.5 * (x / sigma) ** 2) / (np.sqrt(2 * np.pi) * sigma)
+
+    def _wake_potential_integral(self, z: np.ndarray, sigma: float) -> np.ndarray:
+        """The A, B and C terms of the whole-module wake potential at z (V/C/m)."""
+        out = np.zeros_like(z)
 
         # Charge ahead of z lies within the Gaussian cutoff.
         t_max = _GAUSSIAN_CUTOFF * sigma - z
@@ -514,21 +547,17 @@ class ParametricWakefield(WakefieldBase):
                         * np.cos((self.k1 * t) ** self.alpha)
                         / (1 + self.k2 * u)
                     )
-                return np.sum(f * density(za[:, None] + t) * w, axis=1)
+                return np.sum(f * self._gaussian(za[:, None] + t, sigma) * w, axis=1)
 
             # Bound the size of the node arrays.
             chunk = max(1, _MAX_NODES // (n_panels * _GL_NODES))
-            out[active] += np.concatenate(
+            out[active] = np.concatenate(
                 [
                     integrate(za[i : i + chunk], ta[i : i + chunk])
                     for i in range(0, len(za), chunk)
                 ]
             )
 
-        out /= self.length
-
-        if scalar_input:
-            return float(out[0])
         return out
 
     def _gaussian_grid(self, sigma: float) -> tuple[np.ndarray, np.ndarray]:

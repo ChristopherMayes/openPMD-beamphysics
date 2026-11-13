@@ -7,6 +7,9 @@ import numpy as np
 
 from ..units import c_light
 
+# Bunch density beyond this many sigma is neglected (exp(-32) ~ 1e-14).
+_GAUSSIAN_CUTOFF = 8.0
+
 
 class _WakefieldConvolution:
     def convolve_density(
@@ -115,6 +118,81 @@ class _WakefieldConvolution:
         ax2.set_ylabel(r"Current (A)", color="C1")
         ax2.tick_params(axis="y", labelcolor="C1")
         ax2.set_ylim(0, None)
+
+    def wake_potential(
+        self, z: np.ndarray | float, sigma: float, dz: float | None = None
+    ) -> np.ndarray | float:
+        """
+        Wake potential of a Gaussian bunch per unit bunch charge, on a grid.
+
+        The bunch is sampled at spacing dz over the requested positions and
+        +-8 sigma, convolved with `convolve_density`, and interpolated linearly
+        to z. The result includes the error of binning at dz, which is what a
+        tracking code binning at dz sees. Rows beyond the end of a table count as
+        zero, so a table shorter than the bunch also shows up as an error.
+
+        Parameters
+        ----------
+        z : float or np.ndarray
+            Position relative to the bunch centre (m), with z < 0 towards the tail.
+        sigma : float
+            Rms bunch length (m).
+        dz : float, optional
+            Grid spacing (m). Default is sigma / 20.
+
+        Returns
+        -------
+        V : float or np.ndarray
+            Wake potential per unit charge (V/C/m). Positive for energy loss.
+        """
+        if not np.isfinite(sigma) or sigma <= 0:
+            raise ValueError(f"sigma must be finite and positive, got {sigma}")
+        if dz is None:
+            dz = sigma / 20
+        if not np.isfinite(dz) or dz <= 0:
+            raise ValueError(f"dz must be finite and positive, got {dz}")
+
+        z = np.asarray(z, dtype=float)
+        scalar_input = z.ndim == 0
+        z = np.atleast_1d(z)
+
+        z_lo = min(-_GAUSSIAN_CUTOFF * sigma, z.min(initial=0.0))
+        z_hi = max(_GAUSSIAN_CUTOFF * sigma, z.max(initial=0.0))
+        grid = z_lo + dz * np.arange(int(np.ceil((z_hi - z_lo) / dz)) + 1)
+        density = np.exp(-0.5 * (grid / sigma) ** 2) / (np.sqrt(2 * np.pi) * sigma)
+        V = np.interp(z, grid, self.convolve_density(density, dz))
+
+        if scalar_input:
+            return float(V[0])
+        return V
+
+    def plot_wake_potential(
+        self, sigmas, zlim: float = 5.0, n: int = 400, ax=None
+    ) -> None:
+        """
+        Plot the wake potential of Gaussian bunches against z / sigma.
+
+        Parameters
+        ----------
+        sigmas : float or sequence of float
+            Rms bunch lengths (m), one curve each.
+        zlim : float, optional
+            Half-width of the plotted range in units of sigma. Default is 5.
+        n : int, optional
+            Number of points per curve. Default is 400.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None, creates a new figure.
+        """
+        if ax is None:
+            _, ax = plt.subplots()
+        x = np.linspace(-zlim, zlim, n)
+        for sigma in np.atleast_1d(sigmas):
+            V = self.wake_potential(x * sigma, sigma)
+            ax.plot(x, V * 1e-12, label=f"$\\sigma_z$ = {sigma * 1e6:g} µm")
+        ax.axhline(0, color="k", lw=0.5)
+        ax.set_xlabel(r"$z/\sigma_z$")
+        ax.set_ylabel(r"$V(z)$ (V/pC/m)")
+        ax.legend()
 
     def binned_particle_kicks(
         self,

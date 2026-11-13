@@ -441,6 +441,85 @@ def test_wake_potential_rejects_a_nonpositive_sigma(ah1):
         ah1.wake_potential(0.0, 0.0)
 
 
+@pytest.mark.parametrize("sigma", [10e-6, 2e-3])
+def test_wake_potential_interpolates_many_positions(published, sigma):
+    z = np.random.default_rng(0).normal(0, sigma, 20_000)
+    V = published.wake_potential(z, sigma)
+    direct = published.wake_potential(z[:100], sigma)
+
+    np.testing.assert_allclose(
+        V[:100], direct, rtol=0, atol=1e-4 * np.abs(direct).max()
+    )
+
+
+def test_wake_potential_interpolation_keeps_the_delta_term_exact():
+    D, L, sigma = 3.0, 2.0, 1e-4
+    wake = ParametricWakefield(length=L, D=D)
+    z = np.random.default_rng(0).normal(0, sigma, 20_000)
+
+    np.testing.assert_allclose(
+        wake.wake_potential(z, sigma), D / L * gaussian(z, sigma)
+    )
+
+
+@pytest.mark.parametrize(("dz", "rel"), [(2e-6, 2e-3), (5e-6, 1e-2)])
+def test_binned_wake_potential_converges_to_the_exact_one(ah1, dz, rel):
+    sigma = 25e-6
+    z = np.linspace(-4 * sigma, 4 * sigma, 101)
+    exact = ah1.wake_potential(z, sigma)
+    table = BinnedWakefield.from_wakefield(
+        ah1, zmax=10 * sigma, n=int(round(10 * sigma / dz)) + 1
+    )
+
+    for V in (table.wake_potential(z, sigma), ah1.wake_potential(z, sigma, dz=dz)):
+        assert np.abs(V - exact).max() < rel * np.abs(exact).max()
+
+
+def test_binned_wake_potential_shows_a_table_shorter_than_the_bunch(ah1):
+    sigma = 25e-6
+    z = np.linspace(-4 * sigma, 4 * sigma, 101)
+    exact = ah1.wake_potential(z, sigma)
+    short = BinnedWakefield.from_wakefield(ah1, zmax=2 * sigma, n=26)
+
+    assert (
+        np.abs(short.wake_potential(z, sigma) - exact).max() > 0.1 * np.abs(exact).max()
+    )
+
+
+def test_binned_wake_potential_rejects_a_mismatched_spacing(ah1):
+    table = BinnedWakefield.from_wakefield(ah1, zmax=1e-3, n=501)
+    with pytest.raises(ValueError, match="rebin"):
+        table.wake_potential(0.0, 50e-6, dz=1e-6)
+
+
+def test_smooth_wake_potential_matches_the_point_sum():
+    wake = PseudomodeWakefield([Pseudomode(A=1e14, d=1e4, k=3e4, phi=np.pi / 2)])
+    sigma = 50e-6
+    z = np.linspace(-3 * sigma, 3 * sigma, 7)
+
+    def exact(z0):
+        return quad(
+            lambda t: wake.wake(-t) * gaussian(z0 + t, sigma), 0, 8 * sigma - z0
+        )[0]
+
+    reference = np.array([exact(z0) for z0 in z])
+    np.testing.assert_allclose(
+        wake.wake_potential(z, sigma),
+        reference,
+        rtol=0,
+        atol=2e-3 * np.abs(reference).max(),
+    )
+
+
+def test_plot_wake_potential(ah1):
+    import matplotlib.pyplot as plt
+
+    _, ax = plt.subplots()
+    ah1.plot_wake_potential([25e-6, 100e-6], ax=ax)
+    assert len(ax.get_lines()) == 3
+    plt.close("all")
+
+
 def test_loss_factor_and_spread_are_moments_of_the_wake_potential(ah1):
     sigma = 200e-6
     z = np.linspace(-8 * sigma, 8 * sigma, 4001)

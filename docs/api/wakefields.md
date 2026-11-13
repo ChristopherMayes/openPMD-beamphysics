@@ -6,6 +6,10 @@
 
 ::: beamphysics.wakefields.ResistiveWallPseudomode
 
+## Cavity Wakefield Classes
+
+::: beamphysics.wakefields.ParametricWakefield
+
 ## Base Classes
 
 ::: beamphysics.wakefields.WakefieldBase
@@ -16,11 +20,31 @@
 
 ::: beamphysics.wakefields.TabularWakefield
 
+::: beamphysics.wakefields.BinnedWakefield
+
 ::: beamphysics.wakefields.Pseudomode
 
 ## Tabulation and Interchange
 
-`TabularWakefield` is the common format for exchanging wakes with tracking codes. `TabularWakefield.from_wakefield`, or `to_tabular` on the resistive wall classes, resamples any model onto a uniform table. When `zmax` or `n` is omitted, each model supplies `default_zmax` and `default_n_samples`.
+`TabularWakefield` holds interpolated point samples of a smooth wake. `BinnedWakefield` holds fixed-width bin averages for convolution and tracking; it has no pointwise `wake` method. Both classes provide `from_wakefield` and the same Bmad and IMPACT readers and writers. When `zmax` or `n` is omitted, the source supplies `default_zmax` and `default_n_samples`.
+
+### Singular wakes and bin averages
+
+A wake that diverges at the source particle, such as the diffraction term of `ParametricWakefield`, cannot be sampled at points. `BinnedWakefield.from_wakefield` integrates it into bins using the model's `integrated_wake(z)`, the integral from z to zero (V/C), including the full delta contribution for z < 0. This is the integrated Green function of Qiang et al. (2006). Bmad, IMPACT-T, IMPACT-Z and `convolve_density` halve the first row for the self-kick, so the binned kernel stores twice the self-bin coefficient in its first row.
+
+A binned wake's `dz` is fixed. Its convolution and particle tracking methods use that spacing and reject a mismatched explicit dz. `rebin(dz)` changes the spacing conservatively; interpolation of point values is not equivalent. Bmad bins at the table spacing, while IMPACT-T and IMPACT-Z bin at their own mesh width, so rebin to that width before exporting.
+
+```python
+from beamphysics.wakefields import BinnedWakefield, ParametricWakefield, ZAGORODNOV_2021_TABLE_IV
+
+wake = ParametricWakefield(length=10.5, **ZAGORODNOV_2021_TABLE_IV["AH1"])
+bins = BinnedWakefield.from_wakefield(wake, zmax=20e-3, n=2001)
+impact_bins = bins.rebin(dz=50e-6)
+rfdata = impact_bins.to_impact_z()
+restored = BinnedWakefield.from_impact_z(rfdata)
+```
+
+The reader class determines the interpretation: use `BinnedWakefield.from_impact_z` for bin averages and `TabularWakefield.from_impact_z` for point samples. These file formats do not record that distinction.
 
 ### IMPACT-Z
 

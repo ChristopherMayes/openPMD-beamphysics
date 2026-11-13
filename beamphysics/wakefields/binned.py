@@ -161,15 +161,16 @@ class BinnedWakefield(_WakefieldConvolution, _WakefieldTableIO):
             method,
         )
 
-    def wake_potential(
+    def gaussian_wake_potential(
         self, z: np.ndarray | float, sigma: float, dz: float | None = None
     ) -> np.ndarray | float:
         """
         Wake potential of a Gaussian bunch per unit charge (V/C/m) at this spacing.
 
-        As for `WakefieldBase.wake_potential`. An explicit dz must match `dz`.
+        As for `WakefieldBase.gaussian_wake_potential`. An explicit dz must
+        match `dz`.
         """
-        return super().wake_potential(z, sigma, self.dz if dz is None else dz)
+        return super().gaussian_wake_potential(z, sigma, self.dz if dz is None else dz)
 
     def binned_particle_kicks(
         self,

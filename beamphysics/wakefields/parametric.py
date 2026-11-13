@@ -74,7 +74,7 @@ ZAGORODNOV_2021_TABLE_IV: dict[str, dict[str, float]] = {
 # Gauss-Legendre nodes per panel in the quadratures below.
 _GL_NODES = 12
 
-# Largest node array built at once in `wake_potential`.
+# Largest node array built at once in `gaussian_wake_potential`.
 _MAX_NODES = 2_000_000
 
 # Bunch density beyond this many sigma is neglected (exp(-32) ~ 1e-14).
@@ -83,7 +83,7 @@ _GAUSSIAN_CUTOFF = 8.0
 # Largest default spacing with B != 0: a fifth of the shortest bunch the fit covers.
 _MAX_DZ_B_TERM = 2e-6
 
-# Interpolation grid points per sigma when `wake_potential` is asked for many z.
+# Interpolation grid points per sigma for `gaussian_wake_potential` at many z.
 _POTENTIAL_GRID_PER_SIGMA = 64
 
 
@@ -179,7 +179,7 @@ class ParametricWakefield(WakefieldBase):
     --------
     >>> wake = ParametricWakefield(length=10.5, **ZAGORODNOV_2021_TABLE_IV["AH1"])
     >>> table = BinnedWakefield.from_wakefield(wake, zmax=20e-3, n=2001)
-    >>> V = wake.wake_potential(z, sigma=100e-6)  # Gaussian bunch, V/C/m
+    >>> V = wake.gaussian_wake_potential(z, sigma=100e-6)  # Gaussian bunch, V/C/m
     """
 
     def __init__(
@@ -440,7 +440,7 @@ class ParametricWakefield(WakefieldBase):
     # Gaussian bunch
     # -------------------------------------------------------------------------
 
-    def wake_potential(
+    def gaussian_wake_potential(
         self, z: np.ndarray | float, sigma: float, dz: float | None = None
     ) -> np.ndarray | float:
         """
@@ -468,7 +468,7 @@ class ParametricWakefield(WakefieldBase):
             Rms bunch length (m).
         dz : float, optional
             If given, return the binned convolution at this spacing instead, as
-            for `WakefieldBase.wake_potential`.
+            for `WakefieldBase.gaussian_wake_potential`.
 
         Returns
         -------
@@ -477,7 +477,7 @@ class ParametricWakefield(WakefieldBase):
             for V/m.
         """
         if dz is not None:
-            return super().wake_potential(z, sigma, dz)
+            return super().gaussian_wake_potential(z, sigma, dz)
         if sigma <= 0:
             raise ValueError(f"sigma must be positive, got {sigma}")
 
@@ -493,9 +493,11 @@ class ParametricWakefield(WakefieldBase):
         )
         if z.size and 4 * n_grid <= z.size:
             grid = np.linspace(z.min(), z.max(), max(n_grid, 2))
-            out += np.interp(z, grid, self._wake_potential_integral(grid, sigma))
+            out += np.interp(
+                z, grid, self._gaussian_wake_potential_integral(grid, sigma)
+            )
         else:
-            out += self._wake_potential_integral(z, sigma)
+            out += self._gaussian_wake_potential_integral(z, sigma)
 
         out /= self.length
 
@@ -507,7 +509,9 @@ class ParametricWakefield(WakefieldBase):
     def _gaussian(x: np.ndarray, sigma: float) -> np.ndarray:
         return np.exp(-0.5 * (x / sigma) ** 2) / (np.sqrt(2 * np.pi) * sigma)
 
-    def _wake_potential_integral(self, z: np.ndarray, sigma: float) -> np.ndarray:
+    def _gaussian_wake_potential_integral(
+        self, z: np.ndarray, sigma: float
+    ) -> np.ndarray:
         """The A, B and C terms of the whole-module wake potential at z (V/C/m)."""
         out = np.zeros_like(z)
 
@@ -583,7 +587,7 @@ class ParametricWakefield(WakefieldBase):
             Loss factor (V/C/m). Positive for energy loss.
         """
         z, lam = self._gaussian_grid(sigma)
-        return float(np.trapezoid(self.wake_potential(z, sigma) * lam, z))
+        return float(np.trapezoid(self.gaussian_wake_potential(z, sigma) * lam, z))
 
     def rms_energy_spread(self, sigma: float) -> float:
         """
@@ -602,7 +606,7 @@ class ParametricWakefield(WakefieldBase):
             Rms spread of the wake potential per unit charge (V/C/m).
         """
         z, lam = self._gaussian_grid(sigma)
-        V = self.wake_potential(z, sigma)
+        V = self.gaussian_wake_potential(z, sigma)
         kappa = np.trapezoid(V * lam, z)
         return float(np.sqrt(np.trapezoid((V - kappa) ** 2 * lam, z)))
 

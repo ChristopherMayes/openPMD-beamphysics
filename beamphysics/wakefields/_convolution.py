@@ -23,7 +23,7 @@ class _WakefieldConvolution:
         method: str = "auto",
     ) -> np.ndarray:
         """
-        Compute integrated wakefield from a charge density distribution.
+        Wake potential of a charge density distribution.
 
         This computes the causal wake potential:
 
@@ -58,8 +58,8 @@ class _WakefieldConvolution:
 
         Returns
         -------
-        integrated_wake : np.ndarray
-            Integrated longitudinal wakefield (V/m).
+        V : np.ndarray
+            Wake potential per unit length (V/m). Positive for energy loss.
 
         Raises
         ------
@@ -80,21 +80,21 @@ class _WakefieldConvolution:
 
         # Extract the portion corresponding to non-negative lags
         # correlate output has length 2*n-1, with zero lag at index n-1
-        integrated_wake = corr_result[n - 1 : 2 * n - 1]
+        V = corr_result[n - 1 : 2 * n - 1]
 
         # Correlation includes full W[0] contribution from self
         # Remove it, then add half if self-kick is requested
         W0 = W_causal[0]
-        integrated_wake = integrated_wake - charge * W0
+        V = V - charge * W0
         if include_self_kick:
-            integrated_wake = integrated_wake + 0.5 * W0 * charge
+            V = V + 0.5 * W0 * charge
 
         if plot:
-            self._plot_convolve_density(density, dz, integrated_wake, ax=ax)
+            self._plot_convolve_density(density, dz, V, ax=ax)
 
-        return integrated_wake
+        return V
 
-    def _plot_convolve_density(self, density, dz, integrated_wake, ax=None):
+    def _plot_convolve_density(self, density, dz, V, ax=None):
         """Plot density profile and wake potential from convolve_density."""
         n = len(density)
         z = np.arange(n) * dz
@@ -104,7 +104,7 @@ class _WakefieldConvolution:
             fig, ax = plt.subplots(figsize=(10, 5))
 
         # Wake potential on primary axis
-        ax.plot((z - z0) * 1e6, integrated_wake * 1e-6, "C0")
+        ax.plot((z - z0) * 1e6, V * 1e-6, "C0")
         ax.set_xlabel(r"$z - z_0$ (µm)")
         ax.set_ylabel(r"Wake potential (MV/m)", color="C0")
         ax.tick_params(axis="y", labelcolor="C0")
@@ -119,7 +119,7 @@ class _WakefieldConvolution:
         ax2.tick_params(axis="y", labelcolor="C1")
         ax2.set_ylim(0, None)
 
-    def wake_potential(
+    def gaussian_wake_potential(
         self, z: np.ndarray | float, sigma: float, dz: float | None = None
     ) -> np.ndarray | float:
         """
@@ -166,7 +166,7 @@ class _WakefieldConvolution:
             return float(V[0])
         return V
 
-    def plot_wake_potential(
+    def plot_gaussian_wake_potential(
         self, sigmas, zlim: float = 5.0, n: int = 400, ax=None
     ) -> None:
         """
@@ -187,7 +187,7 @@ class _WakefieldConvolution:
             _, ax = plt.subplots()
         x = np.linspace(-zlim, zlim, n)
         for sigma in np.atleast_1d(sigmas):
-            V = self.wake_potential(x * sigma, sigma)
+            V = self.gaussian_wake_potential(x * sigma, sigma)
             ax.plot(x, V * 1e-12, label=f"$\\sigma_z$ = {sigma * 1e6:g} µm")
         ax.axhline(0, color="k", lw=0.5)
         ax.set_xlabel(r"$z/\sigma_z$")

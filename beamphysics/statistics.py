@@ -907,29 +907,45 @@ class KeyExpression:
             denominator=tuple(names["/"]),
         )
 
-    def evaluate(
-        self, resolve: Callable[[str], Any], one: Any, *, numbers: bool = False
-    ) -> Any:
+    def combine(self, resolve: Callable[[str], Any], one: Any) -> Any:
         """
-        Product of the numerator divided by the product of the denominator.
+        Product of the numerator keys divided by the product of the
+        denominator keys, without `scale` and `divisor`.
 
         Parameters
         ----------
         resolve : callable
-            Maps each key to a value that supports `*` and `/`.
+            Maps each key to an object that supports `*` and `/`, such as
+            its unit.
         one
             Result for an empty numerator.
-        numbers : bool, default=False
-            Include `scale` and `divisor` as factors.
+        """
+        return _quotient(
+            [resolve(name) for name in self.numerator],
+            [resolve(name) for name in self.denominator],
+            one,
+        )
+
+    def value(self, resolve: Callable[[str], Any]) -> Any:
+        """
+        Value of the expression, including `scale` and `divisor`.
+
+        Parameters
+        ----------
+        resolve : callable
+            Maps each key to its value.
         """
         numerator = [resolve(name) for name in self.numerator]
         denominator = [resolve(name) for name in self.denominator]
-        if numbers:
-            if self.scale != 1 or not numerator:
-                numerator.insert(0, self.scale)
-            if self.divisor != 1:
-                denominator.insert(0, self.divisor)
-        result = reduce(np.multiply, numerator) if numerator else one
-        if denominator:
-            result = np.true_divide(result, reduce(np.multiply, denominator))
-        return result
+        if self.scale != 1 or not numerator:
+            numerator.insert(0, self.scale)
+        if self.divisor != 1:
+            denominator.insert(0, self.divisor)
+        return _quotient(numerator, denominator, 1.0)
+
+
+def _quotient(numerator: list, denominator: list, one: Any) -> Any:
+    result = reduce(np.multiply, numerator) if numerator else one
+    if denominator:
+        result = np.true_divide(result, reduce(np.multiply, denominator))
+    return result

@@ -1314,7 +1314,7 @@ class ParticleGroup:
                 )
             return value
 
-        return expression.evaluate(resolve, 1.0, numbers=True)
+        return expression.value(resolve)
 
     def where(self, x):
         """

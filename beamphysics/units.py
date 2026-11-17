@@ -1574,7 +1574,7 @@ def pg_units(key: str) -> pmd_unit:
         # Numbers scale values, not units: `2*xp` stays in rad
         if len(expression.numerator) == 1 and not expression.denominator:
             return operand_unit(expression.numerator[0])
-        unit = expression.evaluate(operand_unit, pmd_unit("1"))
+        unit = expression.combine(operand_unit, pmd_unit("1"))
         if is_identity(unit):
             return pmd_unit("1")
         return unit.simplify()

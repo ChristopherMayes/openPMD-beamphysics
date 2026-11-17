@@ -1,3 +1,5 @@
+import re
+
 from .units import nice_array, parse_bunching_str, pmd_unit
 
 TEXLABEL = {
@@ -154,6 +156,34 @@ def texlabel(key: str):
     return rf"\mathrm{{ {key} }}"
 
 
+def _units_str_to_tex(units: str) -> str:
+    """
+    TeX fragment for a display units string.
+
+    Explicit power-of-ten scales from `pmd_unit.scaled_symbol`, as in `'1e-3'`,
+    `'1e-3 m^2'` and `'pC/(1e-3)'`, are written as $10^{-3}$.
+    """
+    try:
+        return pmd_unit(units).to_tex()
+    except (ValueError, KeyError):
+        pass
+
+    scaled = re.fullmatch(r"1e([+-]?\d+)(?: (.+))?", units)
+    if scaled:
+        tex = f"10^{{{int(scaled.group(1))}}}"
+        if scaled.group(2):
+            tex += rf"\,{_units_str_to_tex(scaled.group(2))}"
+        return tex
+
+    per_group = re.fullmatch(r"([^/]+)/\((.+)\)", units)
+    if per_group:
+        numerator = _units_str_to_tex(per_group.group(1))
+        return f"{numerator}/({_units_str_to_tex(per_group.group(2))})"
+
+    fallback = units.replace("*", r"{\cdot}")
+    return rf"\mathrm{{ {fallback} }}"
+
+
 def mathlabel(*keys, units=None, tex=True):
     """
     Axis/legend label for one or more attribute keys, with optional units.
@@ -170,8 +200,8 @@ def mathlabel(*keys, units=None, tex=True):
         Units to append in parentheses. A ``pmd_unit``, or a string that
         parses as a unit symbol, renders via ``pmd_unit.to_tex()`` (so
         compound symbols like eV/c, sqrt(m), m^2, and parenthesized groups
-        come out right); any other string is shown as-is, with ``*`` as a
-        dot.
+        come out right); explicit scales such as `1e-3` render as $10^{-3}$;
+        any other string is shown as-is, with ``*`` as a dot.
 
     tex : bool, default=True
         if True, a mathtext (TeX) string wrapped in $$ will be returned.
@@ -211,11 +241,7 @@ def mathlabel(*keys, units=None, tex=True):
     elif isinstance(units, pmd_unit):
         units_frag = units.to_tex()
     else:
-        try:
-            units_frag = pmd_unit(str(units)).to_tex()
-        except (ValueError, KeyError):
-            fallback = str(units).replace("*", r"{\cdot}")
-            units_frag = rf"\mathrm{{ {fallback} }}"
+        units_frag = _units_str_to_tex(str(units))
 
     if not keys:
         return rf"${units_frag}$" if units_frag else ""

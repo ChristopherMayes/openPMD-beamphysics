@@ -1,6 +1,6 @@
 import re
 
-from .statistics import parse_key_expression
+from .statistics import KeyExpression
 from .units import nice_array, parse_bunching_str, pmd_unit
 
 TEXLABEL = {
@@ -147,9 +147,9 @@ def texlabel(key: str):
         tex1 = texlabel(subkeys[1])
         return rf"\left<{tex0}, {tex1}\right>"
 
-    terms = parse_key_expression(key)
-    if terms is not None:
-        return _expression_tex(terms)
+    expression = KeyExpression.from_string(key)
+    if expression is not None:
+        return _expression_tex(expression)
 
     if key.startswith("bunching"):
         wavelength = parse_bunching_str(key)
@@ -159,26 +159,17 @@ def texlabel(key: str):
     return rf"\mathrm{{ {key} }}"
 
 
-# Labels that need no parentheses as a factor or divisor, such as `p_x`,
-# `\sigma_{ x }` and `\overline{x}`.
-_TEX_ATOM = re.compile(
-    r"(?:\\[A-Za-z]+|[A-Za-z])'?(?:_(?:[A-Za-z0-9]|\{[^{}]*\}|\\text\{[^{}]*\}))?"
-    r"|\\(?:mathrm|overline)\{[^{}]*\}"
-)
-
-
-def _is_tex_atom(tex: str) -> bool:
-    """Whether a label needs no parentheses, including one `\\left...\\right` group."""
-    if _TEX_ATOM.fullmatch(tex):
-        return True
-    if not tex.startswith(r"\left"):
-        return False
+def _group(tex: str) -> str:
+    """Parenthesize a label that is not a single factor, such as `p - p_0`."""
     depth = 0
-    for match in re.finditer(r"\\left|\\right", tex):
-        depth += 1 if match.group() == r"\left" else -1
-        if depth == 0:
-            return len(tex) == match.end() + 1
-    return False
+    for token in re.findall(r"\\left|\\right|[{} /-]", tex):
+        if token in ("{", r"\left"):
+            depth += 1
+        elif token in ("}", r"\right"):
+            depth -= 1
+        elif depth == 0:
+            return f"({tex})"
+    return tex
 
 
 def _number_tex(x: float) -> str:
@@ -192,37 +183,26 @@ def _number_tex(x: float) -> str:
     return rf"{mantissa} \times {power}"
 
 
-def _expression_tex(terms) -> str:
+def _expression_tex(expression: KeyExpression) -> str:
     r"""
-    TeX fragment for the terms of an arithmetic key, as from
-    `parse_key_expression`.
-
-    Operands are grouped where needed to show the left-to-right evaluation:
-    `x/y*z` is $(x/y)\,z$.
+    TeX fragment for an arithmetic key, as a single quotient: `x/y*z` is
+    $x\,z/y$.
     """
-    tex = ""
-    previous_op = None
-    for op, operand in terms:
-        if isinstance(operand, float):
-            term = _number_tex(operand)
-            grouped = previous_op is not None and (operand < 0 or r"\times" in term)
-        else:
-            term = "c" if operand == "c" else texlabel(operand)
-            grouped = len(terms) > 1 and not _is_tex_atom(term)
-        if grouped:
-            term = f"({term})"
-        if previous_op is None:
-            tex = term
-        else:
-            if previous_op == "/":
-                tex = f"({tex})"
-            if op == "/":
-                tex = f"{tex}/{term}"
-            elif isinstance(operand, float):
-                tex = rf"{tex} \cdot {term}"
-            else:
-                tex = rf"{tex}\,{term}"
-        previous_op = op
+    numerator, denominator = (
+        [_group("c" if name == "c" else texlabel(name)) for name in names]
+        for names in (expression.numerator, expression.denominator)
+    )
+    if expression.scale == -1 and numerator:
+        numerator[0] = "-" + numerator[0]
+    elif expression.scale != 1 or not numerator:
+        numerator.insert(0, _number_tex(expression.scale))
+    if expression.divisor != 1:
+        denominator.insert(0, _group(_number_tex(expression.divisor)))
+    tex = r"\,".join(numerator)
+    if len(denominator) > 1:
+        tex += "/(" + r"\,".join(denominator) + ")"
+    elif denominator:
+        tex += "/" + denominator[0]
     return tex
 
 

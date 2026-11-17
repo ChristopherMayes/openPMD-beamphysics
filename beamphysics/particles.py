@@ -36,13 +36,13 @@ from .readers import (
 )
 from .species import charge_of, mass_of
 from .statistics import (
+    KeyExpression,
     StatisticKey,
     StatisticOperator,
     TwissParameter,
     matched_particles,
     norm_emit_calc,
     normalized_particle_coordinate,
-    parse_key_expression,
     particle_amplitude,
     particle_twiss_dispersion,
     resample_particles,
@@ -180,10 +180,12 @@ class ParticleGroup:
     | `cov_prop1__prop2` | `.cov('prop1', 'prop2')[0, 1]` |
 
     Keys can also be products and quotients of keys, numbers and the speed
-    of light `c`, evaluated from left to right, such as `z/c`, `-1*z/c`,
-    `x*px/p0` and `x/sigma_x`. A statistic prefix applies to the whole rest
-    of the key, so `sigma_x/mean_x` is the standard deviation of `x/mean_x`.
-    Parentheses, addition, subtraction and powers are not supported.
+    of light `c`, such as `z/c`, `-1*z/c`, `x*px/p0` and `x/sigma_x`. Factors
+    after `*` go in the numerator and factors after `/` in the denominator,
+    so `px/p0*x` and `px*x/p0` are both $(p_x x)/p_0$, and `x/y/z` is
+    $x/(y z)$. A statistic prefix applies to the whole rest of the key, so
+    `sigma_x/mean_x` is the standard deviation of `x/mean_x`. Parentheses,
+    addition, subtraction and powers are not supported.
 
     Units for all attributes can be accessed by:
 
@@ -1271,9 +1273,9 @@ class ParticleGroup:
             }[op]
             return operator(names[0])
 
-        terms = parse_key_expression(key)
-        if terms is not None:
-            return self._evaluate_terms(key, terms)
+        expression = KeyExpression.from_string(key)
+        if expression is not None:
+            return self._evaluate_expression(key, expression)
 
         if key.startswith("twiss_"):
             twiss_key = key[6:]
@@ -1301,26 +1303,18 @@ class ParticleGroup:
 
         return getattr(self, key)
 
-    def _evaluate_terms(self, key, terms):
-        result = None
-        for op, operand in terms:
-            if isinstance(operand, float):
-                value = operand
-            elif operand == "c":
-                value = c_light
-            else:
-                value = self[operand]
-                if not np.issubdtype(np.asarray(value).dtype, np.number):
-                    raise TypeError(
-                        f"Operand {operand!r} of key expression {key!r} is not numeric"
-                    )
-            if result is None:
-                result = value
-            elif op == "*":
-                result = np.multiply(result, value)
-            else:
-                result = np.divide(result, value)
-        return result
+    def _evaluate_expression(self, key: str, expression: KeyExpression):
+        def resolve(name):
+            if name == "c":
+                return c_light
+            value = self[name]
+            if not np.issubdtype(np.asarray(value).dtype, np.number):
+                raise TypeError(
+                    f"Operand {name!r} of key expression {key!r} is not numeric"
+                )
+            return value
+
+        return expression.value(resolve)
 
     def where(self, x):
         """

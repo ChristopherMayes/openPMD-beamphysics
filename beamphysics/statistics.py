@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
-from typing import NamedTuple
+from functools import reduce
+from typing import Any, NamedTuple
 
 import numpy as np
 from scipy import stats as scipy_stats
@@ -818,75 +821,131 @@ _OPERAND = re.compile(
 )
 
 
-class KeyTerm(NamedTuple):
+@dataclass(frozen=True)
+class KeyExpression:
     """
-    One operand of an arithmetic key, with the operator that applies it.
-
-    Attributes
-    ----------
-    op : str
-        `*` or `/`. The first term of an expression has `*`.
-    operand : str or float
-        A key, the speed of light `c`, or a numeric literal.
-    """
-
-    op: str
-    operand: str | float
-
-
-def parse_key_expression(key: str) -> tuple[KeyTerm, ...] | None:
-    """
-    Split an arithmetic key into its terms.
+    An arithmetic key in the form `scale * numerator / (divisor * denominator)`.
 
     Keys may be products and quotients of other keys, the speed of light `c`
-    and finite numbers, evaluated from left to right. For example, `x*px/p0`
-    is $(x p_x)/p_0$ and `-1*z/c` is $-z/c$. Parentheses, addition,
+    and finite numbers. Factors after `*` go in the numerator and factors
+    after `/` in the denominator, so `px/p0*x` and `px*x/p0` are both
+    $(p_x x)/p_0$, and `x/y/z` is $x/(y z)$. Parentheses, addition,
     subtraction and powers are not supported.
 
     Statistic prefixes apply to the rest of the key, so `sigma_x/mean_x` is
     the standard deviation of `x/mean_x`, and are not handled here.
 
-    Parameters
+    Attributes
     ----------
-    key : str
-        A key, e.g. `x*px/p0`.
-
-    Returns
-    -------
-    tuple of KeyTerm, or None
-        The terms, or None if `key` contains no `*` or `/`.
-
-    Raises
-    ------
-    ValueError
-        If an operand is empty, as in `x*` or `x**2`, or a number is not
-        finite.
-
-    Examples
-    --------
-    >>> parse_key_expression("-1*z/c")
-    (KeyTerm(op='*', operand=-1.0), KeyTerm(op='*', operand='z'), KeyTerm(op='/', operand='c'))
+    scale : float
+        Product of the numbers that multiply.
+    divisor : float
+        Product of the numbers that divide.
+    numerator : tuple of str
+        Keys that multiply. `c` is the speed of light.
+    denominator : tuple of str
+        Keys that divide.
     """
-    parts = []
-    pos = 0
-    while True:
-        match = _OPERAND.match(key, pos)
-        parts.append(match.group(1))
-        if match.group(2) is None:
-            break
-        parts.append(match.group(2))
-        pos = match.end()
-    if len(parts) == 1:
-        return None
-    ops = ["*", *parts[1::2]]
-    terms = []
-    for op, part in zip(ops, parts[::2]):
-        operand: str | float = part
-        if not operand:
-            raise ValueError(f"Empty operand in key expression: {key!r}")
-        if _NUMBER.fullmatch(operand):
-            operand = float(operand)
-            if not math.isfinite(operand):
+
+    scale: float = 1.0
+    divisor: float = 1.0
+    numerator: tuple[str, ...] = ()
+    denominator: tuple[str, ...] = ()
+
+    @classmethod
+    def from_string(cls, key: str) -> KeyExpression | None:
+        """
+        Parse an arithmetic key.
+
+        Parameters
+        ----------
+        key : str
+            A key, e.g. `x*px/p0`.
+
+        Returns
+        -------
+        KeyExpression or None
+            None if `key` contains no `*` or `/`.
+
+        Raises
+        ------
+        ValueError
+            If an operand is empty, as in `x*` or `x**2`, or a number is not
+            finite.
+
+        Examples
+        --------
+        >>> KeyExpression.from_string("-1*z/c")
+        KeyExpression(scale=-1.0, divisor=1.0, numerator=('z',), denominator=('c',))
+        """
+        parts = []
+        pos = 0
+        while True:
+            match = _OPERAND.match(key, pos)
+            parts.append(match.group(1))
+            if match.group(2) is None:
+                break
+            parts.append(match.group(2))
+            pos = match.end()
+        if len(parts) == 1:
+            return None
+        numbers = {"*": 1.0, "/": 1.0}
+        names: dict[str, list[str]] = {"*": [], "/": []}
+        for op, part in zip(["*", *parts[1::2]], parts[::2]):
+            if not part:
+                raise ValueError(f"Empty operand in key expression: {key!r}")
+            if not _NUMBER.fullmatch(part):
+                names[op].append(part)
+                continue
+            if not math.isfinite(float(part)):
                 raise ValueError(f"Number is not finite in key expression: {key!r}")
-        terms.append(KeyTerm(op, operand))
-    return tuple(terms)
+            numbers[op] *= float(part)
+        return cls(
+            scale=numbers["*"],
+            divisor=numbers["/"],
+            numerator=tuple(names["*"]),
+            denominator=tuple(names["/"]),
+        )
+
+    def combine(self, resolve: Callable[[str], Any], one: Any) -> Any:
+        """
+        Product of the numerator keys divided by the product of the
+        denominator keys, without `scale` and `divisor`.
+
+        Parameters
+        ----------
+        resolve : callable
+            Maps each key to an object that supports `*` and `/`, such as
+            its unit.
+        one
+            Result for an empty numerator.
+        """
+        return _quotient(
+            [resolve(name) for name in self.numerator],
+            [resolve(name) for name in self.denominator],
+            one,
+        )
+
+    def value(self, resolve: Callable[[str], Any]) -> Any:
+        """
+        Value of the expression, including `scale` and `divisor`.
+
+        Parameters
+        ----------
+        resolve : callable
+            Maps each key to its value.
+        """
+        numerator = [resolve(name) for name in self.numerator]
+        denominator = [resolve(name) for name in self.denominator]
+        if self.scale != 1 or not numerator:
+            numerator.insert(0, self.scale)
+        if self.divisor != 1:
+            denominator.insert(0, self.divisor)
+        return _quotient(numerator, denominator, 1.0)
+
+
+def _quotient(numerator: list, denominator: list, one: Any) -> Any:
+    result = reduce(np.multiply, numerator) if numerator else one
+    if denominator:
+        result = np.true_divide(result, reduce(np.multiply, denominator))
+    return result

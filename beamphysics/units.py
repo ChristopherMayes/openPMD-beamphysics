@@ -17,7 +17,7 @@ from typing import Optional, Sequence
 import numpy as np
 import scipy.constants
 
-from .statistics import StatisticKey, StatisticOperator, parse_key_expression
+from .statistics import KeyExpression, StatisticKey, StatisticOperator
 
 mec2 = scipy.constants.value("electron mass energy equivalent in MeV") * 1e6
 mpc2 = scipy.constants.value("proton mass energy equivalent in MeV") * 1e6
@@ -1565,19 +1565,16 @@ def pg_units(key: str) -> pmd_unit:
     if field:
         return pmd_unit("V/m" if field.group(1) == "electricField" else "T")
 
-    terms = parse_key_expression(key)
-    if terms is not None:
-        factors = [
-            (op, pmd_unit("m/s") if operand == "c" else pg_units(operand))
-            for op, operand in terms
-            if not isinstance(operand, float)
-        ]
+    expression = KeyExpression.from_string(key)
+    if expression is not None:
+
+        def operand_unit(name: str) -> pmd_unit:
+            return pmd_unit("m/s") if name == "c" else pg_units(name)
+
         # Numbers scale values, not units: `2*xp` stays in rad
-        if len(factors) == 1 and factors[0][0] == "*":
-            return factors[0][1]
-        unit = pmd_unit("1")
-        for op, u in factors:
-            unit = unit * u if op == "*" else unit / u
+        if len(expression.numerator) == 1 and not expression.denominator:
+            return operand_unit(expression.numerator[0])
+        unit = expression.combine(operand_unit, pmd_unit("1"))
         if is_identity(unit):
             return pmd_unit("1")
         return unit.simplify()

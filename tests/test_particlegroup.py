@@ -794,6 +794,8 @@ def test_p0c_derived_keys_require_p0c(simple_pg: ParticleGroup, key: str):
         ("x*px/p0", lambda P: P.x * P.px / P.p0),
         ("x/y*z", lambda P: (P.x / P.y) * P.z),
         ("x/y/z", lambda P: P.x / P.y / P.z),
+        ("2*x/4", lambda P: P.x / 2),
+        ("x/0.5", lambda P: 2 * P.x),
         ("x * 1e3", lambda P: P.x * 1000),
         ("x/sigma_x", lambda P: P.x / P.std("x")),
         ("2*3", lambda P: 6),
@@ -812,6 +814,23 @@ def test_key_surrounding_whitespace(simple_pg: ParticleGroup):
     assert simple_pg.statistics(" mean_x*px ") == {
         " mean_x*px ": simple_pg["mean_x*px"]
     }
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("1/0", np.inf),
+        ("-1/0", -np.inf),
+        ("0/0", np.nan),
+        ("weight/0", np.inf),
+    ],
+)
+def test_key_expression_division_by_zero(
+    simple_pg: ParticleGroup, key: str, expected: float
+):
+    with pytest.warns(RuntimeWarning):
+        result = simple_pg[key]
+    np.testing.assert_array_equal(result, np.full_like(result, expected))
 
 
 @pytest.mark.parametrize(
@@ -840,6 +859,7 @@ def test_key_expression_errors(simple_pg: ParticleGroup, key: str, error):
         ("xp/2", "rad"),
         ("2*norm_emit_4d", "m^2"),
         ("xp/sigma_xp", "1"),
+        ("px/x/t", "eV/c/(m*s)"),
         ("p0c", "eV"),
         ("p0", "eV/c"),
         ("dp", "eV/c"),

@@ -11,11 +11,10 @@ from beamphysics.standards.statistics import (
     scalar_statistic_keys,
 )
 from beamphysics.statistics import (
-    KeyTerm,
+    KeyExpression,
     StatisticKey,
     StatisticOperator,
     TwissParameter,
-    parse_key_expression,
 )
 
 H5FILE = "docs/examples/data/bmad_particles.h5"
@@ -310,30 +309,29 @@ def test_statistics_cov_subset(
     [
         ("x", None),
         ("sigma_x", None),
-        ("z/c", (KeyTerm("*", "z"), KeyTerm("/", "c"))),
+        ("z/c", KeyExpression(numerator=("z",), denominator=("c",))),
         (
             "-1*z/c",
-            (KeyTerm("*", -1.0), KeyTerm("*", "z"), KeyTerm("/", "c")),
+            KeyExpression(scale=-1.0, numerator=("z",), denominator=("c",)),
         ),
-        ("x * 2.5e-3", (KeyTerm("*", "x"), KeyTerm("*", 2.5e-3))),
-        ("x/sigma_x", (KeyTerm("*", "x"), KeyTerm("/", "sigma_x"))),
+        ("x * 2.5e-3", KeyExpression(scale=2.5e-3, numerator=("x",))),
+        ("2*x/4", KeyExpression(scale=2.0, divisor=4.0, numerator=("x",))),
+        ("x/y*z", KeyExpression(numerator=("x", "z"), denominator=("y",))),
+        ("x/sigma_x", KeyExpression(numerator=("x",), denominator=("sigma_x",))),
         ("electricField/x", None),
-        (
-            "electricField/x*t",
-            (KeyTerm("*", "electricField/x"), KeyTerm("*", "t")),
-        ),
+        ("electricField/x*t", KeyExpression(numerator=("electricField/x", "t"))),
     ],
 )
-def test_parse_key_expression(key: str, expected: tuple[KeyTerm, ...] | None) -> None:
-    assert parse_key_expression(key) == expected
+def test_key_expression_from_string(key: str, expected: KeyExpression | None) -> None:
+    assert KeyExpression.from_string(key) == expected
 
 
 @pytest.mark.parametrize(
     "key", ["x*", "/x", "x**2", "x//y", "x*1e999", "electricField*"]
 )
-def test_parse_key_expression_malformed(key: str) -> None:
+def test_key_expression_malformed(key: str) -> None:
     with pytest.raises(ValueError):
-        parse_key_expression(key)
+        KeyExpression.from_string(key)
 
 
 EXPRESSION_KEYS = [

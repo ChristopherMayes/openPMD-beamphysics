@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+import re
 from enum import Enum
 from typing import NamedTuple
 
@@ -805,3 +807,72 @@ class StatisticKey(NamedTuple):
             if names is not None:
                 return cls(op, names)
         return None
+
+
+_NUMBER = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
+
+
+class KeyTerm(NamedTuple):
+    """
+    One operand of an arithmetic key, with the operator that applies it.
+
+    Attributes
+    ----------
+    op : str
+        `*` or `/`. The first term of an expression has `*`.
+    operand : str or float
+        A key, the speed of light `c`, or a numeric literal.
+    """
+
+    op: str
+    operand: str | float
+
+
+def parse_key_expression(key: str) -> tuple[KeyTerm, ...] | None:
+    """
+    Split an arithmetic key into its terms.
+
+    Keys may be products and quotients of other keys, the speed of light `c`
+    and finite numbers, evaluated from left to right. For example, `x*px/p0`
+    is $(x p_x)/p_0$ and `-1*z/c` is $-z/c$. Parentheses, addition,
+    subtraction and powers are not supported.
+
+    Statistic prefixes apply to the rest of the key, so `sigma_x/mean_x` is
+    the standard deviation of `x/mean_x`, and are not handled here.
+
+    Parameters
+    ----------
+    key : str
+        A key, e.g. `x*px/p0`.
+
+    Returns
+    -------
+    tuple of KeyTerm, or None
+        The terms, or None if `key` contains no `*` or `/`.
+
+    Raises
+    ------
+    ValueError
+        If an operand is empty, as in `x*` or `x**2`, or a number is not
+        finite.
+
+    Examples
+    --------
+    >>> parse_key_expression("-1*z/c")
+    (KeyTerm(op='*', operand=-1.0), KeyTerm(op='*', operand='z'), KeyTerm(op='/', operand='c'))
+    """
+    parts = re.split(r"([*/])", key)
+    if len(parts) == 1:
+        return None
+    ops = ["*", *parts[1::2]]
+    terms = []
+    for op, part in zip(ops, parts[::2]):
+        operand: str | float = part.strip()
+        if not operand:
+            raise ValueError(f"Empty operand in key expression: {key!r}")
+        if _NUMBER.fullmatch(operand):
+            operand = float(operand)
+            if not math.isfinite(operand):
+                raise ValueError(f"Number is not finite in key expression: {key!r}")
+        terms.append(KeyTerm(op, operand))
+    return tuple(terms)

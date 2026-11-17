@@ -10,7 +10,13 @@ from beamphysics.standards.statistics import (
     get_all_statistics_by_key,
     scalar_statistic_keys,
 )
-from beamphysics.statistics import StatisticKey, StatisticOperator, TwissParameter
+from beamphysics.statistics import (
+    KeyTerm,
+    StatisticKey,
+    StatisticOperator,
+    TwissParameter,
+    parse_key_expression,
+)
 
 H5FILE = "docs/examples/data/bmad_particles.h5"
 EXTRA_KEYS = [
@@ -297,3 +303,60 @@ def test_statistics_cov_subset(
     stats = particle_group.statistics(*keys)
     for key in keys:
         assert np.isclose(stats[key], particle_group[key])
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("x", None),
+        ("sigma_x", None),
+        ("z/c", (KeyTerm("*", "z"), KeyTerm("/", "c"))),
+        (
+            "-1*z/c",
+            (KeyTerm("*", -1.0), KeyTerm("*", "z"), KeyTerm("/", "c")),
+        ),
+        ("x * 2.5e-3", (KeyTerm("*", "x"), KeyTerm("*", 2.5e-3))),
+        ("x/sigma_x", (KeyTerm("*", "x"), KeyTerm("/", "sigma_x"))),
+    ],
+)
+def test_parse_key_expression(key: str, expected: tuple[KeyTerm, ...] | None) -> None:
+    assert parse_key_expression(key) == expected
+
+
+@pytest.mark.parametrize("key", ["x*", "/x", "x**2", "x//y", "x*1e999"])
+def test_parse_key_expression_malformed(key: str) -> None:
+    with pytest.raises(ValueError):
+        parse_key_expression(key)
+
+
+EXPRESSION_KEYS = [
+    "mean_x*px",
+    "sigma_z/c",
+    "sigma_-1*x",
+    "delta_x*2",
+    "cov_x/c__px",
+    "cov_x__-1*px",
+]
+
+
+def test_particle_statistics_expressions(particle_group: ParticleGroup) -> None:
+    stats = particle_group.statistics(*EXPRESSION_KEYS)
+    expected = per_key_statistics(particle_group, EXPRESSION_KEYS)
+    assert stats.keys() == expected.keys() == set(EXPRESSION_KEYS)
+    for key in EXPRESSION_KEYS:
+        np.testing.assert_allclose(stats[key], expected[key], rtol=1e-12)
+
+
+@pytest.mark.parametrize(
+    ("key", "equivalent"),
+    [
+        ("mean_x*px", lambda P: P.avg("x*px")),
+        ("sigma_-1*x", lambda P: P["sigma_x"]),
+        ("mean_-1*x", lambda P: -P["mean_x"]),
+        ("cov_x/c__px", lambda P: P["cov_x__px"] / 299792458),
+    ],
+)
+def test_statistic_prefix_applies_to_expression(
+    particle_group: ParticleGroup, key: str, equivalent
+) -> None:
+    np.testing.assert_allclose(particle_group[key], equivalent(particle_group))

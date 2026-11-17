@@ -787,8 +787,46 @@ def test_p0c_derived_keys_require_p0c(simple_pg: ParticleGroup, key: str):
 
 
 @pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("z/c", lambda P: P.z / scipy.constants.c),
+        ("-1*z/c", lambda P: -P.z / scipy.constants.c),
+        ("x*px/p0", lambda P: P.x * P.px / P.p0),
+        ("x/y*z", lambda P: (P.x / P.y) * P.z),
+        ("x/y/z", lambda P: P.x / P.y / P.z),
+        ("x * 1e3", lambda P: P.x * 1000),
+        ("x/sigma_x", lambda P: P.x / P.std("x")),
+        ("2*3", lambda P: 6),
+    ],
+)
+def test_key_expression_values(optional_pg: ParticleGroup, key: str, expected):
+    x = optional_pg.x.copy()
+    np.testing.assert_allclose(optional_pg[key], expected(optional_pg))
+    np.testing.assert_array_equal(optional_pg.x, x)
+
+
+@pytest.mark.parametrize(
+    ("key", "error"),
+    [
+        ("x*", ValueError),
+        ("x**2", ValueError),
+        ("species*2", TypeError),
+        ("x*bogus", AttributeError),
+        ("-x*2", AttributeError),
+    ],
+)
+def test_key_expression_errors(simple_pg: ParticleGroup, key: str, error):
+    with pytest.raises(error):
+        simple_pg[key]
+
+
+@pytest.mark.parametrize(
     ("key", "unit"),
     [
+        ("z/c", "s"),
+        ("x/sigma_x", "1"),
+        ("x*px", "m*eV/c"),
+        ("1000*x", "m"),
         ("p0c", "eV"),
         ("p0", "eV/c"),
         ("dp", "eV/c"),

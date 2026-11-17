@@ -7,7 +7,7 @@ matplotlib.use("Agg")
 import pytest
 
 from beamphysics import single_particle
-from beamphysics.labels import mathlabel
+from beamphysics.labels import mathlabel, texlabel
 from beamphysics.plot import (
     _charge_density_units_str,
     marginal_plot,
@@ -156,5 +156,42 @@ def test_dimensionless_plot_labels_use_powers_of_ten() -> None:
     fig = marginal_plot(P, "x", "dp/p0")
     assert fig.axes[0].get_ylabel() == r"$\delta~(10^{-6})$"
     assert fig.axes[2].get_xlabel() == r"$\mathrm{pC}/(10^{-6})$"
+    fig.canvas.draw()
+    plt.close("all")
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("z/c", "z/c"),
+        ("-1*z/c", r"-1\,z/c"),
+        ("x*px/p0", r"x\,p_x/p_0"),
+        ("x/y/z", "(x/y)/z"),
+        ("x/y*z", r"(x/y)\,z"),
+        ("x*-2", r"x \cdot (-2)"),
+        ("x*1e-6", r"x \cdot 10^{-6}"),
+        ("x*2e-6", r"x \cdot (2 \times 10^{-6})"),
+        ("z/p0c", "z/(p_0 c)"),
+        ("dp*x", r"(p - p_0)\,x"),
+        ("x/sigma_x", r"x/\sigma_{ x }"),
+        ("sigma_-1*x", r"\sigma_{ -1\,x }"),
+        ("px/p0", "p_x/p_0"),
+        ("dp/p0", r"\delta"),
+        ("mean_dp/p0", r"\left<\delta\right>"),
+    ],
+)
+def test_expression_texlabel(key: str, expected: str) -> None:
+    assert texlabel(key) == expected
+
+
+def test_expression_plot_labels() -> None:
+    import matplotlib.pyplot as plt
+
+    from beamphysics import ParticleGroup
+
+    P = ParticleGroup("docs/examples/data/bmad_particles.h5")
+    fig = marginal_plot(P, "-1*y/c", "x/sigma_x")
+    assert fig.axes[0].get_xlabel() == r"$-1\,y/c~(\mathrm{ps})$"
+    assert fig.axes[0].get_ylabel() == r"$x/\sigma_{ x }~(1)$"
     fig.canvas.draw()
     plt.close("all")

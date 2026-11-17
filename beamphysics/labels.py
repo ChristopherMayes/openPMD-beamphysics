@@ -1,5 +1,6 @@
 import re
 
+from .statistics import parse_key_expression
 from .units import nice_array, parse_bunching_str, pmd_unit
 
 TEXLABEL = {
@@ -33,13 +34,12 @@ TEXLABEL = {
     "z": "z",
     "r": "r",
     "s": "s",
+    "c": "c",
     "p0c": "p_0 c",
     "p0": "p_0",
     "dp": "p - p_0",
     "px_over_p0": "p_x/p_0",
-    "px/p0": "p_x/p_0",
     "py_over_p0": "p_y/p_0",
-    "py/p0": "p_y/p_0",
     "dp_over_p0": r"\delta",
     "dp/p0": r"\delta",
     "spin_x": "S_x",
@@ -148,12 +148,69 @@ def texlabel(key: str):
         tex1 = texlabel(subkeys[1])
         return rf"\left<{tex0}, {tex1}\right>"
 
+    terms = parse_key_expression(key)
+    if terms is not None:
+        return _expression_tex(terms)
+
     if key.startswith("bunching"):
         wavelength = parse_bunching_str(key)
         x, _, prefix = nice_array(wavelength)
         return rf"\mathrm{{bunching~at}}~{x:.1f}~\mathrm{{ {prefix}m }}"
 
     return rf"\mathrm{{ {key} }}"
+
+
+# Labels that need no parentheses as a factor or divisor, such as `p_x`,
+# `\sigma_{ x }`, `\overline{x}` and `\left<x, p_x\right>`.
+_TEX_ATOM = re.compile(
+    r"(?:\\[A-Za-z]+|[A-Za-z])'?(?:_(?:[A-Za-z0-9]|\{[^{}]*\}|\\text\{[^{}]*\}))?"
+    r"|\\(?:mathrm|overline)\{[^{}]*\}"
+    r"|\\left([<|]).*\\right[>|]"
+)
+
+
+def _number_tex(x: float) -> str:
+    mantissa, _, exponent = f"{x:g}".partition("e")
+    if not exponent:
+        return mantissa
+    power = f"10^{{{int(exponent)}}}"
+    if mantissa in ("1", "-1"):
+        return mantissa.removesuffix("1") + power
+    return rf"{mantissa} \times {power}"
+
+
+def _expression_tex(terms) -> str:
+    r"""
+    TeX fragment for the terms of an arithmetic key, as from
+    `parse_key_expression`.
+
+    Operands are grouped where needed to show the left-to-right evaluation:
+    `x/y*z` is $(x/y)\,z$.
+    """
+    tex = ""
+    previous_op = None
+    for op, operand in terms:
+        if isinstance(operand, float):
+            term = _number_tex(operand)
+            grouped = previous_op is not None and (operand < 0 or r"\times" in term)
+        else:
+            term = texlabel(operand)
+            grouped = len(terms) > 1 and not _TEX_ATOM.fullmatch(term)
+        if grouped:
+            term = f"({term})"
+        if previous_op is None:
+            tex = term
+        else:
+            if previous_op == "/":
+                tex = f"({tex})"
+            if op == "/":
+                tex = f"{tex}/{term}"
+            elif isinstance(operand, float):
+                tex = rf"{tex} \cdot {term}"
+            else:
+                tex = rf"{tex}\,{term}"
+        previous_op = op
+    return tex
 
 
 def _units_str_to_tex(units: str) -> str:

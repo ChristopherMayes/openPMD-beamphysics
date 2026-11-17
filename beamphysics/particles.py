@@ -42,6 +42,7 @@ from .statistics import (
     matched_particles,
     norm_emit_calc,
     normalized_particle_coordinate,
+    parse_key_expression,
     particle_amplitude,
     particle_twiss_dispersion,
     resample_particles,
@@ -63,14 +64,6 @@ __all__ = [
 
 # Legacy keys that are statistics of an array
 _LEGACY_KEYS = {"higher_order_energy_spread": "sigma_higher_order_energy"}
-
-
-# String keys for the properties named with `_over_`.
-_RATIO_KEYS = {
-    "px/p0": "px_over_p0",
-    "py/p0": "py_over_p0",
-    "dp/p0": "dp_over_p0",
-}
 
 # Per-particle arrays stored as integers; everything else is float.
 INT_ARRAY_KEYS = frozenset(
@@ -185,6 +178,12 @@ class ParticleGroup:
     | `mean_prop`        | `.avg('prop')`                 |
     | `sigma_prop`       | `.std('prop')`                 |
     | `cov_prop1__prop2` | `.cov('prop1', 'prop2')[0, 1]` |
+
+    Keys can also be products and quotients of keys, numbers and the speed
+    of light `c`, evaluated from left to right, such as `z/c`, `-1*z/c`,
+    `x*px/p0` and `x/sigma_x`. A statistic prefix applies to the whole rest
+    of the key, so `sigma_x/mean_x` is the standard deviation of `x/mean_x`.
+    Parentheses, addition, subtraction and powers are not supported.
 
     Units for all attributes can be accessed by:
 
@@ -1247,6 +1246,7 @@ class ParticleGroup:
         - `P['x']` returns the x array
         - `P['sigmx_x']` returns the std(x) scalar
         - `P['norm_emit_x']` returns the norm_emit_x scalar
+        - `P['x*px/p0']` returns the x * px / p0 array
 
         Parts can also be given. Example: `P[0:10]` returns a new ParticleGroup with the first 10 elements.
         """
@@ -1254,12 +1254,6 @@ class ParticleGroup:
         # Allow for non-string operations:
         if not isinstance(key, str):
             return particle_parts(self, key)
-
-        # 'z/c' special case
-        if key == "z/c":
-            return self["z"] / (c_light)
-        if key in _RATIO_KEYS:
-            return getattr(self, _RATIO_KEYS[key])
 
         split = StatisticKey.from_string(key)
         if split is not None:
@@ -1275,6 +1269,11 @@ class ParticleGroup:
                 StatisticOperator.DELTA: self.delta,
             }[op]
             return operator(names[0])
+
+        terms = parse_key_expression(key)
+        if terms is not None:
+            return self._evaluate_terms(key, terms)
+
         if key.startswith("twiss_"):
             twiss_key = key[6:]
             plane = twiss_key[-1]
@@ -1300,6 +1299,27 @@ class ParticleGroup:
             return np.abs(bunching)
 
         return getattr(self, key)
+
+    def _evaluate_terms(self, key, terms):
+        result = None
+        for op, operand in terms:
+            if isinstance(operand, float):
+                value = operand
+            elif operand == "c":
+                value = c_light
+            else:
+                value = self[operand]
+                if not np.issubdtype(np.asarray(value).dtype, np.number):
+                    raise TypeError(
+                        f"Operand {operand!r} of key expression {key!r} is not numeric"
+                    )
+            if result is None:
+                result = value
+            elif op == "*":
+                result = np.multiply(result, value)
+            else:
+                result = np.divide(result, value)
+        return result
 
     def where(self, x):
         """

@@ -17,7 +17,7 @@ from typing import Optional, Sequence
 import numpy as np
 import scipy.constants
 
-from .statistics import StatisticKey, StatisticOperator
+from .statistics import StatisticKey, StatisticOperator, parse_key_expression
 
 mec2 = scipy.constants.value("electron mass energy equivalent in MeV") * 1e6
 mpc2 = scipy.constants.value("proton mass energy equivalent in MeV") * 1e6
@@ -1470,7 +1470,7 @@ for k in [
     "charge_state",
 ]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("1")
-for k in ["t", "z/c"]:
+for k in ["t"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("s")
 for k in [
     "energy",
@@ -1483,7 +1483,7 @@ for k in [
     PARTICLEGROUP_UNITS[k] = pmd_unit("eV")
 for k in ["px", "py", "pz", "p", "pr", "ptheta", "p0", "dp"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("eV/c")
-for k in ["px_over_p0", "py_over_p0", "dp_over_p0", "px/p0", "py/p0", "dp/p0"]:
+for k in ["px_over_p0", "py_over_p0", "dp_over_p0"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("1")
 for k in ["x", "y", "z", "r", "s", "Jx", "Jy"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("m")
@@ -1529,7 +1529,25 @@ for plane in ("x", "y"):
 
 def pg_units(key: str) -> pmd_unit:
     """
-    Returns a str representing the units of any attribute
+    Units of a `ParticleGroup` key.
+
+    Units of arithmetic keys, such as `x*px/p0`, combine the units of their
+    operands. Numbers are dimensionless and `c` is in m/s, so `z/c` is in s.
+
+    Parameters
+    ----------
+    key : str
+        Any `ParticleGroup` key, or an openPMD record name such as
+        `electricField/x`.
+
+    Returns
+    -------
+    pmd_unit
+
+    Raises
+    ------
+    ValueError
+        If the key has no known unit.
     """
 
     # Basic cases
@@ -1540,14 +1558,27 @@ def pg_units(key: str) -> pmd_unit:
     if split is not None:
         op, names = split
         if op is StatisticOperator.COV:
-            return PARTICLEGROUP_UNITS[names[0]] * PARTICLEGROUP_UNITS[names[1]]
+            return pg_units(names[0]) * pg_units(names[1])
         return pg_units(names[0])
 
-    # Fields
+    # Fields, checked before arithmetic for record names like electricField/x
     if key.startswith("electricField"):
         return pmd_unit("V/m")
     if key.startswith("magneticField"):
         return pmd_unit("T")
+
+    terms = parse_key_expression(key)
+    if terms is not None:
+        unit = pmd_unit("1")
+        for op, operand in terms:
+            if isinstance(operand, float):
+                continue
+            u = pmd_unit("m/s") if operand == "c" else pg_units(operand)
+            unit = unit * u if op == "*" else unit / u
+        if is_identity(unit):
+            return pmd_unit("1")
+        return unit.simplify()
+
     if key.startswith("bunching_phase"):
         return pmd_unit("rad")
     if key.startswith("bunching"):

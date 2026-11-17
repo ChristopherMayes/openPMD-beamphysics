@@ -1388,20 +1388,20 @@ class ParticleGroup:
     #    return self.data
 
     def to_bmad(self, p0c=None, tref=None):
-        """
+        r"""
         Convert to Bmad phase space coordinates.
 
-        Bmad      openPMD-beamphysics
-        ----      -------------------
-        Bmad x  = x
-        Bmad px = px/p0
-        Bmad y  = y
-        Bmad py = py/p0
-        Bmad z = -beta * c * (t - tref)
-        Bmad pz = p/p0 - 1
-        Bmad t  = t
+        | Bmad | openPMD-beamphysics             |
+        | ---- | ------------------------------- |
+        | `x`  | $x$                             |
+        | `px` | $p_x/p_0$                       |
+        | `y`  | $y$                             |
+        | `py` | $p_y/p_0$                       |
+        | `z`  | $-\beta c (t - t_\mathrm{ref})$ |
+        | `pz` | $p/p_0 - 1$                     |
+        | `t`  | $t$                             |
 
-        where `p0 = p0c/c` is the reference momentum.
+        where $p_0 = p_0c/c$ is the reference momentum.
 
         Optional records present on this group are included: `s`,
         `ix_branch`, `ix_ele`, `spin_x`, `spin_y`, `spin_z` as they are,

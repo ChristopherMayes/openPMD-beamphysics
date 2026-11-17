@@ -1312,10 +1312,7 @@ class ParticleGroup:
                 )
             return value
 
-        result = expression.evaluate(resolve, expression.scale)
-        if expression.divisor != 1:
-            result = result / expression.divisor
-        return result
+        return expression.evaluate(resolve, 1.0, numbers=True)
 
     def where(self, x):
         """

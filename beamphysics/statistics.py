@@ -5,6 +5,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
+from functools import reduce
 from typing import Any, NamedTuple
 
 import numpy as np
@@ -904,22 +905,29 @@ class KeyExpression:
             denominator=tuple(names["/"]),
         )
 
-    def evaluate(self, resolve: Callable[[str], Any], start: Any) -> Any:
+    def evaluate(
+        self, resolve: Callable[[str], Any], one: Any, *, numbers: bool = False
+    ) -> Any:
         """
-        Multiply `start` by the numerator and divide it by the denominator.
-
-        `scale` and `divisor` are not applied.
+        Product of the numerator divided by the product of the denominator.
 
         Parameters
         ----------
         resolve : callable
             Maps each key to a value that supports `*` and `/`.
-        start
-            Initial value of the product.
+        one
+            Result for an empty numerator.
+        numbers : bool, default=False
+            Include `scale` and `divisor` as factors.
         """
-        result = start
-        for name in self.numerator:
-            result = result * resolve(name)
-        for name in self.denominator:
-            result = result / resolve(name)
+        numerator = [resolve(name) for name in self.numerator]
+        denominator = [resolve(name) for name in self.denominator]
+        if numbers:
+            if self.scale != 1 or not numerator:
+                numerator.insert(0, self.scale)
+            if self.divisor != 1:
+                denominator.insert(0, self.divisor)
+        result = reduce(np.multiply, numerator) if numerator else one
+        if denominator:
+            result = np.true_divide(result, reduce(np.multiply, denominator))
         return result

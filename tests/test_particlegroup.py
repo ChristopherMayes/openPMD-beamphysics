@@ -817,6 +817,23 @@ def test_key_surrounding_whitespace(simple_pg: ParticleGroup):
 
 
 @pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("1/0", np.inf),
+        ("-1/0", -np.inf),
+        ("0/0", np.nan),
+        ("weight/0", np.inf),
+    ],
+)
+def test_key_expression_division_by_zero(
+    simple_pg: ParticleGroup, key: str, expected: float
+):
+    with pytest.warns(RuntimeWarning):
+        result = simple_pg[key]
+    np.testing.assert_array_equal(result, np.full_like(result, expected))
+
+
+@pytest.mark.parametrize(
     ("key", "error"),
     [
         ("x*", ValueError),
@@ -842,6 +859,7 @@ def test_key_expression_errors(simple_pg: ParticleGroup, key: str, error):
         ("xp/2", "rad"),
         ("2*norm_emit_4d", "m^2"),
         ("xp/sigma_xp", "1"),
+        ("px/x/t", "eV/c/(m*s)"),
         ("p0c", "eV"),
         ("p0", "eV/c"),
         ("dp", "eV/c"),

@@ -34,7 +34,6 @@ TEXLABEL = {
     "z": "z",
     "r": "r",
     "s": "s",
-    "c": "c",
     "p0c": "p_0 c",
     "p0": "p_0",
     "dp": "p - p_0",
@@ -208,7 +207,7 @@ def _expression_tex(terms) -> str:
             term = _number_tex(operand)
             grouped = previous_op is not None and (operand < 0 or r"\times" in term)
         else:
-            term = texlabel(operand)
+            term = "c" if operand == "c" else texlabel(operand)
             grouped = len(terms) > 1 and not _is_tex_atom(term)
         if grouped:
             term = f"({term})"

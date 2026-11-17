@@ -276,6 +276,12 @@ _PG_EXPECTED_GROUPS = {
         "ix_ele",
         "location",
         "charge_state",
+        "px_over_p0",
+        "py_over_p0",
+        "dp_over_p0",
+        "px/p0",
+        "py/p0",
+        "dp/p0",
     ],
     "s": ["t", "z/c"],
     "hbar": ["spin_x", "spin_y", "spin_z"],
@@ -285,8 +291,9 @@ _PG_EXPECTED_GROUPS = {
         "mass",  # mass is stored as rest energy
         "higher_order_energy",
         "higher_order_energy_spread",
+        "p0c",  # reference momentum times c
     ],
-    "kg*m/s": ["px", "py", "pz", "p", "pr", "ptheta", "p0c"],
+    "kg*m/s": ["px", "py", "pz", "p", "pr", "ptheta", "p0", "dp"],
     "m": [
         "x",
         "y",

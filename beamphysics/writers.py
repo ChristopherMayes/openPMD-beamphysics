@@ -95,8 +95,10 @@ def write_pmd_bunch(h5, data, name=None, t_offset=0.0):
             # id has no units and is a bare dataset
             g["id"] = data["id"]
         else:
+            # totalMomentumOffset is a momentum; p0c holds the same value in eV.
+            unit = pg_units("p0" if key == "p0c" else key)
             write_component_data(
-                g, component_from_alias[key], np.asarray(data[key]), unit=pg_units(key)
+                g, component_from_alias[key], np.asarray(data[key]), unit=unit
             )
 
     # Optional time offset, with the same shape as the particle arrays.

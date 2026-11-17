@@ -7,6 +7,7 @@ matplotlib.use("Agg")
 import pytest
 
 from beamphysics import single_particle
+from beamphysics.labels import mathlabel
 from beamphysics.plot import (
     _charge_density_units_str,
     marginal_plot,
@@ -127,3 +128,33 @@ def test_single_particle_plots_draw() -> None:
         P.plot("z", key)
         plt.gcf().canvas.draw()  # force label rendering
         plt.close("all")
+
+
+@pytest.mark.parametrize(
+    ("units", "expected"),
+    [
+        ("1e-3", "$10^{-3}$"),
+        ("1e6", "$10^{6}$"),
+        ("1e-3 m^2", r"$10^{-3}\,\mathrm{m}^{2}$"),
+        ("1e-3 sqrt(m)", r"$10^{-3}\,\sqrt{\mathrm{m}}$"),
+        ("pC/(1e-3)", r"$\mathrm{pC}/(10^{-3})$"),
+        ("nC/(1e-3 sqrt(m))", r"$\mathrm{nC}/(10^{-3}\,\sqrt{\mathrm{m}})$"),
+        ("1e3 counts", r"$10^{3}\,\mathrm{ counts }$"),
+        ("pC/µm", r"$\mathrm{pC}/\mathrm{µm}$"),
+    ],
+)
+def test_mathlabel_power_of_ten_units(units: str, expected: str) -> None:
+    assert mathlabel(units=units) == expected
+
+
+def test_dimensionless_plot_labels_use_powers_of_ten() -> None:
+    import matplotlib.pyplot as plt
+
+    from beamphysics import ParticleGroup
+
+    P = ParticleGroup("docs/examples/data/bmad_particles.h5")
+    fig = marginal_plot(P, "x", "dp/p0")
+    assert fig.axes[0].get_ylabel() == r"$\delta~(10^{-6})$"
+    assert fig.axes[2].get_xlabel() == r"$\mathrm{pC}/(10^{-6})$"
+    fig.canvas.draw()
+    plt.close("all")

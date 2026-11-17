@@ -1478,10 +1478,13 @@ for k in [
     "mass",
     "higher_order_energy_spread",
     "higher_order_energy",
+    "p0c",
 ]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("eV")
-for k in ["px", "py", "pz", "p", "pr", "ptheta", "p0c"]:
+for k in ["px", "py", "pz", "p", "pr", "ptheta", "p0", "dp"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("eV/c")
+for k in ["px_over_p0", "py_over_p0", "dp_over_p0", "px/p0", "py/p0", "dp/p0"]:
+    PARTICLEGROUP_UNITS[k] = pmd_unit("1")
 for k in ["x", "y", "z", "r", "s", "Jx", "Jy"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("m")
 # Spin in units of hbar, as Bmad writes it. Kept out of NAMED_UNITS so unit

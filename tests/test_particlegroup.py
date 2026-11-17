@@ -30,6 +30,7 @@ P = ParticleGroup(LEGACY_H5FILE)
 ARRAY_KEYS = """
 x y z px py pz t status weight id
 s ix_branch ix_ele location p0c spin_x spin_y spin_z
+p0 dp px_over_p0 py_over_p0 dp_over_p0 px/p0 py/p0 dp/p0
 z/c
 p energy kinetic_energy xp yp higher_order_energy
 r theta pr ptheta
@@ -39,6 +40,9 @@ x_bar px_bar Jx Jy
 weight
 
 """.split()
+
+# Keys derived from the optional `p0c` record
+P0C_KEYS = "p0 dp px_over_p0 py_over_p0 dp_over_p0 px/p0 py/p0 dp/p0".split()
 
 
 SPECIAL_STATS = """
@@ -528,8 +532,10 @@ def test_plot_single_particle_vs_z(array_key: str):
     # for coverage and that this doesn't crash.  Filter out any warnings
     # from this that complain about bad calculated values.
     Ps = single_particle(pz=10e6)
-    if array_key in OPTIONAL_PARTICLE_KEYS and array_key not in Ps:
-        pytest.skip(f"single_particle does not set optional key {array_key!r}")
+    if array_key in P0C_KEYS or (
+        array_key in OPTIONAL_PARTICLE_KEYS and array_key not in Ps
+    ):
+        pytest.skip(f"single_particle does not set the data for {array_key!r}")
     Ps.plot("z", array_key)
     plt.show()
 
@@ -753,3 +759,42 @@ def test_constant_id_record_loads(species_h5file: pathlib.Path):
 
 def test_location_enum():
     assert LocationInElement(P.location[0]) is LocationInElement.DOWNSTREAM_END
+
+
+def test_p0c_derived_keys(optional_pg: ParticleGroup):
+    P = optional_pg
+    p0 = np.array(OPTIONAL_VALUES["p0c"])
+    np.testing.assert_array_equal(P.p0, p0)
+    np.testing.assert_allclose(P.dp, P.p - p0)
+    np.testing.assert_allclose(P.px_over_p0, P.px / p0)
+    np.testing.assert_allclose(P.py_over_p0, P.py / p0)
+    np.testing.assert_allclose(P.dp_over_p0, P.p / p0 - 1)
+    for key in ("px", "py", "dp"):
+        np.testing.assert_array_equal(P[f"{key}/p0"], P[f"{key}_over_p0"])
+
+
+def test_p0c_derived_keys_match_bmad(optional_pg: ParticleGroup):
+    d = optional_pg.to_bmad()
+    np.testing.assert_allclose(optional_pg["px/p0"], d["px"])
+    np.testing.assert_allclose(optional_pg["py/p0"], d["py"])
+    np.testing.assert_allclose(optional_pg["dp/p0"], d["pz"])
+
+
+@pytest.mark.parametrize("key", P0C_KEYS)
+def test_p0c_derived_keys_require_p0c(simple_pg: ParticleGroup, key: str):
+    with pytest.raises(AttributeError, match="p0c"):
+        simple_pg[key]
+
+
+@pytest.mark.parametrize(
+    ("key", "unit"),
+    [
+        ("p0c", "eV"),
+        ("p0", "eV/c"),
+        ("dp", "eV/c"),
+        ("px/p0", "1"),
+        ("dp_over_p0", "1"),
+    ],
+)
+def test_p0c_derived_units(key: str, unit: str):
+    assert str(P.units(key)) == unit

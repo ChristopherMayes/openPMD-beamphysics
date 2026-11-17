@@ -284,7 +284,7 @@ def density_plot(
     ax.bar(hist_x, hist_y, hist_width, color=color, alpha=alpha)
 
     density_units = _charge_density_units_str(particle_group.units(key), ux, hist_f, f1)
-    ax.set_ylabel(f"density ({density_units})")
+    ax.set_ylabel(f"density ({mathlabel(units=density_units, tex=tex)})")
 
     if hasattr(ax, "get_shared_x_axes") and ax.get_shared_x_axes().joined(
         ax, ax.figure.axes[0]

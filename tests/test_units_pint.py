@@ -367,6 +367,7 @@ def test_pg_units_dimension_matches_pint(key: str, ureg) -> None:
         ("p0c/c", "kg*m/s"),
         ("x/sigma_x", "dimensionless"),
         ("cov_x/c__px", "s*kg*m/s"),
+        ("electricField/x*t", "V/m*s"),
     ],
 )
 def test_pg_units_derived_keys_match_pint(key: str, expected: str, ureg) -> None:

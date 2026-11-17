@@ -1561,19 +1561,22 @@ def pg_units(key: str) -> pmd_unit:
             return pg_units(names[0]) * pg_units(names[1])
         return pg_units(names[0])
 
-    # Fields, checked before arithmetic for record names like electricField/x
-    if key.startswith("electricField"):
-        return pmd_unit("V/m")
-    if key.startswith("magneticField"):
-        return pmd_unit("T")
+    field = re.fullmatch(r"(electricField|magneticField)(?:/[A-Za-z]+)?", key)
+    if field:
+        return pmd_unit("V/m" if field.group(1) == "electricField" else "T")
 
     terms = parse_key_expression(key)
     if terms is not None:
+        factors = [
+            (op, pmd_unit("m/s") if operand == "c" else pg_units(operand))
+            for op, operand in terms
+            if not isinstance(operand, float)
+        ]
+        # Numbers scale values, not units: `2*xp` stays in rad
+        if len(factors) == 1 and factors[0][0] == "*":
+            return factors[0][1]
         unit = pmd_unit("1")
-        for op, operand in terms:
-            if isinstance(operand, float):
-                continue
-            u = pmd_unit("m/s") if operand == "c" else pg_units(operand)
+        for op, u in factors:
             unit = unit * u if op == "*" else unit / u
         if is_identity(unit):
             return pmd_unit("1")

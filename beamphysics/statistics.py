@@ -811,6 +811,12 @@ class StatisticKey(NamedTuple):
 
 _NUMBER = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
 
+# An operand and the operator after it. Field record names such as
+# `electricField/x` are single operands.
+_OPERAND = re.compile(
+    r"\s*((?:electricField|magneticField)/[A-Za-z]+|[^*/]*?)\s*(?:([*/])|$)"
+)
+
 
 class KeyTerm(NamedTuple):
     """
@@ -861,13 +867,21 @@ def parse_key_expression(key: str) -> tuple[KeyTerm, ...] | None:
     >>> parse_key_expression("-1*z/c")
     (KeyTerm(op='*', operand=-1.0), KeyTerm(op='*', operand='z'), KeyTerm(op='/', operand='c'))
     """
-    parts = re.split(r"([*/])", key)
+    parts = []
+    pos = 0
+    while True:
+        match = _OPERAND.match(key, pos)
+        parts.append(match.group(1))
+        if match.group(2) is None:
+            break
+        parts.append(match.group(2))
+        pos = match.end()
     if len(parts) == 1:
         return None
     ops = ["*", *parts[1::2]]
     terms = []
     for op, part in zip(ops, parts[::2]):
-        operand: str | float = part.strip()
+        operand: str | float = part
         if not operand:
             raise ValueError(f"Empty operand in key expression: {key!r}")
         if _NUMBER.fullmatch(operand):

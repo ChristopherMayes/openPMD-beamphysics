@@ -161,12 +161,25 @@ def texlabel(key: str):
 
 
 # Labels that need no parentheses as a factor or divisor, such as `p_x`,
-# `\sigma_{ x }`, `\overline{x}` and `\left<x, p_x\right>`.
+# `\sigma_{ x }` and `\overline{x}`.
 _TEX_ATOM = re.compile(
     r"(?:\\[A-Za-z]+|[A-Za-z])'?(?:_(?:[A-Za-z0-9]|\{[^{}]*\}|\\text\{[^{}]*\}))?"
     r"|\\(?:mathrm|overline)\{[^{}]*\}"
-    r"|\\left([<|]).*\\right[>|]"
 )
+
+
+def _is_tex_atom(tex: str) -> bool:
+    """Whether a label needs no parentheses, including one `\\left...\\right` group."""
+    if _TEX_ATOM.fullmatch(tex):
+        return True
+    if not tex.startswith(r"\left"):
+        return False
+    depth = 0
+    for match in re.finditer(r"\\left|\\right", tex):
+        depth += 1 if match.group() == r"\left" else -1
+        if depth == 0:
+            return len(tex) == match.end() + 1
+    return False
 
 
 def _number_tex(x: float) -> str:
@@ -196,7 +209,7 @@ def _expression_tex(terms) -> str:
             grouped = previous_op is not None and (operand < 0 or r"\times" in term)
         else:
             term = texlabel(operand)
-            grouped = len(terms) > 1 and not _TEX_ATOM.fullmatch(term)
+            grouped = len(terms) > 1 and not _is_tex_atom(term)
         if grouped:
             term = f"({term})"
         if previous_op is None:

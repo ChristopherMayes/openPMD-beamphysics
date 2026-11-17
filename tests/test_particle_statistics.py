@@ -317,13 +317,20 @@ def test_statistics_cov_subset(
         ),
         ("x * 2.5e-3", (KeyTerm("*", "x"), KeyTerm("*", 2.5e-3))),
         ("x/sigma_x", (KeyTerm("*", "x"), KeyTerm("/", "sigma_x"))),
+        ("electricField/x", None),
+        (
+            "electricField/x*t",
+            (KeyTerm("*", "electricField/x"), KeyTerm("*", "t")),
+        ),
     ],
 )
 def test_parse_key_expression(key: str, expected: tuple[KeyTerm, ...] | None) -> None:
     assert parse_key_expression(key) == expected
 
 
-@pytest.mark.parametrize("key", ["x*", "/x", "x**2", "x//y", "x*1e999"])
+@pytest.mark.parametrize(
+    "key", ["x*", "/x", "x**2", "x//y", "x*1e999", "electricField*"]
+)
 def test_parse_key_expression_malformed(key: str) -> None:
     with pytest.raises(ValueError):
         parse_key_expression(key)

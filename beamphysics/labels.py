@@ -118,7 +118,7 @@ def texlabel(key: str):
 
     """
 
-    # Basic cases
+    key = key.strip()
     if key in TEXLABEL:
         return TEXLABEL[key]
 
@@ -170,7 +170,8 @@ _TEX_ATOM = re.compile(
 
 
 def _number_tex(x: float) -> str:
-    mantissa, _, exponent = f"{x:g}".partition("e")
+    mantissa, _, exponent = repr(x).partition("e")
+    mantissa = mantissa.removesuffix(".0")
     if not exponent:
         return mantissa
     power = f"10^{{{int(exponent)}}}"

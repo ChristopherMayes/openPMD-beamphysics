@@ -1254,6 +1254,7 @@ class ParticleGroup:
         # Allow for non-string operations:
         if not isinstance(key, str):
             return particle_parts(self, key)
+        key = key.strip()
 
         split = StatisticKey.from_string(key)
         if split is not None:

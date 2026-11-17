@@ -805,6 +805,15 @@ def test_key_expression_values(optional_pg: ParticleGroup, key: str, expected):
     np.testing.assert_array_equal(optional_pg.x, x)
 
 
+def test_key_surrounding_whitespace(simple_pg: ParticleGroup):
+    for key in ("mean_x*px", "x*px", "sigma_x"):
+        np.testing.assert_array_equal(simple_pg[f" {key} "], simple_pg[key])
+        assert simple_pg.units(f" {key} ") == simple_pg.units(key)
+    assert simple_pg.statistics(" mean_x*px ") == {
+        " mean_x*px ": simple_pg["mean_x*px"]
+    }
+
+
 @pytest.mark.parametrize(
     ("key", "error"),
     [

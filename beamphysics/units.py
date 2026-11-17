@@ -1550,7 +1550,7 @@ def pg_units(key: str) -> pmd_unit:
         If the key has no known unit.
     """
 
-    # Basic cases
+    key = key.strip()
     if key in PARTICLEGROUP_UNITS:
         return PARTICLEGROUP_UNITS[key]
 

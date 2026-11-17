@@ -794,6 +794,8 @@ def test_p0c_derived_keys_require_p0c(simple_pg: ParticleGroup, key: str):
         ("x*px/p0", lambda P: P.x * P.px / P.p0),
         ("x/y*z", lambda P: (P.x / P.y) * P.z),
         ("x/y/z", lambda P: P.x / P.y / P.z),
+        ("2*x/4", lambda P: P.x / 2),
+        ("x/0.5", lambda P: 2 * P.x),
         ("x * 1e3", lambda P: P.x * 1000),
         ("x/sigma_x", lambda P: P.x / P.std("x")),
         ("2*3", lambda P: 6),

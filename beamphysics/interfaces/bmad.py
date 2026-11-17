@@ -3,6 +3,28 @@ import numpy as np
 from ..species import mass_of
 from ..units import c_light
 
+# ParticleGroup optional records that keep their names and values in a Bmad dict.
+PASSTHROUGH_KEYS = ("s", "ix_branch", "ix_ele", "spin_x", "spin_y", "spin_z")
+
+# Bmad location constants: upstream_end$ = 1, downstream_end$ = 2, inside$ = 3.
+# ParticleGroup `location` is the openPMD value: -1 upstream, 0 inside, 1 downstream.
+_BMAD_TO_OPENPMD_LOCATION = np.array([0, -1, 1, 0])
+_OPENPMD_TO_BMAD_LOCATION = np.array([1, 3, 2])
+
+
+def bmad_location_to_openpmd(location):
+    """
+    Convert Bmad `location` integers (1, 2, 3) to openPMD `locationInElement` (-1, 1, 0).
+    """
+    return _BMAD_TO_OPENPMD_LOCATION[np.asarray(location, dtype=int)]
+
+
+def openpmd_location_to_bmad(location):
+    """
+    Convert openPMD `locationInElement` (-1, 0, 1) to Bmad `location` integers (1, 3, 2).
+    """
+    return _OPENPMD_TO_BMAD_LOCATION[np.asarray(location, dtype=int) + 1]
+
 
 # Remove from below, because this docstring is used directly in ParticleGroup
 #     pg : ParticleGroup
@@ -24,11 +46,16 @@ def particlegroup_to_bmad(pg, p0c=None, tref=None):
     Bmad pz = p/p0c - 1
     Bmad t  = t
 
+    Optional records present on `pg` are included: `s`, `ix_branch`, `ix_ele`,
+    `spin_x`, `spin_y`, `spin_z` as they are, `location` converted to the Bmad
+    integers (upstream end 1, downstream end 2, inside 3), and `id` as `ix_user`.
+
     Parameters
     ----------
-    p0c : float, optional
-        Reference momentum times the speed of light (in eV).
-        Default is None, which uses pg['mean_p'].
+    p0c : float or numpy.ndarray, optional
+        Reference momentum times the speed of light (in eV), scalar or per
+        particle. Default is None, which uses `pg.p0c` when present and
+        otherwise pg['mean_p'].
     tref : float, optional
         Reference time (in seconds).
         Default is None, which uses pg['mean_t'].
@@ -40,7 +67,7 @@ def particlegroup_to_bmad(pg, p0c=None, tref=None):
     """
 
     if p0c is None:
-        p0c = pg["mean_p"]
+        p0c = pg.p0c if "p0c" in pg else pg["mean_p"]
     if tref is None:
         tref = pg["mean_t"]
 
@@ -59,6 +86,14 @@ def particlegroup_to_bmad(pg, p0c=None, tref=None):
         "state": pg.status,
     }
 
+    for key in PASSTHROUGH_KEYS:
+        if key in pg:
+            bmad_data[key] = pg[key]
+    if "location" in pg:
+        bmad_data["location"] = openpmd_location_to_bmad(pg.location)
+    if "id" in pg:
+        bmad_data["ix_user"] = pg.id
+
     return bmad_data
 
 
@@ -72,7 +107,11 @@ def bmad_to_particlegroup_data(bmad_data):
     Parameters
     ----------
     bmad_data : dict
-        A dictionary containing Bmad phase space coordinates.
+        A dictionary containing Bmad phase space coordinates. The optional
+        keys `s`, `ix_branch`, `ix_ele`, `spin_x`, `spin_y`, `spin_z`,
+        `location` (Bmad integers) and `ix_user` are carried over when present.
+        A per-particle `p0c` array is kept as the `p0c` record; a scalar `p0c`
+        is only a conversion parameter.
 
     Returns
     -------
@@ -107,6 +146,16 @@ def bmad_to_particlegroup_data(bmad_data):
         "status": bmad_data["state"],
     }
 
+    for key in PASSTHROUGH_KEYS:
+        if key in bmad_data:
+            pg_data[key] = bmad_data[key]
+    if "location" in bmad_data:
+        pg_data["location"] = bmad_location_to_openpmd(bmad_data["location"])
+    if "ix_user" in bmad_data:
+        pg_data["id"] = bmad_data["ix_user"]
+    if np.ndim(p0c) == 1 and len(p0c) == len(p):
+        pg_data["p0c"] = p0c
+
     return pg_data
 
 
@@ -127,8 +176,10 @@ def write_bmad(particle_group, outfile, p0c=None, t_ref=0, verbose=False):
 
     Otherwise, Bmad's time based coordinates are written.
 
-    TODO: Spin
-
+    The spin columns are written when the group has any of `spin_x`, `spin_y`,
+    `spin_z`, or has `ix_ele` (Bmad reads the columns positionally, so
+    `ix_ele` needs the spin columns before it; missing spin components are
+    written as zero). `ix_ele` and `location` columns follow when present.
     """
 
     n = particle_group.n_particle
@@ -171,11 +222,27 @@ BEGIN_BUNCH
 0 ! z_center
 0 ! t_center"""
 
-    # <x> <px> <y> <py> <z> <pz> <macro_charge> <state> <spin_x> <spin_y> <spin_z>
+    # <x> <px> <y> <py> <z> <pz> <macro_charge> <state> <spin_x> <spin_y> <spin_z> <ix_ele> <location>
 
+    columns = [x, px, y, py, z, pz, weight, status]
     fmt = 7 * ["%20.12e"] + 1 * ["%2i"]
 
-    dat = np.array([x, px, y, py, z, pz, weight, status]).T
+    spin_keys = ("spin_x", "spin_y", "spin_z")
+    has_ix_ele = "ix_ele" in particle_group
+    if has_ix_ele or any(key in particle_group for key in spin_keys):
+        for key in spin_keys:
+            columns.append(
+                particle_group[key] if key in particle_group else np.zeros(n)
+            )
+        fmt += 3 * ["%20.12e"]
+    if has_ix_ele:
+        columns.append(particle_group.ix_ele)
+        fmt.append("%6i")
+        if "location" in particle_group:
+            columns.append(openpmd_location_to_bmad(particle_group.location))
+            fmt.append("%2i")
+
+    dat = np.array(columns).T
 
     footer = """END_BUNCH"""
 

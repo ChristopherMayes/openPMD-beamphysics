@@ -5,8 +5,8 @@ import typing as _typing
 if _typing.TYPE_CHECKING:
     from .fields import FieldMesh
     from .particles import ParticleGroup, single_particle
-    from .readers import particle_paths
-    from .status import ParticleStatus
+    from .readers import is_openpmd, particle_paths
+    from .status import LocationInElement, ParticleStatus
     from .wavefront import Wavefront, WavefrontAttrs, WavefrontK
     from .writers import pmd_init
 
@@ -22,6 +22,7 @@ _LAZY_IMPORTS = {
     "single_particle": ".particles",
     "particle_paths": ".readers",
     "is_openpmd": ".readers",
+    "LocationInElement": ".status",
     "ParticleStatus": ".status",
     "Wavefront": ".wavefront",
     "WavefrontAttrs": ".wavefront",
@@ -32,15 +33,16 @@ _LAZY_IMPORTS = {
 
 __all__ = [
     "FieldMesh",
-    "is_openpmd",
-    "particle_paths",
+    "LocationInElement",
     "ParticleGroup",
     "ParticleStatus",
-    "pmd_init",
-    "single_particle",
     "Wavefront",
     "WavefrontAttrs",
     "WavefrontK",
+    "is_openpmd",
+    "particle_paths",
+    "pmd_init",
+    "single_particle",
 ]
 
 

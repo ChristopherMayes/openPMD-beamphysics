@@ -5,11 +5,14 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+import scipy.constants
 
-from beamphysics import ParticleGroup, pmd_init
+from beamphysics import LocationInElement, ParticleGroup, pmd_init
 from beamphysics.exceptions import MultipleIterationsError, NotOpenPMDError
-from beamphysics.particles import load_bunch_data, single_particle
+from beamphysics.particles import INT_ARRAY_KEYS, load_bunch_data, single_particle
 from beamphysics.readers import (
+    OPTIONAL_PARTICLE_KEYS,
+    component_from_alias,
     get_root_metadata,
     expected_record_unit_dimension,
     is_openpmd,
@@ -26,6 +29,7 @@ P = ParticleGroup(LEGACY_H5FILE)
 
 ARRAY_KEYS = """
 x y z px py pz t status weight id
+s ix_branch ix_ele location p0c spin_x spin_y spin_z
 z/c
 p energy kinetic_energy xp yp higher_order_energy
 r theta pr ptheta
@@ -268,10 +272,16 @@ def test_init_multiple_iterations():
         ParticleGroup("docs/examples/data/astra_particles.h5")
 
 
-@pytest.mark.parametrize("h5", [{"x": [0.0]}, 3, object()])
+@pytest.mark.parametrize("h5", [3, object()])
 def test_init_unsupported_type(h5):
     with pytest.raises(TypeError):
         ParticleGroup(h5)
+
+
+def test_init_dict_positional(simple_pg: ParticleGroup):
+    assert ParticleGroup(simple_pg.data) == simple_pg
+    with pytest.raises(NotImplementedError):
+        ParticleGroup(simple_pg.data, data=simple_pg.data)
 
 
 def test_init_nested_openpmd_root(simple_pg: ParticleGroup, tmp_path: pathlib.Path):
@@ -518,6 +528,8 @@ def test_plot_single_particle_vs_z(array_key: str):
     # for coverage and that this doesn't crash.  Filter out any warnings
     # from this that complain about bad calculated values.
     Ps = single_particle(pz=10e6)
+    if array_key in OPTIONAL_PARTICLE_KEYS and array_key not in Ps:
+        pytest.skip(f"single_particle does not set optional key {array_key!r}")
     Ps.plot("z", array_key)
     plt.show()
 
@@ -534,7 +546,7 @@ def test_id_ensure_int():
     assert np.issubdtype(P.id.dtype, int)
 
     for key in P._settable_array_keys:
-        if key not in {"id", "status"}:
+        if key not in INT_ARRAY_KEYS:
             assert np.issubdtype(getattr(P, key).dtype, float), key
 
 
@@ -569,3 +581,175 @@ def test_coerce_int_array_round(val, expected: np.ndarray):
     result = _round_to_int_array(val)
     np.testing.assert_array_equal(actual=result, desired=expected)
     assert np.issubdtype(result.dtype, int)
+
+
+# Optional per-particle records (Bmad `coord_struct` names), excluding `id`
+# which has its own tests above.
+OPTIONAL_KEYS = [key for key in OPTIONAL_PARTICLE_KEYS if key != "id"]
+
+# Constant records in LEGACY_H5FILE, written by Bmad.
+BMAD_FILE_VALUES = {
+    "s": 0.445,
+    "ix_branch": 0,
+    "ix_ele": 8,
+    "location": 1,
+    "p0c": 41996891.31444237,
+    "spin_x": 0.0,
+    "spin_y": 0.0,
+    "spin_z": 0.0,
+}
+
+OPTIONAL_VALUES = {
+    "s": [0.5, 1.5],
+    "ix_branch": [0, 1],
+    "ix_ele": [3, 4],
+    "location": [-1, 1],
+    "p0c": [1e6, 2e6],
+    "spin_x": [0.1, 0.2],
+    "spin_y": [0.3, -0.4],
+    "spin_z": [0.5, 0.6],
+    "charge_state": [1, 2],
+}
+
+
+@pytest.fixture
+def optional_pg(simple_pg: ParticleGroup) -> ParticleGroup:
+    """simple_pg with every optional record set to distinct per-particle values."""
+    for key, val in OPTIONAL_VALUES.items():
+        setattr(simple_pg, key, val)
+    return simple_pg
+
+
+@pytest.fixture(params=OPTIONAL_KEYS)
+def optional_key(request) -> str:
+    return request.param
+
+
+def test_optional_key_absent(simple_pg: ParticleGroup, optional_key: str):
+    assert optional_key not in simple_pg
+    assert not hasattr(simple_pg, optional_key)
+    with pytest.raises(AttributeError, match=optional_key):
+        simple_pg[optional_key]
+
+
+@pytest.mark.parametrize(("key", "expected"), list(BMAD_FILE_VALUES.items()))
+def test_optional_key_from_bmad_file(key: str, expected: float):
+    assert key in P
+    np.testing.assert_allclose(P[key], expected)
+    if key in INT_ARRAY_KEYS:
+        assert np.issubdtype(P[key].dtype, np.integer)
+    else:
+        assert np.issubdtype(P[key].dtype, np.floating)
+
+
+def test_optional_key_setter(simple_pg: ParticleGroup, optional_key: str):
+    setattr(simple_pg, optional_key, 2.4)
+    arr = simple_pg[optional_key]
+    assert optional_key in simple_pg
+    assert optional_key in simple_pg._settable_array_keys
+    assert simple_pg.data[optional_key] is arr
+    assert len(arr) == len(simple_pg)
+    if optional_key in INT_ARRAY_KEYS:
+        assert np.issubdtype(arr.dtype, np.integer)
+        np.testing.assert_array_equal(arr, [2, 2])
+    else:
+        np.testing.assert_allclose(arr, 2.4)
+
+
+def test_optional_keys_write_reload(optional_pg: ParticleGroup, tmp_path: pathlib.Path):
+    h5file = tmp_path / "optional.h5"
+    optional_pg.write(h5file)
+
+    P2 = ParticleGroup(h5file)
+    assert P2 == optional_pg
+    for key, val in OPTIONAL_VALUES.items():
+        assert key in P2
+        np.testing.assert_allclose(P2[key], val)
+
+    angular_momentum = (2, 1, -1, 0, 0, 0, 0)
+    with h5py.File(h5file, "r") as h5:
+        g = h5["particles/electron"]
+        for key in OPTIONAL_KEYS:
+            record = component_from_alias[key]
+            assert record in g
+            if record.startswith("spin/"):
+                expected = angular_momentum
+            else:
+                expected = expected_record_unit_dimension[record]
+            assert tuple(g[record].attrs["unitDimension"]) == expected
+
+
+def test_optional_keys_propagate(optional_pg: ParticleGroup):
+    results = [
+        optional_pg[0:1],
+        optional_pg[np.array([True, False])],
+        optional_pg.where(optional_pg.x >= 0),
+        optional_pg.split(2)[0],
+        optional_pg.resample(2),
+        optional_pg + optional_pg,
+        optional_pg.copy(),
+    ]
+    for Q in results:
+        for key in OPTIONAL_KEYS:
+            assert key in Q, key
+
+
+def test_join_drops_missing_optional_keys(optional_pg: ParticleGroup):
+    plain = ParticleGroup(
+        data={
+            k: optional_pg[k]
+            for k in optional_pg._settable_array_keys
+            if k not in OPTIONAL_KEYS
+        }
+        | {"species": "electron"}
+    )
+    with pytest.warns(UserWarning, match="Dropping optional keys"):
+        Q = optional_pg + plain
+    assert len(Q) == 2 * len(optional_pg)
+    assert not any(key in Q for key in OPTIONAL_KEYS)
+
+
+def test_eq_optional_keys(optional_pg: ParticleGroup, optional_key: str):
+    P2 = optional_pg.copy()
+    assert P2 == optional_pg
+
+    setattr(P2, optional_key, 2 * optional_pg[optional_key] + 1)
+    assert P2 != optional_pg
+
+    P3 = optional_pg.copy()
+    P3._data.pop(optional_key)
+    P3._settable_array_keys.remove(optional_key)
+    assert P3 != optional_pg
+    assert optional_pg != P3
+
+
+@pytest.mark.parametrize(
+    ("unit_si", "unit_dimension"),
+    [
+        pytest.param(scipy.constants.hbar, (2, 1, -1, 0, 0, 0, 0), id="bmad-hbar"),
+        pytest.param(1.0, (0, 0, 0, 0, 0, 0, 0), id="legacy-dimensionless"),
+    ],
+)
+def test_spin_in_units_of_hbar(tmp_path: pathlib.Path, unit_si: float, unit_dimension):
+    raw = np.array([0.1, -0.5, 1.0])
+    h5file = tmp_path / "spin.h5"
+    with h5py.File(h5file, "w") as h5:
+        h5["spin/x"] = raw
+        h5["spin/x"].attrs["unitSI"] = unit_si
+        h5["spin/x"].attrs["unitDimension"] = unit_dimension
+    with h5py.File(h5file, "r") as h5:
+        np.testing.assert_allclose(particle_array(h5, "spin_x"), raw)
+
+
+def test_constant_id_record_loads(species_h5file: pathlib.Path):
+    with h5py.File(species_h5file, "a") as h5:
+        g = h5["particles/electron"].create_group("id")
+        g.attrs["value"] = 7
+        g.attrs["shape"] = (2,)
+    P2 = ParticleGroup(species_h5file)
+    np.testing.assert_array_equal(P2.id, [7, 7])
+    assert np.issubdtype(P2.id.dtype, np.integer)
+
+
+def test_location_enum():
+    assert LocationInElement(P.location[0]) is LocationInElement.DOWNSTREAM_END

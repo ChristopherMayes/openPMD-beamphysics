@@ -65,6 +65,13 @@ __all__ = [
 _LEGACY_KEYS = {"higher_order_energy_spread": "sigma_higher_order_energy"}
 
 
+# String keys for the properties named with `_over_`.
+_RATIO_KEYS = {
+    "px/p0": "px_over_p0",
+    "py/p0": "py_over_p0",
+    "dp/p0": "dp_over_p0",
+}
+
 # Per-particle arrays stored as integers; everything else is float.
 INT_ARRAY_KEYS = frozenset(
     {"id", "status", "ix_branch", "ix_ele", "location", "charge_state"}
@@ -102,7 +109,7 @@ class ParticleGroup:
     | `ix_branch`                  | `branchIndex`                | int   | 1    | Lattice branch index                        |
     | `ix_ele`                     | `elementIndex`               | int   | 1    | Lattice element index                       |
     | `location`                   | `locationInElement`          | int   | 1    | -1 upstream end, 0 inside, 1 downstream end |
-    | `p0c`                        | `totalMomentumOffset`        | float | eV/c | Reference momentum                          |
+    | `p0c`                        | `totalMomentumOffset`        | float | eV   | Reference momentum times $c$                |
     | `spin_x`, `spin_y`, `spin_z` | `spin/x`, `spin/y`, `spin/z` | float | hbar | Spin components                             |
     | `charge_state`               | `chargeState`                | int   | 1    | Integer charge of an atom or molecule       |
 
@@ -122,6 +129,12 @@ class ParticleGroup:
     | `xp`, `yp`                                    | rad     | Slopes $x' = dx/dz = p_x/p_z$ and $y' = dy/dz = p_y/p_z$ |
     | `x_bar`, `px_bar`, `y_bar`, `py_bar`          | sqrt(m) | Normalized transverse coordinates                        |
     | `Jx`, `Jy`                                    | m       | Amplitudes, `Jx = (x_bar^2 + px_bar^2)/2`                |
+    | `p0`                                          | eV/c    | Reference momentum, equal in value to `p0c`              |
+    | `dp`                                          | eV/c    | Momentum deviation $p - p_0$                             |
+    | `px_over_p0`, `py_over_p0`                    | 1       | $p_x/p_0$ and $p_y/p_0$, also keys `px/p0` and `py/p0`   |
+    | `dp_over_p0`                                  | 1       | $(p - p_0)/p_0$, also key `dp/p0`                        |
+
+    `p0`, `dp` and the ratios to `p0` require the optional `p0c` record.
 
     The normalization of `x_bar` and friends is computed from the covariance
     matrix, with momenta normalized by the mass so that `<Jx> = norm_emit_x`
@@ -443,7 +456,7 @@ class ParticleGroup:
     @property
     def p0c(self):
         """
-        Reference momentum (eV/c).
+        Reference momentum times the speed of light (eV).
 
         Optional; the openPMD `totalMomentumOffset` record, Bmad `p0c`.
         """
@@ -452,6 +465,54 @@ class ParticleGroup:
     @p0c.setter
     def p0c(self, val):
         self._set_optional_array("p0c", val)
+
+    @property
+    def p0(self):
+        """
+        Reference momentum (eV/c).
+
+        Equal in value to `p0c`, which is in energy units (eV). Requires `p0c`.
+        """
+        return self.p0c
+
+    @property
+    def dp(self):
+        """
+        Momentum deviation from the reference momentum, $p - p_0$ (eV/c).
+
+        Requires `p0c`.
+        """
+        return self.p - self.p0
+
+    @property
+    def px_over_p0(self):
+        """
+        x momentum relative to the reference momentum, $p_x/p_0$ (dimensionless).
+
+        The Bmad `px` phase space coordinate. Also available as `P['px/p0']`.
+        Requires `p0c`.
+        """
+        return self.px / self.p0
+
+    @property
+    def py_over_p0(self):
+        """
+        y momentum relative to the reference momentum, $p_y/p_0$ (dimensionless).
+
+        The Bmad `py` phase space coordinate. Also available as `P['py/p0']`.
+        Requires `p0c`.
+        """
+        return self.py / self.p0
+
+    @property
+    def dp_over_p0(self):
+        """
+        Relative momentum deviation, $\\delta = (p - p_0)/p_0$ (dimensionless).
+
+        The Bmad `pz` phase space coordinate. Also available as `P['dp/p0']`.
+        Requires `p0c`.
+        """
+        return self.dp / self.p0
 
     @property
     def spin_x(self):
@@ -1197,6 +1258,8 @@ class ParticleGroup:
         # 'z/c' special case
         if key == "z/c":
             return self["z"] / (c_light)
+        if key in _RATIO_KEYS:
+            return getattr(self, _RATIO_KEYS[key])
 
         split = StatisticKey.from_string(key)
         if split is not None:
@@ -1331,12 +1394,14 @@ class ParticleGroup:
         Bmad      openPMD-beamphysics
         ----      -------------------
         Bmad x  = x
-        Bmad px = px/p0c
+        Bmad px = px/p0
         Bmad y  = y
-        Bmad py = py/p0c
+        Bmad py = py/p0
         Bmad z = -beta * c * (t - tref)
-        Bmad pz = p/p0c - 1
+        Bmad pz = p/p0 - 1
         Bmad t  = t
+
+        where `p0 = p0c/c` is the reference momentum.
 
         Optional records present on this group are included: `s`,
         `ix_branch`, `ix_ele`, `spin_x`, `spin_y`, `spin_z` as they are,

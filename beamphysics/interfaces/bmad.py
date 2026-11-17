@@ -39,12 +39,14 @@ def particlegroup_to_bmad(pg, p0c=None, tref=None):
     Bmad      openPMD-beamphysics
     ----      -------------------
     Bmad x  = x
-    Bmad px = px/p0c
+    Bmad px = px/p0
     Bmad y  = y
-    Bmad py = py/p0c
+    Bmad py = py/p0
     Bmad z = -beta * c * (t - tref)
-    Bmad pz = p/p0c - 1
+    Bmad pz = p/p0 - 1
     Bmad t  = t
+
+    where `p0 = p0c/c` is the reference momentum.
 
     Optional records present on `pg` are included: `s`, `ix_branch`, `ix_ele`,
     `spin_x`, `spin_y`, `spin_z` as they are, `location` converted to the Bmad

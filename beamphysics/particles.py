@@ -410,7 +410,7 @@ class ParticleGroup:
 
     @ix_branch.setter
     def ix_branch(self, val):
-        self._set_optional_array("ix_branch", val, dtype=int)
+        self._set_optional_array("ix_branch", val)
 
     @property
     def ix_ele(self):
@@ -423,7 +423,7 @@ class ParticleGroup:
 
     @ix_ele.setter
     def ix_ele(self, val):
-        self._set_optional_array("ix_ele", val, dtype=int)
+        self._set_optional_array("ix_ele", val)
 
     @property
     def location(self):
@@ -438,7 +438,7 @@ class ParticleGroup:
 
     @location.setter
     def location(self, val):
-        self._set_optional_array("location", val, dtype=int)
+        self._set_optional_array("location", val)
 
     @property
     def p0c(self):
@@ -504,7 +504,7 @@ class ParticleGroup:
 
     @charge_state.setter
     def charge_state(self, val):
-        self._set_optional_array("charge_state", val, dtype=int)
+        self._set_optional_array("charge_state", val)
 
     def _optional_array(self, key: str) -> np.ndarray:
         try:
@@ -515,7 +515,8 @@ class ParticleGroup:
                 f"{component_from_alias[key]!r})"
             ) from None
 
-    def _set_optional_array(self, key: str, val, dtype=None) -> None:
+    def _set_optional_array(self, key: str, val) -> None:
+        dtype = int if key in INT_ARRAY_KEYS else float
         full_array_val = full_array(len(self), val, dtype=dtype)
         if key not in self._settable_array_keys:
             self._settable_array_keys.append(key)

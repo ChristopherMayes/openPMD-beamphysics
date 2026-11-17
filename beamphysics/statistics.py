@@ -827,8 +827,10 @@ class KeyExpression:
     An arithmetic key in the form `scale * numerator / (divisor * denominator)`.
 
     Keys may be products and quotients of other keys, the speed of light `c`
-    and finite numbers. Parentheses, addition, subtraction and powers are not
-    supported.
+    and finite numbers. Factors after `*` go in the numerator and factors
+    after `/` in the denominator, so `px/p0*x` and `px*x/p0` are both
+    $(p_x x)/p_0$, and `x/y/z` is $x/(y z)$. Parentheses, addition,
+    subtraction and powers are not supported.
 
     Statistic prefixes apply to the rest of the key, so `sigma_x/mean_x` is
     the standard deviation of `x/mean_x`, and are not handled here.

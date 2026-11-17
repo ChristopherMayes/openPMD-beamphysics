@@ -180,10 +180,12 @@ class ParticleGroup:
     | `cov_prop1__prop2` | `.cov('prop1', 'prop2')[0, 1]` |
 
     Keys can also be products and quotients of keys, numbers and the speed
-    of light `c`, such as `z/c`, `-1*z/c`,
-    `x*px/p0` and `x/sigma_x`. A statistic prefix applies to the whole rest
-    of the key, so `sigma_x/mean_x` is the standard deviation of `x/mean_x`.
-    Parentheses, addition, subtraction and powers are not supported.
+    of light `c`, such as `z/c`, `-1*z/c`, `x*px/p0` and `x/sigma_x`. Factors
+    after `*` go in the numerator and factors after `/` in the denominator,
+    so `px/p0*x` and `px*x/p0` are both $(p_x x)/p_0$, and `x/y/z` is
+    $x/(y z)$. A statistic prefix applies to the whole rest of the key, so
+    `sigma_x/mean_x` is the standard deviation of `x/mean_x`. Parentheses,
+    addition, subtraction and powers are not supported.
 
     Units for all attributes can be accessed by:
 

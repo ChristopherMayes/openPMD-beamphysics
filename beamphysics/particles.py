@@ -2719,7 +2719,7 @@ def particle_parts(particle_group, x):
     return ParticleGroup(data=data)
 
 
-def join_particle_groups(*particle_groups):
+def join_particle_groups(*particle_groups: ParticleGroup):
     """
     Join particle groups.
 
@@ -2731,11 +2731,11 @@ def join_particle_groups(*particle_groups):
     # return species
 
     species0 = species[0]
-    assert all([spe == species0 for spe in species]), "species must be the same to join"
+    assert all(spe == species0 for spe in species), "species must be the same to join"
 
     # Optional records are kept only when every group carries them. `id` is
     # excepted: its getter assigns default ids to a group without them.
-    keys = list(particle_groups[0]._settable_array_keys)
+    keys = {key for pg in particle_groups for key in pg._settable_array_keys}
     dropped = [
         key
         for key in keys

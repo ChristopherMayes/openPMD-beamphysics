@@ -516,9 +516,10 @@ class ParticleGroup:
             ) from None
 
     def _set_optional_array(self, key: str, val, dtype=None) -> None:
+        full_array_val = full_array(len(self), val, dtype=dtype)
         if key not in self._settable_array_keys:
             self._settable_array_keys.append(key)
-        self._data[key] = full_array(len(self), val, dtype=dtype)
+        self._data[key] = full_array_val
 
     @property
     def species(self):

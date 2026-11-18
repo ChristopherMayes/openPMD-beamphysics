@@ -42,6 +42,7 @@ from .statistics import (
     TwissParameter,
     matched_particles,
     norm_emit_calc,
+    normalize_key,
     normalized_particle_coordinate,
     particle_amplitude,
     particle_twiss_dispersion,
@@ -1256,7 +1257,7 @@ class ParticleGroup:
         # Allow for non-string operations:
         if not isinstance(key, str):
             return particle_parts(self, key)
-        key = key.strip()
+        key = normalize_key(key)
 
         split = StatisticKey.from_string(key)
         if split is not None:

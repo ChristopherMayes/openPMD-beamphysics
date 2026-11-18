@@ -814,11 +814,33 @@ class StatisticKey(NamedTuple):
 
 _NUMBER = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
 
-# An operand and the operator after it. Field record names such as
-# `electricField/x` are single operands.
+# An operand and the operator after it, in a key from `normalize_key`. Field
+# record names such as `electricField/x` are single operands.
 _OPERAND = re.compile(
-    r"\s*((?:electricField|magneticField)/[A-Za-z]+|[^*/]*?)\s*(?:([*/])|$)"
+    r"((?:electricField|magneticField)/[A-Za-z]+|[^*/]*?)(?:([*/])|$)"
 )
+_OPERATOR_SPACE = re.compile(r"\s*([*/])\s*")
+
+
+def normalize_key(key: str) -> str:
+    """
+    Remove whitespace at the ends of a key and around `*` and `/`.
+
+    Parameters
+    ----------
+    key : str
+        A key, e.g. `" x * px / p0 "`.
+
+    Returns
+    -------
+    str
+
+    Examples
+    --------
+    >>> normalize_key(" electricField / z ")
+    'electricField/z'
+    """
+    return _OPERATOR_SPACE.sub(r"\1", key.strip())
 
 
 @dataclass(frozen=True)
@@ -878,6 +900,7 @@ class KeyExpression:
         >>> KeyExpression.from_string("-1*z/c")
         KeyExpression(scale=-1.0, divisor=1.0, numerator=('z',), denominator=('c',))
         """
+        key = normalize_key(key)
         parts = []
         pos = 0
         while True:

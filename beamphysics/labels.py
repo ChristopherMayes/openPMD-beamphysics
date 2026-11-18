@@ -1,6 +1,6 @@
 import re
 
-from .statistics import KeyExpression
+from .statistics import KeyExpression, normalize_key
 from .units import nice_array, parse_bunching_str, pmd_unit
 
 TEXLABEL = {
@@ -117,7 +117,7 @@ def texlabel(key: str):
 
     """
 
-    key = key.strip()
+    key = normalize_key(key)
     if key in TEXLABEL:
         return TEXLABEL[key]
 

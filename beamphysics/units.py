@@ -17,7 +17,12 @@ from typing import Optional, Sequence
 import numpy as np
 import scipy.constants
 
-from .statistics import KeyExpression, StatisticKey, StatisticOperator
+from .statistics import (
+    KeyExpression,
+    StatisticKey,
+    StatisticOperator,
+    normalize_key,
+)
 
 mec2 = scipy.constants.value("electron mass energy equivalent in MeV") * 1e6
 mpc2 = scipy.constants.value("proton mass energy equivalent in MeV") * 1e6
@@ -1550,7 +1555,7 @@ def pg_units(key: str) -> pmd_unit:
         If the key has no known unit.
     """
 
-    key = key.strip()
+    key = normalize_key(key)
     if key in PARTICLEGROUP_UNITS:
         return PARTICLEGROUP_UNITS[key]
 

@@ -319,6 +319,7 @@ def test_statistics_cov_subset(
         ("x/y*z", KeyExpression(numerator=("x", "z"), denominator=("y",))),
         ("x/sigma_x", KeyExpression(numerator=("x",), denominator=("sigma_x",))),
         ("electricField/x", None),
+        ("electricField / x", None),
         ("electricField/x*t", KeyExpression(numerator=("electricField/x", "t"))),
     ],
 )

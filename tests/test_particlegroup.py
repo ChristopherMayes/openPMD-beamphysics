@@ -9,6 +9,7 @@ import scipy.constants
 
 from beamphysics import LocationInElement, ParticleGroup, pmd_init
 from beamphysics.exceptions import MultipleIterationsError, NotOpenPMDError
+from beamphysics.labels import texlabel
 from beamphysics.particles import INT_ARRAY_KEYS, load_bunch_data, single_particle
 from beamphysics.readers import (
     OPTIONAL_PARTICLE_KEYS,
@@ -20,6 +21,7 @@ from beamphysics.readers import (
     load_time_offset,
     particle_array,
 )
+from beamphysics.units import pg_units
 
 # File with no species subgroup
 LEGACY_H5FILE = "docs/examples/data/bmad_particles.h5"
@@ -807,13 +809,28 @@ def test_key_expression_values(optional_pg: ParticleGroup, key: str, expected):
     np.testing.assert_array_equal(optional_pg.x, x)
 
 
-def test_key_surrounding_whitespace(simple_pg: ParticleGroup):
-    for key in ("mean_x*px", "x*px", "sigma_x"):
-        np.testing.assert_array_equal(simple_pg[f" {key} "], simple_pg[key])
-        assert simple_pg.units(f" {key} ") == simple_pg.units(key)
-    assert simple_pg.statistics(" mean_x*px ") == {
-        " mean_x*px ": simple_pg["mean_x*px"]
-    }
+@pytest.mark.parametrize(
+    ("spaced", "key"),
+    [
+        (" mean_x*px ", "mean_x*px"),
+        (" x * px ", "x*px"),
+        (" sigma_x ", "sigma_x"),
+        ("x / sigma_x", "x/sigma_x"),
+        ("-1 * z\t/ c", "-1*z/c"),
+    ],
+)
+def test_key_whitespace(simple_pg: ParticleGroup, spaced: str, key: str):
+    np.testing.assert_array_equal(simple_pg[spaced], simple_pg[key])
+    assert simple_pg.units(spaced) == simple_pg.units(key)
+    assert texlabel(spaced) == texlabel(key)
+    np.testing.assert_array_equal(
+        simple_pg.statistics(spaced)[spaced], simple_pg.statistics(key)[key]
+    )
+
+
+@pytest.mark.parametrize("key", ["electricField/z", "electricField/t", "x/z"])
+def test_key_whitespace_units(key: str):
+    assert pg_units(key.replace("/", " / ")) == pg_units(key)
 
 
 @pytest.mark.parametrize(

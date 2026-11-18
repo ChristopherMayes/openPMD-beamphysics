@@ -121,8 +121,11 @@ def texlabel(key: str):
             https://matplotlib.org/stable/tutorials/text/mathtext.html
 
     """
+    return _texlabel(deprecated_field_record_names(key))
 
-    key = normalize_key(deprecated_field_record_names(key))
+
+def _texlabel(key: str) -> str:
+    key = normalize_key(key)
     if key in TEXLABEL:
         return TEXLABEL[key]
 
@@ -130,7 +133,7 @@ def texlabel(key: str):
     for prefix in ("sigma_", "mean_", "min_", "max_", "ptp_", "delta_", "abs_"):
         if key.startswith(prefix):
             key0 = key.removeprefix(prefix)
-            tex0 = texlabel(key0)
+            tex0 = _texlabel(key0)
             prefix = prefix.removesuffix("_")
 
             if prefix == "abs":
@@ -148,8 +151,8 @@ def texlabel(key: str):
 
     if key.startswith("cov_"):
         subkeys = key.removeprefix("cov_").split("__")
-        tex0 = texlabel(subkeys[0])
-        tex1 = texlabel(subkeys[1])
+        tex0 = _texlabel(subkeys[0])
+        tex1 = _texlabel(subkeys[1])
         return rf"\left<{tex0}, {tex1}\right>"
 
     expression = KeyExpression.from_string(key)
@@ -194,7 +197,7 @@ def _expression_tex(expression: KeyExpression) -> str:
     $x\,z/y$.
     """
     numerator, denominator = (
-        [_group("c" if name == "c" else texlabel(name)) for name in names]
+        [_group("c" if name == "c" else _texlabel(name)) for name in names]
         for names in (expression.numerator, expression.denominator)
     )
     if expression.scale == -1 and numerator:

@@ -1,5 +1,6 @@
 import os
 import pathlib
+import re
 
 import h5py
 import matplotlib.pyplot as plt
@@ -848,9 +849,35 @@ def test_pg_units_field_record_name_deprecated(name: str, alias: str):
         assert pg_units(name) == pg_units(alias)
 
 
-def test_texlabel_field_record_name_deprecated():
-    with pytest.warns(DeprecationWarning, match="use 'Ez' instead"):
-        assert texlabel("electricField/z") == texlabel("Ez")
+@pytest.mark.parametrize(
+    ("name", "alias"),
+    [
+        ("electricField/z", "Ez"),
+        ("mean_electricField/z", "mean_Ez"),
+        ("cov_electricField/z__x", "cov_Ez__x"),
+        ("2*magneticField/r", "2*Br"),
+    ],
+)
+def test_texlabel_field_record_name_deprecated(name: str, alias: str):
+    with pytest.warns(
+        DeprecationWarning, match=re.escape(f"use {alias!r} instead")
+    ) as record:
+        assert texlabel(name) == texlabel(alias)
+    assert len(record) == 1
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "electricField / z",
+        "mean_electricField / z",
+        "2*electricField / z",
+        "electricField/t",
+    ],
+)
+def test_texlabel_not_field_record_name(key: str, recwarn):
+    assert "E_z" not in texlabel(key)
+    assert not [w for w in recwarn if w.category is DeprecationWarning]
 
 
 @pytest.mark.parametrize(

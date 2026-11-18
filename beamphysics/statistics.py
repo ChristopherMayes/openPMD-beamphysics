@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import re
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from enum import Enum
@@ -812,11 +811,6 @@ class StatisticKey(NamedTuple):
         return None
 
 
-_NUMBER = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
-
-_OPERATOR_SPACE = re.compile(r"\s*([*/])\s*")
-
-
 def normalize_key(key: str) -> str:
     """
     Remove whitespace at the ends of a key and around `*` and `/`.
@@ -835,7 +829,8 @@ def normalize_key(key: str) -> str:
     >>> normalize_key(" x * px / p0 ")
     'x*px/p0'
     """
-    return _OPERATOR_SPACE.sub(r"\1", key.strip())
+    factors = [op + part.strip() for op, part in _factors(key)]
+    return "".join(factors).removeprefix("*")
 
 
 def _factors(key: str) -> Iterator[tuple[str, str]]:
@@ -925,12 +920,14 @@ class KeyExpression:
         for op, part in factors:
             if not part:
                 raise ValueError(f"Empty operand in key expression: {key!r}")
-            if not _NUMBER.fullmatch(part):
+            try:
+                number = float(part)
+            except ValueError:
                 names[op].append(part)
                 continue
-            if not math.isfinite(float(part)):
+            if not math.isfinite(number):
                 raise ValueError(f"Number is not finite in key expression: {key!r}")
-            numbers[op] *= float(part)
+            numbers[op] *= number
         return cls(
             scale=numbers["*"],
             divisor=numbers["/"],

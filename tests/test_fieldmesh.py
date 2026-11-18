@@ -100,3 +100,22 @@ def test_duplicate_component_alias_rejected(component_keys):
     }
     with pytest.raises(ValueError, match="Duplicate component"):
         load_field_data_dict(data, verbose=False)
+
+
+def test_record_name_key_deprecated(fm_dipole_corrector):
+    FM = fm_dipole_corrector
+    with pytest.warns(DeprecationWarning, match=r"components\['magneticField/z'\]"):
+        assert FM["magneticField/z"] is FM.components["magneticField/z"]
+    with pytest.warns(DeprecationWarning, match="'Bz'"):
+        np.testing.assert_array_equal(FM["abs_magneticField/z"], FM["abs_Bz"])
+    with pytest.warns(DeprecationWarning, match="'Bz'"):
+        assert FM.units("magneticField/z") == FM.units("Bz")
+
+
+def test_alias_keys_not_deprecated(fm_dipole_corrector, recwarn):
+    FM = fm_dipole_corrector
+    FM["Bz"]
+    FM.units("abs_Bz")
+    assert FM.is_pure_magnetic
+    assert not FM.is_pure_electric
+    assert not [w for w in recwarn if w.category is DeprecationWarning]

@@ -1542,8 +1542,7 @@ def pg_units(key: str) -> pmd_unit:
     Parameters
     ----------
     key : str
-        Any `ParticleGroup` key, or an openPMD record name such as
-        `electricField/x`.
+        Any `ParticleGroup` key, or a field component such as `Ex`.
 
     Returns
     -------
@@ -1553,8 +1552,47 @@ def pg_units(key: str) -> pmd_unit:
     ------
     ValueError
         If the key has no known unit.
-    """
 
+    Warns
+    -----
+    DeprecationWarning
+        For openPMD field record names such as `electricField/x`. Use the
+        component alias, such as `Ex`, instead.
+    """
+    alias = _field_record_alias(key.strip())
+    if alias is not None:
+        warnings.warn(
+            f"Field record name {key.strip()!r} as a key is deprecated; "
+            f"use {alias!r} instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _pg_units(alias)
+    return _pg_units(key)
+
+
+def _field_record_alias(name: str) -> str | None:
+    """
+    Alias of an openPMD field record name.
+
+    Parameters
+    ----------
+    name : str
+        A name such as `electricField/x` or `magneticField`.
+
+    Returns
+    -------
+    str or None
+        The alias, such as `Ex` or `B`, or None if `name` is not a field
+        record name.
+    """
+    match = re.fullmatch(r"(electric|magnetic)Field(?:/(x|y|z|r|theta))?", name)
+    if match is None:
+        return None
+    return ("E" if match.group(1) == "electric" else "B") + (match.group(2) or "")
+
+
+def _pg_units(key: str) -> pmd_unit:
     key = normalize_key(key)
     if key in PARTICLEGROUP_UNITS:
         return PARTICLEGROUP_UNITS[key]
@@ -1563,18 +1601,14 @@ def pg_units(key: str) -> pmd_unit:
     if split is not None:
         op, names = split
         if op is StatisticOperator.COV:
-            return pg_units(names[0]) * pg_units(names[1])
-        return pg_units(names[0])
-
-    field = re.fullmatch(r"(electricField|magneticField)(?:/[A-Za-z]+)?", key)
-    if field:
-        return pmd_unit("V/m" if field.group(1) == "electricField" else "T")
+            return _pg_units(names[0]) * _pg_units(names[1])
+        return _pg_units(names[0])
 
     expression = KeyExpression.from_string(key)
     if expression is not None:
 
         def operand_unit(name: str) -> pmd_unit:
-            return pmd_unit("m/s") if name == "c" else pg_units(name)
+            return pmd_unit("m/s") if name == "c" else _pg_units(name)
 
         # Numbers scale values, not units: `2*xp` stays in rad
         if len(expression.numerator) == 1 and not expression.denominator:

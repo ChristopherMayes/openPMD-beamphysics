@@ -353,12 +353,12 @@ def test_pg_units_dimension_matches_pint(key: str, ureg) -> None:
         # Covariance multiplies the two sub-key dimensions.
         ("cov_x__px", "m*kg*m/s"),
         ("cov_t__t", "s**2"),
-        # startswith-based field keys.
-        ("electricField", "V/m"),
-        ("magneticField", "T"),
+        # Field components.
+        ("E", "V/m"),
+        ("B", "T"),
         ("bunching_5", "dimensionless"),
-        ("electricField/x", "V/m"),
-        ("magneticField/theta", "T"),
+        ("Ex", "V/m"),
+        ("Btheta", "T"),
         # Arithmetic keys combine the units of their operands.
         ("z/c", "s"),
         ("px/p0", "dimensionless"),

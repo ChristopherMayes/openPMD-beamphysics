@@ -824,7 +824,7 @@ def plot_fieldmesh_rectangular_1d(
         fieldmesh_component in fm.components
     ), f"FieldMesh was missing field component: {field_component}"
 
-    field_unit = fm.units(fieldmesh_component)
+    field_unit = fm.units(field_component)
 
     ylabel = (
         r"$"

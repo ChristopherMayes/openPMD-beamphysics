@@ -282,9 +282,9 @@ def expand_fieldmesh_from_onaxis(
         raise NotImplementedError("Expanding both Ez and Bz not implemented")
 
     if has_Ez:
-        fz = fieldmesh["electricField/z"][0, 0, :]
+        fz = fieldmesh.components["electricField/z"][0, 0, :]
     elif has_Bz:
-        fz = fieldmesh["magneticField/z"][0, 0, :]
+        fz = fieldmesh.components["magneticField/z"][0, 0, :]
     else:
         raise ValueError("Neither Ez nor Bz found")
 

@@ -828,9 +828,27 @@ def test_key_whitespace(simple_pg: ParticleGroup, spaced: str, key: str):
     )
 
 
-@pytest.mark.parametrize("key", ["electricField/z", "electricField/t", "x/z"])
-def test_key_whitespace_units(key: str):
-    assert pg_units(key.replace("/", " / ")) == pg_units(key)
+def test_key_whitespace_units():
+    assert pg_units("x / z") == pg_units("x/z")
+
+
+@pytest.mark.parametrize(
+    ("name", "alias"),
+    [
+        ("electricField", "E"),
+        ("electricField/z", "Ez"),
+        ("magneticField/theta", "Btheta"),
+    ],
+)
+def test_pg_units_field_record_name_deprecated(name: str, alias: str):
+    with pytest.warns(DeprecationWarning, match=repr(alias)):
+        assert pg_units(name) == pg_units(alias)
+
+
+@pytest.mark.parametrize("key", ["electricField / z", "electricField/t"])
+def test_pg_units_field_record_name_invalid(key: str):
+    with pytest.raises(ValueError):
+        pg_units(key)
 
 
 @pytest.mark.parametrize(

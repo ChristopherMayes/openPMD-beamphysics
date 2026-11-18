@@ -1,4 +1,5 @@
 import os
+import warnings
 from copy import deepcopy
 
 import numpy as np
@@ -41,7 +42,7 @@ from ..readers import (
     is_legacy_fortran_data_ordering,
     load_field_attrs,
 )
-from ..units import pg_units
+from ..units import _field_record_alias, pg_units
 from ..writers import pmd_field_init, write_pmd_field
 from .conversion import (
     fieldmesh_rectangular_to_cylindrically_symmetric_data,
@@ -396,7 +397,7 @@ class FieldMesh:
         """
         Returns True if there are no non-zero mageneticField components
         """
-        klist = [key for key in self.components if not self.component_is_zero(key)]
+        klist = [key for key in self.components if np.any(self.components[key])]
         return all([key.startswith("electric") for key in klist])
 
     # Logicals
@@ -405,7 +406,7 @@ class FieldMesh:
         """
         Returns True if there are no non-zero electricField components
         """
-        klist = [key for key in self.components if not self.component_is_zero(key)]
+        klist = [key for key in self.components if np.any(self.components[key])]
         return all([key.startswith("magnetic") for key in klist])
 
     @property
@@ -580,16 +581,26 @@ class FieldMesh:
             raise ValueError(f"Unsupported geometry for plot_onaxis: {self.geometry}")
 
     def units(self, key):
-        """Returns the units of any key"""
+        """
+        Units of a key.
 
-        # Strip any operators
+        Parameters
+        ----------
+        key : str
+            A coordinate or field component, such as `z` or `abs_Ez`.
+
+        Returns
+        -------
+        pmd_unit
+
+        Warns
+        -----
+        DeprecationWarning
+            For openPMD field record names such as `electricField/z`. Use the
+            component alias, such as `Ez`, instead.
+        """
         _, key = get_operator(key)
-
-        # Fill out aliases
-        if key in component_from_alias:
-            key = component_from_alias[key]
-
-        return pg_units(key)
+        return pg_units(_alias_of_record_name(key))
 
     # openPMD
     def write(self, h5, name=None):
@@ -1023,8 +1034,9 @@ class FieldMesh:
 
         the appropriate numpy operator is applied.
 
-
-
+        openPMD field record names, such as `electricField/z`, are
+        deprecated. Use `components["electricField/z"]` for the unscaled
+        array, or the alias, such as `Ez`, for the scaled component.
         """
 
         #
@@ -1033,10 +1045,18 @@ class FieldMesh:
 
         # Raw components
         if key in self.components:
+            warnings.warn(
+                f"FieldMesh[{key!r}] is deprecated; use "
+                f"FieldMesh.components[{key!r}] for the unscaled array, or "
+                f"FieldMesh[{_field_record_alias(key)!r}] for the scaled component.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             return self.components[key]
 
         # Check for operators
         operator, key = get_operator(key)
+        key = _alias_of_record_name(key)
 
         # Scaled components
         if key == "E":
@@ -1058,6 +1078,19 @@ class FieldMesh:
     def __repr__(self):
         memloc = hex(id(self))
         return f"<FieldMesh with {self.geometry} geometry and {self.shape} shape at {memloc}>"
+
+
+def _alias_of_record_name(key: str, stacklevel: int = 3) -> str:
+    alias = _field_record_alias(key)
+    if alias is None:
+        return key
+    warnings.warn(
+        f"Field record name {key!r} as a FieldMesh key is deprecated; "
+        f"use {alias!r} instead.",
+        DeprecationWarning,
+        stacklevel=stacklevel,
+    )
+    return alias
 
 
 def get_operator(key):

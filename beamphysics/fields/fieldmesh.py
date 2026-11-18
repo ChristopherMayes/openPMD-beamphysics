@@ -427,9 +427,8 @@ class FieldMesh:
         Parameters
         ----------
         key : str
-            The key representing the field data to interpolate. Examples include:
-            - 'Ez' for scaled/phased data
-            - 'magneticField/y' for raw component data
+            The key representing the field data to interpolate, such as `Ez`
+            or `abs_By`. Components are scaled and phased.
 
         Returns
         -------
@@ -936,9 +935,8 @@ class FieldMesh:
         """
 
         if key in self.components:
-            dat = self.components[key]
-        # Aliases
-        elif key in component_from_alias:
+            key = _alias_of_record_name(key)
+        if key in component_from_alias:
             comp = component_from_alias[key]
             if comp in self.components:
                 dat = self.components[comp]
@@ -1056,7 +1054,8 @@ class FieldMesh:
 
         # Check for operators
         operator, key = get_operator(key)
-        key = _alias_of_record_name(key)
+        if key in self.components:
+            key = _alias_of_record_name(key)
 
         # Scaled components
         if key == "E":

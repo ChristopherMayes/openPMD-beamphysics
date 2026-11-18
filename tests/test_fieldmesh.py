@@ -119,3 +119,26 @@ def test_alias_keys_not_deprecated(fm_dipole_corrector, recwarn):
     assert FM.is_pure_magnetic
     assert not FM.is_pure_electric
     assert not [w for w in recwarn if w.category is DeprecationWarning]
+
+
+def test_write_does_not_warn(fm_dipole_corrector, tmp_path, recwarn):
+    fm_dipole_corrector.write(str(tmp_path / "fm.h5"))
+    assert not [w for w in recwarn if w.category is DeprecationWarning]
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["magneticField/r", "electricField/z", "abs_electricField/z", "electricField"],
+)
+def test_absent_record_name_key_raises(fm_dipole_corrector, key):
+    with pytest.raises(ValueError):
+        fm_dipole_corrector[key]
+
+
+def test_scaled_component_record_name_deprecated(fm_dipole_corrector):
+    FM = fm_dipole_corrector
+    with pytest.warns(DeprecationWarning, match="'Bz'") as record:
+        np.testing.assert_array_equal(
+            FM.scaled_component("magneticField/z"), FM.scaled_component("Bz")
+        )
+    assert record[0].filename == __file__

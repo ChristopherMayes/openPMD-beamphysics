@@ -1,6 +1,11 @@
 import numpy as np
 
-from .readers import OPTIONAL_PARTICLE_KEYS, component_from_alias, load_field_attrs
+from .readers import (
+    OPTIONAL_PARTICLE_KEYS,
+    component_alias,
+    component_from_alias,
+    load_field_attrs,
+)
 from .tools import encode_attrs, fstr
 from .units import pg_units, write_unit_h5
 
@@ -146,7 +151,7 @@ def write_pmd_field(h5, data, name=None):
     # write components (datasets)
     for key, val in data["components"].items():
         # Units
-        u = pg_units(key)
+        u = pg_units(component_alias[key])
 
         # Ensure complex
         val = val.astype(complex)

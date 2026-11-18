@@ -325,7 +325,7 @@ def test_key_expression_from_string(key: str, expected: KeyExpression | None) ->
 
 
 @pytest.mark.parametrize(
-    "key", ["x*", "/x", "x**2", "x//y", "x*1e999", "electricField*"]
+    "key", ["x*", "/x", "x**2", "x//y", "x*/y", "*", "/", "x*1e999"]
 )
 def test_key_expression_malformed(key: str) -> None:
     with pytest.raises(ValueError):

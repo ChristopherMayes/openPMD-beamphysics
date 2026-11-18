@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from enum import Enum
 from functools import reduce
@@ -814,8 +814,6 @@ class StatisticKey(NamedTuple):
 
 _NUMBER = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
 
-# An operand and the operator after it, in a key from `normalize_key`.
-_OPERAND = re.compile(r"([^*/]*?)(?:([*/])|$)")
 _OPERATOR_SPACE = re.compile(r"\s*([*/])\s*")
 
 
@@ -838,6 +836,27 @@ def normalize_key(key: str) -> str:
     'x*px/p0'
     """
     return _OPERATOR_SPACE.sub(r"\1", key.strip())
+
+
+def _factors(key: str) -> Iterator[tuple[str, str]]:
+    """
+    Yield each operand of an arithmetic key with the operator before it.
+
+    The first operand has `*`.
+
+    Examples
+    --------
+    >>> list(_factors("x*px/p0"))
+    [('*', 'x'), ('*', 'px'), ('/', 'p0')]
+    """
+    op = "*"
+    start = 0
+    for index, char in enumerate(key):
+        if char in "*/":
+            yield op, key[start:index]
+            op = char
+            start = index + 1
+    yield op, key[start:]
 
 
 @dataclass(frozen=True)
@@ -898,20 +917,12 @@ class KeyExpression:
         KeyExpression(scale=-1.0, divisor=1.0, numerator=('z',), denominator=('c',))
         """
         key = normalize_key(key)
-        parts = []
-        pos = 0
-        while True:
-            match = _OPERAND.match(key, pos)
-            parts.append(match.group(1))
-            if match.group(2) is None:
-                break
-            parts.append(match.group(2))
-            pos = match.end()
-        if len(parts) == 1:
+        factors = list(_factors(key))
+        if len(factors) == 1:
             return None
         numbers = {"*": 1.0, "/": 1.0}
         names: dict[str, list[str]] = {"*": [], "/": []}
-        for op, part in zip(["*", *parts[1::2]], parts[::2]):
+        for op, part in factors:
             if not part:
                 raise ValueError(f"Empty operand in key expression: {key!r}")
             if not _NUMBER.fullmatch(part):

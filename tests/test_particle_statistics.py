@@ -318,9 +318,6 @@ def test_statistics_cov_subset(
         ("2*x/4", KeyExpression(scale=2.0, divisor=4.0, numerator=("x",))),
         ("x/y*z", KeyExpression(numerator=("x", "z"), denominator=("y",))),
         ("x/sigma_x", KeyExpression(numerator=("x",), denominator=("sigma_x",))),
-        ("electricField/x", None),
-        ("electricField / x", None),
-        ("electricField/x*t", KeyExpression(numerator=("electricField/x", "t"))),
     ],
 )
 def test_key_expression_from_string(key: str, expected: KeyExpression | None) -> None:

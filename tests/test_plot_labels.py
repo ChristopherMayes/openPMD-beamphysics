@@ -189,7 +189,6 @@ def test_dimensionless_plot_labels_use_powers_of_ten() -> None:
         ("mean_dp/p0", r"\left<\delta\right>"),
         ("2*delta_mean_x", r"2\,(\left<x\right> - \left<\left<x\right>\right>)"),
         ("1/cov_x__px", r"1/\left<x, p_x\right>"),
-        ("electricField/z", r"\mathrm{ electricField/z }"),
     ],
 )
 def test_expression_texlabel(key: str, expected: str) -> None:

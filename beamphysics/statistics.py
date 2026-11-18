@@ -814,11 +814,8 @@ class StatisticKey(NamedTuple):
 
 _NUMBER = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
 
-# An operand and the operator after it, in a key from `normalize_key`. Field
-# record names such as `electricField/x` are single operands.
-_OPERAND = re.compile(
-    r"((?:electricField|magneticField)/[A-Za-z]+|[^*/]*?)(?:([*/])|$)"
-)
+# An operand and the operator after it, in a key from `normalize_key`.
+_OPERAND = re.compile(r"([^*/]*?)(?:([*/])|$)")
 _OPERATOR_SPACE = re.compile(r"\s*([*/])\s*")
 
 
@@ -837,8 +834,8 @@ def normalize_key(key: str) -> str:
 
     Examples
     --------
-    >>> normalize_key(" electricField / z ")
-    'electricField/z'
+    >>> normalize_key(" x * px / p0 ")
+    'x*px/p0'
     """
     return _OPERATOR_SPACE.sub(r"\1", key.strip())
 

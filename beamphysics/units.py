@@ -1559,37 +1559,71 @@ def pg_units(key: str) -> pmd_unit:
         For openPMD field record names such as `electricField/x`. Use the
         component alias, such as `Ex`, instead.
     """
-    alias = _field_record_alias(key.strip())
-    if alias is not None:
-        warnings.warn(
-            f"Field record name {key.strip()!r} as a key is deprecated; "
-            f"use {alias!r} instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return _pg_units(alias)
-    return _pg_units(key)
+    return _pg_units(deprecated_field_record_names(key))
 
 
-def _field_record_alias(name: str) -> str | None:
+# A field record name not followed by more of a name. A bare record name must
+# not be followed by `/`, so `electricField/t` is not `electricField`.
+_FIELD_RECORD_NAME = re.compile(
+    r"(?<![A-Za-z0-9])(electric|magnetic)Field"
+    r"(?:/(x|y|z|r|theta)(?![A-Za-z0-9])|(?![A-Za-z0-9]|\s*/))"
+)
+
+
+def field_record_aliases(key: str) -> str:
     """
-    Alias of an openPMD field record name.
+    Replace openPMD field record names in a key with their aliases.
 
     Parameters
     ----------
-    name : str
-        A name such as `electricField/x` or `magneticField`.
+    key : str
+        A key, such as `abs_electricField/z`.
 
     Returns
     -------
-    str or None
-        The alias, such as `Ex` or `B`, or None if `name` is not a field
-        record name.
+    str
+        The key with aliases, such as `abs_Ez`.
+
+    Examples
+    --------
+    >>> field_record_aliases("mean_magneticField/theta")
+    'mean_Btheta'
     """
-    match = re.fullmatch(r"(electric|magnetic)Field(?:/(x|y|z|r|theta))?", name)
-    if match is None:
-        return None
-    return ("E" if match.group(1) == "electric" else "B") + (match.group(2) or "")
+    return _FIELD_RECORD_NAME.sub(
+        lambda match: ("E" if match[1] == "electric" else "B") + (match[2] or ""),
+        key,
+    )
+
+
+def deprecated_field_record_names(key: str, stacklevel: int = 2) -> str:
+    """
+    `field_record_aliases`, warning if the key changes.
+
+    Parameters
+    ----------
+    key : str
+        A key, such as `abs_electricField/z`.
+    stacklevel : int, default=2
+        Stack level of the warning, relative to the caller.
+
+    Returns
+    -------
+    str
+
+    Warns
+    -----
+    DeprecationWarning
+        If `key` contains a field record name.
+    """
+    replaced = field_record_aliases(key)
+    if replaced != key:
+        warnings.warn(
+            f"Field record names as keys are deprecated; use {replaced.strip()!r} "
+            f"instead of {key.strip()!r}.",
+            DeprecationWarning,
+            stacklevel=stacklevel + 1,
+        )
+    return replaced
 
 
 def _pg_units(key: str) -> pmd_unit:

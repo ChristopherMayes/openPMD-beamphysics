@@ -1,7 +1,12 @@
 import re
 
 from .statistics import KeyExpression, normalize_key
-from .units import nice_array, parse_bunching_str, pmd_unit
+from .units import (
+    deprecated_field_record_names,
+    nice_array,
+    parse_bunching_str,
+    pmd_unit,
+)
 
 TEXLABEL = {
     # 'status'
@@ -117,7 +122,7 @@ def texlabel(key: str):
 
     """
 
-    key = normalize_key(key)
+    key = normalize_key(deprecated_field_record_names(key))
     if key in TEXLABEL:
         return TEXLABEL[key]
 

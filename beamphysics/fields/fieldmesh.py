@@ -42,7 +42,7 @@ from ..readers import (
     is_legacy_fortran_data_ordering,
     load_field_attrs,
 )
-from ..units import _field_record_alias, pg_units
+from ..units import deprecated_field_record_names, field_record_aliases, pg_units
 from ..writers import pmd_field_init, write_pmd_field
 from .conversion import (
     fieldmesh_rectangular_to_cylindrically_symmetric_data,
@@ -598,8 +598,8 @@ class FieldMesh:
             For openPMD field record names such as `electricField/z`. Use the
             component alias, such as `Ez`, instead.
         """
-        _, key = get_operator(key)
-        return pg_units(_alias_of_record_name(key))
+        _, key = get_operator(deprecated_field_record_names(key))
+        return pg_units(key)
 
     # openPMD
     def write(self, h5, name=None):
@@ -935,7 +935,7 @@ class FieldMesh:
         """
 
         if key in self.components:
-            key = _alias_of_record_name(key)
+            key = deprecated_field_record_names(key)
         if key in component_from_alias:
             comp = component_from_alias[key]
             if comp in self.components:
@@ -1046,16 +1046,17 @@ class FieldMesh:
             warnings.warn(
                 f"FieldMesh[{key!r}] is deprecated; use "
                 f"FieldMesh.components[{key!r}] for the unscaled array, or "
-                f"FieldMesh[{_field_record_alias(key)!r}] for the scaled component.",
+                f"FieldMesh[{field_record_aliases(key)!r}] for the scaled component.",
                 DeprecationWarning,
                 stacklevel=2,
             )
             return self.components[key]
 
         # Check for operators
+        _, base = get_operator(key)
+        if base in self.components:
+            key = deprecated_field_record_names(key)
         operator, key = get_operator(key)
-        if key in self.components:
-            key = _alias_of_record_name(key)
 
         # Scaled components
         if key == "E":
@@ -1077,19 +1078,6 @@ class FieldMesh:
     def __repr__(self):
         memloc = hex(id(self))
         return f"<FieldMesh with {self.geometry} geometry and {self.shape} shape at {memloc}>"
-
-
-def _alias_of_record_name(key: str, stacklevel: int = 3) -> str:
-    alias = _field_record_alias(key)
-    if alias is None:
-        return key
-    warnings.warn(
-        f"Field record name {key!r} as a FieldMesh key is deprecated; "
-        f"use {alias!r} instead.",
-        DeprecationWarning,
-        stacklevel=stacklevel,
-    )
-    return alias
 
 
 def get_operator(key):

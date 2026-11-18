@@ -838,14 +838,25 @@ def test_key_whitespace_units():
         ("electricField", "E"),
         ("electricField/z", "Ez"),
         ("magneticField/theta", "Btheta"),
+        ("mean_electricField/z", "mean_Ez"),
+        ("sigma_magneticField/r", "sigma_Br"),
+        ("cov_electricField/z__x", "cov_Ez__x"),
     ],
 )
 def test_pg_units_field_record_name_deprecated(name: str, alias: str):
-    with pytest.warns(DeprecationWarning, match=repr(alias)):
+    with pytest.warns(DeprecationWarning, match=f"use {alias!r} instead"):
         assert pg_units(name) == pg_units(alias)
 
 
-@pytest.mark.parametrize("key", ["electricField / z", "electricField/t"])
+def test_texlabel_field_record_name_deprecated():
+    with pytest.warns(DeprecationWarning, match="use 'Ez' instead"):
+        assert texlabel("electricField/z") == texlabel("Ez")
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["electricField / z", "electricField/ z", "electricField/t", "electricField/zz"],
+)
 def test_pg_units_field_record_name_invalid(key: str):
     with pytest.raises(ValueError):
         pg_units(key)

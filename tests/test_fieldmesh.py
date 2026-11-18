@@ -102,14 +102,35 @@ def test_duplicate_component_alias_rejected(component_keys):
         load_field_data_dict(data, verbose=False)
 
 
-def test_record_name_key_deprecated(fm_dipole_corrector):
-    FM = fm_dipole_corrector
+@pytest.fixture
+def fm_onaxis():
+    from beamphysics import FieldMesh
+
+    FM = FieldMesh.from_onaxis(z=np.arange(3.0), Bz=np.array([-2.0, 0.0, 1.0]))
+    FM.scale = 2.0
+    return FM
+
+
+def test_record_name_key_deprecated(fm_onaxis):
+    FM = fm_onaxis
     with pytest.warns(DeprecationWarning, match=r"components\['magneticField/z'\]"):
         assert FM["magneticField/z"] is FM.components["magneticField/z"]
-    with pytest.warns(DeprecationWarning, match="'Bz'"):
-        np.testing.assert_array_equal(FM["abs_magneticField/z"], FM["abs_Bz"])
-    with pytest.warns(DeprecationWarning, match="'Bz'"):
-        assert FM.units("magneticField/z") == FM.units("Bz")
+
+
+@pytest.mark.parametrize(
+    ("key", "replacement"),
+    [
+        ("abs_magneticField/z", "abs_Bz"),
+        ("re_magneticField/z", "re_Bz"),
+        ("im_magneticField/z", "im_Bz"),
+    ],
+)
+def test_prefixed_record_name_key_deprecated(fm_onaxis, key, replacement):
+    FM = fm_onaxis
+    with pytest.warns(DeprecationWarning, match=f"use '{replacement}' instead"):
+        np.testing.assert_array_equal(FM[key], FM[replacement])
+    with pytest.warns(DeprecationWarning, match=f"use '{replacement}' instead"):
+        assert FM.units(key) == FM.units(replacement)
 
 
 def test_alias_keys_not_deprecated(fm_dipole_corrector, recwarn):
@@ -135,9 +156,9 @@ def test_absent_record_name_key_raises(fm_dipole_corrector, key):
         fm_dipole_corrector[key]
 
 
-def test_scaled_component_record_name_deprecated(fm_dipole_corrector):
-    FM = fm_dipole_corrector
-    with pytest.warns(DeprecationWarning, match="'Bz'") as record:
+def test_scaled_component_record_name_deprecated(fm_onaxis):
+    FM = fm_onaxis
+    with pytest.warns(DeprecationWarning, match="use 'Bz' instead") as record:
         np.testing.assert_array_equal(
             FM.scaled_component("magneticField/z"), FM.scaled_component("Bz")
         )

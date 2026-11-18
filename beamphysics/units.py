@@ -17,7 +17,12 @@ from typing import Optional, Sequence
 import numpy as np
 import scipy.constants
 
-from .statistics import StatisticKey, StatisticOperator
+from .statistics import (
+    KeyExpression,
+    StatisticKey,
+    StatisticOperator,
+    normalize_key,
+)
 
 mec2 = scipy.constants.value("electron mass energy equivalent in MeV") * 1e6
 mpc2 = scipy.constants.value("proton mass energy equivalent in MeV") * 1e6
@@ -1470,7 +1475,7 @@ for k in [
     "charge_state",
 ]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("1")
-for k in ["t", "z/c"]:
+for k in ["t"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("s")
 for k in [
     "energy",
@@ -1483,7 +1488,7 @@ for k in [
     PARTICLEGROUP_UNITS[k] = pmd_unit("eV")
 for k in ["px", "py", "pz", "p", "pr", "ptheta", "p0", "dp"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("eV/c")
-for k in ["px_over_p0", "py_over_p0", "dp_over_p0", "px/p0", "py/p0", "dp/p0"]:
+for k in ["px_over_p0", "py_over_p0", "dp_over_p0"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("1")
 for k in ["x", "y", "z", "r", "s", "Jx", "Jy"]:
     PARTICLEGROUP_UNITS[k] = pmd_unit("m")
@@ -1529,10 +1534,100 @@ for plane in ("x", "y"):
 
 def pg_units(key: str) -> pmd_unit:
     """
-    Returns a str representing the units of any attribute
-    """
+    Units of a `ParticleGroup` key.
 
-    # Basic cases
+    Units of arithmetic keys, such as `x*px/p0`, combine the units of their
+    operands. Numbers are dimensionless and `c` is in m/s, so `z/c` is in s.
+
+    Parameters
+    ----------
+    key : str
+        Any `ParticleGroup` key, or a field component such as `Ex`.
+
+    Returns
+    -------
+    pmd_unit
+
+    Raises
+    ------
+    ValueError
+        If the key has no known unit.
+
+    Warns
+    -----
+    DeprecationWarning
+        For openPMD field record names such as `electricField/x`. Use the
+        component alias, such as `Ex`, instead.
+    """
+    return _pg_units(deprecated_field_record_names(key))
+
+
+# A field record name not followed by more of a name. A bare record name must
+# not be followed by `/`, so `electricField/t` is not `electricField`.
+_FIELD_RECORD_NAME = re.compile(
+    r"(?<![A-Za-z0-9])(electric|magnetic)Field"
+    r"(?:/(x|y|z|r|theta)(?![A-Za-z0-9])|(?![A-Za-z0-9]|\s*/))"
+)
+
+
+def field_record_aliases(key: str) -> str:
+    """
+    Replace openPMD field record names in a key with their aliases.
+
+    Parameters
+    ----------
+    key : str
+        A key, such as `abs_electricField/z`.
+
+    Returns
+    -------
+    str
+        The key with aliases, such as `abs_Ez`.
+
+    Examples
+    --------
+    >>> field_record_aliases("mean_magneticField/theta")
+    'mean_Btheta'
+    """
+    return _FIELD_RECORD_NAME.sub(
+        lambda match: ("E" if match[1] == "electric" else "B") + (match[2] or ""),
+        key,
+    )
+
+
+def deprecated_field_record_names(key: str, stacklevel: int = 2) -> str:
+    """
+    `field_record_aliases`, warning if the key changes.
+
+    Parameters
+    ----------
+    key : str
+        A key, such as `abs_electricField/z`.
+    stacklevel : int, default=2
+        Stack level of the warning, relative to the caller.
+
+    Returns
+    -------
+    str
+
+    Warns
+    -----
+    DeprecationWarning
+        If `key` contains a field record name.
+    """
+    replaced = field_record_aliases(key)
+    if replaced != key:
+        warnings.warn(
+            f"Field record names as keys are deprecated; use {replaced.strip()!r} "
+            f"instead of {key.strip()!r}.",
+            DeprecationWarning,
+            stacklevel=stacklevel + 1,
+        )
+    return replaced
+
+
+def _pg_units(key: str) -> pmd_unit:
+    key = normalize_key(key)
     if key in PARTICLEGROUP_UNITS:
         return PARTICLEGROUP_UNITS[key]
 
@@ -1540,14 +1635,23 @@ def pg_units(key: str) -> pmd_unit:
     if split is not None:
         op, names = split
         if op is StatisticOperator.COV:
-            return PARTICLEGROUP_UNITS[names[0]] * PARTICLEGROUP_UNITS[names[1]]
-        return pg_units(names[0])
+            return _pg_units(names[0]) * _pg_units(names[1])
+        return _pg_units(names[0])
 
-    # Fields
-    if key.startswith("electricField"):
-        return pmd_unit("V/m")
-    if key.startswith("magneticField"):
-        return pmd_unit("T")
+    expression = KeyExpression.from_string(key)
+    if expression is not None:
+
+        def operand_unit(name: str) -> pmd_unit:
+            return pmd_unit("m/s") if name == "c" else _pg_units(name)
+
+        # Numbers scale values, not units: `2*xp` stays in rad
+        if len(expression.numerator) == 1 and not expression.denominator:
+            return operand_unit(expression.numerator[0])
+        unit = expression.combine(operand_unit, pmd_unit("1"))
+        if is_identity(unit):
+            return pmd_unit("1")
+        return unit.simplify()
+
     if key.startswith("bunching_phase"):
         return pmd_unit("rad")
     if key.startswith("bunching"):

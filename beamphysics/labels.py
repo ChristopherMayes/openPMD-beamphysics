@@ -1,6 +1,12 @@
 import re
 
-from .units import nice_array, parse_bunching_str, pmd_unit
+from .statistics import KeyExpression, normalize_key
+from .units import (
+    deprecated_field_record_names,
+    nice_array,
+    parse_bunching_str,
+    pmd_unit,
+)
 
 TEXLABEL = {
     # 'status'
@@ -37,9 +43,7 @@ TEXLABEL = {
     "p0": "p_0",
     "dp": "p - p_0",
     "px_over_p0": "p_x/p_0",
-    "px/p0": "p_x/p_0",
     "py_over_p0": "p_y/p_0",
-    "py/p0": "p_y/p_0",
     "dp_over_p0": r"\delta",
     "dp/p0": r"\delta",
     "spin_x": "S_x",
@@ -117,8 +121,11 @@ def texlabel(key: str):
             https://matplotlib.org/stable/tutorials/text/mathtext.html
 
     """
+    return _texlabel(deprecated_field_record_names(key))
 
-    # Basic cases
+
+def _texlabel(key: str) -> str:
+    key = normalize_key(key)
     if key in TEXLABEL:
         return TEXLABEL[key]
 
@@ -126,7 +133,7 @@ def texlabel(key: str):
     for prefix in ("sigma_", "mean_", "min_", "max_", "ptp_", "delta_", "abs_"):
         if key.startswith(prefix):
             key0 = key.removeprefix(prefix)
-            tex0 = texlabel(key0)
+            tex0 = _texlabel(key0)
             prefix = prefix.removesuffix("_")
 
             if prefix == "abs":
@@ -144,9 +151,13 @@ def texlabel(key: str):
 
     if key.startswith("cov_"):
         subkeys = key.removeprefix("cov_").split("__")
-        tex0 = texlabel(subkeys[0])
-        tex1 = texlabel(subkeys[1])
+        tex0 = _texlabel(subkeys[0])
+        tex1 = _texlabel(subkeys[1])
         return rf"\left<{tex0}, {tex1}\right>"
+
+    expression = KeyExpression.from_string(key)
+    if expression is not None:
+        return _expression_tex(expression)
 
     if key.startswith("bunching"):
         wavelength = parse_bunching_str(key)
@@ -154,6 +165,53 @@ def texlabel(key: str):
         return rf"\mathrm{{bunching~at}}~{x:.1f}~\mathrm{{ {prefix}m }}"
 
     return rf"\mathrm{{ {key} }}"
+
+
+def _group(tex: str) -> str:
+    """Parenthesize a label that is not a single factor, such as `p - p_0`."""
+    depth = 0
+    for token in re.findall(r"\\left|\\right|[{} /-]", tex):
+        if token in ("{", r"\left"):
+            depth += 1
+        elif token in ("}", r"\right"):
+            depth -= 1
+        elif depth == 0:
+            return f"({tex})"
+    return tex
+
+
+def _number_tex(x: float) -> str:
+    mantissa, _, exponent = repr(x).partition("e")
+    mantissa = mantissa.removesuffix(".0")
+    if not exponent:
+        return mantissa
+    power = f"10^{{{int(exponent)}}}"
+    if mantissa in ("1", "-1"):
+        return mantissa.removesuffix("1") + power
+    return rf"{mantissa} \times {power}"
+
+
+def _expression_tex(expression: KeyExpression) -> str:
+    r"""
+    TeX fragment for an arithmetic key, as a single quotient: `x/y*z` is
+    $x\,z/y$.
+    """
+    numerator, denominator = (
+        [_group("c" if name == "c" else _texlabel(name)) for name in names]
+        for names in (expression.numerator, expression.denominator)
+    )
+    if expression.scale == -1 and numerator:
+        numerator[0] = "-" + numerator[0]
+    elif expression.scale != 1 or not numerator:
+        numerator.insert(0, _number_tex(expression.scale))
+    if expression.divisor != 1:
+        denominator.insert(0, _group(_number_tex(expression.divisor)))
+    tex = r"\,".join(numerator)
+    if len(denominator) > 1:
+        tex += "/(" + r"\,".join(denominator) + ")"
+    elif denominator:
+        tex += "/" + denominator[0]
+    return tex
 
 
 def _units_str_to_tex(units: str) -> str:

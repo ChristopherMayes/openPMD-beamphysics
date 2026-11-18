@@ -100,3 +100,66 @@ def test_duplicate_component_alias_rejected(component_keys):
     }
     with pytest.raises(ValueError, match="Duplicate component"):
         load_field_data_dict(data, verbose=False)
+
+
+@pytest.fixture
+def fm_onaxis():
+    from beamphysics import FieldMesh
+
+    FM = FieldMesh.from_onaxis(z=np.arange(3.0), Bz=np.array([-2.0, 0.0, 1.0]))
+    FM.scale = 2.0
+    return FM
+
+
+def test_record_name_key_deprecated(fm_onaxis):
+    FM = fm_onaxis
+    with pytest.warns(DeprecationWarning, match=r"components\['magneticField/z'\]"):
+        assert FM["magneticField/z"] is FM.components["magneticField/z"]
+
+
+@pytest.mark.parametrize(
+    ("key", "replacement"),
+    [
+        ("abs_magneticField/z", "abs_Bz"),
+        ("re_magneticField/z", "re_Bz"),
+        ("im_magneticField/z", "im_Bz"),
+    ],
+)
+def test_prefixed_record_name_key_deprecated(fm_onaxis, key, replacement):
+    FM = fm_onaxis
+    with pytest.warns(DeprecationWarning, match=f"use '{replacement}' instead"):
+        np.testing.assert_array_equal(FM[key], FM[replacement])
+    with pytest.warns(DeprecationWarning, match=f"use '{replacement}' instead"):
+        assert FM.units(key) == FM.units(replacement)
+
+
+def test_alias_keys_not_deprecated(fm_dipole_corrector, recwarn):
+    FM = fm_dipole_corrector
+    FM["Bz"]
+    FM.units("abs_Bz")
+    assert FM.is_pure_magnetic
+    assert not FM.is_pure_electric
+    assert not [w for w in recwarn if w.category is DeprecationWarning]
+
+
+def test_write_does_not_warn(fm_dipole_corrector, tmp_path, recwarn):
+    fm_dipole_corrector.write(str(tmp_path / "fm.h5"))
+    assert not [w for w in recwarn if w.category is DeprecationWarning]
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["magneticField/r", "electricField/z", "abs_electricField/z", "electricField"],
+)
+def test_absent_record_name_key_raises(fm_dipole_corrector, key):
+    with pytest.raises(ValueError):
+        fm_dipole_corrector[key]
+
+
+def test_scaled_component_record_name_deprecated(fm_onaxis):
+    FM = fm_onaxis
+    with pytest.warns(DeprecationWarning, match="use 'Bz' instead") as record:
+        np.testing.assert_array_equal(
+            FM.scaled_component("magneticField/z"), FM.scaled_component("Bz")
+        )
+    assert record[0].filename == __file__

@@ -10,7 +10,12 @@ from beamphysics.standards.statistics import (
     get_all_statistics_by_key,
     scalar_statistic_keys,
 )
-from beamphysics.statistics import StatisticKey, StatisticOperator, TwissParameter
+from beamphysics.statistics import (
+    KeyExpression,
+    StatisticKey,
+    StatisticOperator,
+    TwissParameter,
+)
 
 H5FILE = "docs/examples/data/bmad_particles.h5"
 EXTRA_KEYS = [
@@ -297,3 +302,64 @@ def test_statistics_cov_subset(
     stats = particle_group.statistics(*keys)
     for key in keys:
         assert np.isclose(stats[key], particle_group[key])
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("x", None),
+        ("sigma_x", None),
+        ("z/c", KeyExpression(numerator=("z",), denominator=("c",))),
+        (
+            "-1*z/c",
+            KeyExpression(scale=-1.0, numerator=("z",), denominator=("c",)),
+        ),
+        ("x * 2.5e-3", KeyExpression(scale=2.5e-3, numerator=("x",))),
+        ("2*x/4", KeyExpression(scale=2.0, divisor=4.0, numerator=("x",))),
+        ("x/y*z", KeyExpression(numerator=("x", "z"), denominator=("y",))),
+        ("x/sigma_x", KeyExpression(numerator=("x",), denominator=("sigma_x",))),
+    ],
+)
+def test_key_expression_from_string(key: str, expected: KeyExpression | None) -> None:
+    assert KeyExpression.from_string(key) == expected
+
+
+@pytest.mark.parametrize(
+    "key", ["x*", "/x", "x**2", "x//y", "x*/y", "*", "/", "x*1e999", "x*nan", "x/inf"]
+)
+def test_key_expression_malformed(key: str) -> None:
+    with pytest.raises(ValueError):
+        KeyExpression.from_string(key)
+
+
+EXPRESSION_KEYS = [
+    "mean_x*px",
+    "sigma_z/c",
+    "sigma_-1*x",
+    "delta_x*2",
+    "cov_x/c__px",
+    "cov_x__-1*px",
+]
+
+
+def test_particle_statistics_expressions(particle_group: ParticleGroup) -> None:
+    stats = particle_group.statistics(*EXPRESSION_KEYS)
+    expected = per_key_statistics(particle_group, EXPRESSION_KEYS)
+    assert stats.keys() == expected.keys() == set(EXPRESSION_KEYS)
+    for key in EXPRESSION_KEYS:
+        np.testing.assert_allclose(stats[key], expected[key], rtol=1e-12)
+
+
+@pytest.mark.parametrize(
+    ("key", "equivalent"),
+    [
+        ("mean_x*px", lambda P: P.avg("x*px")),
+        ("sigma_-1*x", lambda P: P["sigma_x"]),
+        ("mean_-1*x", lambda P: -P["mean_x"]),
+        ("cov_x/c__px", lambda P: P["cov_x__px"] / 299792458),
+    ],
+)
+def test_statistic_prefix_applies_to_expression(
+    particle_group: ParticleGroup, key: str, equivalent
+) -> None:
+    np.testing.assert_allclose(particle_group[key], equivalent(particle_group))

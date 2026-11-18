@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import math
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from enum import Enum
-from typing import NamedTuple
+from functools import reduce
+from typing import Any, NamedTuple
 
 import numpy as np
 from scipy import stats as scipy_stats
@@ -805,3 +809,171 @@ class StatisticKey(NamedTuple):
             if names is not None:
                 return cls(op, names)
         return None
+
+
+def normalize_key(key: str) -> str:
+    """
+    Remove whitespace at the ends of a key and around `*` and `/`.
+
+    Parameters
+    ----------
+    key : str
+        A key, e.g. `" x * px / p0 "`.
+
+    Returns
+    -------
+    str
+
+    Examples
+    --------
+    >>> normalize_key(" x * px / p0 ")
+    'x*px/p0'
+    """
+    factors = [op + part.strip() for op, part in _factors(key)]
+    return "".join(factors).removeprefix("*")
+
+
+def _factors(key: str) -> Iterator[tuple[str, str]]:
+    """
+    Yield each operand of an arithmetic key with the operator before it.
+
+    The first operand has `*`.
+
+    Examples
+    --------
+    >>> list(_factors("x*px/p0"))
+    [('*', 'x'), ('*', 'px'), ('/', 'p0')]
+    """
+    op = "*"
+    start = 0
+    for index, char in enumerate(key):
+        if char in "*/":
+            yield op, key[start:index]
+            op = char
+            start = index + 1
+    yield op, key[start:]
+
+
+@dataclass(frozen=True)
+class KeyExpression:
+    """
+    An arithmetic key in the form `scale * numerator / (divisor * denominator)`.
+
+    Keys may be products and quotients of other keys, the speed of light `c`
+    and finite numbers. Factors after `*` go in the numerator and factors
+    after `/` in the denominator, so `px/p0*x` and `px*x/p0` are both
+    $(p_x x)/p_0$, and `x/y/z` is $x/(y z)$. Parentheses, addition,
+    subtraction and powers are not supported.
+
+    Statistic prefixes apply to the rest of the key, so `sigma_x/mean_x` is
+    the standard deviation of `x/mean_x`, and are not handled here.
+
+    Attributes
+    ----------
+    scale : float
+        Product of the numbers that multiply.
+    divisor : float
+        Product of the numbers that divide.
+    numerator : tuple of str
+        Keys that multiply. `c` is the speed of light.
+    denominator : tuple of str
+        Keys that divide.
+    """
+
+    scale: float = 1.0
+    divisor: float = 1.0
+    numerator: tuple[str, ...] = ()
+    denominator: tuple[str, ...] = ()
+
+    @classmethod
+    def from_string(cls, key: str) -> KeyExpression | None:
+        """
+        Parse an arithmetic key.
+
+        Parameters
+        ----------
+        key : str
+            A key, e.g. `x*px/p0`.
+
+        Returns
+        -------
+        KeyExpression or None
+            None if `key` contains no `*` or `/`.
+
+        Raises
+        ------
+        ValueError
+            If an operand is empty, as in `x*` or `x**2`, or a number is not
+            finite.
+
+        Examples
+        --------
+        >>> KeyExpression.from_string("-1*z/c")
+        KeyExpression(scale=-1.0, divisor=1.0, numerator=('z',), denominator=('c',))
+        """
+        key = normalize_key(key)
+        factors = list(_factors(key))
+        if len(factors) == 1:
+            return None
+        numbers = {"*": 1.0, "/": 1.0}
+        names: dict[str, list[str]] = {"*": [], "/": []}
+        for op, part in factors:
+            if not part:
+                raise ValueError(f"Empty operand in key expression: {key!r}")
+            try:
+                number = float(part)
+            except ValueError:
+                names[op].append(part)
+                continue
+            if not math.isfinite(number):
+                raise ValueError(f"Number is not finite in key expression: {key!r}")
+            numbers[op] *= number
+        return cls(
+            scale=numbers["*"],
+            divisor=numbers["/"],
+            numerator=tuple(names["*"]),
+            denominator=tuple(names["/"]),
+        )
+
+    def combine(self, resolve: Callable[[str], Any], one: Any) -> Any:
+        """
+        Product of the numerator keys divided by the product of the
+        denominator keys, without `scale` and `divisor`.
+
+        Parameters
+        ----------
+        resolve : callable
+            Maps each key to an object that supports `*` and `/`, such as
+            its unit.
+        one
+            Result for an empty numerator.
+        """
+        return _quotient(
+            [resolve(name) for name in self.numerator],
+            [resolve(name) for name in self.denominator],
+            one,
+        )
+
+    def value(self, resolve: Callable[[str], Any]) -> Any:
+        """
+        Value of the expression, including `scale` and `divisor`.
+
+        Parameters
+        ----------
+        resolve : callable
+            Maps each key to its value.
+        """
+        numerator = [resolve(name) for name in self.numerator]
+        denominator = [resolve(name) for name in self.denominator]
+        if self.scale != 1 or not numerator:
+            numerator.insert(0, self.scale)
+        if self.divisor != 1:
+            denominator.insert(0, self.divisor)
+        return _quotient(numerator, denominator, 1.0)
+
+
+def _quotient(numerator: list, denominator: list, one: Any) -> Any:
+    result = reduce(np.multiply, numerator) if numerator else one
+    if denominator:
+        result = np.true_divide(result, reduce(np.multiply, denominator))
+    return result

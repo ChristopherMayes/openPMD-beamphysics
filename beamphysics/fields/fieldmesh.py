@@ -1,4 +1,5 @@
 import os
+import warnings
 from copy import deepcopy
 
 import numpy as np
@@ -41,7 +42,7 @@ from ..readers import (
     is_legacy_fortran_data_ordering,
     load_field_attrs,
 )
-from ..units import pg_units
+from ..units import deprecated_field_record_names, field_record_aliases, pg_units
 from ..writers import pmd_field_init, write_pmd_field
 from .conversion import (
     fieldmesh_rectangular_to_cylindrically_symmetric_data,
@@ -396,7 +397,7 @@ class FieldMesh:
         """
         Returns True if there are no non-zero mageneticField components
         """
-        klist = [key for key in self.components if not self.component_is_zero(key)]
+        klist = [key for key in self.components if np.any(self.components[key])]
         return all([key.startswith("electric") for key in klist])
 
     # Logicals
@@ -405,7 +406,7 @@ class FieldMesh:
         """
         Returns True if there are no non-zero electricField components
         """
-        klist = [key for key in self.components if not self.component_is_zero(key)]
+        klist = [key for key in self.components if np.any(self.components[key])]
         return all([key.startswith("magnetic") for key in klist])
 
     @property
@@ -426,9 +427,8 @@ class FieldMesh:
         Parameters
         ----------
         key : str
-            The key representing the field data to interpolate. Examples include:
-            - 'Ez' for scaled/phased data
-            - 'magneticField/y' for raw component data
+            The key representing the field data to interpolate, such as `Ez`
+            or `abs_By`. Components are scaled and phased.
 
         Returns
         -------
@@ -580,15 +580,25 @@ class FieldMesh:
             raise ValueError(f"Unsupported geometry for plot_onaxis: {self.geometry}")
 
     def units(self, key):
-        """Returns the units of any key"""
+        """
+        Units of a key.
 
-        # Strip any operators
-        _, key = get_operator(key)
+        Parameters
+        ----------
+        key : str
+            A coordinate or field component, such as `z` or `abs_Ez`.
 
-        # Fill out aliases
-        if key in component_from_alias:
-            key = component_from_alias[key]
+        Returns
+        -------
+        pmd_unit
 
+        Warns
+        -----
+        DeprecationWarning
+            For openPMD field record names such as `electricField/z`. Use the
+            component alias, such as `Ez`, instead.
+        """
+        _, key = get_operator(deprecated_field_record_names(key))
         return pg_units(key)
 
     # openPMD
@@ -925,9 +935,8 @@ class FieldMesh:
         """
 
         if key in self.components:
-            dat = self.components[key]
-        # Aliases
-        elif key in component_from_alias:
+            key = deprecated_field_record_names(key)
+        if key in component_from_alias:
             comp = component_from_alias[key]
             if comp in self.components:
                 dat = self.components[comp]
@@ -1023,8 +1032,9 @@ class FieldMesh:
 
         the appropriate numpy operator is applied.
 
-
-
+        openPMD field record names, such as `electricField/z`, are
+        deprecated. Use `components["electricField/z"]` for the unscaled
+        array, or the alias, such as `Ez`, for the scaled component.
         """
 
         #
@@ -1033,9 +1043,19 @@ class FieldMesh:
 
         # Raw components
         if key in self.components:
+            warnings.warn(
+                f"FieldMesh[{key!r}] is deprecated; use "
+                f"FieldMesh.components[{key!r}] for the unscaled array, or "
+                f"FieldMesh[{field_record_aliases(key)!r}] for the scaled component.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             return self.components[key]
 
         # Check for operators
+        _, base = get_operator(key)
+        if base in self.components:
+            key = deprecated_field_record_names(key)
         operator, key = get_operator(key)
 
         # Scaled components

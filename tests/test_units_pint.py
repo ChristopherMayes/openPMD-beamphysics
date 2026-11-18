@@ -279,11 +279,8 @@ _PG_EXPECTED_GROUPS = {
         "px_over_p0",
         "py_over_p0",
         "dp_over_p0",
-        "px/p0",
-        "py/p0",
-        "dp/p0",
     ],
-    "s": ["t", "z/c"],
+    "s": ["t"],
     "hbar": ["spin_x", "spin_y", "spin_z"],
     "J": [
         "energy",
@@ -356,10 +353,20 @@ def test_pg_units_dimension_matches_pint(key: str, ureg) -> None:
         # Covariance multiplies the two sub-key dimensions.
         ("cov_x__px", "m*kg*m/s"),
         ("cov_t__t", "s**2"),
-        # startswith-based field keys.
-        ("electricField", "V/m"),
-        ("magneticField", "T"),
+        # Field components.
+        ("E", "V/m"),
+        ("B", "T"),
         ("bunching_5", "dimensionless"),
+        ("Ex", "V/m"),
+        ("Btheta", "T"),
+        # Arithmetic keys combine the units of their operands.
+        ("z/c", "s"),
+        ("px/p0", "dimensionless"),
+        ("x*px/p0", "m"),
+        ("-1e-3*x/c", "s"),
+        ("p0c/c", "kg*m/s"),
+        ("x/sigma_x", "dimensionless"),
+        ("cov_x/c__px", "s*kg*m/s"),
     ],
 )
 def test_pg_units_derived_keys_match_pint(key: str, expected: str, ureg) -> None:

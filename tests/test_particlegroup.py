@@ -1,5 +1,6 @@
 import os
 import pathlib
+import re
 
 import h5py
 import matplotlib.pyplot as plt
@@ -9,6 +10,7 @@ import scipy.constants
 
 from beamphysics import LocationInElement, ParticleGroup, pmd_init
 from beamphysics.exceptions import MultipleIterationsError, NotOpenPMDError
+from beamphysics.labels import texlabel
 from beamphysics.particles import INT_ARRAY_KEYS, load_bunch_data, single_particle
 from beamphysics.readers import (
     OPTIONAL_PARTICLE_KEYS,
@@ -20,6 +22,7 @@ from beamphysics.readers import (
     load_time_offset,
     particle_array,
 )
+from beamphysics.units import pg_units
 
 # File with no species subgroup
 LEGACY_H5FILE = "docs/examples/data/bmad_particles.h5"
@@ -787,8 +790,149 @@ def test_p0c_derived_keys_require_p0c(simple_pg: ParticleGroup, key: str):
 
 
 @pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("z/c", lambda P: P.z / scipy.constants.c),
+        ("-1*z/c", lambda P: -P.z / scipy.constants.c),
+        ("x*px/p0", lambda P: P.x * P.px / P.p0),
+        ("x/y*z", lambda P: (P.x / P.y) * P.z),
+        ("x/y/z", lambda P: P.x / P.y / P.z),
+        ("2*x/4", lambda P: P.x / 2),
+        ("x/0.5", lambda P: 2 * P.x),
+        ("x * 1e3", lambda P: P.x * 1000),
+        ("x/sigma_x", lambda P: P.x / P.std("x")),
+        ("2*3", lambda P: 6),
+    ],
+)
+def test_key_expression_values(optional_pg: ParticleGroup, key: str, expected):
+    x = optional_pg.x.copy()
+    np.testing.assert_allclose(optional_pg[key], expected(optional_pg))
+    np.testing.assert_array_equal(optional_pg.x, x)
+
+
+@pytest.mark.parametrize(
+    ("spaced", "key"),
+    [
+        (" mean_x*px ", "mean_x*px"),
+        (" x * px ", "x*px"),
+        (" sigma_x ", "sigma_x"),
+        ("x / sigma_x", "x/sigma_x"),
+        ("-1 * z\t/ c", "-1*z/c"),
+    ],
+)
+def test_key_whitespace(simple_pg: ParticleGroup, spaced: str, key: str):
+    np.testing.assert_array_equal(simple_pg[spaced], simple_pg[key])
+    assert simple_pg.units(spaced) == simple_pg.units(key)
+    assert texlabel(spaced) == texlabel(key)
+    np.testing.assert_array_equal(
+        simple_pg.statistics(spaced)[spaced], simple_pg.statistics(key)[key]
+    )
+
+
+def test_key_whitespace_units():
+    assert pg_units("x / z") == pg_units("x/z")
+
+
+@pytest.mark.parametrize(
+    ("name", "alias"),
+    [
+        ("electricField", "E"),
+        ("electricField/z", "Ez"),
+        ("magneticField/theta", "Btheta"),
+        ("mean_electricField/z", "mean_Ez"),
+        ("sigma_magneticField/r", "sigma_Br"),
+        ("cov_electricField/z__x", "cov_Ez__x"),
+    ],
+)
+def test_pg_units_field_record_name_deprecated(name: str, alias: str):
+    with pytest.warns(DeprecationWarning, match=f"use {alias!r} instead"):
+        assert pg_units(name) == pg_units(alias)
+
+
+@pytest.mark.parametrize(
+    ("name", "alias"),
+    [
+        ("electricField/z", "Ez"),
+        ("mean_electricField/z", "mean_Ez"),
+        ("cov_electricField/z__x", "cov_Ez__x"),
+        ("2*magneticField/r", "2*Br"),
+    ],
+)
+def test_texlabel_field_record_name_deprecated(name: str, alias: str):
+    with pytest.warns(
+        DeprecationWarning, match=re.escape(f"use {alias!r} instead")
+    ) as record:
+        assert texlabel(name) == texlabel(alias)
+    assert len(record) == 1
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "electricField / z",
+        "mean_electricField / z",
+        "2*electricField / z",
+        "electricField/t",
+    ],
+)
+def test_texlabel_not_field_record_name(key: str, recwarn):
+    assert "E_z" not in texlabel(key)
+    assert not [w for w in recwarn if w.category is DeprecationWarning]
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["electricField / z", "electricField/ z", "electricField/t", "electricField/zz"],
+)
+def test_pg_units_field_record_name_invalid(key: str):
+    with pytest.raises(ValueError):
+        pg_units(key)
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("1/0", np.inf),
+        ("-1/0", -np.inf),
+        ("0/0", np.nan),
+        ("weight/0", np.inf),
+    ],
+)
+def test_key_expression_division_by_zero(
+    simple_pg: ParticleGroup, key: str, expected: float
+):
+    with pytest.warns(RuntimeWarning):
+        result = simple_pg[key]
+    np.testing.assert_array_equal(result, np.full_like(result, expected))
+
+
+@pytest.mark.parametrize(
+    ("key", "error"),
+    [
+        ("x*", ValueError),
+        ("x**2", ValueError),
+        ("species*2", TypeError),
+        ("x*bogus", AttributeError),
+        ("-x*2", AttributeError),
+    ],
+)
+def test_key_expression_errors(simple_pg: ParticleGroup, key: str, error):
+    with pytest.raises(error):
+        simple_pg[key]
+
+
+@pytest.mark.parametrize(
     ("key", "unit"),
     [
+        ("z/c", "s"),
+        ("x/sigma_x", "1"),
+        ("x*px", "m*eV/c"),
+        ("1000*x", "m"),
+        ("-1*xp", "rad"),
+        ("xp/2", "rad"),
+        ("2*norm_emit_4d", "m^2"),
+        ("xp/sigma_xp", "1"),
+        ("px/x/t", "eV/c/(m*s)"),
         ("p0c", "eV"),
         ("p0", "eV/c"),
         ("dp", "eV/c"),

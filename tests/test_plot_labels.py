@@ -7,7 +7,7 @@ matplotlib.use("Agg")
 import pytest
 
 from beamphysics import single_particle
-from beamphysics.labels import mathlabel
+from beamphysics.labels import mathlabel, texlabel
 from beamphysics.plot import (
     _charge_density_units_str,
     marginal_plot,
@@ -156,5 +156,53 @@ def test_dimensionless_plot_labels_use_powers_of_ten() -> None:
     fig = marginal_plot(P, "x", "dp/p0")
     assert fig.axes[0].get_ylabel() == r"$\delta~(10^{-6})$"
     assert fig.axes[2].get_xlabel() == r"$\mathrm{pC}/(10^{-6})$"
+    fig.canvas.draw()
+    plt.close("all")
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("z/c", "z/c"),
+        ("-1*z/c", "-z/c"),
+        ("x*px/p0", r"x\,p_x/p_0"),
+        ("x/y/z", r"x/(y\,z)"),
+        ("x/y*z", r"x\,z/y"),
+        ("x*-2", r"-2\,x"),
+        ("x*1e-6", r"10^{-6}\,x"),
+        ("x*2e-6", r"2 \times 10^{-6}\,x"),
+        ("x/2e-6", r"x/(2 \times 10^{-6})"),
+        ("x/3", "x/3"),
+        ("x/-2", "x/(-2)"),
+        ("-1*dp", "-(p - p_0)"),
+        ("x/px_over_p0", "x/(p_x/p_0)"),
+        ("1.0000001*x", r"1.0000001\,x"),
+        ("1234567*x", r"1234567\,x"),
+        ("x*1.5e16", r"1.5 \times 10^{16}\,x"),
+        (" mean_x*px ", r"\left<x\,p_x\right>"),
+        ("z/p0c", "z/(p_0 c)"),
+        ("dp*x", r"(p - p_0)\,x"),
+        ("x/sigma_x", r"x/\sigma_{ x }"),
+        ("sigma_-1*x", r"\sigma_{ -x }"),
+        ("px/p0", "p_x/p_0"),
+        ("dp/p0", r"\delta"),
+        ("mean_dp/p0", r"\left<\delta\right>"),
+        ("2*delta_mean_x", r"2\,(\left<x\right> - \left<\left<x\right>\right>)"),
+        ("1/cov_x__px", r"1/\left<x, p_x\right>"),
+    ],
+)
+def test_expression_texlabel(key: str, expected: str) -> None:
+    assert texlabel(key) == expected
+
+
+def test_expression_plot_labels() -> None:
+    import matplotlib.pyplot as plt
+
+    from beamphysics import ParticleGroup
+
+    P = ParticleGroup("docs/examples/data/bmad_particles.h5")
+    fig = marginal_plot(P, "-1*y/c", "x/sigma_x")
+    assert fig.axes[0].get_xlabel() == r"$-y/c~(\mathrm{ps})$"
+    assert fig.axes[0].get_ylabel() == r"$x/\sigma_{ x }~(1)$"
     fig.canvas.draw()
     plt.close("all")

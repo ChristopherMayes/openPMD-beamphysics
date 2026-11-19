@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ..units import c_light
+from ._convolution import _WakefieldConvolution
 
 __all__ = ["SAMPLES_PER_WAVELENGTH", "WakefieldBase"]
 
@@ -29,7 +29,7 @@ SAMPLES_PER_WAVELENGTH = 128
 MIN_SAMPLES = 4
 
 
-class WakefieldBase(ABC):
+class WakefieldBase(_WakefieldConvolution, ABC):
     """
     Abstract base class for longitudinal wakefield models.
 
@@ -53,10 +53,17 @@ class WakefieldBase(ABC):
         Evaluate the wakefield at position z (V/C/m)
     impedance(k)
         Evaluate the impedance at wavenumber k (Ohm/m)
+    integrated_wake(z)
+        Integral of the wake from z up to the source particle (V/C), if the
+        model defines one
+    bin_averaged_wake(dz, n)
+        Bin averages of the wake, as tabulated for tracking codes (V/C/m)
     convolve_density(density, dz, offset=0)
         Compute integrated wake from a charge density distribution (V/m)
     particle_kicks(z, weight, include_self_kick=True)
         Compute momentum kicks for a distribution of particles (eV/m)
+    binned_particle_kicks(z, weight, dz=None, include_self_kick=True)
+        The same through a charge deposit and the bin-averaged wake (eV/m)
     plot(zmax=None, zmin=0, n=200)
         Plot the wakefield over a range of z values
     plot_impedance(kmax=None, kmin=0, n=200)
@@ -108,6 +115,96 @@ class WakefieldBase(ABC):
         This is equivalent to calling wake(z).
         """
         return self.wake(z)
+
+    def integrated_wake(self, z: np.ndarray | float) -> np.ndarray | float:
+        """
+        Integral of the wake from z up to the source particle.
+
+        $$F(z) = \\int_z^0 W(z') \\, dz'$$
+
+        This is the integral of the wake over the distance s = -z behind the
+        source. A delta function at the source, as in `ParametricWakefield`, is
+        counted in full for every z < 0. Models that define this can be tabulated
+        as bin averages, which is the only correct tabulation of a wake that is
+        singular at z = 0.
+
+        Parameters
+        ----------
+        z : float or np.ndarray
+            Longitudinal position (m). Negative z is behind the source.
+
+        Returns
+        -------
+        F : float or np.ndarray
+            Integrated wake (V/C). Returns 0 for z >= 0.
+
+        Raises
+        ------
+        NotImplementedError
+            If the model does not implement `integrated_wake`.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement integrated_wake."
+        )
+
+    def _has_integrated_wake(self) -> bool:
+        """Whether the model overrides `integrated_wake`."""
+        return type(self).integrated_wake is not WakefieldBase.integrated_wake
+
+    @property
+    def is_singular(self) -> bool:
+        """
+        Whether the wake has no finite point value at z = 0.
+
+        A singular wake, such as the diffraction-model or delta-function term of
+        `ParametricWakefield`, cannot be sampled at points. It is tabulated and
+        applied through `bin_averaged_wake` instead.
+        """
+        return False
+
+    def bin_averaged_wake(self, dz: float, n: int) -> np.ndarray:
+        """
+        Bin averages of the wake at n uniform lags, in the convention of tracking codes.
+
+        With F(s) = `integrated_wake(-s)` and s = k dz behind the source,
+
+        $$K_0 = \\frac{F(\\Delta/2)}{\\Delta}, \\qquad
+        K_k = \\frac{F((k + \\tfrac12)\\Delta) - F((k - \\tfrac12)\\Delta)}{\\Delta},
+        \\quad k \\ge 1$$
+
+        where Delta is dz. This is the integrated Green function of Qiang et al.
+        (2006): $K_k$ is the wake at the centre of a bin from a unit charge spread
+        uniformly over the bin k bins ahead, and $K_0$ is the self term from the
+        half of its own bin that lies ahead. Bmad, IMPACT-T, IMPACT-Z and
+        `convolve_density` all halve the first entry of a wake table for the
+        self-kick, so the first entry returned is $2 K_0$. For a smooth wake it
+        agrees with the point sample to second order in dz.
+
+        Parameters
+        ----------
+        dz : float
+            Bin width (m).
+        n : int
+            Number of lags, from k = 0 to k = n - 1.
+
+        Returns
+        -------
+        np.ndarray
+            Array of length n holding $2 K_0, K_1, \\ldots, K_{n-1}$ (V/C/m).
+
+        Raises
+        ------
+        NotImplementedError
+            If the model does not implement `integrated_wake`.
+        """
+        k = np.arange(n)
+        # F(z) = 0 for z >= 0, so the lower edge of the k = 0 bin contributes nothing.
+        F_upper = self.integrated_wake(-(k + 0.5) * dz)
+        F_lower = self.integrated_wake(-(k - 0.5) * dz)
+        K = (np.asarray(F_upper, dtype=float) - np.asarray(F_lower, dtype=float)) / dz
+        K[0] *= 2
+
+        return K
 
     @property
     def default_zmax(self) -> float:
@@ -164,101 +261,28 @@ class WakefieldBase(ABC):
 
         return max(n, MIN_SAMPLES)
 
-    def convolve_density(
-        self,
-        density: np.ndarray,
-        dz: float,
-        offset: float = 0,
-        include_self_kick: bool = True,
-        plot: bool = False,
-        ax=None,
-    ) -> np.ndarray:
-        """
-        Compute integrated wakefield from a charge density distribution.
+    def _wake_kernel(self, dz: float, n: int, offset: float, method: str) -> np.ndarray:
+        """Wake at lags k dz for k = 0 to n - 1, as used by `convolve_density`."""
+        if method == "auto":
+            if offset == 0 and self._has_integrated_wake():
+                method = "bin_average"
+            else:
+                method = "sample"
 
-        This computes the causal wake potential:
-
-        $$V(z_i) = \\sum_{j>i} Q_j \\cdot W(z_j - z_i) + \\frac{1}{2} Q_i \\cdot W(0)$$
-
-        where only particles ahead (larger z index) contribute to the wake
-        felt by each particle. This is mathematically a correlation, not
-        a convolution, and is computed efficiently using FFT.
-
-        Parameters
-        ----------
-        density : np.ndarray
-            Charge density array (C/m). Index 0 is the tail (back),
-            index n-1 is the head (front).
-        dz : float
-            Grid spacing (m).
-        offset : float, optional
-            Offset for the z coordinate (m). Default is 0.
-        include_self_kick : bool, optional
-            Whether to include the half self-kick term. Default is True.
-        plot : bool, optional
-            If True, plot the density profile and wake potential. Default is False.
-        ax : matplotlib.axes.Axes, optional
-            Axes to plot on. If None and plot=True, creates a new figure.
-
-        Returns
-        -------
-        integrated_wake : np.ndarray
-            Integrated longitudinal wakefield (V/m).
-        """
-        from scipy.signal import correlate
-
-        n = len(density)
-        charge = density * dz  # Convert to charge per bin (C)
-
-        # Build causal wake array: W[k] = wake at lag k*dz
-        # W[0] = W(0), W[1] = W(-dz), W[2] = W(-2*dz), ...
-        z_wake = -np.arange(n) * dz + offset
-        W_causal = self.wake(z_wake)
-
-        # Correlation: result[i] = sum_k charge[i+k] * W[k]
-        # This gives the wake from particles ahead (larger indices)
-        corr_result = correlate(charge, W_causal, mode="full")
-
-        # Extract the portion corresponding to non-negative lags
-        # correlate output has length 2*n-1, with zero lag at index n-1
-        integrated_wake = corr_result[n - 1 : 2 * n - 1]
-
-        # Correlation includes full W[0] contribution from self
-        # Remove it, then add half if self-kick is requested
-        W0 = W_causal[0]
-        integrated_wake = integrated_wake - charge * W0
-        if include_self_kick:
-            integrated_wake = integrated_wake + 0.5 * W0 * charge
-
-        if plot:
-            self._plot_convolve_density(density, dz, integrated_wake, ax=ax)
-
-        return integrated_wake
-
-    def _plot_convolve_density(self, density, dz, integrated_wake, ax=None):
-        """Plot density profile and wake potential from convolve_density."""
-        n = len(density)
-        z = np.arange(n) * dz
-        z0 = z[n // 2]  # Assume centered
-
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(10, 5))
-
-        # Wake potential on primary axis
-        ax.plot((z - z0) * 1e6, integrated_wake * 1e-6, "C0")
-        ax.set_xlabel(r"$z - z_0$ (µm)")
-        ax.set_ylabel(r"Wake potential (MV/m)", color="C0")
-        ax.tick_params(axis="y", labelcolor="C0")
-        ax.axhline(0, color="k", lw=0.5)
-        ax.set_title("Wake Potential and Current Profile")
-
-        # Density as current on secondary axis (I = ρ * c)
-        ax2 = ax.twinx()
-        current = density * c_light  # (A)
-        ax2.fill_between((z - z0) * 1e6, current, alpha=0.3, color="C1")
-        ax2.set_ylabel(r"Current (A)", color="C1")
-        ax2.tick_params(axis="y", labelcolor="C1")
-        ax2.set_ylim(0, None)
+        if method == "bin_average":
+            if offset != 0:
+                raise ValueError("method='bin_average' does not support an offset")
+            return self.bin_averaged_wake(dz, n)
+        if method == "sample":
+            if self.is_singular:
+                raise ValueError(
+                    f"{type(self).__name__} is singular at z = 0 and cannot be "
+                    "sampled at points. Use method='bin_average'."
+                )
+            return np.asarray(self.wake(-np.arange(n) * dz + offset), dtype=float)
+        raise ValueError(
+            f"method must be 'auto', 'sample' or 'bin_average', got {method!r}"
+        )
 
     def particle_kicks(
         self,
@@ -269,8 +293,9 @@ class WakefieldBase(ABC):
         """
         Compute wakefield-induced energy kicks per unit length.
 
-        This is a default O(N²) implementation. Subclasses may override
-        with more efficient algorithms.
+        Smooth wakes use a default O(N²) point-to-point sum. Singular wakes use
+        `binned_particle_kicks`; call that method to choose the bin width.
+        Subclasses may override with more efficient algorithms.
 
         Parameters
         ----------
@@ -285,7 +310,13 @@ class WakefieldBase(ABC):
         -------
         kicks : np.ndarray
             Energy kick per unit length at each particle (eV/m).
+
         """
+        if self.is_singular:
+            return self.binned_particle_kicks(
+                z, weight, include_self_kick=include_self_kick
+            )
+
         z = np.asarray(z)
         weight = np.asarray(weight)
         n = len(z)

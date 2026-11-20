@@ -1707,6 +1707,7 @@ class ParticleGroup:
         cathode_kinetic_energy_ref=None,
         include_header=True,
         verbose=False,
+        n_columns=6,
     ):
         """
         Write particle data in Impact-T format.
@@ -1716,12 +1717,21 @@ class ParticleGroup:
         filePath : str or pathlib.Path
             Output file path.
         cathode_kinetic_energy_ref : float, optional
-            Reference kinetic energy at the cathode in eV. If None, the
-            average kinetic energy is used.
+            Reference kinetic energy at the cathode in eV, used to convert t
+            to z for cathode emission. If None, particles must have the same
+            time and are started in free space.
         include_header : bool, optional
             If True, include the Impact-T header line. Default is True.
         verbose : bool, optional
             If True, print information during writing. Default is False.
+        n_columns : int, optional
+            6 for `Flagdist=16`. 9 adds charge/mass, charge per macroparticle
+            and id, for `Flagdist=166`. Default is 6.
+
+        Returns
+        -------
+        dict
+            Settings for the Impact-T header, including `Np` and `Flagdist`.
         """
         from .interfaces.impact import write_impact
 
@@ -1731,6 +1741,7 @@ class ParticleGroup:
             cathode_kinetic_energy_ref=cathode_kinetic_energy_ref,
             include_header=include_header,
             verbose=verbose,
+            n_columns=n_columns,
         )
 
     def write_litrack(self, filePath, p0c=None, verbose=False):

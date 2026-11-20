@@ -6,6 +6,7 @@ import warnings
 from typing import TYPE_CHECKING
 
 import numpy as np
+import scipy.constants
 from numpy import pi
 from scipy import fft
 
@@ -18,38 +19,68 @@ if TYPE_CHECKING:
 
 
 c_light = 299792458.0
+e_charge = scipy.constants.e
 
 
-def parse_impact_particles(
-    filePath, names=("x", "GBx", "y", "GBy", "z", "GBz"), skiprows=0
-):
+IMPACT_PARTICLE_NAMES_6 = ("x", "GBx", "y", "GBy", "z", "GBz")
+IMPACT_PARTICLE_NAMES_9 = (
+    *IMPACT_PARTICLE_NAMES_6,
+    "charge_over_mass_ratio",
+    "charge_per_macroparticle",
+    "id",
+)
+
+
+def parse_impact_particles(filePath, names=IMPACT_PARTICLE_NAMES_6, skiprows=0):
     """
     Parse Impact-T input and output particle data.
-    Typical filenames: 'partcl.data', 'fort.40', 'fort.50'.
 
-    Note that partcl.data has the number of particles in the first line, so skiprows=1 should be used.
+    Typical filenames: `partcl.data`, `fort.40`, `fort.50`.
 
-    Returns a structured numpy array
+    Impact-T particle distributions are ASCII files with columns:
 
-    Impact-T input/output particles distribions are ASCII files with columns:
-    x (m)
-    GBx = gamma*beta_x (dimensionless)
-    y (m)
-    GBy = gamma*beta_y (dimensionless)
-    z (m)
-    GBz = gamma*beta_z (dimensionless)
+    1. x (m)
+    2. GBx = gamma*beta_x (dimensionless)
+    3. y (m)
+    4. GBy = gamma*beta_y (dimensionless)
+    5. z (m)
+    6. GBz = gamma*beta_z (dimensionless)
 
-    Routine from lume-impact:
-        https://github.com/ChristopherMayes/lume-impact
+    Output files (`fort.40`, `fort.50`, ...) and `partcl.data` for
+    `Flagdist=166` have three more columns:
 
+    7. charge number / mass (1/eV)
+    8. signed charge per macroparticle (C)
+    9. id
+
+    Parameters
+    ----------
+    filePath : str or pathlib.Path
+        File to parse.
+    names : tuple of str, optional
+        One field name per column. Use `IMPACT_PARTICLE_NAMES_9` for the
+        9-column files. Default is `IMPACT_PARTICLE_NAMES_6`.
+    skiprows : int, optional
+        Rows to skip. `partcl.data` has the number of particles in the first
+        line, so use `skiprows=1` for it.
+
+    Returns
+    -------
+    np.ndarray
+        Structured array with one float field per name.
     """
 
-    dtype = {"names": names, "formats": 6 * [float]}
+    dtype = {"names": names, "formats": len(names) * [float]}
     pdat = np.loadtxt(
         filePath, skiprows=skiprows, dtype=dtype, ndmin=1
     )  # to make sure that 1 particle is parsed the same as many.
 
     return pdat
+
+
+def _impact_field(tout, name):
+    names = tout.keys() if isinstance(tout, dict) else (tout.dtype.names or ())
+    return np.asarray(tout[name]) if name in names else None
 
 
 def impact_particles_to_particle_data(
@@ -62,19 +93,43 @@ def impact_particles_to_particle_data(
     verbose=False,
 ):
     """
-    Convert impact particles to data for ParticleGroup
-
-    particle_charge is the charge in units of |e|
+    Convert Impact-T particles to data for ParticleGroup.
 
     At the cathode, Impact-T translates z to t = z / (beta*c) for emission,
-    where (beta*c) is the velocity calculated from kinetic energy:
-        header['Bkenergy'] in eV.
-    This is purely a conversion factor.
+    where (beta*c) is the velocity calculated from the kinetic energy
+    `header['Bkenergy']` in eV. This is purely a conversion factor.
 
-    If cathode_kinetic_energy_ref is given, z will be parsed appropriately to t, and z will be set to 0.
+    Parameters
+    ----------
+    tout : np.ndarray or dict
+        Particle data as returned by `parse_impact_particles`.
+    mc2 : float
+        Rest mass in eV.
+    species : str
+        Species name.
+    time : float, optional
+        Time assigned to all particles for a free space start (s).
+    macrocharge : float, optional
+        Charge per macroparticle (C), used as the weight when `tout` has no
+        usable `charge_per_macroparticle` field. If 0, the weight is 1/n.
+    cathode_kinetic_energy_ref : float, optional
+        If given, z is converted to t and z is set to 0.
+    verbose : bool, optional
+        If True, print information. Default is False.
 
-    Otherwise, particles will be set to the same time.
+    Returns
+    -------
+    dict
+        Data for `ParticleGroup(data=...)`.
 
+    Notes
+    -----
+    If `tout` has an `id` field, it is kept when all ids are positive and
+    unique. Impact-T can assign repeated ids when it numbers the particles
+    itself with MPI, in which case the ids are dropped.
+
+    If `tout` has a non-zero `charge_per_macroparticle` field, its absolute
+    value is used as the weight.
     """
 
     # mc2 = SPECIES_MASS[species]
@@ -117,11 +172,23 @@ def impact_particles_to_particle_data(
     data["t"] = t
 
     data["status"] = np.full(n_particle, 1)
-    if macrocharge == 0:
-        weight = 1 / n_particle
+
+    charge_per_macroparticle = _impact_field(tout, "charge_per_macroparticle")
+    if charge_per_macroparticle is not None and np.any(charge_per_macroparticle != 0):
+        data["weight"] = np.abs(charge_per_macroparticle)
+    elif macrocharge == 0:
+        data["weight"] = np.full(n_particle, 1 / n_particle)
     else:
-        weight = abs(macrocharge)
-    data["weight"] = np.full(n_particle, weight)
+        data["weight"] = np.full(n_particle, abs(macrocharge))
+
+    ids = _impact_field(tout, "id")
+    if (
+        ids is not None
+        and np.all(np.isfinite(ids))
+        and np.all(ids >= 1)
+        and len(np.unique(ids)) == len(ids)
+    ):
+        data["id"] = ids.astype(np.int64)
 
     data["species"] = species
     data["n_particle"] = n_particle
@@ -134,27 +201,47 @@ def write_impact(
     cathode_kinetic_energy_ref=None,
     include_header=True,
     verbose=False,
+    n_columns=6,
 ):
     """
-    Writes Impact-T style particles from particle_group type data.
+    Write Impact-T style particles from a ParticleGroup.
 
-    outfile should ultimately be named 'partcl.data' for Impact-T
+    The file should ultimately be named `partcl.data` for Impact-T.
 
-    For now, the species must be electrons.
+    Parameters
+    ----------
+    particle_group : ParticleGroup
+        Particles to write.
+    outfile : str or pathlib.Path
+        Output file path.
+    cathode_kinetic_energy_ref : float, optional
+        If given, t is used to compute z for cathode emission, with this
+        kinetic energy (eV) as the conversion factor. Otherwise, particles
+        must have the same time and are started in free space.
+    include_header : bool, optional
+        If True, write the number of particles as the first line. Default is
+        True.
+    verbose : bool, optional
+        If True, print information during writing. Default is False.
+    n_columns : int, optional
+        6 writes x (m), GBx, y (m), GBy, z (m), GBz, for `Flagdist=16`.
+        9 adds charge number / mass (1/eV), signed charge per macroparticle
+        (C) and id, for `Flagdist=166`. Default is 6.
 
-    If cathode_kinetic_energy_ref is given, t will be used to compute z for cathode emission.
-
-    If include_header, the number of particles will be written as the first line. Default is True.
-
-    Otherwise, particles must have the same time, and should be started in free space.
-
-    A dict is returned with info about emission, for use in Impact-T
-
+    Returns
+    -------
+    dict
+        Settings for the Impact-T header: `Np`, `Flagdist`, `Tini`, and
+        `Bkenergy` and `Temission` (cathode start) or `Flagimg` (free space
+        start), along with `input_particle_file`.
     """
 
     def vprint(*a, **k):
         if verbose:
             print(*a, **k)
+
+    if n_columns not in (6, 9):
+        raise ValueError(f"n_columns must be 6 or 9, got {n_columns}")
 
     n_particle = particle_group.n_particle
 
@@ -165,6 +252,7 @@ def write_impact(
     # Dict output for use in Impact-T
     output = {"input_particle_file": outfile}
     output["Np"] = n_particle
+    output["Flagdist"] = 16 if n_columns == 6 else 166
 
     # Handle z
     if cathode_kinetic_energy_ref:
@@ -232,16 +320,26 @@ def write_impact(
         vprint(f"Normal start with at time {t} s")
 
     # Form data table
-    dat = np.array(
-        [
-            particle_group["x"],
-            particle_group["px"] / mc2,
-            particle_group["y"],
-            particle_group["py"] / mc2,
-            z,
-            gamma_beta_z,
+    columns = [
+        particle_group["x"],
+        particle_group["px"] / mc2,
+        particle_group["y"],
+        particle_group["py"] / mc2,
+        z,
+        gamma_beta_z,
+    ]
+    fmt = 6 * ["%.18e"]
+
+    if n_columns == 9:
+        charge_number = particle_group.species_charge / e_charge
+        columns += [
+            np.full(n_particle, charge_number / mc2),
+            np.sign(charge_number) * particle_group.weight,
+            particle_group.id,
         ]
-    )
+        fmt += ["%.18e", "%.18e", "%d"]
+
+    dat = np.array(columns)
 
     # Save to ASCII
     if include_header:
@@ -249,7 +347,7 @@ def write_impact(
     else:
         header = ""
 
-    np.savetxt(outfile, dat.T, header=header, comments="")
+    np.savetxt(outfile, dat.T, fmt=fmt, header=header, comments="")
 
     # Return info dict
     return output

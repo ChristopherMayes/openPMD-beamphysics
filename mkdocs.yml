@@ -23,6 +23,7 @@ nav:
       - Wakefields:
           - examples/wakefields/resistive_wall.ipynb
           - examples/wakefields/impedance_wakefield.ipynb
+          - examples/wakefields/taylor_wakefield_3d.ipynb
       - Wavefront:
           - examples/wavefront/wavefront.ipynb
           - examples/wavefront/advanced_drift.ipynb

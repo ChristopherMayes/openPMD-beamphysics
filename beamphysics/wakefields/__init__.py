@@ -16,6 +16,11 @@ TabularWakefield
     Interpolation-based wakefield from user-supplied data
 ImpedanceWakefield
     Wakefield defined through its impedance Z(k)
+TaylorWakefield
+    Second-order Taylor-expanded 3D wakefield (longitudinal + transverse
+    kicks from wake tables, ocelot/Zagorodnov style)
+TaylorWakeComponent
+    A single one-dimensional component h_ab(s) of a TaylorWakefield
 ResistiveWallWakefieldBase
     Base class for resistive wall wakefield models
 ResistiveWallWakefield
@@ -48,6 +53,7 @@ from .resistive_wall import (
     wakefield_from_impedance_fft,
 )
 from .tabular import TabularWakefield
+from .taylor import TaylorWakeComponent, TaylorWakefield
 
 __all__ = [
     # Base classes
@@ -56,6 +62,8 @@ __all__ = [
     "PseudomodeWakefield",
     "TabularWakefield",
     "ImpedanceWakefield",
+    "TaylorWakefield",
+    "TaylorWakeComponent",
     # Resistive wall
     "Geometry",
     "ResistiveWallWakefieldBase",

@@ -22,11 +22,10 @@ dynamic = ["version"]
 keywords = []
 name = "openpmd-beamphysics"
 readme = { file = "README.md", content-type = "text/markdown" }
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [project.optional-dependencies]
-# pytest 9.2 removed Item._nodeid, which pytest-benchmark 5.3 still uses.
-dev = ["pytest<9.2", "pytest-cov", "pytest-benchmark", "pyyaml", "pint"]
+dev = ["pytest", "pytest-cov", "pytest-benchmark>=5.3.1", "pyyaml", "pint"]
 doc = [
   "mkdocs",
   "mkdocs-jupyter",

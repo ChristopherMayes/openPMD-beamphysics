@@ -23,7 +23,6 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/conda-setup
         with:
-          python-version: ${{ matrix.python-version }}
           extras: "doc"
       - name: Install package
         shell: bash -l {0}

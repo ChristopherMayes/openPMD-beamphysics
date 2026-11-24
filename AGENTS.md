@@ -16,7 +16,7 @@
 - Give units in parentheses, such as `Longitudinal position (m)`, not in brackets.
 - Keep docstrings concise: the purpose, any defining formula, the parameters, the return value and the exceptions raised. Derivations and measurements belong in PR descriptions or example notebooks.
 - Comment only where the reason is not evident from the code, such as a hidden constraint, an invariant or a workaround. Do not restate what the code does.
-- Use modern type annotations (Python 3.10 and later): `list[int]`, `dict[str, X]`, `X | None` and `X | Y`. Do not import `List`, `Dict`, `Optional` or `Union` from `typing`.
+- Use modern type annotations (Python 3.11 and later): `list[int]`, `dict[str, X]`, `X | None` and `X | Y`. Do not import `List`, `Dict`, `Optional` or `Union` from `typing`.
 
 ## Tests
 

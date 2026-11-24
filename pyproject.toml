@@ -1,6 +1,6 @@
 [build-system]
 build-backend = "setuptools.build_meta"
-requires = ["setuptools>=60", "setuptools_scm[toml]>=8.0"]
+requires = ["setuptools>=77", "setuptools_scm[toml]>=8.0"]
 
 [project]
 authors = [{ name = "Christopher Mayes" }]
@@ -20,6 +20,8 @@ dependencies = [
 description = "Tools for analyzing and viewing particle data in the openPMD standard, extension beamphysics."
 dynamic = ["version"]
 keywords = []
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 name = "openpmd-beamphysics"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
@@ -49,9 +51,6 @@ namespaces = false
 
 [tool.setuptools.package-data]
 "beamphysics.standards" = ["statistics.yaml"]
-
-[project.license]
-file = "LICENSE"
 
 [tool.ruff]
 # select = []
